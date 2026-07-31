@@ -39,7 +39,13 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: cloud-agentic-iot-slack-integration
-      Runtime: nodejs20.x
+      # nodejs22.x, not 20: this is the one Lambda that bundles jsforce, and
+      # jsforce 3 depends on undici 8, which declares "node": ">=22.19.0".
+      # On nodejs20.x the cold start dies inside require('jsforce') with
+      # "webidl.util.markAsUncloneable is not a function" before the handler
+      # is ever reached. The other functions here use only the AWS SDK and
+      # are unaffected.
+      Runtime: nodejs22.x
       Handler: index.handler
       Timeout: 10
       Role: !GetAtt SlackIntegrationRole.Arn

@@ -10,7 +10,7 @@ This doc is written so anyone can fork/clone this repo, follow it top to bottom,
 - Each environment has its own scoped secrets/variables — a value stored under `Prod` is not readable by a workflow run triggered from `Dev`, and vice versa.
 - `Prod`'s environment has a **required reviewer** protection rule — a deploy to the real production AWS account/Salesforce org needs a manual approval click, even though the workflow itself is automated.
 - **No long-lived AWS access keys anywhere.** GitHub Actions authenticates to AWS via OIDC federation — a workflow run gets a short-lived token by presenting a signed OIDC claim, nothing stored to steal.
-- **No Salesforce username/password anywhere.** Auth uses the JWT Bearer Flow — a Connected App + a private key, never a password.
+- **No Salesforce username/password anywhere.** Auth uses the JWT Bearer Flow — an External Client App + a private key, never a password. (External Client Apps are the current framework for the same OAuth surface Connected Apps used to provide; new orgs have legacy Connected App creation switched off by default.)
 
 ## What's automated vs. what's manual
 
@@ -20,7 +20,7 @@ This doc is written so anyone can fork/clone this repo, follow it top to bottom,
 | Create your Salesforce Dev + Prod orgs | **Manual** | Signup flow, needs a real email |
 | Create the GitHub repo | **Manual** | One-time |
 | One-time AWS OIDC provider + IAM role setup (commands below) | **Manual**, run once per account | Establishes trust, shouldn't be re-run automatically |
-| One-time Salesforce Connected App + JWT cert setup (steps below) | **Manual**, run once per org | Same reason |
+| One-time Salesforce External Client App + JWT cert setup (steps below) | **Manual**, run once per org | Same reason |
 | Entering secret values into GitHub | **Manual**, one-time (~10 min) | Secret values must never pass through an automated agent or chat |
 | Compiling the ESP32 firmware | **Automated** — `.github/workflows/build-firmware.yml` runs on every push | Pure build, no physical access needed |
 | Flashing firmware onto the physical device | **Always manual** | Needs the device plugged into a USB port — cannot be automated by definition |
@@ -33,7 +33,7 @@ This doc is written so anyone can fork/clone this repo, follow it top to bottom,
 ## Setting all of this up
 
 The step-by-step — creating accounts, the five identities, Salesforce license
-allocation, both Connected Apps, the OIDC role, VS Code authorization, and the
+allocation, both External Client Apps, the OIDC role, VS Code authorization, and the
 exact GitHub secrets — lives in **[`SETUP.md`](SETUP.md)** so there is one
 canonical copy rather than two that drift apart.
 
@@ -42,7 +42,7 @@ The short version of what the pipelines need:
 | Environment secret | Purpose |
 |---|---|
 | `AWS_ROLE_ARN` | OIDC role the workflow assumes — no long-lived keys exist |
-| `SF_CONSUMER_KEY`, `SF_JWT_KEY`, `SF_USERNAME` | The **deploy** Connected App and user, never the runtime integration one |
+| `SF_CONSUMER_KEY`, `SF_JWT_KEY`, `SF_USERNAME` | The **deploy** External Client App and user, never the runtime integration one |
 | `OTA_PRESIGN_ROLE_ARN` | Role AWS IoT assumes to sign per-device firmware URLs |
 
 Variables (not secrets): `AWS_REGION`, `FIRMWARE_BUCKET`, `SF_LOGIN_URL`.

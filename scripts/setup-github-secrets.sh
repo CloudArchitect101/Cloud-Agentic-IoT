@@ -137,6 +137,20 @@ else
     echo "Skipped AWS_REGION."
 fi
 
+# The deploy workflow passes this straight to `sf org login jwt --instance-url`.
+# Leaving it unset used to interpolate to an empty string and fail the login,
+# so the workflow now defaults it too — but set it explicitly when the target
+# is a sandbox, because that default is wrong there.
+echo "  (login.salesforce.com for a Developer Edition or production org;"
+echo "   test.salesforce.com for a sandbox)"
+ask "Enter SF_LOGIN_URL:" "https://login.salesforce.com"
+if [[ -n "$REPLY" ]]; then
+    gh variable set SF_LOGIN_URL --body "$REPLY" --env "$ENV"
+    echo "✓ Variable 'SF_LOGIN_URL' set."
+else
+    echo "Skipped SF_LOGIN_URL."
+fi
+
 echo
 echo "---"
 echo "✅ Setup complete for environment '$ENV'."

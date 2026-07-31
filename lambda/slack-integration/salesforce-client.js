@@ -5,8 +5,8 @@ const jsforce = require('jsforce');
  * Headless service-account auth: no interactive login, no per-user
  * Salesforce credentials ever touch Slack. A single dedicated integration
  * user, scoped to the minimum permissions this Lambda needs, authenticates
- * via the JWT Bearer Flow. See docs/CI-CD-SECRETS.md for how the Connected
- * App + certificate behind this are set up.
+ * via the JWT Bearer Flow. See docs/CI-CD-SECRETS.md for how the External
+ * Client App + certificate behind this are set up.
  */
 async function getSalesforceConnection() {
   const assertion = jwt.sign(

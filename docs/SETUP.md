@@ -127,7 +127,19 @@ Use code with caution.[Phase 1: Bootstrap] ➡️ Manually give 'deploy@...' rig
 
 *Note: As of Spring '26, legacy Connected Apps are disabled by default for fresh setups. We utilize the next-generation External Client Apps framework.*
 
-+--------------------+                               +-----------------------+|   GitHub Actions   | --(JWT signed with PrivKey)--> | External Client App   || (Secret: Username) |                               | (Matches PubCert)     |+--------------------+                               +-----------------------+|(Assumes User Context)v+-----------------------+|    deploy@... User    |+-----------------------+
+```
++--------------------+                                +-----------------------+
+|   GitHub Actions   | --(JWT signed with PrivKey)--> | External Client App   |
+| (Secret: Username) |                                | (Matches PubCert)     |
++--------------------+                                +-----------------------+
+                                                                 |
+                                                    (Assumes User Context)
+                                                                 v
+                                                      +-----------------------+
+                                                      |    deploy@... User    |
+                                                      +-----------------------+
+```
+
 ### Step 1: Isolate Cryptographic Certificate Keypairs
 Run the following local openssl utility calls to establish completely separate cryptographic identities for both your deployment processing and live data operations.
 ```bash
@@ -269,6 +281,7 @@ The script will set up the following. Note that secrets are encrypted and can't 
 | `SF_JWT_KEY` | Secret | The **base64-encoded** private key (`server-deploy.key`) for JWT authentication. |
 | `AWS_ROLE_ARN` | Secret | The ARN of the IAM role that GitHub Actions assumes to deploy to AWS. |
 | `AWS_REGION` | Variable | The AWS region for all deployments (e.g., `us-east-1`). |
+| `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` for a Developer Edition or production org, `https://test.salesforce.com` for a sandbox. |
 
 ---
 

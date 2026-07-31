@@ -25,25 +25,59 @@ jobs:
             echo "No Salesforce metadata in force-app/ on ${{ github.ref_name }} — nothing to deploy."
           fi
 
+      # Node 22, not 20. The CLI pulls in jsforce, which depends on undici 8,
+      # which declares "node": ">=22.19.0". npm only warns about an unmet
+      # engines field, so the install succeeds and the CLI then dies on its
+      # first run with "webidl.util.markAsUncloneable is not a function" —
+      # an API that does not exist on Node 20. Do not lower this.
       - uses: actions/setup-node@v4
         if: steps.check.outputs.found == 'true'
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Salesforce CLI
         if: steps.check.outputs.found == 'true'
         run: npm install --global @salesforce/cli
 
+      # Secrets go through env, not ${{ }} interpolation into the script body:
+      # interpolation pastes the value into the shell source before bash sees
+      # it, so a value containing a quote would break out of the command.
       - name: Authenticate via JWT Bearer Flow (no password, ever)
         if: steps.check.outputs.found == 'true'
+        env:
+          SF_JWT_KEY:      ${{ secrets.SF_JWT_KEY }}
+          SF_CONSUMER_KEY: ${{ secrets.SF_CONSUMER_KEY }}
+          SF_USERNAME:     ${{ secrets.SF_USERNAME }}
+          # An unset variable interpolates to an empty string, and `sf` treats
+          # --instance-url "" as "log in to nothing". Default it here so a
+          # missing environment variable cannot silently produce that.
+          SF_LOGIN_URL:    ${{ vars.SF_LOGIN_URL || 'https://login.salesforce.com' }}
         run: |
           set -euo pipefail
-          echo "${{ secrets.SF_JWT_KEY }}" | base64 --decode > server.key
+
+          # Fail with a readable message rather than an opaque CLI error.
+          missing=""
+          for name in SF_JWT_KEY SF_CONSUMER_KEY SF_USERNAME; do
+            [ -n "${!name:-}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub Environment secret(s):$missing"
+            echo "Set them for the '${{ github.ref_name }}' environment — see docs/SETUP.md"
+            exit 1
+          fi
+
+          printf '%s' "$SF_JWT_KEY" | base64 --decode > server.key
+          chmod 600 server.key
+          grep -q "PRIVATE KEY" server.key || {
+            echo "::error::SF_JWT_KEY did not decode to a PEM private key. Store it as: base64 -i server-deploy.key"
+            exit 1
+          }
+
           sf org login jwt \
-            --client-id "${{ secrets.SF_CONSUMER_KEY }}" \
+            --client-id "$SF_CONSUMER_KEY" \
             --jwt-key-file server.key \
-            --username "${{ secrets.SF_USERNAME }}" \
-            --instance-url "${{ vars.SF_LOGIN_URL }}" \
+            --username "$SF_USERNAME" \
+            --instance-url "$SF_LOGIN_URL" \
             --alias target-org \
             --set-default
           rm -f server.key
