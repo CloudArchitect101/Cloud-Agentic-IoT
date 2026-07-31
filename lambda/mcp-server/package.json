@@ -1,0 +1,6 @@
+{
+  "name": "mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server exposing patient-device capabilities as agent tools",
+  "main": "index.js"
+}

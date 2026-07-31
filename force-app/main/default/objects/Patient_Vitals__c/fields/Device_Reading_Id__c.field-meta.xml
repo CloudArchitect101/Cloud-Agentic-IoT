@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Device_Reading_Id__c</fullName>
+    <label>Device Reading Id</label>
+    <length>100</length>
+    <required>true</required>
+    <unique>true</unique>
+    <externalId>true</externalId>
+    <type>Text</type>
+</CustomField>

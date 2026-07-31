@@ -1,0 +1,50 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ProjectServices",
+      "Effect": "Allow",
+      "Action": [
+        "iot:*",
+        "lambda:*",
+        "s3:*",
+        "dynamodb:*",
+        "events:*",
+        "sqs:*",
+        "cloudformation:*",
+        "apigateway:*",
+        "logs:*",
+        "cloudwatch:*",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:PutParameter",
+        "bedrock:InvokeModel",
+        "sts:GetCallerIdentity"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IamForStackRolesOnly",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:PassRole",
+        "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy",
+        "iam:AttachRolePolicy", "iam:DetachRolePolicy",
+        "iam:TagRole", "iam:CreateOpenIDConnectProvider", "iam:GetOpenIDConnectProvider"
+      ],
+      "Resource": "*",
+      "Condition": {}
+    },
+    {
+      "Sid": "NoBillingNoUsers",
+      "Effect": "Deny",
+      "Action": [
+        "aws-portal:*",
+        "account:*",
+        "iam:CreateUser", "iam:DeleteUser", "iam:CreateAccessKey",
+        "organizations:*"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

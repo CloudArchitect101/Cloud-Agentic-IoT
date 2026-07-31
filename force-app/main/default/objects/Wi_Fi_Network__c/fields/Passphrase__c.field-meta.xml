@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Passphrase__c</fullName>
+    <label>Passphrase</label>
+    <description>Encrypted Text is available in every edition - no Shield required. Masked in the UI, reports and exports; readable only with "View Encrypted Data".</description>
+    <encryptionScheme>ProbabilisticEncryption</encryptionScheme>
+    <maskChar>asterisk</maskChar>
+    <maskType>all</maskType>
+    <length>63</length>
+    <type>EncryptedText</type>
+</CustomField>

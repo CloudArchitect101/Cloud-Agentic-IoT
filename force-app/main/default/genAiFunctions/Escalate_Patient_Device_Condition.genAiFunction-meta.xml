@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <masterLabel>Escalate Patient Device Condition</masterLabel>
+    <!--
+      The description is read by the planner to decide WHEN to call this. It is
+      prompt engineering, not documentation. Saying when NOT to use an action
+      matters as much as when to: without the second sentence the agent
+      escalates on any mention of a device, including questions.
+    -->
+    <description>Creates a care team Case for a patient device condition that needs human attention. Use only when a reading is genuinely abnormal or the user explicitly asks to escalate. Do not use for questions about current readings, device status, or how the system works.</description>
+    <invocationTarget>PatientCareAgentActions</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <!-- Creating a Case is a side effect on real clinical workflow, so the
+         agent must confirm with the user before acting rather than after. -->
+    <isConfirmationRequired>true</isConfirmationRequired>
+</GenAiFunction>

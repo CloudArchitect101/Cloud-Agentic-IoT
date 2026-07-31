@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Command__c</fullName>
+    <label>Command</label>
+    <valueSet>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>DISPENSE_MEDICATION</fullName><default>false</default><label>DISPENSE_MEDICATION</label></value>
+            <value><fullName>RESTART</fullName><default>false</default><label>RESTART</label></value>
+        </valueSetDefinition>
+    </valueSet>
+    <type>Picklist</type>
+</CustomField>

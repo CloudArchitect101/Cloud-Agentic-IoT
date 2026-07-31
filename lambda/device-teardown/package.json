@@ -1,0 +1,6 @@
+{
+  "name": "device-teardown",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": { "@aws-sdk/client-iot": "^3.665.0" }
+}

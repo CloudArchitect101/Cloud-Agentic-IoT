@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Bot xmlns="http://soap.sforce.com/2006/04/metadata">
+    <masterLabel>Patient Care Agent</masterLabel>
+    <description>Agentforce agent for the care team: answers questions about patient monitoring devices and escalates abnormal conditions.</description>
+    <botMlDomain>
+        <label>Patient Care Agent</label>
+        <name>Patient_Care_Agent</name>
+    </botMlDomain>
+    <botUser>integration@example.com</botUser>
+    <contextVariables>
+        <contextVariableMappings>
+            <SObjectType>Asset</SObjectType>
+            <fieldName>SerialNumber</fieldName>
+        </contextVariableMappings>
+        <dataType>Text</dataType>
+        <developerName>DeviceSerialNumber</developerName>
+        <label>Device Serial Number</label>
+    </contextVariables>
+    <label>Patient Care Agent</label>
+    <logPrivateConversationData>false</logPrivateConversationData>
+    <richContentEnabled>true</richContentEnabled>
+    <type>Bot</type>
+</Bot>

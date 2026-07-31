@@ -1,0 +1,71 @@
+name: Deploy Salesforce Metadata
+
+on:
+  push:
+    branches: [Dev, Prod]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Prod sits at a clean baseline until a promotion brings feature work in,
+      # and several branches carry no Salesforce metadata at all. sfdx-project.json
+      # is present everywhere as project config, so the real signal is whether
+      # force-app actually holds anything.
+      - name: Check whether there is any Salesforce metadata to deploy
+        id: check
+        run: |
+          if [ -d force-app ] && [ -n "$(find force-app -type f 2>/dev/null)" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No Salesforce metadata in force-app/ on ${{ github.ref_name }} — nothing to deploy."
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.found == 'true'
+        with:
+          node-version: '20'
+
+      - name: Install Salesforce CLI
+        if: steps.check.outputs.found == 'true'
+        run: npm install --global @salesforce/cli
+
+      - name: Authenticate via JWT Bearer Flow (no password, ever)
+        if: steps.check.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.SF_JWT_KEY }}" | base64 --decode > server.key
+          sf org login jwt \
+            --client-id "${{ secrets.SF_CONSUMER_KEY }}" \
+            --jwt-key-file server.key \
+            --username "${{ secrets.SF_USERNAME }}" \
+            --instance-url "${{ vars.SF_LOGIN_URL }}" \
+            --alias target-org \
+            --set-default
+          rm -f server.key
+
+      # Dry run first: on Prod a bad deploy should fail before it touches the org.
+      - name: Validate deployment (check-only, runs local tests)
+        if: steps.check.outputs.found == 'true'
+        run: |
+          sf project deploy start \
+            --dry-run \
+            --test-level RunLocalTests \
+            --target-org target-org \
+            --wait 30
+
+      - name: Deploy
+        if: steps.check.outputs.found == 'true'
+        run: |
+          sf project deploy start \
+            --test-level RunLocalTests \
+            --target-org target-org \
+            --wait 30
+
+      - name: Always clean up the key material
+        if: always()
+        run: rm -f server.key

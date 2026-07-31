@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: '2012-11-13'
+Description: Cloud-Agentic-IoT Branch 01 - Data Cloud RAG Pipeline (Lambda + DynamoDB)
+
+Parameters:
+  PatientVitalsTableName:
+    Type: String
+    Default: patient-vitals
+    Description: DynamoDB table name for patient vitals storage
+
+Resources:
+  # DynamoDB Table for patient vitals time-series storage
+  PatientVitalsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref PatientVitalsTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: CreatedAt
+        TTLSeconds: 7776000 # 90 days
+
+  # Lambda Execution Role
+  PatientVitalsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocumentVersion: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource: !GetAtt PatientVitalsTable.Arn
+        - PolicyName: CloudWatchLogs
+          PolicyDocumentVersion: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+
+  # Lambda Function for patient vital processing
+  PatientVitalsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-patient-vitals
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          # See index.js for full implementation
+      Role: !GetAtt PatientVitalsLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref PatientVitalsTableName
+          SALESFORCE_ENDPOINT: !Sub https://${SALESFORCE_INSTANCE}.salesforce.com
+          SALESFORCE_CLIENT_ID: !Ref SalesforceClientId
+          SALESFORCE_CLIENT_SECRET: !Ref SalesforceClientSecret
+          SALESFORCE_USERNAME: !Ref SalesforceUsername
+          SALESFORCE_PASSWORD: !Ref SalesforcePassword
+          SALESFORCE_LOGIN_URL: !Sub https://${SALESFORCE_INSTANCE}.salesforce.com
+      Tracing: AWSCodePipeline
+
+  # IoT Rule to trigger Lambda on telemetry events
+  PatientVitalsIoTRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      TopicRulePayload:
+        TopicRulePayload:
+          Payload:
+            '$map({
+              "deviceId": $input("deviceId"),
+              "vitals": $input("vitals")
+            })'
+          Sql: "SELECT * FROM 'device/+/telemetry'"
+          Actions:
+            - Lambda:
+                RoleArn: !GetAtt PatientVitalsLambdaRole.Arn
+                Endpoint: aws-iot
+
+Outputs:
+  PatientVitalsTableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt PatientVitalsTable.Arn
+
+  PatientVitalsLambdaArn:
+    Description: Lambda function ARN
+    Value: !GetAtt PatientVitalsLambda.Arn
+
+  PatientVitalsLambdaFunctionName:
+    Description: Lambda function name
+    Value: !Ref PatientVitalsLambda

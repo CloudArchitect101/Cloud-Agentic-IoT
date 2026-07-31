@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Provisioning_Expires_At__c</fullName>
+    <label>Bundle Expires At</label>
+    <description>After this, the link is dead and the device must be re-provisioned.</description>
+
+    <type>DateTime</type>
+</CustomField>

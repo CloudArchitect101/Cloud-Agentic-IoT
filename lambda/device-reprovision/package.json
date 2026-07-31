@@ -1,0 +1,10 @@
+{
+  "name": "device-reprovision",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-iot": "^3.665.0",
+    "@aws-sdk/client-s3": "^3.665.0",
+    "@aws-sdk/s3-request-presigner": "^3.665.0"
+  }
+}

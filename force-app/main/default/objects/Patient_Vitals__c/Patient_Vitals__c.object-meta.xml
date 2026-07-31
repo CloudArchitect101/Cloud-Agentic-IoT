@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Patient Vitals</label>
+    <pluralLabel>Patient Vitals</pluralLabel>
+    <nameField>
+        <label>Vitals Record</label>
+        <type>AutoNumber</type>
+        <displayFormat>PV-{00000000}</displayFormat>
+    </nameField>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <sharingModel>Private</sharingModel>
+    <enableHistory>true</enableHistory>
+</CustomObject>

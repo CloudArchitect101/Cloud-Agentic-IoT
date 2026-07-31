@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Headless Slack <-> Salesforce integration. Slack slash commands hit API
+  Gateway, which invokes a Lambda that authenticates to Salesforce via the
+  JWT Bearer Flow (a dedicated integration user — no per-user Salesforce
+  login anywhere in this path) and reads/writes records.
+
+Parameters:
+  SlackSigningSecretParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/slack/signing-secret
+  SfConsumerKeyParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/consumer-key
+  SfUsernameParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/username
+  SfLoginUrlParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/login-url
+  SfJwtPrivateKeyParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/jwt-private-key
+
+Resources:
+  SlackIntegrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  SlackIntegrationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-slack-integration
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 10
+      Role: !GetAtt SlackIntegrationRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 200,
+            body: 'Placeholder - deploy pipeline replaces this with the real index.js/salesforce-client.js bundle'
+          });
+      Environment:
+        Variables:
+          SLACK_SIGNING_SECRET: !Ref SlackSigningSecretParam
+          SF_CONSUMER_KEY: !Ref SfConsumerKeyParam
+          SF_USERNAME: !Ref SfUsernameParam
+          SF_LOGIN_URL: !Ref SfLoginUrlParam
+          SF_JWT_PRIVATE_KEY: !Ref SfJwtPrivateKeyParam
+
+  SlackApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: cloud-agentic-iot-slack-api
+      ProtocolType: HTTP
+
+  SlackApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref SlackApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt SlackIntegrationFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  SlackApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SlackApi
+      RouteKey: 'POST /slack/commands'
+      Target: !Sub 'integrations/${SlackApiIntegration}'
+
+  SlackApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref SlackApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  SlackApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SlackIntegrationFunction
+      Principal: apigateway.amazonaws.com
+
+Outputs:
+  SlackCommandsUrl:
+    Description: Set this as the Request URL for each Slack slash command in api.slack.com
+    Value: !Sub 'https://${SlackApi}.execute-api.${AWS::Region}.amazonaws.com/slack/commands'
