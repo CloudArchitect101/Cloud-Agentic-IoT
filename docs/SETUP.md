@@ -167,6 +167,41 @@ openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
    * **Upload Files**: Choose and upload your local `server-deploy.crt` file.
 5. Save the configuration and copy the resulting **Consumer Key** string.
 
+> **Reload the page and confirm "Enable JWT Bearer Flow" is still ticked.** The
+> certificate upload and the checkbox are saved independently, and the checkbox
+> can silently fail to persist — leaving an app that looks fully configured, has
+> the right certificate on it, and rejects every JWT with the badly-worded
+> *"External client app is not installed in this org."*
+
+To verify from the terminal rather than trusting the screen — this reads the
+saved value, so it catches exactly that failure:
+
+```bash
+tmp=$(mktemp -d)
+sf project retrieve start -o iot-dev \
+  -m "ExtlClntAppGlobalOauthSettings:Cloud_Agentic_IoT_Deploy_glbloauth" \
+  --target-metadata-dir "$tmp" --unzip
+grep -rh isNamedUserJwtEnabled "$tmp"
+rm -rf "$tmp"
+# must print: <isNamedUserJwtEnabled>true</isNamedUserJwtEnabled>
+```
+
+**Retrieve to a temp directory, never into `force-app/`.** That metadata carries
+the app's `<consumerKey>` and `<certificate>` inline, and a plain
+`sf project retrieve start` writes them into your package directory — one
+`git add .` away from publishing the consumer key of your deploy app. Hence
+`--target-metadata-dir` (which accepts a path outside the project) rather than
+`--output-dir` (which refuses one).
+
+The same file also carries `<certificate>`. To confirm the uploaded certificate
+actually pairs with the private key GitHub Actions signs with, compare moduli —
+a mismatch here fails as `invalid_grant`, which looks nothing like the error above:
+
+```bash
+openssl x509 -in server-deploy.crt -noout -modulus
+openssl rsa  -in server-deploy.key -noout -modulus   # the two must be identical
+```
+
 ### Step 3: Enforce Access Policies
 1. Back inside the External Client App Manager listing, select the dropdown indicator next to your newly created application and click **Manage Policies**.
 2. Modify **Permitted Users** from its default layout to: **Admin approved users are pre-authorized**.
