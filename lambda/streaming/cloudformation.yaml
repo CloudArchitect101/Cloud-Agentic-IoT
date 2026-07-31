@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2012-11-13'
+Description: Cloud-Agentic-IoT Branch 02 - Real-time Streams to Agents (EventBridge + Platform Events)
+
+Resources:
+  # EventBridge Bus for patient vitals events
+  PatientVitalsEventBus:
+    Type: AWS::EventBus
+    Properties:
+      Name: patient-vitals-event-bus
+
+  # EventBridge Rule to route telemetry events to alert dispatcher
+  TelemetryToAlertRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusId: !GetAtt PatientVitalsEventBus.Arn
+      EventPattern:
+        source: ['patient.iot.wearable']
+        detailType: ['patient.vitals.update']
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt AlertDispatcherLambda.Arn
+          Id: AlertDispatcher
+          RetryConfig:
+            DestinationOptions:
+              DeadLetterConfig:
+                Arn: !GetAtt AlertDLQ.Arn
+              OnSuccess:
+                DeadLetterConfig:
+                  Arn: !GetAtt AlertDLQ.Arn
+        - Arn: !GetAtt DataSinkLambda.Arn
+          Id: DataSink
+
+  # Alert Dispatcher Lambda
+  AlertDispatcherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudWatchLogs
+          PolicyDocumentVersion: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+        - PolicyName: SalesforceAccess
+          PolicyDocumentVersion: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+
+  AlertDispatcherLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-alert-dispatcher
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt AlertDispatcherRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 200,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          SALESFORCE_ENDPOINT: !Sub https://${SALESFORCE_INSTANCE}.salesforce.com
+          SALESFORCE_ACCESS_TOKEN: !Ref SalesforceAccessToken
+
+  # Data Sink Lambda (stores events in DynamoDB)
+  DataSinkRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+
+  DataSinkLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      # Named to match its source directory (lambda/streaming/event-router) so
+      # the deploy pipeline can map source to function without a lookup table.
+      FunctionName: cloud-agentic-iot-event-router
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt DataSinkRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 200,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+
+  # Dead Letter Queue for failed events
+  AlertDLQ:
+    Type: AWS::Sqs::Queue
+    Properties:
+      QueueName: patient-vitals-alert-dlq
+      VisibilityTimeout: 300
+
+Outputs:
+  PatientVitalsEventBusArn:
+    Description: EventBridge bus ARN
+    Value: !GetAtt PatientVitalsEventBus.Arn
+
+  AlertDispatcherLambdaArn:
+    Description: Alert dispatcher Lambda ARN
+    Value: !GetAtt AlertDispatcherLambda.Arn

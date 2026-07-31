@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Full_Speed_Depth__c</fullName>
+    <label>Full Speed Depth</label>
+    <description>Open case count at which the indicator runs at maximum speed. Depth is scaled 0..this value before being sent to the device.</description>
+    <precision>3</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

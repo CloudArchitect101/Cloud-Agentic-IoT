@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <masterLabel>Patient Care Planner</masterLabel>
+    <description>Routes care team requests to the device monitoring topic.</description>
+    <plannerType>AiCopilot__ReAct</plannerType>
+    <genAiPlugins>
+        <genAiPluginName>Patient_Device_Monitoring</genAiPluginName>
+    </genAiPlugins>
+</GenAiPlannerBundle>

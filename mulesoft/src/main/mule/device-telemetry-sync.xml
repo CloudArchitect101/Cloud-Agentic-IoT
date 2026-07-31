@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+        http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+        http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+        http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+        http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    <!--
+      Receives device telemetry from AWS and upserts it into Salesforce.
+
+      This is the same job the Lambda in branch 01 does directly. It exists as
+      a Mule flow because enterprises that own MuleSoft want integration logic
+      in the integration layer, where it is governed, monitored, and reusable -
+      not scattered across per-team Lambdas. The tradeoff is an extra hop and
+      an extra licence.
+    -->
+
+    <http:listener-config name="telemetry-http-config">
+        <http:listener-connection host="0.0.0.0" port="8081"/>
+    </http:listener-config>
+
+    <salesforce:sfdc-config name="salesforce-config">
+        <!-- JWT flow: no password, same pattern as the CI pipeline. -->
+        <salesforce:jwt-connection
+            consumerKey="${sf.consumerKey}"
+            keyStore="${sf.keyStore}"
+            storePassword="${sf.storePassword}"
+            principal="${sf.principal}"
+            tokenEndpoint="${sf.tokenEndpoint}"/>
+    </salesforce:sfdc-config>
+
+    <flow name="device-telemetry-sync">
+        <http:listener config-ref="telemetry-http-config" path="/telemetry" allowedMethods="POST"/>
+
+        <ee:transform doc:name="Normalise AWS payload to Salesforce schema">
+            <ee:message>
+                <ee:set-payload resource="dwl/telemetry-to-salesforce.dwl"/>
+            </ee:message>
+        </ee:transform>
+
+        <!--
+          Upsert on the external ID, not create. Devices retry on reconnect, so
+          the same reading arrives more than once; create would duplicate it.
+        -->
+        <salesforce:upsert config-ref="salesforce-config"
+                           objectType="Patient_Vitals__c"
+                           externalIdFieldName="Device_Reading_Id__c"/>
+
+        <ee:transform doc:name="Build response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{ accepted: true, records: sizeOf(payload) }]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+
+        <error-handler>
+            <!--
+              Salesforce being unavailable must not look like a client error to
+              the device, or it will stop retrying.
+            -->
+            <on-error-propagate type="SALESFORCE:CONNECTIVITY, SALESFORCE:RETRY_EXHAUSTED">
+                <ee:transform>
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{ accepted: false, retryable: true, error: error.description }]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <ee:transform>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+</mule>

@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Relays Salesforce Case queue depth changes to a physical ESP32 indicator.
+  Salesforce Apex calls API Gateway (SigV4-signed via a Named Credential),
+  which invokes a Lambda that republishes the message to AWS IoT Core.
+
+Parameters:
+  CommandTopic:
+    Type: String
+    Default: device/queue/command
+    Description: MQTT topic the ESP32 indicator subscribes to.
+
+Resources:
+  QueueRelayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PublishToDeviceCommandTopicOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Least privilege: this function may publish to exactly one topic.
+              - Effect: Allow
+                Action: iot:Publish
+                Resource: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/${CommandTopic}'
+
+  QueueRelayFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-queue-relay
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 10
+      Role: !GetAtt QueueRelayRole.Arn
+      Environment:
+        Variables:
+          COMMAND_TOPIC: !Ref CommandTopic
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 200,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+
+  QueueRelayApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: cloud-agentic-iot-queue-relay-api
+      ProtocolType: HTTP
+
+  QueueRelayIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt QueueRelayFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  QueueRelayRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /queue-depth'
+      # Salesforce signs the request with SigV4 through the Named Credential,
+      # so API Gateway authorises it as IAM rather than accepting anonymous POSTs.
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${QueueRelayIntegration}'
+
+  QueueRelayStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      StageName: '$default'
+      AutoDeploy: true
+
+  QueueRelayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref QueueRelayFunction
+      Principal: apigateway.amazonaws.com
+
+Outputs:
+  QueueDepthEndpoint:
+    Description: Use as the URL of the AWS_IoT_Relay Named Credential in Salesforce.
+    Value: !Sub 'https://${QueueRelayApi}.execute-api.${AWS::Region}.amazonaws.com'

@@ -1,0 +1,10 @@
+{
+  "name": "slack-salesforce-integration",
+  "version": "1.0.0",
+  "description": "Headless Slack <-> Salesforce integration via JWT Bearer Flow",
+  "main": "index.js",
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "jsforce": "^3.4.1"
+  }
+}

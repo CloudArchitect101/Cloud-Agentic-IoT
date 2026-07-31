@@ -1,0 +1,53 @@
+name: Build ESP32 Firmware (compile check only — flashing is always manual)
+
+on:
+  push:
+    branches: [Dev, Prod]
+  pull_request:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+
+      - name: Install ESP32 core + required libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install "PubSubClient" "ArduinoJson" "DHT sensor library" "ESP32Servo"
+
+      # Compiles every sketch present on this branch. A sketch folder must
+      # contain a .ino named after the folder — arduino-cli fails with
+      # "main file missing from sketch" otherwise.
+      - name: Compile all sketches
+        run: |
+          set -euo pipefail
+          found=0
+          for sketch in $(find . -name "*.ino" -not -path "./node_modules/*"); do
+            dir=$(dirname "$sketch")
+            expected="$dir/$(basename "$dir").ino"
+            if [ "$sketch" != "$expected" ]; then
+              echo "::error::$sketch must be named $(basename "$dir").ino to be a valid sketch"
+              exit 1
+            fi
+
+            # No credential injection: nothing secret is compiled in. Sketches
+            # get their WiFi and certificate from NVS at provisioning time, so
+            # one binary is valid for every device of that type.
+            echo "::group::Compiling $dir"
+            # --libraries is required: the sketches include <CloudAgenticDevice.h>
+            # from firmware/libraries, and without it the header is not found.
+            arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 \
+              --libraries firmware/libraries "$dir"
+            echo "::endgroup::"
+            found=$((found + 1))
+          done
+          echo "Compiled $found sketch(es)."

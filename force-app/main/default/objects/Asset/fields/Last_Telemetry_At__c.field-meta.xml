@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Last_Telemetry_At__c</fullName>
+    <label>Last Telemetry At</label>
+    <description>When the device last reported. Drives the DEVICE_DISCONNECTED alert.</description>
+    <type>DateTime</type>
+</CustomField>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Device Command</label>
+    <pluralLabel>Device Commands</pluralLabel>
+    <description>A command queued for a physical device. Custom on purpose: no standard object models an auditable device-command lifecycle (Pending/Sent/Acked/Failed). A Flow on this object publishes the Platform Event the device pipeline consumes.</description>
+    <nameField>
+        <label>Command Number</label>
+        <type>AutoNumber</type>
+        <displayFormat>CMD-{000000}</displayFormat>
+    </nameField>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <sharingModel>Private</sharingModel>
+    <enableHistory>true</enableHistory>
+</CustomObject>

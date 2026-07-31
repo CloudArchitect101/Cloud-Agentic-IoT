@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Thing_ARN__c</fullName>
+    <label>Thing ARN</label>
+    <description>AWS IoT Thing created for this Asset.</description>
+    <length>255</length>
+    <type>Text</type>
+</CustomField>

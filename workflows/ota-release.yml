@@ -1,0 +1,126 @@
+name: OTA Release (version-gated, canary first)
+
+on:
+  push:
+    branches: [Dev, Prod]
+    paths:
+      - 'firmware/**'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Version gate. A merge that does not bump FIRMWARE_VERSION must not
+      # create a Job - otherwise every docs tweak or refactor pushes firmware
+      # to physical devices, and a bad commit reaches the fleet automatically.
+      - name: Read firmware versions
+        id: versions
+        run: |
+          set -euo pipefail
+          matrix='[]'
+          for sketch in firmware/*/; do
+            [ "$(basename "$sketch")" = "libraries" ] && continue
+            name=$(basename "$sketch")
+            ino="$sketch$name.ino"
+            [ -f "$ino" ] || continue
+            version=$(grep -oE '#define[[:space:]]+FIRMWARE_VERSION[[:space:]]+"[^"]+"' "$ino" \
+                      | grep -oE '"[^"]+"' | tr -d '"' || true)
+            if [ -z "$version" ]; then
+              echo "::notice::$name declares no FIRMWARE_VERSION, skipping OTA"
+              continue
+            fi
+            matrix=$(echo "$matrix" | jq -c --arg n "$name" --arg v "$version" '. + [{name:$n,version:$v}]')
+          done
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Discovered: $matrix"
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.versions.outputs.matrix != '[]'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install arduino-cli and ESP32 toolchain
+        if: steps.versions.outputs.matrix != '[]'
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+          export PATH="$PWD/bin:$PATH"
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install "PubSubClient" "ArduinoJson" "DHT sensor library" "ESP32Servo"
+
+      - name: Build, publish, and create canary Job for any bumped version
+        if: steps.versions.outputs.matrix != '[]'
+        env:
+          BUCKET: ${{ vars.FIRMWARE_BUCKET }}
+          PRESIGN_ROLE: ${{ secrets.OTA_PRESIGN_ROLE_ARN }}
+          REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+
+          echo '${{ steps.versions.outputs.matrix }}' | jq -c '.[]' | while read -r row; do
+            NAME=$(echo "$row" | jq -r .name)
+            VERSION=$(echo "$row" | jq -r .version)
+            KEY="firmware/$NAME/$VERSION.bin"
+
+            # Idempotent gate: the artefact existing IS the record that this
+            # version already shipped. No extra state store to drift.
+            if aws s3api head-object --bucket "$BUCKET" --key "$KEY" >/dev/null 2>&1; then
+              echo "::notice::$NAME $VERSION already published, no Job created"
+              continue
+            fi
+
+            echo "::group::Building $NAME $VERSION"
+            # No credential injection: nothing secret is compiled in. The
+            # firmware reads WiFi and its certificate from NVS at runtime, so
+            # this one binary is valid for every device of this type.
+            arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 \
+              --libraries firmware/libraries \
+              --output-dir "/tmp/build-$NAME" "firmware/$NAME"
+            echo "::endgroup::"
+
+            BIN=$(find "/tmp/build-$NAME" -name "*.ino.bin" | head -1)
+            aws s3 cp "$BIN" "s3://$BUCKET/$KEY" --sse AES256
+
+            # Each device TYPE gets its own canary ring and its own fleet
+            # group, because they run different binaries. A patient monitor
+            # must never be offered queue-indicator firmware.
+            GROUP="canary-$NAME"
+            JOB_ID="ota-$NAME-${VERSION//./-}-$(date +%s)"
+
+            # Built with jq rather than a heredoc: a heredoc terminator must
+            # sit at column 0, which breaks the YAML block scalar this runs in.
+            # The ${aws:iot:s3-presigned-url:...} placeholder must reach AWS
+            # literally - IoT substitutes a fresh signed URL per device, so no
+            # long-lived link is ever embedded in the job document.
+            jq -n \
+              --arg sketch "$NAME" \
+              --arg version "$VERSION" \
+              --arg url "\${aws:iot:s3-presigned-url:https://s3.$REGION.amazonaws.com/$BUCKET/$KEY}" \
+              '{operation:"ota", sketch:$sketch, version:$version, url:$url}' \
+              > /tmp/job-doc.json
+
+            aws iot create-job \
+              --job-id "$JOB_ID" \
+              --targets "arn:aws:iot:$REGION:$ACCOUNT:thinggroup/$GROUP" \
+              --document "file:///tmp/job-doc.json" \
+              --description "$NAME $VERSION -> $GROUP (${{ github.ref_name }})" \
+              --presigned-url-config "roleArn=$PRESIGN_ROLE,expiresInSec=3600" \
+              --job-executions-rollout-config "maximumPerMinute=5" \
+              --timeout-config "inProgressTimeoutInMinutes=10" \
+              --abort-config '{"criteriaList":[{"failureType":"FAILED","action":"CANCEL","thresholdPercentage":25,"minNumberOfExecutedThings":2}]}'
+
+            echo "::notice::Created $JOB_ID targeting $GROUP"
+          done

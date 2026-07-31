@@ -1,0 +1,93 @@
+name: OTA Promote (canary -> fleet)
+
+# Manual only, and deliberately so. Promotion is the decision that a canary
+# ring behaved for long enough to trust the build on every device. That
+# judgement is a human's; automating it removes the only checkpoint between a
+# bad build and the whole fleet.
+on:
+  workflow_dispatch:
+    inputs:
+      sketch:
+        description: 'Firmware name (e.g. patient-monitor)'
+        required: true
+      version:
+        description: 'Version already published and canaried (e.g. 1.1.0)'
+        required: true
+      environment:
+        description: 'Which environment to promote in'
+        required: true
+        type: choice
+        options: [Dev, Prod]
+      group:
+        description: 'Target Thing Group (fleet-<sketch>)'
+        required: true
+        default: 'fleet-patient-monitor'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Refuse to promote a build the canary never ran
+        env:
+          BUCKET: ${{ vars.FIRMWARE_BUCKET }}
+        run: |
+          set -euo pipefail
+          KEY="firmware/${{ inputs.sketch }}/${{ inputs.version }}.bin"
+          if ! aws s3api head-object --bucket "$BUCKET" --key "$KEY" >/dev/null 2>&1; then
+            echo "::error::$KEY does not exist - that version was never published"
+            exit 1
+          fi
+
+          # A canary Job must exist and have completed. Promoting a version
+          # nobody canaried is the exact failure this whole design prevents.
+          CANARY=$(aws iot list-jobs --status COMPLETED \
+            --query "jobs[?contains(jobId, 'ota-${{ inputs.sketch }}-$(echo '${{ inputs.version }}' | tr '.' '-')')].jobId" \
+            --output text)
+          if [ -z "$CANARY" ]; then
+            echo "::error::No COMPLETED canary Job found for ${{ inputs.sketch }} ${{ inputs.version }}"
+            exit 1
+          fi
+          echo "::notice::Canary job(s) completed: $CANARY"
+
+      - name: Create fleet-wide Job
+        env:
+          BUCKET: ${{ vars.FIRMWARE_BUCKET }}
+          PRESIGN_ROLE: ${{ secrets.OTA_PRESIGN_ROLE_ARN }}
+          REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          KEY="firmware/${{ inputs.sketch }}/${{ inputs.version }}.bin"
+          JOB_ID="ota-fleet-${{ inputs.sketch }}-$(echo '${{ inputs.version }}' | tr '.' '-')-$(date +%s)"
+
+          jq -n \
+            --arg sketch "${{ inputs.sketch }}" \
+            --arg version "${{ inputs.version }}" \
+            --arg url "\${aws:iot:s3-presigned-url:https://s3.$REGION.amazonaws.com/$BUCKET/$KEY}" \
+            '{operation:"ota", sketch:$sketch, version:$version, url:$url}' \
+            > /tmp/job-doc.json
+
+          # Slower rollout and a tighter abort threshold than the canary: more
+          # devices means more to lose, so failures stop the rollout sooner.
+          aws iot create-job \
+            --job-id "$JOB_ID" \
+            --targets "arn:aws:iot:$REGION:$ACCOUNT:thinggroup/${{ inputs.group }}" \
+            --document "file:///tmp/job-doc.json" \
+            --description "Fleet promote ${{ inputs.sketch }} ${{ inputs.version }}" \
+            --presigned-url-config "roleArn=$PRESIGN_ROLE,expiresInSec=3600" \
+            --job-executions-rollout-config '{"maximumPerMinute":10,"exponentialRate":{"baseRatePerMinute":5,"incrementFactor":2,"rateIncreaseCriteria":{"numberOfSucceededThings":10}}}' \
+            --timeout-config "inProgressTimeoutInMinutes=15" \
+            --abort-config '{"criteriaList":[{"failureType":"FAILED","action":"CANCEL","thresholdPercentage":10,"minNumberOfExecutedThings":5}]}'
+
+          echo "::notice::Created $JOB_ID targeting ${{ inputs.group }}"

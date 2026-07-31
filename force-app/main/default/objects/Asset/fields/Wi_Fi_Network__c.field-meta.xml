@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Wi_Fi_Network__c</fullName>
+    <label>Wi-Fi Network</label>
+    <description>Which network this device joins. Set before provisioning.</description>
+    <referenceTo>Wi_Fi_Network__c</referenceTo>
+    <relationshipName>Devices</relationshipName>
+    <relationshipLabel>Devices</relationshipLabel>
+    <type>Lookup</type>
+</CustomField>
