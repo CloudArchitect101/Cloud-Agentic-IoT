@@ -6,7 +6,12 @@
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
       "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike": { "token.actions.githubusercontent.com:sub": "repo:YOUR_GH_USERNAME/Cloud-Agentic-IoT:ref:refs/heads/Dev" }
+      "StringLike": {
+        "token.actions.githubusercontent.com:sub": [
+          "repo:YOUR_GH_USERNAME/Cloud-Agentic-IoT:environment:Dev",
+          "repo:YOUR_GH_USERNAME@YOUR_OWNER_ID/Cloud-Agentic-IoT@YOUR_REPO_ID:environment:Dev"
+        ]
+      }
     }
   }]
 }

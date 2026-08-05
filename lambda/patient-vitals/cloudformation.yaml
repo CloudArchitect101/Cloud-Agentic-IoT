@@ -1,7 +1,30 @@
-AWSTemplateFormatVersion: '2012-11-13'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: Cloud-Agentic-IoT Branch 01 - Data Cloud RAG Pipeline (Lambda + DynamoDB)
 
+# SalesforceInstance/ClientId/Username were referenced without being declared,
+# which failed validation outright. SalesforceClientSecret and SalesforcePassword
+# are gone entirely: lambda/patient-vitals/index.js authenticates with the JWT
+# bearer flow and never reads them - they were left over from a password-flow
+# version of this template and contradicted the rest of the repo.
 Parameters:
+  # SSM-backed, matching lambda/slack-integration. The values are seeded from
+  # GitHub Environment secrets by deploy-aws.yml, so GitHub stays the single
+  # source of truth and SSM is only the delivery path the templates read.
+  SfInstanceParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/instance
+  SfConsumerKeyParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/consumer-key
+  SfUsernameParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/username
+  SfLoginUrlParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/login-url
+  SfJwtPrivateKeyParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/jwt-private-key
   PatientVitalsTableName:
     Type: String
     Default: patient-vitals
@@ -75,13 +98,13 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE: !Ref PatientVitalsTableName
-          SALESFORCE_ENDPOINT: !Sub https://${SALESFORCE_INSTANCE}.salesforce.com
-          SALESFORCE_CLIENT_ID: !Ref SalesforceClientId
-          SALESFORCE_CLIENT_SECRET: !Ref SalesforceClientSecret
-          SALESFORCE_USERNAME: !Ref SalesforceUsername
-          SALESFORCE_PASSWORD: !Ref SalesforcePassword
-          SALESFORCE_LOGIN_URL: !Sub https://${SALESFORCE_INSTANCE}.salesforce.com
-      Tracing: AWSCodePipeline
+          SALESFORCE_ENDPOINT: !Sub 'https://${SfInstanceParam}.salesforce.com'
+          SALESFORCE_CLIENT_ID: !Ref SfConsumerKeyParam
+          SALESFORCE_USERNAME: !Ref SfUsernameParam
+          SALESFORCE_LOGIN_URL: !Ref SfLoginUrlParam
+          SALESFORCE_JWT_PRIVATE_KEY: !Ref SfJwtPrivateKeyParam
+      TracingConfig:
+        Mode: Active
 
   # IoT Rule to trigger Lambda on telemetry events
   PatientVitalsIoTRule:

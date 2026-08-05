@@ -25,6 +25,54 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # GitHub is the single source of truth for these values; SSM is only the
+      # delivery mechanism the templates read from. Seeding here rather than
+      # by hand means Prod is reproducible and nothing has to be kept in sync
+      # in two places.
+      #
+      # They are String, not SecureString, on purpose: CloudFormation's
+      # AWS::SSM::Parameter::Value<String> cannot resolve a SecureString, and
+      # the templates use that type. The values end up in Lambda environment
+      # variables either way, so SecureString would buy encryption at rest in
+      # SSM only. Anyone with lambda:GetFunctionConfiguration can still read
+      # them - that is the trade-off of env-var delivery, and moving the
+      # Lambdas to read from SSM at runtime is what would actually fix it.
+      - name: Seed SSM Parameter Store from GitHub Environment secrets
+        env:
+          SF_CONSUMER_KEY: ${{ secrets.SF_CONSUMER_KEY }}
+          SF_USERNAME:     ${{ secrets.SF_USERNAME }}
+          SF_JWT_KEY:      ${{ secrets.SF_JWT_KEY }}
+          SF_LOGIN_URL:    ${{ vars.SF_LOGIN_URL || 'https://login.salesforce.com' }}
+          SF_INSTANCE:     ${{ vars.SF_INSTANCE }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+        run: |
+          set -euo pipefail
+
+          put() {   # put <name> <value>; skips silently when the value is empty
+            [ -n "${2:-}" ] || { echo "::warning::$1 not set, skipping"; return 0; }
+            aws ssm put-parameter --name "$1" --type String --overwrite \
+              --value "$2" > /dev/null
+            echo "  seeded $1"
+          }
+
+          put /cloud-agentic-iot/salesforce/consumer-key "$SF_CONSUMER_KEY"
+          put /cloud-agentic-iot/salesforce/username     "$SF_USERNAME"
+          put /cloud-agentic-iot/salesforce/login-url    "$SF_LOGIN_URL"
+          put /cloud-agentic-iot/salesforce/instance     "$SF_INSTANCE"
+          put /cloud-agentic-iot/slack/signing-secret    "$SLACK_SIGNING_SECRET"
+
+          # SF_JWT_KEY is stored base64-encoded (same form the Salesforce deploy
+          # uses); the Lambdas need the PEM itself.
+          if [ -n "${SF_JWT_KEY:-}" ]; then
+            printf '%s' "$SF_JWT_KEY" | base64 --decode > /tmp/sf.key
+            aws ssm put-parameter --name /cloud-agentic-iot/salesforce/jwt-private-key \
+              --type String --overwrite --value "$(cat /tmp/sf.key)" > /dev/null
+            rm -f /tmp/sf.key
+            echo "  seeded /cloud-agentic-iot/salesforce/jwt-private-key"
+          else
+            echo "::warning::SF_JWT_KEY not set, skipping jwt-private-key"
+          fi
+
       - name: Validate every CloudFormation template before deploying anything
         run: |
           set -euo pipefail

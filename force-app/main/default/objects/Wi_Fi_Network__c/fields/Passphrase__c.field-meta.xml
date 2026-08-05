@@ -3,7 +3,6 @@
     <fullName>Passphrase__c</fullName>
     <label>Passphrase</label>
     <description>Encrypted Text is available in every edition - no Shield required. Masked in the UI, reports and exports; readable only with "View Encrypted Data".</description>
-    <encryptionScheme>ProbabilisticEncryption</encryptionScheme>
     <maskChar>asterisk</maskChar>
     <maskType>all</maskType>
     <length>63</length>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <label>Device Integration</label>
-    <description>Everything the integration user (CLI, CI, MCP, AWS callbacks) needs and nothing more: API access, the device data model, and execute on the service classes. Delete is deliberately withheld everywhere - automation creates and updates, humans delete. Assign on top of the Minimum Access profile; see docs/ACCOUNT-BOOTSTRAP.md.</description>
+    <description>Runtime access for the integration user: CLI, CI, MCP and AWS callbacks. Read/write on device and telemetry objects only - no metadata or configuration rights.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <userPermissions>
         <enabled>true</enabled>
@@ -80,6 +80,19 @@
         <allowCreate>true</allowCreate>
         <allowRead>true</allowRead>
         <allowEdit>true</allowEdit>
+        <allowDelete>false</allowDelete>
+        <viewAllRecords>false</viewAllRecords>
+        <modifyAllRecords>false</modifyAllRecords>
+    </objectPermissions>
+    <!-- Asset is a child of Account, and Salesforce refuses Read on Asset
+         without Read on Account: "Permission Read Asset depends on
+         permission(s): Read Account". Read-only on purpose - the integration
+         user never creates or edits Accounts. -->
+    <objectPermissions>
+        <object>Account</object>
+        <allowCreate>false</allowCreate>
+        <allowRead>true</allowRead>
+        <allowEdit>false</allowEdit>
         <allowDelete>false</allowDelete>
         <viewAllRecords>false</viewAllRecords>
         <modifyAllRecords>false</modifyAllRecords>

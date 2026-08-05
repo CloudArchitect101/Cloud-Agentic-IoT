@@ -13,24 +13,24 @@ public with sharing class DataIngestionService {
      * Patient vital record DTO for ingestion
      */
     public class VitalRecord {
-        @AuraEnabled public String deviceId;
-        @AuraEnabled public Decimal heartRate;
-        @AuraEnabled public Decimal spo2;
-        @AuraEnabled public Decimal temperature;
-        @AuraEnabled public Decimal bloodPressureSystolic;
-        @AuraEnabled public Decimal bloodPressureDiastolic;
-        @AuraEnabled public DateTime timestamp;
-        @AuraEnabled public String sourceSystem;
+        @AuraEnabled @InvocableVariable public String deviceId;
+        @AuraEnabled @InvocableVariable public Decimal heartRate;
+        @AuraEnabled @InvocableVariable public Decimal spo2;
+        @AuraEnabled @InvocableVariable public Decimal temperature;
+        @AuraEnabled @InvocableVariable public Decimal bloodPressureSystolic;
+        @AuraEnabled @InvocableVariable public Decimal bloodPressureDiastolic;
+        @AuraEnabled @InvocableVariable public DateTime timestamp;
+        @AuraEnabled @InvocableVariable public String sourceSystem;
     }
 
     /**
      * Ingestion result DTO
      */
     public class IngestionResult {
-        @AuraEnabled public Boolean success;
-        @AuraEnabled public String message;
-        @AuraEnabled public Id recordId;
-        @AuraEnabled public Integer riskScore;
+        @AuraEnabled @InvocableVariable public Boolean success;
+        @AuraEnabled @InvocableVariable public String message;
+        @AuraEnabled @InvocableVariable public Id recordId;
+        @AuraEnabled @InvocableVariable public Integer riskScore;
     }
 
     /**
@@ -71,10 +71,17 @@ public with sharing class DataIngestionService {
                 BP_Diastolic__c = latest.bloodPressureDiastolic,
                 Timestamp__c = latest.timestamp,
                 Source_System__c = latest.sourceSystem,
-                Risk_Score__c = riskScore
+                Risk_Score__c = riskScore,
+                // Required, unique external ID. Same deviceId-timestamp key the
+                // patient-vitals Lambda upserts on, so a reading that arrives via
+                // both paths lands on one record instead of duplicating.
+                Device_Reading_Id__c = deviceId + '-' +
+                    String.valueOf(latest.timestamp != null ? latest.timestamp : System.now())
             );
 
-            insert vitalsRecord;
+            // Upsert, not insert: IoT deliveries retry, and a retried insert
+            // would violate the unique constraint rather than being a no-op.
+            upsert vitalsRecord Device_Reading_Id__c;
 
             IngestionResult result = new IngestionResult();
             result.success = true;
@@ -131,7 +138,8 @@ public with sharing class DataIngestionService {
      * @param deviceId The patient device identifier
      * @return List of Patient_Vitals__c records for the device
      */
-    @InvocableMethod(label='Get Patient Vitals for Data Cloud' description='Retrieves patient vitals for Data Cloud External Object sync')
+    // Not @InvocableMethod: Apex allows only one per class, and that slot
+    // belongs to ingestVitals. Called directly rather than from a Flow.
     public static List<Patient_Vitals__c> getVitalsForDataCloud(String deviceId) {
         return [
             SELECT Id, Device__c, Heart_Rate__c, SpO2__c, Temperature__c,

@@ -6,7 +6,7 @@
 @isTest
 private class StreamingAlertServiceTest {
 
-    @Test
+    @IsTest
     static void test_process_vitals_critical_heart_rate() {
         StreamingAlertService.VitalsPayload payload = new StreamingAlertService.VitalsPayload();
         payload.deviceId = 'TEST-DEVICE-001';
@@ -24,11 +24,11 @@ private class StreamingAlertServiceTest {
         Test.stopTest();
 
         System.assertEquals(1, results.size());
-        System.assertTrue(results[0].alertPublished, 'Should publish alert for critical heart rate');
+        Assert.isTrue(results[0].alertPublished, 'Should publish alert for critical heart rate');
         System.assertEquals('CRITICAL_VITALS', results[0].alertType);
     }
 
-    @Test
+    @IsTest
     static void test_process_vitals_critical_spo2() {
         StreamingAlertService.VitalsPayload payload = new StreamingAlertService.VitalsPayload();
         payload.deviceId = 'TEST-DEVICE-002';
@@ -45,11 +45,11 @@ private class StreamingAlertServiceTest {
         List<StreamingAlertService.AlertResult> results = StreamingAlertService.processVitalsAlert(payloads);
         Test.stopTest();
 
-        System.assertTrue(results[0].alertPublished, 'Should publish alert for critical SpO2');
+        Assert.isTrue(results[0].alertPublished, 'Should publish alert for critical SpO2');
         System.assertEquals('CRITICAL_VITALS', results[0].alertType);
     }
 
-    @Test
+    @IsTest
     static void test_process_vitals_normal_range() {
         StreamingAlertService.VitalsPayload payload = new StreamingAlertService.VitalsPayload();
         payload.deviceId = 'TEST-DEVICE-003';
@@ -66,10 +66,10 @@ private class StreamingAlertServiceTest {
         List<StreamingAlertService.AlertResult> results = StreamingAlertService.processVitalsAlert(payloads);
         Test.stopTest();
 
-        System.assertFalse(results[0].alertPublished, 'Should not publish alert for normal vitals');
+        Assert.isFalse(results[0].alertPublished, 'Should not publish alert for normal vitals');
     }
 
-    @Test
+    @IsTest
     static void test_process_vitals_abnormal_trend() {
         StreamingAlertService.VitalsPayload payload = new StreamingAlertService.VitalsPayload();
         payload.deviceId = 'TEST-DEVICE-004';
@@ -86,11 +86,11 @@ private class StreamingAlertServiceTest {
         List<StreamingAlertService.AlertResult> results = StreamingAlertService.processVitalsAlert(payloads);
         Test.stopTest();
 
-        System.assertTrue(results[0].alertPublished, 'Should publish warning for abnormal trend');
+        Assert.isTrue(results[0].alertPublished, 'Should publish warning for abnormal trend');
         System.assertEquals('ABNORMAL_TREND', results[0].alertType);
     }
 
-    @Test
+    @IsTest
     static void test_process_vitals_multiple_payloads() {
         StreamingAlertService.VitalsPayload critical = new StreamingAlertService.VitalsPayload();
         critical.deviceId = 'TEST-DEVICE-001';
@@ -117,7 +117,7 @@ private class StreamingAlertServiceTest {
         Test.stopTest();
 
         System.assertEquals(2, results.size());
-        System.assertTrue(results[0].alertPublished, 'First payload should trigger alert');
-        System.assertFalse(results[1].alertPublished, 'Second payload should not trigger alert');
+        Assert.isTrue(results[0].alertPublished, 'First payload should trigger alert');
+        Assert.isFalse(results[1].alertPublished, 'Second payload should not trigger alert');
     }
 }

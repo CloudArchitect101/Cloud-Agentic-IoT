@@ -148,7 +148,7 @@ public with sharing class CaseQueueMonitorService {
         // forget: subscribers (the AWS relay, the LWC dashboard, an agent) are
         // invisible to this code, which is exactly why new consumers can be
         // added without touching it.
-        List<Database.SaveResult> results = EventBus.publishQueueDepthEvents(events);
+        List<Database.SaveResult> results = EventBus.publish(events);
         for (Integer i = 0; i < results.size(); i++) {
             if (!results[i].isSuccess()) {
                 for (Database.Error err : results[i].getErrors()) {
