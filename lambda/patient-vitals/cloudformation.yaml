@@ -48,8 +48,8 @@ Resources:
         - AttributeName: SK
           KeyType: RANGE
       TimeToLiveSpecification:
-        AttributeName: CreatedAt
-        TTLSeconds: 7776000 # 90 days
+        AttributeName: ExpiresAt
+        Enabled: true
 
   # Lambda Execution Role
   PatientVitalsLambdaRole:
@@ -64,23 +64,25 @@ Resources:
             Action: sts:AssumeRole
       Policies:
         - PolicyName: DynamoDBAccess
-          PolicyDocumentVersion: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:PutItem
-                - dynamodb:GetItem
-                - dynamodb:Query
-              Resource: !GetAtt PatientVitalsTable.Arn
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Resource: !GetAtt PatientVitalsTable.Arn
         - PolicyName: CloudWatchLogs
-          PolicyDocumentVersion: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
 
   # Lambda Function for patient vital processing
   PatientVitalsLambda:
@@ -107,21 +109,34 @@ Resources:
         Mode: Active
 
   # IoT Rule to trigger Lambda on telemetry events
+  #
+  # The previous version of this resource nested TopicRulePayload inside itself,
+  # carried a "Payload" property that does not exist on AWS::IoT::TopicRule, and
+  # gave the Lambda action RoleArn/Endpoint instead of FunctionArn. That is what
+  # CloudFormation rejected as AWS::EarlyValidation::PropertyValidation - a
+  # message that names no property, so the shape had to be read against the
+  # resource schema.
   PatientVitalsIoTRule:
     Type: AWS::IoT::TopicRule
     Properties:
+      RuleName: cloud_agentic_iot_patient_vitals
       TopicRulePayload:
-        TopicRulePayload:
-          Payload:
-            '$map({
-              "deviceId": $input("deviceId"),
-              "vitals": $input("vitals")
-            })'
-          Sql: "SELECT * FROM 'device/+/telemetry'"
-          Actions:
-            - Lambda:
-                RoleArn: !GetAtt PatientVitalsLambdaRole.Arn
-                Endpoint: aws-iot
+        Sql: "SELECT * FROM 'device/+/telemetry'"
+        AwsIotSqlVersion: '2016-03-23'
+        RuleDisabled: false
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt PatientVitalsLambda.Arn
+
+  # Without this, the rule exists but IoT Core is not allowed to invoke the
+  # function, and telemetry silently goes nowhere.
+  PatientVitalsIoTInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt PatientVitalsLambda.Arn
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt PatientVitalsIoTRule.Arn
 
 Outputs:
   PatientVitalsTableArn:

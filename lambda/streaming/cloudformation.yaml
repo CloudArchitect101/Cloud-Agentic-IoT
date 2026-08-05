@@ -28,26 +28,51 @@ Resources:
       Name: patient-vitals-event-bus
 
   # EventBridge Rule to route telemetry events to alert dispatcher
+  #
+  # Corrected against the resource schema: EventBusId is not a property
+  # (EventBusName is), EventPattern uses detail-type not detailType, and a
+  # target takes RetryPolicy + DeadLetterConfig - RetryConfig/DestinationOptions
+  # /OnSuccess do not exist and were what failed early validation.
   TelemetryToAlertRule:
     Type: AWS::Events::Rule
     Properties:
-      EventBusId: !GetAtt PatientVitalsEventBus.Arn
+      EventBusName: !Ref PatientVitalsEventBus
       EventPattern:
         source: ['patient.iot.wearable']
-        detailType: ['patient.vitals.update']
+        detail-type: ['patient.vitals.update']
       State: ENABLED
       Targets:
         - Arn: !GetAtt AlertDispatcherLambda.Arn
           Id: AlertDispatcher
-          RetryConfig:
-            DestinationOptions:
-              DeadLetterConfig:
-                Arn: !GetAtt AlertDLQ.Arn
-              OnSuccess:
-                DeadLetterConfig:
-                  Arn: !GetAtt AlertDLQ.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+          DeadLetterConfig:
+            Arn: !GetAtt AlertDLQ.Arn
         - Arn: !GetAtt DataSinkLambda.Arn
           Id: DataSink
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+          DeadLetterConfig:
+            Arn: !GetAtt AlertDLQ.Arn
+
+  # Rules do not implicitly get permission to invoke their targets.
+  AlertDispatcherInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt AlertDispatcherLambda.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TelemetryToAlertRule.Arn
+
+  DataSinkInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt DataSinkLambda.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TelemetryToAlertRule.Arn
 
   # Alert Dispatcher Lambda
   AlertDispatcherRole:
@@ -60,25 +85,25 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+      # Inline policies need a nested PolicyDocument holding Version and
+      # Statement. PolicyDocumentVersion is not a property and made the whole
+      # changeset fail early validation.
+      #
+      # The second policy was named SalesforceAccess but granted only the same
+      # CloudWatch Logs actions as the first - a copy-paste that granted nothing
+      # it claimed to. Dropped rather than left as misleading dead weight: this
+      # Lambda reaches Salesforce over HTTPS with a token, which needs no IAM.
       Policies:
         - PolicyName: CloudWatchLogs
-          PolicyDocumentVersion: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
-        - PolicyName: SalesforceAccess
-          PolicyDocumentVersion: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
 
   AlertDispatcherLambda:
     Type: AWS::Lambda::Function

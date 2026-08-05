@@ -81,12 +81,17 @@ jobs:
             aws cloudformation validate-template --template-body "file://$stack" > /dev/null
           done
 
-      - name: Deploy stacks
+      # Slack is deployed separately, below. It is the only stack that depends
+      # on a third-party app existing (the Slack signing secret), so bundling it
+      # here meant one unconfigured integration failed the deploy of the device
+      # pipeline, which has nothing to do with Slack.
+      - name: Deploy core stacks
         run: |
           set -euo pipefail
           for stack in $(find . -name cloudformation.yaml -not -path "./node_modules/*"); do
             dir=$(dirname "$stack")
             name=$(basename "$dir")
+            if [ "$name" = "slack-integration" ]; then continue; fi
             echo "::group::Deploying $stack"
             aws cloudformation deploy \
               --template-file "$stack" \
@@ -96,20 +101,70 @@ jobs:
             echo "::endgroup::"
           done
 
+      # Skipped rather than failed when the Slack app has not been created yet.
+      # The template reads /cloud-agentic-iot/slack/signing-secret from SSM, and
+      # CloudFormation refuses to build a changeset when that parameter is
+      # absent — so check first and say so plainly instead of dying on
+      # "Unable to fetch parameters ... from parameter store".
+      - name: Deploy Slack integration (optional)
+        id: slack
+        run: |
+          set -euo pipefail
+          if ! aws ssm get-parameter --name /cloud-agentic-iot/slack/signing-secret > /dev/null 2>&1; then
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SLACK_SIGNING_SECRET is not set, so /cloud-agentic-iot/slack/signing-secret does not exist. Skipping the Slack stack — everything else deployed. Set the secret on this environment to enable it."
+            exit 0
+          fi
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          echo "::group::Deploying lambda/slack-integration/cloudformation.yaml"
+          aws cloudformation deploy \
+            --template-file lambda/slack-integration/cloudformation.yaml \
+            --stack-name "cloud-agentic-iot-slack-integration-${{ github.ref_name }}" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+          echo "::endgroup::"
+
       # The templates carry a placeholder inline handler so the stack can be
       # created standalone. Real source lives next to it in git, so every
       # directory holding an index.js is bundled and pushed over the top here —
       # without this step the stacks deploy green while running placeholder code.
+      #
+      # Only sources whose FunctionName is actually declared in a template are
+      # packaged. The repo carries Lambda source for several functions whose
+      # infrastructure has not been written yet (device-provisioning, ota-saga,
+      # mcp-server and others), plus animations/src, which is not a Lambda at
+      # all. Treating every index.js as deployable made this step fail on all of
+      # them. Deriving the list from the templates keeps the real guard intact:
+      # if a template declares a function and its source directory does not
+      # match, that still fails loudly.
       - name: Package and upload real Lambda source
+        env:
+          SLACK_DEPLOYED: ${{ steps.slack.outputs.deployed }}
         run: |
           set -euo pipefail
+
+          declared=$(grep -rh "FunctionName: cloud-agentic-iot" --include=cloudformation.yaml . \
+                     | sed 's/.*FunctionName: //' | tr -d '\r' | sort -u)
+          echo "Functions declared in templates:"; echo "$declared" | sed 's/^/  /'
+
           for src in $(find . -name index.js -not -path "./node_modules/*" -not -path "*/node_modules/*"); do
             dir=$(dirname "$src")
             fn="cloud-agentic-iot-$(basename "$dir")"
 
+            if ! echo "$declared" | grep -qx "$fn"; then
+              echo "::notice::Skipping $dir - no CloudFormation template declares $fn."
+              continue
+            fi
+
+            # A skipped Slack stack is expected, not a mistake.
+            if [ "$SLACK_DEPLOYED" != "true" ] && [ "$(basename "$dir")" = "slack-integration" ]; then
+              echo "::notice::Skipping $dir - the Slack stack was not deployed."
+              continue
+            fi
+
             if ! aws lambda get-function --function-name "$fn" > /dev/null 2>&1; then
-              echo "::error::No Lambda named $fn for source in $dir. FunctionName in the \
-          CloudFormation template must match cloud-agentic-iot-<source directory name>."
+              echo "::error::$fn is declared in a template but does not exist in the account. \
+          FunctionName must match cloud-agentic-iot-<source directory name>."
               exit 1
             fi
 
