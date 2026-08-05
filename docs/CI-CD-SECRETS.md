@@ -63,3 +63,35 @@ These are not style preferences — break one and the build fails loudly (which 
 | Bump `FIRMWARE_VERSION` to ship firmware | An unchanged version publishes nothing, so refactors and docs edits cannot reach devices | The S3 artefact's existence is the gate |
 
 `scripts/chapter-setup.sh` generates scaffolding that already satisfies all of these — use it rather than hand-creating a new chapter.
+
+## Pipeline failures and what they actually mean
+
+Every one of these was hit for real getting the pipeline green. The error text
+rarely names the cause, which is the whole reason for this table.
+
+| Error | Real cause | Fix |
+|---|---|---|
+| `webidl.util.markAsUncloneable is not a function` during `sf` startup | The Salesforce CLI pulls in jsforce → undici 8, which requires Node ≥ 22.19.0. npm only *warns* on an unmet `engines`, so the install succeeds and the CLI dies on first run | `node-version: '22'` in the workflow. Same trap in `lambda/slack-integration`, which bundles jsforce — its `Runtime` is `nodejs22.x` for this reason |
+| `sf org login jwt` runs with `--instance-url ""` | `SF_LOGIN_URL` was never set as a GitHub Environment **variable** | Set it, or rely on the workflow default. `scripts/setup-github-secrets.sh` prompts for it |
+| `External client app is not installed in this org` | Misleading — the app usually *is* installed. It means the org will not honour the JWT for that app: no certificate uploaded, the user not pre-authorized (permission set **and** profile), or the login blocked by `ipRelaxationPolicyType: Enforce` against a runner IP you cannot predict | See [`SETUP.md`](SETUP.md) §5, which lists the known-good configuration to diff against |
+| JWT auth succeeds but the CLI then fails against the Metadata API | **"Issue JSON Web Token (JWT)-based access tokens for named users"** (`isNamedUserJwtEnabled`) is on. That is not the JWT bearer *flow* — it changes the access token handed back into a JWT, and the CLI needs an opaque session ID | Turn it **off**. It is a different setting from "Enable JWT Bearer Flow" despite the near-identical name |
+| `invalid_grant` on an otherwise correct JWT | The certificate uploaded to the app is not the public half of the key being signed with | Compare moduli — `openssl x509 -noout -modulus` vs `openssl rsa -noout -modulus` |
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | The IAM trust policy matches a `sub` claim GitHub no longer sends. Jobs declaring `environment:` get `...:environment:Dev`, **not** `...:ref:refs/heads/Dev`; new repos additionally get immutable owner/repo IDs | See [`SETUP.md`](SETUP.md) §6 Step 2. Read the real claim from CloudTrail rather than guessing |
+| Every Apex component fails `Not available for deploy for this organization`, every LWC fails `insufficient access rights on entity: LightningComponentResource` | The deploy user's permission set lacks **Author Apex**. One missing permission, two unrelated-looking messages. Invisible locally — admins hold it implicitly, so only the pipeline sees it | Add Author Apex to `Metadata_Deploy` — see [`SETUP.md`](SETUP.md) §4 |
+| Only the LWC bundle fails, with `insufficient access rights on entity: LightningComponentResource`, after Author Apex is granted | Lightning components need **Customize Application** as well as Author Apex | §4 |
+| Objects or fields fail while Apex now succeeds | **Customize Application** missing. Each metadata type needs its own permission; `Modify Metadata Through Metadata API Functions` only grants Metadata API access, not the right to change any given type | §4 has the full type→permission table |
+| Apex tests fail with `INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY` while the same tests pass locally | Tests run as the **deploying user**, not as you. Anything creating setup objects — a `Group` of `Type='Queue'` in our case — needs admin rights that no permission grant supplies | The deploy user's profile is System Administrator for this reason — see [`SETUP.md`](SETUP.md) §4 |
+| A trigger reports `Test coverage … is 0%, at least 1% is required` even though org-wide coverage looks fine | Salesforce enforces ≥1% per **trigger** separately from the 75% org-wide rule. A trigger whose only tests failed counts as 0% | Fix the failing tests first; the coverage warning is usually a symptom, not the cause |
+| The pipeline goes green in Dev, then fails wholesale on the first Prod deploy | Dev was hand-deployed by an admin first. Unchanged components skip the permission check entirely, so Dev never exercised the deploy user's real permissions; Prod has nothing pre-deployed and exercises all of them at once | Read effective permissions rather than trusting a green Dev run — §4 |
+| A `PermissionSet` component fails but nothing else does | **Manage Profiles and Permission Sets** missing | Same table |
+| A single component fails `Not available for deploy for this organization` | That *type* needs a feature switched on — `Bot` needs Einstein Bots, the `GenAi*` types need Agentforce | Enable the feature. If it persists on `Bot`, check `<type>`: classic `Bot` needs an Einstein Bots licence, Agentforce agents use `InternalCopilot` |
+| `Expected source files for type 'GenAiFunction'` | `GenAiFunction` is a bundle type — it needs its own directory, not a bare `.genAiFunction-meta.xml` | `genAiFunctions/<Name>/<Name>.genAiFunction-meta.xml` |
+| `Could not infer a metadata type` on an `__e` event | Platform events are CustomObjects in source format. A `platform_events/` directory with a `<CustomEventDefinition>` root is MDAPI shape and does not resolve | `objects/<Event>__e/<Event>__e.object-meta.xml` with `<CustomObject>`, fields split into `fields/` |
+| A platform event field silently will not deploy | Platform events support only Checkbox, Date, Date/Time, Number, Text and Text Area (Long) — **Picklist is not supported** | Use Text and document the permitted values in the field description |
+
+Two habits that catch most of the above before a push:
+
+```bash
+sf project convert source -d "$(mktemp -d)"   # resolves all source offline, no org contact
+ruby -ryaml -e "YAML.load_file('.github/workflows/deploy-salesforce.yml')"
+```

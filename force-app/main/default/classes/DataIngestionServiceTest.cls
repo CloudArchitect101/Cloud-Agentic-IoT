@@ -40,7 +40,7 @@ private class DataIngestionServiceTest {
         Test.stopTest();
 
         System.assertEquals(1, results.size(), 'Should return one result per device');
-        System.assertTrue(results[0].success, 'Ingestion should succeed');
+        Assert.isTrue(results[0].success, 'Ingestion should succeed');
         System.assertEquals(0, results[0].riskScore, 'Normal vitals should have zero risk score');
         System.assertNotEquals(null, results[0].recordId, 'Should create a record');
     }
@@ -65,7 +65,7 @@ private class DataIngestionServiceTest {
         Test.stopTest();
 
         System.assertEquals(1, results.size());
-        System.assertTrue(results[0].success);
+        Assert.isTrue(results[0].success);
         System.assert(results[0].riskScore >= 80, 'Critical vitals should have high risk score');
     }
 
@@ -119,6 +119,7 @@ private class DataIngestionServiceTest {
         vitals.Temperature__c = 36.8;
         vitals.Timestamp__c = DateTime.now();
         vitals.Risk_Score__c = 0;
+        vitals.Device_Reading_Id__c = 'TEST-DEVICE-001-' + String.valueOf(DateTime.now());
         insert vitals;
 
         Test.startTest();

@@ -18,13 +18,13 @@ public with sharing class StreamingAlertService {
      * Incoming vitals payload from AWS Lambda
      */
     public class VitalsPayload {
-        @AuraEnabled public String deviceId;
-        @AuraEnabled public Decimal heartRate;
-        @AuraEnabled public Decimal spo2;
-        @AuraEnabled public Decimal temperature;
-        @AuraEnabled public Decimal bpSystolic;
-        @AuraEnabled public Decimal bpDiastolic;
-        @AuraEnabled public String sourceSystem;
+        @AuraEnabled @InvocableVariable public String deviceId;
+        @AuraEnabled @InvocableVariable public Decimal heartRate;
+        @AuraEnabled @InvocableVariable public Decimal spo2;
+        @AuraEnabled @InvocableVariable public Decimal temperature;
+        @AuraEnabled @InvocableVariable public Decimal bpSystolic;
+        @AuraEnabled @InvocableVariable public Decimal bpDiastolic;
+        @AuraEnabled @InvocableVariable public String sourceSystem;
     }
 
     /**
@@ -128,15 +128,15 @@ public with sharing class StreamingAlertService {
         alertEvent.Temperature__c = payload.temperature;
         alertEvent.Message__c = message;
 
-        Database.insert(new List<Patient_Vital_Alert__e> { alertEvent }, false);
+        EventBus.publish(new List<Patient_Vital_Alert__e>{ alertEvent });
     }
 
     /**
      * Alert result DTO
      */
     public class AlertResult {
-        @AuraEnabled public String deviceId;
-        @AuraEnabled public Boolean alertPublished;
-        @AuraEnabled public String alertType;
+        @AuraEnabled @InvocableVariable public String deviceId;
+        @AuraEnabled @InvocableVariable public Boolean alertPublished;
+        @AuraEnabled @InvocableVariable public String alertType;
     }
 }

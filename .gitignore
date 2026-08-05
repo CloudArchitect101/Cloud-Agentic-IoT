@@ -17,6 +17,9 @@ career/
 # accidental push as a rotation event.
 # ---------------------------------------------------------------------------
 secrets.h
+.secrets
+.secrets.*
+.vars
 .env
 .env.*
 *.pem

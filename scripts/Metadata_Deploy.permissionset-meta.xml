@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Metadata_Deploy - the permission set the CI/CD deploy user runs as.
+
+  This lives in scripts/, NOT in force-app/, on purpose. It is a bootstrap
+  artefact: the deploy user needs it BEFORE the pipeline can deploy anything,
+  so it cannot ship inside the package the pipeline deploys. Apply it by hand,
+  once per org, as an administrator. The two commands (deploy, then assign) are
+  in docs/SETUP.md section 4.
+
+  Each permission below is here because a specific metadata type in force-app/
+  demands it. Adding a new type may mean adding a permission; the full
+  type to permission table is in docs/SETUP.md section 4.
+
+  Deliberately absent: ModifyAllData, ViewAllData, ManageUsers.
+
+  STATUS: this permission set is no longer what authorises the pipeline.
+
+  The deploy user's profile was changed to System Administrator, because Apex
+  tests run as the deploying user and two of them create a Queue as fixture
+  data. Creating a Group of Type='Queue' is not reachable by permission grants:
+  ManageUsers (which drags in twelve more) does not unlock it, nor does a role,
+  nor Case access. The only remaining route was ModifyAllData, which demands a
+  further thirty-three permissions - System Administrator rebuilt by hand, with
+  none of the honesty of just saying so.
+
+  Verified directly: identical Apex creating a queue succeeds as an admin and
+  fails as the least-privilege deploy user in the same org, seconds apart.
+
+  This file is kept because it still documents which permission each metadata
+  type needs, and because it is the starting point if the tests are ever
+  reworked to stop inserting setup objects (CaseQueueMonitorService already has
+  a testBindingOverride seam for exactly that kind of injection). Until then the
+  admin profile is doing the work, and that is the trade-off on record.
+-->
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>CI/CD deploy identity. Structure only, no record data access. See docs/SETUP.md section 4.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>Metadata_Deploy</label>
+
+    <!-- JWT token exchange. Without it the pipeline cannot authenticate at all. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ApiEnabled</name>
+    </userPermissions>
+
+    <!-- ApexClass (20), ApexTrigger (4). Also required by LightningComponentBundle,
+         which needs CustomizeApplication as well; Author Apex alone fails it. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>AuthorApex</name>
+    </userPermissions>
+
+    <!-- CustomObject (7), CustomField (44), CustomMetadata (1),
+         LightningComponentBundle (1). Carries two hard prerequisites of its own,
+         immediately below; without them Salesforce refuses it. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>CustomizeApplication</name>
+    </userPermissions>
+
+    <!-- Prerequisite of CustomizeApplication. Not optional and not obvious:
+         "Permission CustomizeApplication depends on permission(s):
+         ManageCustomPermissions, ManageTranslation". -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ManageCustomPermissions</name>
+    </userPermissions>
+
+    <!-- The second prerequisite of CustomizeApplication, same error. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ManageTranslation</name>
+    </userPermissions>
+
+    <!-- PermissionSet (1); the pipeline deploys Device_Integration. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ManageProfilesPermissionsets</name>
+    </userPermissions>
+
+    <!-- Opens the Metadata API itself. Necessary but nowhere near sufficient:
+         it grants access to the API, not the right to change any given type. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ModifyMetadata</name>
+    </userPermissions>
+
+    <!-- Prerequisite for CustomizeApplication and ManageProfilesPermissionsets.
+         Leave it out and the Metadata API does NOT fail: it reports Succeeded,
+         reports changed=false, and silently discards both dependent permissions.
+         The only way to catch that is to query the org afterwards. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewSetup</name>
+    </userPermissions>
+
+    <!-- Prerequisite of AuthorApex: "Permission AuthorApex depends on
+         permission(s): ViewRoles". Grants visibility of the role hierarchy,
+         not membership of it. -->
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ViewRoles</name>
+    </userPermissions>
+
+
+
+
+    <!-- Object access below is NOT for deploying. It is for RunLocalTests.
+
+         The pipeline validates at test level RunLocalTests, and Apex tests
+         execute as whoever is deploying - here the least-privilege deploy user,
+         not an administrator. Tests that build fixture data therefore need real
+         object permissions, and without them they fail with errors that look
+         nothing like a permissions problem:
+
+           INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY
+
+         which is what CaseQueueMonitorServiceTest and TriggerHandlerTest hit
+         when inserting a QueueSobject that references Case.
+
+         This is a real widening of the deploy identity: it can now read Case
+         data, which the "structure only" principle above would rather it could
+         not. The alternatives are worse - making the deploy user an
+         administrator, or dropping RunLocalTests and losing the pre-deploy test
+         gate. Keep this list as small as the tests allow, and never add
+         ViewAllRecords or ModifyAllRecords. -->
+    <objectPermissions>
+        <object>Case</object>
+        <allowCreate>true</allowCreate>
+        <allowRead>true</allowRead>
+        <allowEdit>true</allowEdit>
+        <allowDelete>false</allowDelete>
+        <viewAllRecords>false</viewAllRecords>
+        <modifyAllRecords>false</modifyAllRecords>
+    </objectPermissions>
+</PermissionSet>

@@ -1,10 +1,29 @@
-AWSTemplateFormatVersion: '2012-11-13'
+AWSTemplateFormatVersion: '2010-09-09'
 Description: Cloud-Agentic-IoT Branch 02 - Real-time Streams to Agents (EventBridge + Platform Events)
+
+# Both of these were referenced in the Resources block without ever being
+# declared, so the template failed validation with "Unresolved resource
+# dependencies" before CloudFormation looked at a single resource.
+Parameters:
+  # SSM-backed, matching the other templates. Seeded from GitHub Environment
+  # secrets by deploy-aws.yml.
+  SfInstanceParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/instance
+  SalesforceAccessToken:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: >-
+      Session token for the alert dispatcher. A long-lived token here is a
+      stopgap; the rest of this repo uses the JWT bearer flow and this Lambda
+      should be moved onto it.
+
 
 Resources:
   # EventBridge Bus for patient vitals events
   PatientVitalsEventBus:
-    Type: AWS::EventBus
+    Type: AWS::Events::EventBus
     Properties:
       Name: patient-vitals-event-bus
 
@@ -78,7 +97,7 @@ Resources:
           });
       Environment:
         Variables:
-          SALESFORCE_ENDPOINT: !Sub https://${SALESFORCE_INSTANCE}.salesforce.com
+          SALESFORCE_ENDPOINT: !Sub https://${SfInstanceParam}.salesforce.com
           SALESFORCE_ACCESS_TOKEN: !Ref SalesforceAccessToken
 
   # Data Sink Lambda (stores events in DynamoDB)
@@ -113,7 +132,7 @@ Resources:
 
   # Dead Letter Queue for failed events
   AlertDLQ:
-    Type: AWS::Sqs::Queue
+    Type: AWS::SQS::Queue
     Properties:
       QueueName: patient-vitals-alert-dlq
       VisibilityTimeout: 300

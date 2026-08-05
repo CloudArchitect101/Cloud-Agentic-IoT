@@ -1,22 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
     <label>Daily Patient Summary</label>
-    <pluralize>Daily Summaries</pluralize>
-    <pluralLabel>Daily Patient Summary</pluralLabel>
-    <pluralName>Daily_Patient_Summaries</pluralName>
-    <versionLabel>1</versionLabel>
+    <pluralLabel>Daily Patient Summaries</pluralLabel>
+    <description>Per-patient daily rollup of ingested vitals. Written by the summarization path so the agent can answer trend questions without scanning raw telemetry.</description>
+    <nameField>
+        <label>Summary Number</label>
+        <type>AutoNumber</type>
+        <displayFormat>SUM-{000000}</displayFormat>
+    </nameField>
     <deploymentStatus>Deployed</deploymentStatus>
-    <enableOfflineCaps>false</enableOfflineCaps>
-    <enableActivities>true</enableActivities>
-    <networksForThisObject>Standard</networksForThisObject>
-    <searchEmailOptions>false</searchEmailOptions>
-    <allowInComponentDefinition>false</allowInComponentDefinition>
-    <enableFeeds>false</enableFeeds>
-    <customMetadataTranslations/>
-    <historyTrackRetentions>Default</historyTrackRetentions>
-    <recordTypeTrackWithFeeds>false</recordTypeTrackWithFeeds>
-    <contactRelationshipAccessProfile>AllUsers</contactRelationshipAccessProfile>
-    <accountRelationshipAccessProfile>AllUsers</accountRelationshipAccessProfile>
-    <externalSharingModel>Private</externalSharingModel>
-    <deploymentStatus>Deployed</deploymentStatus>
+    <sharingModel>Private</sharingModel>
+    <enableHistory>false</enableHistory>
 </CustomObject>

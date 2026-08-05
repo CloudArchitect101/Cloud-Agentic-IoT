@@ -33,13 +33,13 @@ public with sharing class QueueDepthRelayQueueable implements Queueable, Databas
         }
     }
 
-    private void send(Payload payload) {
+    private void sendCommandToDevice(DeviceQueueCommand deviceCommand) {
         HttpRequest request = new HttpRequest();
         request.setEndpoint('callout:AWS_IoT_Relay/queue-depth');
         request.setMethod('POST');
         request.setHeader('Content-Type', 'application/json');
         request.setTimeout(10000);
-        request.setBody(JSON.serialize(payload));
+        request.setBody(JSON.serialize(deviceCommand));
 
         try {
             HttpResponse response = new Http().send(request);
