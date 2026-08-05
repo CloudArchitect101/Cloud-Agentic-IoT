@@ -39,9 +39,16 @@ jobs:
       # Lambdas to read from SSM at runtime is what would actually fix it.
       - name: Seed SSM Parameter Store from GitHub Environment secrets
         env:
-          SF_CONSUMER_KEY: ${{ secrets.SF_CONSUMER_KEY }}
-          SF_USERNAME:     ${{ secrets.SF_USERNAME }}
-          SF_JWT_KEY:      ${{ secrets.SF_JWT_KEY }}
+          # INTEGRATION credentials, not the deploy ones. These are what the
+          # Lambdas authenticate to Salesforce with at runtime, and they must be
+          # a different identity and a different keypair from the CI/CD deploy
+          # user: the deploy user is a System Administrator, and its key already
+          # authorises metadata deployment. Handing that same key to a Lambda
+          # would give anyone who can read the function's configuration full
+          # admin access to the org.
+          SF_CONSUMER_KEY: ${{ secrets.SF_INTEGRATION_CONSUMER_KEY }}
+          SF_USERNAME:     ${{ secrets.SF_INTEGRATION_USERNAME }}
+          SF_JWT_KEY:      ${{ secrets.SF_INTEGRATION_JWT_KEY }}
           SF_LOGIN_URL:    ${{ vars.SF_LOGIN_URL || 'https://login.salesforce.com' }}
           SF_INSTANCE:     ${{ vars.SF_INSTANCE }}
           SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
@@ -55,6 +62,9 @@ jobs:
             echo "  seeded $1"
           }
 
+          if [ -z "${SF_CONSUMER_KEY:-}" ]; then
+            echo "::warning::SF_INTEGRATION_CONSUMER_KEY is not set. The Lambdas will not be able to authenticate to Salesforce until the integration External Client App exists and its consumer key is stored here."
+          fi
           put /cloud-agentic-iot/salesforce/consumer-key "$SF_CONSUMER_KEY"
           put /cloud-agentic-iot/salesforce/username     "$SF_USERNAME"
           put /cloud-agentic-iot/salesforce/login-url    "$SF_LOGIN_URL"
