@@ -14,7 +14,9 @@ const INJECTION_SIGNALS = [
   { pattern: /ignore\s+(all\s+)?(previous|prior|above)\s+instructions?/i, label: 'instruction_override' },
   { pattern: /disregard\s+(your|the)\s+(rules|instructions|guidelines)/i, label: 'instruction_override' },
   { pattern: /you\s+are\s+now\s+(a|an)\s+/i, label: 'persona_hijack' },
-  { pattern: /reveal|print|show\s+(me\s+)?(your|the)\s+(system\s+)?prompt/i, label: 'prompt_extraction' },
+  // The verbs are grouped: without the parentheses, | splits the whole
+  // pattern, so any message containing "reveal" or "print" was flagged.
+  { pattern: /(reveal|print|show)\s+(me\s+)?(your|the)\s+(system\s+)?prompt/i, label: 'prompt_extraction' },
   { pattern: /\bpretend\s+(you|to\s+be)\b/i, label: 'persona_hijack' },
 ];
 
@@ -64,7 +66,13 @@ function checkBusinessRules(action, context = {}) {
 
   if (action === 'DISPENSE_MEDICATION') {
     if (!context.prescriptionVerified) failures.push('prescription_not_verified');
-    if (context.dosesInLast24h >= context.maxDailyDoses) failures.push('daily_dose_limit_reached');
+    // Fails closed. With either count missing, undefined >= undefined is
+    // false, which used to let the dose through.
+    if (!Number.isFinite(context.dosesInLast24h) || !Number.isFinite(context.maxDailyDoses)) {
+      failures.push('dose_history_unknown');
+    } else if (context.dosesInLast24h >= context.maxDailyDoses) {
+      failures.push('daily_dose_limit_reached');
+    }
   }
 
   if (action === 'ESCALATE' && !context.deviceId) {
