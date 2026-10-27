@@ -17,7 +17,10 @@
 #include <CloudAgenticDevice.h>
 #include <ESP32Servo.h>
 
-CloudAgenticDevice device("queue-indicator", "2.0.0");
+// Raise to ship a change - see patient-monitor.ino.
+#define FIRMWARE_VERSION "2.0.1"
+
+CloudAgenticDevice device("queue-indicator", FIRMWARE_VERSION);
 
 #define SERVO_PIN 5
 // Uncomment for a continuous-rotation servo (FS90R / SG90-360). A standard
