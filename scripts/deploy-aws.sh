@@ -32,6 +32,16 @@ for t in $templates; do
 done
 endstep
 
+# Several templates read Salesforce settings from SSM Parameter Store, and
+# CloudFormation fails a stack with "Unable to fetch parameters" when one is
+# missing - after it has started. Check them all first and name what is missing.
+# (The Slack template is optional and checked on its own, below.)
+missing=""
+for p in $(grep -h "Default: /$PROJECT/" $templates /dev/null | grep -v /slack/ | sed 's/.*Default: //' | tr -d '\r' | sort -u); do
+  aws ssm get-parameter --name "$p" > /dev/null 2>&1 || missing="$missing $p"
+done
+[ -z "$missing" ] || die "Missing from SSM in this account:$missing. The pipeline's seed step writes them from the $ENV environment's secrets (docs/SETUP.md, 'Secrets and variables'), so run Deploy once from GitHub, or put them by hand."
+
 # Each template becomes the stack cloud-agentic-iot-<its directory>-<env>.
 # Slack is left out here: it is the one stack that needs a third-party app to
 # exist first, so one unconfigured integration must not fail the deploy of the

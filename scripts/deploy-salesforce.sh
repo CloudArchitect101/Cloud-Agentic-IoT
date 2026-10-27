@@ -7,10 +7,10 @@
 #   scripts/deploy-salesforce.sh Dev --dry-run   # validate with tests, change nothing
 #
 # On a laptop it deploys as the deploy user (alias iot-dev-deploy, set up in
-# docs/SETUP.md §6.2), not as you. That is deliberate: an admin deploy goes
-# green where the deploy user would fail, because components that did not change
-# skip the permission check. Dev looks fine and the first Prod deploy fails.
-# Same user as the pipeline, same result as the pipeline.
+# docs/SETUP.md, "The deploy user can actually deploy"), not as you. That is
+# deliberate: an admin deploy goes green where the deploy user would fail,
+# because components that did not change skip the permission check. Dev looks
+# fine and the first Prod deploy fails. Same user as the pipeline, same result.
 #
 # In the pipeline the workflow logs in with the JWT flow and passes the alias
 # in SF_TARGET_ORG.
@@ -35,7 +35,7 @@ fi
 
 org="${SF_TARGET_ORG:-iot-$(tr '[:upper:]' '[:lower:]' <<< "$ENV")-deploy}"
 user=$(sf org display --target-org "$org" --json 2>/dev/null | jq -r '.result.username // empty' || true)
-[ -n "$user" ] || die "No authorized org with alias $org. Log in as the deploy user first - docs/SETUP.md §6.2."
+[ -n "$user" ] || die "No authorized org with alias $org. Log in as the deploy user first: docs/SETUP.md, \"The deploy user can actually deploy\"."
 echo "Salesforce org $org, as $user"
 case "$user" in
   deploy@*) ;;
