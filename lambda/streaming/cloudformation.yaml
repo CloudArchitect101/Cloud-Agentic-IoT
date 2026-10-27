@@ -49,13 +49,9 @@ Resources:
             MaximumEventAgeInSeconds: 3600
           DeadLetterConfig:
             Arn: !GetAtt AlertDLQ.Arn
-        - Arn: !GetAtt DataSinkLambda.Arn
-          Id: DataSink
-          RetryPolicy:
-            MaximumRetryAttempts: 2
-            MaximumEventAgeInSeconds: 3600
-          DeadLetterConfig:
-            Arn: !GetAtt AlertDLQ.Arn
+        # The event router is not a target. It is the publisher: every event
+        # it receives from this rule it would publish straight back to the
+        # same bus, which matches this rule again - an endless loop.
 
   # Rules do not implicitly get permission to invoke their targets.
   AlertDispatcherInvokePermission:
@@ -63,14 +59,6 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt AlertDispatcherLambda.Arn
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt TelemetryToAlertRule.Arn
-
-  DataSinkInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt DataSinkLambda.Arn
       Principal: events.amazonaws.com
       SourceArn: !GetAtt TelemetryToAlertRule.Arn
 
@@ -125,7 +113,12 @@ Resources:
           SALESFORCE_ENDPOINT: !Sub https://${SfInstanceParam}.salesforce.com
           SALESFORCE_ACCESS_TOKEN: !Ref SalesforceAccessToken
 
-  # Data Sink Lambda (stores events in DynamoDB)
+  # The event router: publishes validated telemetry to the bus above.
+  # The logical IDs still say DataSink so that existing stacks update this
+  # function in place instead of trying to recreate it under the same name.
+  #
+  # Nothing invokes it yet. It needs an IoT rule on device/+/telemetry, which
+  # should wait until the alert dispatcher authenticates with the JWT flow.
   DataSinkRole:
     Type: AWS::IAM::Role
     Properties:
@@ -136,6 +129,18 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+      # It had no policies at all: no logs, and no permission to publish the
+      # events it exists to publish.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PublishToPatientVitalsBus
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: events:PutEvents
+                Resource: !GetAtt PatientVitalsEventBus.Arn
 
   DataSinkLambda:
     Type: AWS::Lambda::Function
@@ -161,6 +166,25 @@ Resources:
     Properties:
       QueueName: patient-vitals-alert-dlq
       VisibilityTimeout: 300
+
+  # EventBridge can only write to a dead-letter queue whose policy lets it.
+  # Without this, an event that exhausts its retries is dropped instead.
+  AlertDLQPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref AlertDLQ
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt AlertDLQ.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !GetAtt TelemetryToAlertRule.Arn
 
 Outputs:
   PatientVitalsEventBusArn:

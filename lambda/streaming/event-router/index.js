@@ -29,8 +29,9 @@ exports.handler = async (event, context) => {
     console.log('Received IoT telemetry event:', JSON.stringify(event));
 
     try {
-        // Extract and validate telemetry payload
-        const payload = event.detail || event.payload;
+        // Extract and validate telemetry payload. An IoT rule's Lambda action
+        // passes the device's message itself as the event.
+        const payload = event.detail || event.payload || event;
         const telemetry = parseTelemetry(payload);
 
         if (!telemetry) {
@@ -51,10 +52,9 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Error routing event:', error);
-        return createResponse(500, {
-            message: 'Failed to route event',
-            error: error.message
-        });
+        // Rethrown: invoked asynchronously, a returned 500 counts as success
+        // and the event is lost. A thrown error is retried.
+        throw error;
     }
 };
 
@@ -67,20 +67,38 @@ exports.handler = async (event, context) => {
 function parseTelemetry(rawPayload) {
     try {
         const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+        const deviceId = data && (data.deviceId || data.device_id);
+        if (!deviceId) return null;
+
+        // Missing values stay null, as in patient-vitals. A heart rate
+        // defaulted to 0 read as critical bradycardia downstream, and a
+        // defaulted SpO2 of 98 hid a sensor that had stopped reporting.
         return {
-            deviceId: data.deviceId || data.device_id,
-            heartRate: parseFloat(data.heartRate || data.hr || 0),
-            spo2: parseFloat(data.spo2 || data.o2_saturation || 98),
-            temperature: parseFloat(data.temperature || data.temp || 36.8),
-            bpSystolic: parseFloat(data.bpSystolic || data.bp_sys || 120),
-            bpDiastolic: parseFloat(data.bpDiastolic || data.bp_dia || 80),
-            timestamp: data.timestamp || new Date().toISOString(),
+            deviceId,
+            heartRate: firstNumber(data.heartRate, data.hr),
+            spo2: firstNumber(data.spo2, data.o2_saturation),
+            temperature: firstNumber(data.temperature, data.temp),
+            bpSystolic: firstNumber(data.bpSystolic, data.bp_sys),
+            bpDiastolic: firstNumber(data.bpDiastolic, data.bp_dia),
+            timestamp: data.timestamp || data.receivedAt || new Date().toISOString(),
             sourceSystem: 'AWS_IoT'
         };
     } catch (error) {
         console.error('Failed to parse telemetry:', error);
         return null;
     }
+}
+
+/**
+ * The first value that parses as a finite number, or null.
+ */
+function firstNumber(...values) {
+    for (const value of values) {
+        if (value === null || value === undefined || value === '') continue;
+        const n = typeof value === 'number' ? value : parseFloat(value);
+        if (Number.isFinite(n)) return n;
+    }
+    return null;
 }
 
 /**
@@ -123,7 +141,17 @@ async function routeToEventBus(enrichedEvent) {
         EventBusName: EVENT_BUS_NAME
     };
 
-    await ebClient.send(new PutEventsCommand({ events: [params] }));
+    // The SDK's field is Entries; under any other name the request carries
+    // no events at all.
+    const result = await ebClient.send(new PutEventsCommand({ Entries: [params] }));
+
+    // PutEvents succeeds as a call even when entries are rejected, so a
+    // failure only shows up here.
+    if (result.FailedEntryCount) {
+        const failed = result.Entries.find((entry) => entry.ErrorCode) || {};
+        throw new Error(`EventBridge rejected the event: ${failed.ErrorCode} ${failed.ErrorMessage}`);
+    }
+    return result;
 }
 
 /**
