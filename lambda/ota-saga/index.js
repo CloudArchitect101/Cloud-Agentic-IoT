@@ -35,7 +35,7 @@ async function runStep(step, context) {
       // Targeting is Thing Group membership, not a device list held here:
       // arn:aws:iot:<region>:<acct>:thinggroup/<group> for a fleet rollout, or
       // .../thing/<name> for a single device. Batch by moving devices between
-      // groups (canary-ring-1 -> patient-monitors), which is what makes
+      // groups (canary-patient-monitor -> fleet-patient-monitor), which is what makes
       // migration-runbook phase 4 batched rather than all-at-once.
       return {
         jobId: `ota-${context.deviceId}-${context.version}`,

@@ -255,7 +255,7 @@ public with sharing class DeviceProvisioningService {
 
         Map<String, Object> body = new Map<String, Object>{
             'thingName'  => device.SerialNumber,
-            'thingGroup' => String.isBlank(device.Thing_Group__c) ? 'patient-monitors' : device.Thing_Group__c,
+            'thingGroup' => String.isBlank(device.Thing_Group__c) ? 'fleet-patient-monitor' : device.Thing_Group__c,
             'ssid'       => device.Wi_Fi_Network__r.SSID__c,
             'passphrase' => device.Wi_Fi_Network__r.Passphrase__c,
             'ttlMinutes' => BUNDLE_TTL_MINUTES
