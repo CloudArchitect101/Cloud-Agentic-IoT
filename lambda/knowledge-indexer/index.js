@@ -33,28 +33,12 @@ function chunk(text) {
   for (const para of paragraphs) {
     if (para.length > MAX_CHARS) {
       flush();
-      const sentences = para.match(/[^.!?]+[.!?]+|\S+$/g) || [para];
-      let buf = '';
-      for (const s of sentences) {
-        // A single sentence can exceed the window on its own (tables, long
-        // dosage lists). Left unsplit it silently overflows the embedding
-        // model's input and the tail is dropped without any error.
-        if (s.length > MAX_CHARS) {
-          if (buf.trim()) chunks.push(buf.trim());
-          buf = '';
-          for (let i = 0; i < s.length; i += MAX_CHARS - OVERLAP) {
-            chunks.push(s.slice(i, i + MAX_CHARS).trim());
-          }
-          continue;
-        }
-        if ((buf + s).length > MAX_CHARS) {
-          if (buf) chunks.push(buf.trim());
-          buf = buf.slice(-OVERLAP) + s;
-        } else {
-          buf += s;
-        }
-      }
-      if (buf.trim()) chunks.push(buf.trim());
+      // A single sentence can exceed the window on its own (tables, long
+      // dosage lists). Left unsplit it silently overflows the embedding
+      // model's input and the tail is dropped without any error.
+      const pieces = splitSentences(para)
+        .flatMap((s) => (s.length > MAX_CHARS ? hardSplit(s) : [s]));
+      chunks.push(...packSentences(pieces));
     } else if ((current + '\n\n' + para).length > MAX_CHARS) {
       flush();
       current = para;
@@ -64,6 +48,85 @@ function chunk(text) {
   }
   flush();
   return chunks;
+}
+
+/**
+ * A sentence ends at . ! or ? (and any closing quote or bracket) followed by
+ * whitespace or the end of the text. Requiring the whitespace is what keeps
+ * "2.5 mg" in one piece, and text after the last full stop is kept as a
+ * sentence of its own rather than dropped.
+ */
+function splitSentences(text) {
+  return text.split(/(?<=[.!?]["'\u201D\u2019)\]]*)\s+/).filter(Boolean);
+}
+
+/**
+ * Packs whole sentences into chunks of at most MAX_CHARS. The overlap is the
+ * trailing whole sentences of the previous chunk, up to OVERLAP characters,
+ * so a chunk never starts mid-sentence and the overlap can never push a chunk
+ * past the cap.
+ */
+function packSentences(sentences) {
+  const chunks = [];
+  let buf = [];
+  let len = 0;
+  const joined = (a, b) => (a ? a + 1 + b : b);   // length after joining with a space
+
+  for (const s of sentences) {
+    if (joined(len, s.length) <= MAX_CHARS) {
+      buf.push(s);
+      len = joined(len, s.length);
+      continue;
+    }
+    if (buf.length) chunks.push(buf.join(' '));
+
+    const carry = [];
+    let carryLen = 0;
+    for (let i = buf.length - 1; i >= 0; i--) {
+      const next = joined(carryLen, buf[i].length);
+      if (next > OVERLAP || joined(next, s.length) > MAX_CHARS) break;
+      carry.unshift(buf[i]);
+      carryLen = next;
+    }
+    buf = [...carry, s];
+    len = joined(carryLen, s.length);
+  }
+  if (buf.length) chunks.push(buf.join(' '));
+  return chunks;
+}
+
+/**
+ * Splits one over-long sentence into windows of at most MAX_CHARS that end
+ * at whitespace where there is any. Each window after the first starts up to
+ * OVERLAP characters back, also at whitespace, and the last window ends at
+ * the end of the text, so no window repeats only overlap.
+ */
+function hardSplit(text) {
+  const pieces = [];
+  let start = 0;
+  for (;;) {
+    let end = Math.min(start + MAX_CHARS, text.length);
+    if (end < text.length) {
+      const cut = lastWhitespace(text, start + 1, end);
+      if (cut !== -1) end = cut;
+    }
+    const piece = text.slice(start, end).trim();
+    if (piece) pieces.push(piece);
+    if (end >= text.length) return pieces;
+
+    const back = firstWhitespace(text, Math.max(start + 1, end - OVERLAP), end);
+    start = back === -1 ? end : back + 1;
+  }
+}
+
+function lastWhitespace(text, from, to) {
+  for (let i = to; i >= from; i--) if (/\s/.test(text[i])) return i;
+  return -1;
+}
+
+function firstWhitespace(text, from, to) {
+  for (let i = from; i < to; i++) if (/\s/.test(text[i])) return i;
+  return -1;
 }
 
 async function embed(text) {
