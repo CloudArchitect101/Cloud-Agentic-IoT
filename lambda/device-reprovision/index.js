@@ -2,7 +2,7 @@ const { IoTClient, ListThingPrincipalsCommand, DetachPolicyCommand,
         DetachThingPrincipalCommand, UpdateCertificateCommand, DeleteCertificateCommand,
         CreateKeysAndCertificateCommand, AttachPolicyCommand, AttachThingPrincipalCommand,
         DescribeEndpointCommand } = require('@aws-sdk/client-iot');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const iot = new IoTClient({});
@@ -73,8 +73,9 @@ exports.handler = async (event) => {
       ContentType: 'application/json',
       ServerSideEncryption: 'AES256',
     }));
+    // Signed for GetObject, the download - see device-provisioning.
     const bundleUrl = await getSignedUrl(
-      s3, new PutObjectCommand({ Bucket: BUNDLE_BUCKET, Key: key }), { expiresIn: ttlMinutes * 60 }
+      s3, new GetObjectCommand({ Bucket: BUNDLE_BUCKET, Key: key }), { expiresIn: ttlMinutes * 60 }
     );
 
     return respond(200, {
