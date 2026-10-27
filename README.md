@@ -558,3 +558,4 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 ## Current state
 
 Every chapter is written and locally verified — firmware compiles, Node handlers are tested, Apex is reviewed. **None of it has been deployed to a real AWS account or Salesforce org yet.** The connections described above are how the system is designed to fit together; proving they fit is the deploy-and-verify work still ahead. Chapter 05's Agentforce metadata carries the one explicit caveat, noted in its section.
+# Cloud-Agentic-IoT
