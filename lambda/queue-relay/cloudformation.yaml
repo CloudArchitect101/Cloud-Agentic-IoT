@@ -4,12 +4,6 @@ Description: >
   Salesforce Apex calls API Gateway (SigV4-signed via a Named Credential),
   which invokes a Lambda that republishes the message to AWS IoT Core.
 
-Parameters:
-  CommandTopic:
-    Type: String
-    Default: device/queue/command
-    Description: MQTT topic the ESP32 indicator subscribes to.
-
 Resources:
   QueueRelayRole:
     Type: AWS::IAM::Role
@@ -27,10 +21,12 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # Least privilege: this function may publish to exactly one topic.
+              # Least privilege: device command topics only. Each device
+              # subscribes to its own device/<thing>/command, so the function
+              # publishes to whichever device the queue is bound to.
               - Effect: Allow
                 Action: iot:Publish
-                Resource: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/${CommandTopic}'
+                Resource: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/device/*/command'
 
   QueueRelayFunction:
     Type: AWS::Lambda::Function
@@ -40,9 +36,6 @@ Resources:
       Handler: index.handler
       Timeout: 10
       Role: !GetAtt QueueRelayRole.Arn
-      Environment:
-        Variables:
-          COMMAND_TOPIC: !Ref CommandTopic
       Code:
         ZipFile: |
           exports.handler = async () => ({
@@ -87,6 +80,9 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref QueueRelayFunction
       Principal: apigateway.amazonaws.com
+      # Without SourceArn any API Gateway API, in any account, that learns
+      # this function's ARN may invoke it. This limits it to the API above.
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
 
 Outputs:
   QueueDepthEndpoint:
