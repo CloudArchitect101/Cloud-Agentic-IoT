@@ -22,15 +22,15 @@ This doc is written so anyone can fork/clone this repo, follow it top to bottom,
 | One-time AWS OIDC provider + IAM role setup (commands below) | **Manual**, run once per account | Establishes trust, shouldn't be re-run automatically |
 | One-time Salesforce External Client App + JWT cert setup (steps below) | **Manual**, run once per org | Same reason |
 | Entering secret values into GitHub | **Manual**, one-time (~10 min) | Secret values must never pass through an automated agent or chat |
-| Compiling the ESP32 firmware | **Automated** — `.github/workflows/build-firmware.yml` runs on every push | Pure build, no physical access needed |
-| Flashing firmware onto the physical device | **Always manual** | Needs the device plugged into a USB port — cannot be automated by definition |
-| Deploying Lambda/CloudFormation to Dev/Prod AWS | **Automated** — `.github/workflows/deploy-aws.yml`, on push to `Dev`/`Prod` | Validates every template, deploys stacks, then packages and uploads the real Lambda source |
-| Deploying Salesforce metadata to Dev/Prod org | **Automated** — `.github/workflows/deploy-salesforce.yml`, on push to `Dev`/`Prod` | Runs a check-only dry run with `RunLocalTests` before the real deploy |
-| Publishing firmware + creating the **canary** OTA Job | **Automated** — `.github/workflows/ota-release.yml`, on push to `Dev`/`Prod` touching `firmware/**` | Only if `FIRMWARE_VERSION` was bumped; always targets `canary-ring-1` first |
-| Promoting an OTA build **canary → fleet** | **Manual** — `.github/workflows/ota-promote.yml`, `workflow_dispatch` | Deliberately human: it is the judgement that the canary behaved. Refuses to run if no COMPLETED canary Job exists for that version |
+| Checking a change: Lambda tests, template lint, script lint, Salesforce metadata, firmware build | **Automated** — `.github/workflows/checks.yml` on every pull request, and again before every deploy. Locally: `scripts/check.sh` | Nothing here needs credentials, so it runs on any branch |
+| A board's first flash, over USB | **Always manual** — `scripts/setup-device.sh`; day to day, `scripts/firmware.sh flash` | A blank ESP32 has no network stack, so the first firmware cannot arrive over the air |
+| Deploying Lambda/CloudFormation to Dev/Prod AWS | **Automated** — `.github/workflows/deploy.yml` on push to `Dev`/`Prod`, running `scripts/deploy-aws.sh` | Validates every template, deploys stacks, then packages and uploads the real Lambda source |
+| Deploying Salesforce metadata to Dev/Prod org | **Automated** — the same run, `scripts/deploy-salesforce.sh` | Runs a check-only dry run with `RunLocalTests` before the real deploy |
+| Publishing firmware over the air | **Automated** — the same run, `scripts/ota.sh release` | Only a version not yet published. Dev: every Dev board (`fleet-<type>`). Prod: the canary ring (`canary-<type>`) |
+| Promoting a Prod release **canary → fleet** | **Manual** — `.github/workflows/ota-promote.yml`, `workflow_dispatch` on `Prod` | Deliberately human: it is the judgement that the canary behaved. Refuses unless that version's canary job finished with a board updated and none failed |
 | Triggering a one-off device command | **Manual**, from the Salesforce app | That's the demo of Salesforce managing the device |
 
-> **Automatic triggers are currently paused for first-time setup.** `build-firmware`, `deploy-aws`, `deploy-salesforce` and `ota-release` have their `push`/`pull_request` triggers commented out and run only via `workflow_dispatch` (Actions tab → pick the workflow → *Run workflow* → choose the `Dev` or `Prod` branch). Once the first manual runs succeed, uncomment the trigger block in each file to restore the automation described above.
+> **Pushes deploy only once you switch them on.** `deploy.yml` deploys a push only when the repository variable `AUTO_DEPLOY` names the branch: set it to `Dev` once Dev's secrets are in, then `Dev Prod`. Until then, run Deploy by hand (Actions tab → Deploy → *Run workflow* → choose `Dev` or `Prod`). See [`DEVELOPMENT.md`](DEVELOPMENT.md), "Turning it on".
 
 ## Setting all of this up
 
@@ -45,9 +45,9 @@ The short version of what the pipelines need:
 |---|---|
 | `AWS_ROLE_ARN` | OIDC role the workflow assumes — no long-lived keys exist |
 | `SF_CONSUMER_KEY`, `SF_JWT_KEY`, `SF_USERNAME` | The **deploy** External Client App and user, never the runtime integration one |
-| `OTA_PRESIGN_ROLE_ARN` | Role AWS IoT assumes to sign per-device firmware URLs |
+| `SF_INTEGRATION_CONSUMER_KEY`, `SF_INTEGRATION_JWT_KEY`, `SF_INTEGRATION_USERNAME` | The **integration** app and user the Lambdas run as, copied into SSM by the deploy |
 
-Variables (not secrets): `AWS_REGION`, `FIRMWARE_BUCKET`, `SF_LOGIN_URL`.
+Variables (not secrets): `AWS_REGION`, `SF_LOGIN_URL`, `SF_INSTANCE`. The firmware bucket and the role AWS IoT signs download links with come from the `ota` stack, so OTA needs nothing set. One repository variable, `AUTO_DEPLOY`, switches automatic deploys on.
 
 ## Conventions the pipelines enforce
 
@@ -55,14 +55,15 @@ These are not style preferences — break one and the build fails loudly (which 
 
 | Convention | Why | Enforced by |
 |---|---|---|
-| A Lambda's `FunctionName` must be `cloud-agentic-iot-<source directory name>` | Lets the packaging step map source to function with no lookup table | `deploy-aws.yml` errors and exits if a function is missing |
+| A Lambda's `FunctionName` must be `cloud-agentic-iot-<source directory name>` | Lets the packaging step map source to function with no lookup table | `scripts/deploy-aws.sh` errors and exits if a function is missing |
 | Every `AWS::Lambda::Function` needs a `Code` property | It is required by CloudFormation; without it the stack fails validation | Template validation step, before any deploy |
 | Every `.cls` needs a matching `.cls-meta.xml` | Salesforce source-format deploys reject classes without it | `sf project deploy start` |
 | Salesforce metadata goes in the shared `force-app/`, not a per-chapter copy | One package directory means `sf project deploy start` just works on `Dev` and `Prod` alike | `sfdx-project.json` declares the single path |
 | Per-chapter prose goes in `content/<chapter>/`, code does not | Every chapter has its own ARCHITECTURE/BLOG/LINKEDIN/VIDEO; code stays in the one shared layout | Convention, generated by `chapter-setup.sh` |
-| A sketch folder must contain a `.ino` named after the folder | `arduino-cli` fails with "main file missing from sketch" otherwise | `build-firmware.yml` checks the name explicitly |
-| A sketch must declare `#define FIRMWARE_VERSION "x.y.z"` | It is the OTA version gate; without it the sketch is never released | `ota-release.yml` skips sketches that omit it |
-| Bump `FIRMWARE_VERSION` to ship firmware | An unchanged version publishes nothing, so refactors and docs edits cannot reach devices | The S3 artefact's existence is the gate |
+| A sketch folder must contain a `.ino` named after the folder | `arduino-cli` fails with "main file missing from sketch" otherwise | `scripts/firmware.sh build` checks the name explicitly |
+| A sketch must declare `#define FIRMWARE_VERSION "x.y.z"` | It is the OTA version gate; without it the sketch could never be released | `scripts/firmware.sh build` fails without it |
+| Raise `FIRMWARE_VERSION` to ship firmware | An unchanged version publishes nothing, so refactors and docs edits cannot reach devices, and a board skips a version it already runs | `scripts/firmware.sh check-version` fails a pull request that changes firmware without raising it; the S3 artefact's existence is the release gate |
+| Every sketch has `fleet-<sketch>` and `canary-<sketch>` in `infra/ota/cloudformation.yaml` | A release needs a group to target | `scripts/check.sh templates` |
 
 `scripts/chapter-setup.sh` generates scaffolding that already satisfies all of these — use it rather than hand-creating a new chapter.
 
@@ -91,9 +92,9 @@ rarely names the cause, which is the whole reason for this table.
 | `Could not infer a metadata type` on an `__e` event | Platform events are CustomObjects in source format. A `platform_events/` directory with a `<CustomEventDefinition>` root is MDAPI shape and does not resolve | `objects/<Event>__e/<Event>__e.object-meta.xml` with `<CustomObject>`, fields split into `fields/` |
 | A platform event field silently will not deploy | Platform events support only Checkbox, Date, Date/Time, Number, Text and Text Area (Long) — **Picklist is not supported** | Use Text and document the permitted values in the field description |
 
-Two habits that catch most of the above before a push:
+One habit catches most of the above before a push, and it is the same check the pull request runs:
 
 ```bash
-sf project convert source -d "$(mktemp -d)"   # resolves all source offline, no org contact
-ruby -ryaml -e "YAML.load_file('.github/workflows/deploy-salesforce.yml')"
+scripts/check.sh                               # includes resolving all Salesforce source offline
+scripts/deploy-salesforce.sh Dev --dry-run     # then validate against the Dev org, as the deploy user
 ```

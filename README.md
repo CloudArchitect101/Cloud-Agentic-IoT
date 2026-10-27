@@ -115,7 +115,7 @@ Code uses one standard layout rather than per-chapter copies, so the repo looks 
 | Stage | What | How long |
 |---|---|---|
 | 0 | Prerequisites — [`docs/SETUP.md`](docs/SETUP.md) | Once, ~a day |
-| 1 | Push to `Dev` → all AWS and Salesforce deploy automatically | Minutes |
+| 1 | Push to `Dev` → AWS, Salesforce and the Dev boards deploy automatically | Minutes |
 | 2 | Connect the seams CI cannot reach (Named Credentials, Slack, Data Cloud, agent) | ~an hour |
 | 3 | Hardware — create the Thing, flash and provision each device | ~20 min per device |
 | 4 | Verify end to end | Minutes |
@@ -123,20 +123,19 @@ Code uses one standard layout rather than per-chapter copies, so the repo looks 
 
 ### Stage 1 — Push to `Dev`
 
-Push to `Dev` and GitHub Actions does the following. Nothing here needs a local CLI, and it deploys **everything at once** — every Lambda and CloudFormation stack in `lambda/`, all Salesforce metadata in `force-app/`, and a compile check for both firmware sketches.
+Push to `Dev` and GitHub Actions deploys **everything at once**: every CloudFormation stack and the real Lambda code, all Salesforce metadata in `force-app/`, and any firmware whose version went up, over the air to the Dev boards. Each step is a script you can run from your laptop as well; [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) walks the whole path from laptop to Dev to Prod.
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `deploy-aws.yml` | push to `Dev`/`Prod` | Validates **every** `cloudformation.yaml`, then deploys each as `cloud-agentic-iot-<dir>-<branch>`, then bundles and pushes the real Lambda source over each template's placeholder handler |
-| `deploy-salesforce.yml` | push to `Dev`/`Prod` | JWT Bearer Flow auth (no password), then `sf project deploy start`. Skips cleanly when `force-app/` holds nothing |
-| `build-firmware.yml` | push + every PR | Compile check for every sketch. **Never flashes** — that needs physical USB access |
-| `ota-release.yml` | push touching `firmware/**` | Builds the binary, uploads to S3, creates an AWS IoT Job against that device type's canary ring |
-| `ota-promote.yml` | manual | Promotes a verified canary release to the full fleet, one device type at a time |
+| `checks.yml` | every pull request | `scripts/check.sh`, one job per part: Lambda tests, cfn-lint, shellcheck, Salesforce metadata, a firmware build. Also fails a firmware change that does not raise `FIRMWARE_VERSION` |
+| `deploy.yml` | push to `Dev`/`Prod` once `AUTO_DEPLOY` names the branch, or manual | Checks on that commit, then AWS (`scripts/deploy-aws.sh`), Salesforce (`scripts/deploy-salesforce.sh`) and the boards (`scripts/ota.sh release`: every Dev board, or the Prod canary ring). Prod waits for your approval |
+| `ota-promote.yml` | manual, Prod | Sends a release the canary ran cleanly to the whole Prod fleet, one device type at a time |
 
-Two conventions the pipelines enforce, because both fail at deploy time rather than author time:
+Three conventions the pipelines enforce, because each would otherwise fail at deploy time rather than author time:
 
 - A Lambda's `FunctionName` in CloudFormation must be `cloud-agentic-iot-<source directory name>`, or the source-upload step cannot find the function it belongs to.
 - A sketch folder must contain a `.ino` named after the folder, or `arduino-cli` reports "main file missing from sketch".
+- A sketch must declare `#define FIRMWARE_VERSION`, and raise it to ship a change. A board installs only a version it is not already running.
 
 ### Stage 2 — Connect the seams CI cannot reach
 

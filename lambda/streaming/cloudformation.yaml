@@ -6,7 +6,7 @@ Description: Cloud-Agentic-IoT Branch 02 - Real-time Streams to Agents (EventBri
 # dependencies" before CloudFormation looked at a single resource.
 Parameters:
   # SSM-backed, matching the other templates. Seeded from GitHub Environment
-  # secrets by deploy-aws.yml.
+  # secrets by the seed step in .github/workflows/deploy.yml.
   SfInstanceParam:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: /cloud-agentic-iot/salesforce/instance

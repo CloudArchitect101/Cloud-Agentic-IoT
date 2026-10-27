@@ -532,7 +532,7 @@ The script will set up the following. Note that secrets are encrypted and can't 
 ## 🔄 Production Environment Adjustments
 
 When constructing your mirroring production staging pipelines later, repeat the exact sequencing tracks detailed across this guide with the following explicit updates:
-* **Branch Pinnings**: Modify your AWS `trust-policy.json` structural matching parameter logic to target branch configurations reading `:ref:refs/heads/Prod` instead of `Dev`.
+* **Branch Pinnings**: Modify your AWS `trust-policy.json` so the `sub` condition ends `:environment:Prod` instead of `:environment:Dev`. The deploy job declares `environment:`, so GitHub sends the environment claim, not `:ref:refs/heads/Prod`.
 * **Licensing Optimization**: In real production Salesforce workspaces, apply real **Integration User Licenses** for both your deployment identity profiles and live running operational nodes.
 * **Target Routing Paths**: Swap the internal Salesforce metadata command structures within your automated continuous deployment configuration actions file from using `https://login.salesforce.com` paths directly over to sandbox targeting environments via `https://test.salesforce.com` where necessary.
 EOF
@@ -888,12 +888,16 @@ every deploy.
 
 ### Firmware — already installed in §0
 
-Confirm the toolchain still builds before you rely on it:
+Install the ESP32 core and libraries once, then confirm every sketch builds:
 
 ```bash
-arduino-cli compile --fqbn esp32:esp32:esp32doit-devkit-v1 \
-  --libraries firmware/libraries firmware/patient-monitor
+scripts/firmware.sh setup
+scripts/firmware.sh build
 ```
+
+Day to day, `scripts/check.sh` runs every check the pull requests run, and
+`scripts/firmware.sh flash <sketch>` puts your working copy on a board over
+USB. [`DEVELOPMENT.md`](DEVELOPMENT.md) has the whole loop.
 
 ## 5. GitHub
 
@@ -906,6 +910,8 @@ git push -u origin Dev
 ```
 
 Then create `Prod` from `Dev` in the GitHub UI when you are ready to promote.
+[`DEVELOPMENT.md`](DEVELOPMENT.md), "Turning it on", covers the branch rules and
+the switch that lets a push deploy.
 
 ### 5.2 Environments
 
@@ -922,14 +928,25 @@ credential in one.
 |---|---|---|---|
 | `AWS_ROLE_ARN` | Secret | Role ARN from §3.2 | AWS deploys, OTA |
 | `AWS_REGION` | Variable | `us-east-1` | all AWS jobs |
-| `FIRMWARE_BUCKET` | Variable | S3 bucket for firmware binaries | OTA release |
-| `OTA_PRESIGN_ROLE_ARN` | Secret | Role AWS IoT assumes to sign firmware URLs | OTA release |
 | `SF_CONSUMER_KEY` | Secret | **Deploy** Connected App consumer key | Salesforce deploy |
 | `SF_JWT_KEY` | Secret | `base64 -i server-deploy.key` | Salesforce deploy |
 | `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` | Salesforce deploy |
-| `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` | Salesforce deploy |
+| `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` | Salesforce deploy, and the Lambdas |
+| `SF_INTEGRATION_CONSUMER_KEY` | Secret | **Integration** app consumer key | copied to SSM for the Lambdas |
+| `SF_INTEGRATION_JWT_KEY` | Secret | `base64 -i server-integration.key` | copied to SSM for the Lambdas |
+| `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` | copied to SSM for the Lambdas |
+| `SF_INSTANCE` | Variable | Your org's My Domain host without `.salesforce.com`, e.g. `acme-dev-ed.develop.my` | copied to SSM for the Lambdas |
+| `SLACK_SIGNING_SECRET` | Secret | Optional, from the Slack app | the Slack stack, skipped without it |
 
-Note the pipeline uses the **deploy** app and user, never the integration one.
+The pipeline deploys as the **deploy** app and user. The integration values are
+only copied into SSM, where the Lambdas read them at runtime; the patient-vitals
+and streaming stacks will not deploy until they are there. OTA needs nothing:
+the firmware bucket and the role AWS IoT signs download links with come from
+the `ota` stack.
+
+One more value is a **repository** variable rather than an environment one,
+because it decides whether a push deploys at all: `AUTO_DEPLOY`, set to `Dev`
+and later `Dev Prod`.
 
 Enter values yourself — via the GitHub UI, or from your own terminal so they
 never appear in any transcript:
@@ -971,12 +988,16 @@ same identity. If it fails on privileges, revisit §2.3.
 
 ### 6.3 The real first deployment, via GitHub
 
+Actions tab → **Deploy** → *Run workflow* → branch `Dev`. Or switch pushes on
+and push:
+
 ```bash
+gh variable set AUTO_DEPLOY --body "Dev"
 git push origin Dev
 ```
 
-Watch the Actions run. A green run means every secret in §5.3 is correct, and
-it is what creates the `Device_Integration` permission set in the org.
+Watch the run. A green run means every secret in §5.3 is correct, and it is
+what creates the `Device_Integration` permission set in the org.
 
 ### 6.4 Then finish the bootstrap
 
@@ -1000,7 +1021,7 @@ That is the end of setup. Everything after this ships through GitHub.
 | Step | Change for Prod |
 |---|---|
 | Salesforce org | A second Developer org (or a real EE org). Same two service users, same two Connected Apps, fresh keypairs — never reuse Dev's keys. |
-| AWS account | A second standalone account. Same `iot-operator` and OIDC role, but the trust policy `sub` ends `refs/heads/Prod`. |
+| AWS account | A second standalone account. Same `iot-operator` and OIDC role, but the trust policy `sub` ends `environment:Prod`: the deploy job declares `environment:`, so that is the claim GitHub sends. |
 | GitHub | Same secret names in the **Prod** environment, different values. Add the required reviewer. |
 | AWS Organizations | Only after the free-credit phase — see `MIGRATION-RUNBOOK.md` phase 1. |
 
