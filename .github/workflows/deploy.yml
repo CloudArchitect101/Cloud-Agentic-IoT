@@ -1,0 +1,181 @@
+name: Deploy
+
+# One pipeline, two environments. A push to the Dev branch deploys Dev; a push
+# to Prod deploys Prod. The branch name is the environment name: it picks the
+# GitHub Environment, and with it the secrets, the AWS account and the org.
+#
+#   1. Checks         the same checks as a pull request, on this exact commit
+#   2. AWS            every stack, then the real Lambda code
+#   3. Salesforce     check-only deploy with every local Apex test, then deploy
+#   4. Boards         any sketch whose FIRMWARE_VERSION is new is built and
+#                     published: to every Dev board, or to the Prod canary ring
+#
+# The Prod environment has a required reviewer, so a merge into Prod waits for
+# your approval after the checks pass and before anything changes.
+#
+# Pushes deploy only once the repository variable AUTO_DEPLOY names the branch:
+# "Dev" first, "Dev Prod" once Prod is set up. Until an environment has its
+# secrets there is nothing to deploy with, so it starts switched off - see
+# docs/DEVELOPMENT.md. Running it by hand (Actions -> Deploy -> Run workflow,
+# on the Dev or Prod branch) always works, and can deploy one part alone.
+run-name: Deploy ${{ github.ref_name }} (${{ inputs.part || 'everything' }})
+
+on:
+  push:
+    branches: [Dev, Prod]
+  workflow_dispatch:
+    inputs:
+      part:
+        description: What to deploy
+        type: choice
+        options: [everything, aws, salesforce, firmware]
+        default: everything
+
+# Never two deploys into one environment at once, and never cancel one halfway:
+# a stack or an org left mid-update is worse than a queued run.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # OIDC: each run gets short-lived AWS credentials; no keys are stored
+  contents: read
+
+jobs:
+  checks:
+    if: >-
+      (github.ref_name == 'Dev' || github.ref_name == 'Prod') &&
+      (github.event_name == 'workflow_dispatch' || contains(vars.AUTO_DEPLOY, github.ref_name))
+    uses: ./.github/workflows/checks.yml
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    env:
+      ENVIRONMENT: ${{ github.ref_name }}
+      PART: ${{ inputs.part || 'everything' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: AWS credentials (OIDC, no stored keys)
+        if: env.PART != 'salesforce'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # The one step with no laptop equivalent: it moves this environment's
+      # secrets from GitHub into SSM Parameter Store, where the templates read
+      # them. GitHub stays the single source of truth, so Prod is reproducible
+      # and nothing is kept in sync by hand.
+      #
+      # They are String, not SecureString, on purpose: CloudFormation's
+      # AWS::SSM::Parameter::Value<String> cannot resolve a SecureString. The
+      # values end up in Lambda environment variables either way, so anyone
+      # with lambda:GetFunctionConfiguration can read them - the trade-off of
+      # env-var delivery. Reading them from SSM at runtime is what would fix it.
+      - name: AWS - seed SSM from this environment's secrets
+        if: env.PART == 'everything' || env.PART == 'aws'
+        env:
+          # INTEGRATION credentials, not the deploy ones: these are what the
+          # Lambdas use at runtime. The deploy user is a System Administrator,
+          # and handing its key to a Lambda would give anyone who can read the
+          # function's configuration admin access to the org.
+          SF_CONSUMER_KEY: ${{ secrets.SF_INTEGRATION_CONSUMER_KEY }}
+          SF_USERNAME:     ${{ secrets.SF_INTEGRATION_USERNAME }}
+          SF_JWT_KEY:      ${{ secrets.SF_INTEGRATION_JWT_KEY }}
+          SF_LOGIN_URL:    ${{ vars.SF_LOGIN_URL || 'https://login.salesforce.com' }}
+          SF_INSTANCE:     ${{ vars.SF_INSTANCE }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+        run: |
+          set -euo pipefail
+
+          put() {   # put <name> <value>; skips, with a warning, when the value is empty
+            [ -n "${2:-}" ] || { echo "::warning::$1 not set, skipping"; return 0; }
+            aws ssm put-parameter --name "$1" --type String --overwrite --value "$2" > /dev/null
+            echo "  seeded $1"
+          }
+
+          if [ -z "${SF_CONSUMER_KEY:-}" ]; then
+            echo "::warning::SF_INTEGRATION_CONSUMER_KEY is not set. The Lambdas cannot authenticate to Salesforce until the integration External Client App exists and its consumer key is stored here."
+          fi
+          put /cloud-agentic-iot/salesforce/consumer-key "$SF_CONSUMER_KEY"
+          put /cloud-agentic-iot/salesforce/username     "$SF_USERNAME"
+          put /cloud-agentic-iot/salesforce/login-url    "$SF_LOGIN_URL"
+          put /cloud-agentic-iot/salesforce/instance     "$SF_INSTANCE"
+          put /cloud-agentic-iot/slack/signing-secret    "$SLACK_SIGNING_SECRET"
+
+          # Stored base64-encoded, the same form the Salesforce deploy uses; the
+          # Lambdas need the PEM itself.
+          if [ -n "${SF_JWT_KEY:-}" ]; then
+            put /cloud-agentic-iot/salesforce/jwt-private-key "$(printf '%s' "$SF_JWT_KEY" | base64 --decode)"
+          else
+            echo "::warning::SF_INTEGRATION_JWT_KEY not set, skipping jwt-private-key"
+          fi
+
+      - name: AWS - stacks and Lambda code
+        if: env.PART == 'everything' || env.PART == 'aws'
+        run: scripts/deploy-aws.sh "$ENVIRONMENT"
+
+      - name: Salesforce - install the CLI
+        if: env.PART == 'everything' || env.PART == 'salesforce'
+        run: npm install --global @salesforce/cli
+
+      # Secrets go through env, not ${{ }} in the script: interpolation pastes a
+      # value into the shell source before bash sees it, so a quote in a value
+      # would break out of the command.
+      - name: Salesforce - log in as the deploy user (JWT bearer flow, no password)
+        if: env.PART == 'everything' || env.PART == 'salesforce'
+        env:
+          SF_JWT_KEY:      ${{ secrets.SF_JWT_KEY }}
+          SF_CONSUMER_KEY: ${{ secrets.SF_CONSUMER_KEY }}
+          SF_USERNAME:     ${{ secrets.SF_USERNAME }}
+          # Unset, this would interpolate to "", and sf treats --instance-url ""
+          # as "log in to nothing". Default it here instead.
+          SF_LOGIN_URL:    ${{ vars.SF_LOGIN_URL || 'https://login.salesforce.com' }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for name in SF_JWT_KEY SF_CONSUMER_KEY SF_USERNAME; do
+            [ -n "${!name:-}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing secret(s) in the $ENVIRONMENT environment:$missing. See docs/SETUP.md."
+            exit 1
+          fi
+
+          printf '%s' "$SF_JWT_KEY" | base64 --decode > server.key
+          chmod 600 server.key
+          grep -q "PRIVATE KEY" server.key || {
+            echo "::error::SF_JWT_KEY did not decode to a PEM private key. Store it as: base64 -i server-deploy.key"
+            exit 1
+          }
+          sf org login jwt \
+            --client-id "$SF_CONSUMER_KEY" \
+            --jwt-key-file server.key \
+            --username "$SF_USERNAME" \
+            --instance-url "$SF_LOGIN_URL" \
+            --alias target-org
+          rm -f server.key
+
+      - name: Salesforce - validate, then deploy
+        if: env.PART == 'everything' || env.PART == 'salesforce'
+        env:
+          SF_TARGET_ORG: target-org
+        run: scripts/deploy-salesforce.sh "$ENVIRONMENT"
+
+      - uses: arduino/setup-arduino-cli@v2
+        if: env.PART == 'everything' || env.PART == 'firmware'
+
+      - name: Boards - publish every new firmware version over the air
+        if: env.PART == 'everything' || env.PART == 'firmware'
+        run: scripts/ota.sh release "$ENVIRONMENT"
+
+      - name: Remove key material
+        if: always()
+        run: rm -f server.key
