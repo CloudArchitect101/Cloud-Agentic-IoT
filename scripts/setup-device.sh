@@ -65,7 +65,9 @@ ls -1 "$CERT_DIR" | sed 's/^/    /'
 echo
 
 # AWS uses predictable download names, so offer them as defaults. Any of them
-# can be overwritten by just typing a different filename.
+# can be overwritten by just typing a different filename. Those names hold no
+# newlines or odd characters, which is what makes ls | grep safe here.
+# shellcheck disable=SC2010
 guess() { ls -1 "$CERT_DIR" 2>/dev/null | grep -i -m1 -E "$1" || true; }
 
 CERT_FILE="$(ask "Certificate file"  "$(guess 'certificate\.pem\.crt$|\.crt$')")"
@@ -228,6 +230,16 @@ kill "$READER" 2>/dev/null || true
 wait "$READER" 2>/dev/null || true
 exec 3>&-
 echo "  ----------------------------------------------------------------"
+
+# Over-the-air updates find a board through its Thing Group, so put it in its
+# type's fleet group now. scripts/ota.sh join moves it to the canary ring.
+if command -v aws >/dev/null && aws iot add-thing-to-thing-group \
+     --thing-name "$THING_NAME" --thing-group-name "fleet-$SKETCH" >/dev/null 2>&1; then
+  echo "  Added $THING_NAME to fleet-$SKETCH, so over-the-air updates will reach it."
+else
+  warn "Could not add $THING_NAME to fleet-$SKETCH: no AWS CLI, or the ota stack is not deployed yet."
+  warn "Once it is: scripts/ota.sh join <Dev|Prod> $THING_NAME $SKETCH"
+fi
 
 bold "Done"
 cat <<EOF
