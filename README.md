@@ -203,16 +203,26 @@ Do this once per device, before it first connects. Chapter 13 automates all of i
     { "Effect": "Allow", "Action": "iot:Connect",
       "Resource": "arn:aws:iot:REGION:ACCOUNT_ID:client/${iot:ClientId}" },
     { "Effect": "Allow", "Action": "iot:Publish",
-      "Resource": "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/telemetry" },
+      "Resource": [
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/telemetry",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/status",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/${iot:Connection.Thing.ThingName}/jobs/*"
+      ] },
     { "Effect": "Allow", "Action": "iot:Subscribe",
-      "Resource": "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/device/${iot:Connection.Thing.ThingName}/command" },
+      "Resource": [
+        "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/device/${iot:Connection.Thing.ThingName}/command",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topicfilter/$aws/things/${iot:Connection.Thing.ThingName}/jobs/*"
+      ] },
     { "Effect": "Allow", "Action": "iot:Receive",
-      "Resource": "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/command" }
+      "Resource": [
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/command",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/${iot:Connection.Thing.ThingName}/jobs/*"
+      ] }
   ]
 }
 ```
 
-Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a policy variable resolved per connection, so **one policy serves every device and each is scoped to its own topics** — a device physically cannot subscribe to another's commands. Add `iot:Subscribe`/`iot:Receive` on `$aws/things/${iot:Connection.Thing.ThingName}/jobs/*` for OTA.
+Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a policy variable resolved per connection, so **one policy serves every device and each is scoped to its own topics** — a device physically cannot subscribe to another's commands. The `status` topic is where the queue indicator reports back, and the `$aws/things/.../jobs/*` lines are OTA. They are not optional: the firmware asks for pending OTA jobs every time it connects, and IoT Core disconnects a client that publishes to a topic its policy doesn't allow, so without them the device reconnects in a loop.
 
 **3. Download and attach.** Download the certificate, the private key, and Amazon Root CA 1 into one folder. Attach the policy to the certificate.
 

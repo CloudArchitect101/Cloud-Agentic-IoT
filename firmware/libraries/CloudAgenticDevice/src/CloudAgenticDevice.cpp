@@ -6,10 +6,31 @@
 #define WIFI_ATTEMPT_MS 15000
 
 // Amazon Root CA 1 is identical for every device in every account, so unlike
-// per-device material it is fine to compile in.
+// per-device material it is fine to compile in. It is public: the same file is
+// published at https://www.amazontrust.com/repository/AmazonRootCA1.pem
+// (SHA-256 fingerprint 8E:CD:E6:88:4F:3D:87:B1:12:5B:A3:1A:C3:FC:B1:3D:
+// 70:16:DE:7F:57:CC:90:4F:E1:CB:97:C6:AE:98:19:6E). It also signs the S3
+// certificate, which is why the OTA download below can use it too.
 static const char AWS_ROOT_CA[] = R"EOF_CA(
 -----BEGIN CERTIFICATE-----
-[... PASTE AMAZON ROOT CA 1 HERE - identical for all devices ...]
+MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
+ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6
+b24gUm9vdCBDQSAxMB4XDTE1MDUyNjAwMDAwMFoXDTM4MDExNzAwMDAwMFowOTEL
+MAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEZMBcGA1UEAxMQQW1hem9uIFJv
+b3QgQ0EgMTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALJ4gHHKeNXj
+ca9HgFB0fW7Y14h29Jlo91ghYPl0hAEvrAIthtOgQ3pOsqTQNroBvo3bSMgHFzZM
+9O6II8c+6zf1tRn4SWiw3te5djgdYZ6k/oI2peVKVuRF4fn9tBb6dNqcmzU5L/qw
+IFAGbHrQgLKm+a/sRxmPUDgH3KKHOVj4utWp+UhnMJbulHheb4mjUcAwhmahRWa6
+VOujw5H5SNz/0egwLX0tdHA114gk957EWW67c4cX8jJGKLhD+rcdqsq08p8kDi1L
+93FcXmn/6pUCyziKrlA4b9v7LWIbxcceVOF34GfID5yHI9Y/QCB/IIDEgEw+OyQm
+jgSubJrIqg0CAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMC
+AYYwHQYDVR0OBBYEFIQYzIU07LwMlJQuCFmcx7IQTgoIMA0GCSqGSIb3DQEBCwUA
+A4IBAQCY8jdaQZChGsV2USggNiMOruYou6r4lK5IpDB/G/wkjUu0yKGX9rbxenDI
+U5PMCCjjmCXPI6T53iHTfIUJrU6adTrCC2qJeHZERxhlbI1Bjjt/msv0tadQ1wUs
+N+gDS63pYaACbvXy8MWy7Vu33PqUXHeeE6V/Uq2V8viTO96LXFvKWlJbYK8U90vv
+o/ufQJVtMVT8QtPHRh8jrdkPSHCa2XV4cdFyQzR1bldZwgJcJmApzyMZFo6IQ6XU
+5MsI+yMRQ+hDKXJioaldXgjUkK642M4UwtBV8ob2xJNDd2ZhwLnoQdeXeGADbkpy
+rqXRfboQnoZsG4q5WTP468SQvvG5
 -----END CERTIFICATE-----
 )EOF_CA";
 
@@ -243,6 +264,10 @@ void CloudAgenticDevice::connectAWS() {
 
   _mqtt.subscribe(("$aws/things/" + _thingName + "/jobs/notify-next").c_str());
   _mqtt.subscribe(("device/" + _thingName + "/command").c_str());
+  // The answer to $next/get arrives on $next/get/accepted, not notify-next.
+  // Without this subscription a job queued while the device was offline is
+  // never picked up.
+  _mqtt.subscribe(("$aws/things/" + _thingName + "/jobs/$next/get/accepted").c_str());
   // Ask for anything queued while this device was offline.
   _mqtt.publish(("$aws/things/" + _thingName + "/jobs/$next/get").c_str(), "{}");
 }
