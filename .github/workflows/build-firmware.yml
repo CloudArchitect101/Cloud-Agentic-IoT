@@ -1,9 +1,12 @@
 name: Build ESP32 Firmware (compile check only — flashing is always manual)
 
 on:
-  push:
-    branches: [Dev, Prod]
-  pull_request:
+  # Automatic triggers paused for first-time setup; run manually from the
+  # Actions tab (choose the Dev or Prod branch). Uncomment to re-enable.
+  workflow_dispatch:
+  # push:
+  #   branches: [Dev, Prod]
+  # pull_request:
 
 jobs:
   compile:

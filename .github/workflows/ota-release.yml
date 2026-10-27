@@ -1,10 +1,13 @@
 name: OTA Release (version-gated, canary first)
 
 on:
-  push:
-    branches: [Dev, Prod]
-    paths:
-      - 'firmware/**'
+  # Automatic triggers paused for first-time setup; run manually from the
+  # Actions tab (choose the Dev or Prod branch). Uncomment to re-enable.
+  workflow_dispatch:
+  # push:
+  #   branches: [Dev, Prod]
+  #   paths:
+  #     - 'firmware/**'
 
 permissions:
   id-token: write

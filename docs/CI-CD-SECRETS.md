@@ -30,6 +30,8 @@ This doc is written so anyone can fork/clone this repo, follow it top to bottom,
 | Promoting an OTA build **canary → fleet** | **Manual** — `.github/workflows/ota-promote.yml`, `workflow_dispatch` | Deliberately human: it is the judgement that the canary behaved. Refuses to run if no COMPLETED canary Job exists for that version |
 | Triggering a one-off device command | **Manual**, from the Salesforce app | That's the demo of Salesforce managing the device |
 
+> **Automatic triggers are currently paused for first-time setup.** `build-firmware`, `deploy-aws`, `deploy-salesforce` and `ota-release` have their `push`/`pull_request` triggers commented out and run only via `workflow_dispatch` (Actions tab → pick the workflow → *Run workflow* → choose the `Dev` or `Prod` branch). Once the first manual runs succeed, uncomment the trigger block in each file to restore the automation described above.
+
 ## Setting all of this up
 
 The step-by-step — creating accounts, the five identities, Salesforce license

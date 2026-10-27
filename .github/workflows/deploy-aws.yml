@@ -1,8 +1,11 @@
 name: Deploy AWS Infrastructure
 
 on:
-  push:
-    branches: [Dev, Prod]
+  # Automatic triggers paused for first-time setup; run manually from the
+  # Actions tab (choose the Dev or Prod branch). Uncomment to re-enable.
+  workflow_dispatch:
+  # push:
+  #   branches: [Dev, Prod]
 
 permissions:
   id-token: write
