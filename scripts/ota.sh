@@ -35,11 +35,11 @@ resolve_ota_stack() {
   BUCKET=$(stack_output "$stack" FirmwareBucketName)
   PRESIGN_ROLE=$(stack_output "$stack" OtaPresignRoleArn)
   { [ -n "$BUCKET" ] && [ "$BUCKET" != "None" ]; } \
-    || die "Stack $stack not found or has no outputs. Deploy AWS first: scripts/deploy-aws.sh $1"
+    || die "Stack $stack not found or has no outputs. Deploy AWS to $1 first: that creates it."
 }
 
 known_sketch() {
-  grep -qx "$1" <<< "$(sketches)" || die "No sketch named '$1'. Sketches: $(sketches | tr '\n' ' ')"
+  grep -qxF "$1" <<< "$(sketches)" || die "No sketch named '$1'. Sketches: $(sketches | tr '\n' ' ')"
 }
 
 # create_job <job id> <thing group> <sketch> <version> <S3 key> <first-ring|fleet> <environment>
@@ -188,7 +188,7 @@ cmd_status() {
   aws_whoami
   assert_aws_environment "$env"
   for job in $(aws iot list-jobs --query 'jobs[?starts_with(jobId, `ota-`)].jobId' --output json \
-                 | jq -r 'sort_by(split("-") | last | tonumber) | reverse | .[:5] | .[]'); do
+                 | jq -r 'sort_by(split("-") | last | tonumber? // 0) | reverse | .[:5] | .[]'); do
     aws iot describe-job --job-id "$job" --output json \
       | jq -r '.job | "\(.jobId)  \(.status)  \(.description // "")"'
     aws iot list-job-executions-for-job --job-id "$job" --output json \
