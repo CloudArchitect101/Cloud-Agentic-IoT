@@ -563,6 +563,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 57 Node tests cover 10 of the Lambda functions, and every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile. The first CI pipelines deployed to a real AWS account and Salesforce org in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 57 Node tests cover 10 of the Lambda functions, and every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
 PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
