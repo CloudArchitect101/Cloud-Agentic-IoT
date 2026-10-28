@@ -1,12 +1,12 @@
 # Cloud-Agentic-IoT
 
-> A healthcare IoT + Agentforce system, built from scratch and in public: physical device provisioning (ESP32) and OTA updates, through Data Cloud RAG, real-time event streams, multi-agent orchestration, and cross-cloud integrations — with real Dev and Prod AWS/Salesforce environments, not a slide deck.
+> A healthcare IoT + Agentforce system, built from scratch and in public: physical device provisioning (ESP32) and OTA updates, an Agentforce agent, RAG, real-time event streams and cross-cloud integrations, designed for separate Dev and Prod AWS accounts and Salesforce orgs. [Current state](#current-state) says what runs today.
 
 ## Why this repo exists
 
 Built from scratch and in public — no environment, no accounts, no hardware wired up at the start — with every step documented so anyone can clone this repo and replicate the whole thing on their own machine. It is one system applied to a healthcare patient-monitoring scenario, presented as fourteen chapters that each demonstrate one capability.
 
-**Everything lives on one branch: `Dev`. Clone `Dev` and you have the entire system — all the Salesforce metadata, every Lambda, both firmware sketches, and the prose for each chapter. `Prod` exists only as the promotion target for verified work.
+**Everything lives on one branch: `Dev`.** Clone `Dev` and you have the entire system — all the Salesforce metadata, every Lambda and both firmware sketches. `Prod` exists only as the promotion target for verified work.
 
 ## Start here
 
@@ -16,7 +16,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 4. **Deploy the whole system once** — [Deployment](#deployment) below. It is one sequence, not fourteen.
 5. **Read [The chapters](#the-chapters)** to understand what you just deployed and why each piece is built the way it is.
 
-> **Chapters are a reading order, not a deployment order.** There is no per-chapter install. The system deploys as a single unit — one push stands up every Lambda, every Apex class, the agent, and the events together — because that is what it is: one system. The chapters exist to explain it, in an order that makes narrative sense, and each has its own article and video. Nothing in `content/` is a deployable artefact.
+> **Chapters are a reading order, not a deployment order.** There is no per-chapter install. The system deploys as a single unit — one push stands up every Lambda, every Apex class, the agent, and the events together — because that is what it is: one system. The chapters exist to explain it, in an order that makes narrative sense, and each gets its own article and video as it is published.
 
 ## Documentation
 
@@ -83,11 +83,10 @@ graph TB
 Cloud-Agentic-IoT/
 ├── README.md                          # You are here — the whole system + how to deploy it
 ├── force-app/main/default/            # Salesforce metadata — one standard project
-│   ├── objects/                       # Asset, Patient_Vitals__c, Wi_Fi_Network__c, ...
+│   ├── objects/                       # Asset, Patient_Vitals__c, the two platform events, ...
 │   ├── classes/                       # Apex services + tests
 │   ├── triggers/                      # One trigger per object, handler pattern
-│   ├── platform_events/               # Patient_Vital_Alert__e, Queue_Depth_Change__e
-│   ├── bots/ genAiPlannerBundles/     # The Agentforce agent and its planner
+│   ├── genAiPlannerBundles/           # The Agentforce agent's planner
 │   ├── genAiPlugins/ genAiFunctions/  # Its topic and registered actions
 │   ├── customMetadata/                # Device_Queue_Binding — config, not code
 │   └── lwc/                           # queueDepthIndicator
@@ -96,15 +95,14 @@ Cloud-Agentic-IoT/
 │   ├── libraries/CloudAgenticDevice/  # Shared runtime: NVS, provisioning, WiFi, MQTT, OTA
 │   ├── patient-monitor/               # DHT11 vitals + medication servo
 │   └── queue-indicator/               # Servo driven by Case queue depth
-├── mulesoft/                          # The iPaaS alternative to the ingestion Lambda
-├── content/<NN-chapter>/              # Per-chapter ARCHITECTURE diagram + article drafts
+├── mulesoft/                          # The iPaaS alternative to the ingestion Lambda (a design sketch)
 ├── docs/                              # see the Documentation table above
 ├── scripts/                           # Device setup, provisioning, chapter scaffolding
 ├── .github/workflows/                 # CI/CD — see Deployment below
 └── sfdx-project.json                  # Single package directory: force-app
 ```
 
-Code uses one standard layout rather than per-chapter copies, so the repo looks like a real, deployable project. Only the prose is namespaced per chapter, under `content/`.
+Code uses one standard layout rather than per-chapter copies, so the repo looks like a real, deployable project. The article and video drafts for each chapter stay outside the repository until they are published.
 
 ---
 
@@ -157,7 +155,7 @@ Everything below is manual for a structural reason, not an oversight: it stores 
 
 **8. Optional — MuleSoft.** Only if you want the iPaaS ingestion path instead of the Lambda. Open `mulesoft/` in Anypoint Studio, or `mvn package` and deploy to CloudHub; set the `sf.*` properties (consumer key, keystore, principal — JWT, no password); then point the AWS IoT rule at the flow's `/telemetry` endpoint. Chapter 07 explains when this is the right call and when it is not.
 
-Two integration points are **code, not configuration**, and are already wired in the repo — listed here so you know where they live: `PiiMaskingService.mask`/`unmask` wrap every Agentforce prompt callout (chapter 10), and the guardrails Lambda is called at `phase: input`, `phase: output`, and `phase: action` (chapter 11).
+Two pieces are written and tested but **not yet wired** into the agent's action path: `PiiMaskingService.mask`/`unmask` (chapter 10) and the guardrails Lambda with its `input`, `output` and `action` phases (chapter 11).
 
 ### Why these stay manual
 
@@ -280,7 +278,7 @@ Once it holds together on `Dev`, `Prod` is the same sequence against the second 
 
 ## The chapters
 
-**These are explanations, not install steps.** The system is already deployed by the time you read them — everything above stood it up in one pass. Each chapter is a directory under `content/` holding an `ARCHITECTURE.md` diagram and the article drafts (`BLOG.md`, `LINKEDIN.md`, `VIDEO.md`); the code all lives in the shared layout above, together, because it is one system.
+**These are explanations, not install steps.** They assume the system is deployed with the steps above. Each chapter's article and video will be published separately; the code all lives in the shared layout above, together, because it is one system.
 
 The separation is editorial: it is the order the story is told in, across the article and video series. Where a chapter needs something from [Stage 2](#stage-2--connect-the-seams-ci-cannot-reach) it says so, and where you can watch it working there is a **To see it work** line.
 
@@ -308,7 +306,7 @@ Patient vitals streaming in real time through **EventBridge** and **Platform Eve
 
 Telemetry hits IoT Core → an EventBridge rule fans out to Lambda and SQS → the alert dispatcher evaluates vitals against clinical thresholds → creates `Patient_Vitals__c` → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it.
 
-**Key files:** `platform_events/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls` (+ test), `lambda/streaming/`
+**Key files:** `objects/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls` (+ test), `lambda/streaming/`
 
 ### 03 · Physical Case Queue Indicator
 
@@ -329,7 +327,7 @@ Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesf
 
 **Hardware note:** a standard **SG90 is a positional servo** — 0–180°, physically incapable of continuous rotation. The firmware defaults to a gauge-needle sweep that gets faster as the queue deepens, which works on the SG90 you already have and reads clearly on camera. For literal continuous spin use an **FS90R or SG90-360** (~$6) and uncomment `#define CONTINUOUS_ROTATION_SERVO`. Both paths are compile-verified.
 
-**Key files:** `objects/Device_Queue_Binding__mdt/`, `classes/CaseQueueMonitorService.cls`, `triggers/CaseTrigger.trigger`, `platform_events/Queue_Depth_Change__e/`, `classes/QueueDepthRelayQueueable.cls`, `lambda/queue-relay/`, `firmware/queue-indicator/`
+**Key files:** `objects/Device_Queue_Binding__mdt/`, `classes/CaseQueueMonitorService.cls`, `triggers/CaseTrigger.trigger`, `objects/Queue_Depth_Change__e/`, `classes/QueueDepthRelayQueueable.cls`, `lambda/queue-relay/`, `firmware/queue-indicator/`
 
 **To see it work:** create a Case, assign it to the bound queue, and watch the motor start. Close the Case and watch it stop.
 
@@ -358,7 +356,6 @@ Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the ag
 
 | File | What it is |
 |---|---|
-| `bots/Patient_Care_Agent/` | The agent and its version. Ships `Inactive` — activating an agent that can create clinical Cases should be deliberate, not a side effect of a deploy |
 | `genAiPlannerBundles/Patient_Care_Planner/` | The planner. Decides which topic handles a request |
 | `genAiPlugins/Patient_Device_Monitoring.genAiPlugin` | The **topic** — scope plus four instructions. Where the agent's behaviour actually lives |
 | `genAiFunctions/Escalate_Patient_Device_Condition.genAiFunction` | Registers the Apex `@InvocableMethod` as an action the agent may call |
@@ -501,7 +498,7 @@ ESP32 sensor
 
 **Why the migration framing matters:** a capstone that is just "everything at once" proves you can build. The migration runbook proves you can *land* something. The detail that makes it credible is that the irreversible step — device certificate rotation — is isolated, batched, and deliberately last, and that decommissioning the old environment is a separate delayed phase rather than a same-day cleanup.
 
-**Key files:** [`docs/MIGRATION-RUNBOOK.md`](docs/MIGRATION-RUNBOOK.md) — the five-phase cutover, each phase with a tested rollback
+**Key files:** [`docs/MIGRATION-RUNBOOK.md`](docs/MIGRATION-RUNBOOK.md) — the five-phase cutover, each phase with a rollback defined
 
 **This is Stage 5 of [Deployment](#deployment):** once the system holds together on `Dev`, promote to `Prod` and follow the runbook.
 
@@ -566,5 +563,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-Every chapter is written and locally verified — firmware compiles, Node handlers are tested, Apex is reviewed. **None of it has been deployed to a real AWS account or Salesforce org yet.** The connections described above are how the system is designed to fit together; proving they fit is the deploy-and-verify work still ahead. Chapter 05's Agentforce metadata carries the one explicit caveat, noted in its section.
-# Cloud-Agentic-IoT
+The design, the Apex, the firmware and the Lambdas are written. 57 Node tests cover 10 of the Lambda functions, and every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile. The first CI pipelines deployed to a real AWS account and Salesforce org in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+
+PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
