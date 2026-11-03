@@ -120,4 +120,58 @@ private class StreamingAlertServiceTest {
         Assert.isTrue(results[0].alertPublished, 'First payload should trigger alert');
         Assert.isFalse(results[1].alertPublished, 'Second payload should not trigger alert');
     }
+
+    private static StreamingAlertService.VitalsPayload payload(String deviceId, Decimal heartRate, Decimal temperature) {
+        StreamingAlertService.VitalsPayload p = new StreamingAlertService.VitalsPayload();
+        p.deviceId = deviceId;
+        p.heartRate = heartRate;
+        p.spo2 = 98.0;
+        p.temperature = temperature;
+        p.sourceSystem = 'AWS_IoT';
+        return p;
+    }
+
+    @IsTest
+    static void test_three_hundred_alerts_are_one_publish() {
+        // EventBus.publish inside the loop counted one DML statement per
+        // alert, so the 151st alert of one call failed the call.
+        DeviceTestSettings.use();
+        DeviceTestSettings.useStandardThresholds();
+        List<StreamingAlertService.VitalsPayload> payloads = new List<StreamingAlertService.VitalsPayload>();
+        for (Integer i = 0; i < 300; i++) {
+            payloads.add(payload('BULK-' + i, 130, 36.8));
+        }
+
+        Test.startTest();
+        Integer before = Limits.getDmlStatements();
+        List<StreamingAlertService.AlertResult> results = StreamingAlertService.processVitalsAlert(payloads);
+        Integer used = Limits.getDmlStatements() - before;
+        Test.stopTest();
+
+        Assert.isTrue(used <= 1, 'At most one DML statement for 300 alerts, used ' + used);
+        Assert.areEqual(300, results.size(), 'One result per payload');
+        Assert.isTrue(results[299].alertPublished, 'The last one was published too');
+    }
+
+    @IsTest
+    static void test_any_vital_in_its_warning_band_is_an_abnormal_trend() {
+        // Bands come from Vital_Sign_Threshold__mdt, so temperature is judged
+        // like every other vital: 38.7 C is in its warning band.
+        DeviceTestSettings.use();
+        DeviceTestSettings.useStandardThresholds();
+        List<StreamingAlertService.AlertResult> results = StreamingAlertService.processVitalsAlert(
+            new List<StreamingAlertService.VitalsPayload>{ payload('TEST-DEVICE-005', 75, 38.7) });
+        Assert.areEqual('ABNORMAL_TREND', results[0].alertType, 'Temperature warning');
+    }
+
+    @IsTest
+    static void test_a_changed_band_changes_the_alert_without_code() {
+        DeviceTestSettings.use();
+        VitalSignEvaluator.testThresholds = new List<Vital_Sign_Threshold__mdt>{
+            DeviceTestSettings.band('heartRate', 50, 100, 60, 90, 30, 15, 10)
+        };
+        List<StreamingAlertService.AlertResult> results = StreamingAlertService.processVitalsAlert(
+            new List<StreamingAlertService.VitalsPayload>{ payload('TEST-DEVICE-006', 105, null) });
+        Assert.areEqual('CRITICAL_VITALS', results[0].alertType, '105 bpm is critical once the band says so');
+    }
 }

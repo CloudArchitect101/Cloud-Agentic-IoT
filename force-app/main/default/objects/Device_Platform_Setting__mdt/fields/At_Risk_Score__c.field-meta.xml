@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>At_Risk_Score__c</fullName>
+    <label>At Risk From Score</label>
+    <description>Risk score at which a patient is AT_RISK. Must match states.AT_RISK in config/vital-thresholds.json.</description>
+    <precision>3</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

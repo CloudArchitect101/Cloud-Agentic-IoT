@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Callouts_Per_Job__c</fullName>
+    <label>Callouts per Job</label>
+    <description>Most callouts one background job makes before it hands the rest to the next job. Salesforce allows 100.</description>
+    <precision>3</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

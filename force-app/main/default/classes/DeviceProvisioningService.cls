@@ -11,12 +11,14 @@
  * bundle to S3 and returns a short-lived pre-signed URL, so Salesforce stores a
  * link that expires and a certificate id for audit.
  *
+ * The callouts themselves run in DeviceProvisioningJob, batched and inside
+ * Salesforce's limits, so a save of 200 devices (or a load of a million, with
+ * DeviceProvisioningBatch) behaves the same as a save of one.
+ *
  * Demonstrates: API integration, secure credential handling, async Apex,
  * workflow automation driven from the CRM.
  */
 public with sharing class DeviceProvisioningService {
-
-    private static final Integer BUNDLE_TTL_MINUTES = 15;
 
     /* ------------------------------------------------------- trigger entry */
 
@@ -61,8 +63,8 @@ public with sharing class DeviceProvisioningService {
             assetIdsToProvision.add(device.Id);
         }
 
-        if (!assetIdsToProvision.isEmpty() && !System.isFuture()) {
-            provisionAsync(assetIdsToProvision);
+        if (!assetIdsToProvision.isEmpty()) {
+            DeviceProvisioningJob.start(DeviceProvisioningJob.Action.PROVISION, idsAsStrings(assetIdsToProvision));
         }
     }
 
@@ -78,8 +80,10 @@ public with sharing class DeviceProvisioningService {
                 thingNamesToTearDown.add(device.SerialNumber);
             }
         }
-        if (!thingNamesToTearDown.isEmpty() && !System.isFuture()) {
-            teardownAsync(thingNamesToTearDown);
+        // One job for the whole delete, however many devices: it batches the
+        // Thing names into as few callouts as Device_Platform_Setting__mdt allows.
+        if (!thingNamesToTearDown.isEmpty()) {
+            DeviceProvisioningJob.start(DeviceProvisioningJob.Action.TEARDOWN, new List<String>(thingNamesToTearDown));
         }
     }
 
@@ -98,6 +102,7 @@ public with sharing class DeviceProvisioningService {
                     Certificate_Id__c          = null,
                     Provisioning_Bundle_URL__c = null,
                     Provisioning_Expires_At__c = null,
+                    Provisioning_Error__c      = null,
                     Provisioning_Status__c     = 'Not Provisioned'
                 ));
             }
@@ -106,44 +111,6 @@ public with sharing class DeviceProvisioningService {
             // Fires after update, where provisionEligibleDevices sees the
             // cleared Thing ARN as a change and re-provisions cleanly.
             update assetsNeedingReset;
-        }
-    }
-
-    public class ProvisioningException extends Exception {}
-
-    /**
-     * Entry point for the Asset trigger. Runs async because it makes a callout,
-     * and because a device registry write must not fail if AWS is briefly down.
-     */
-    @future(callout=true)
-    public static void provisionAsync(Set<Id> assetIds) {
-        List<Asset> assets = [
-            SELECT Id, Name, SerialNumber, Thing_Group__c,
-                   Wi_Fi_Network__c, Wi_Fi_Network__r.SSID__c, Wi_Fi_Network__r.Passphrase__c
-            FROM Asset
-            WHERE Id IN :assetIds
-        ];
-
-        List<Asset> updates = new List<Asset>();
-        for (Asset device : assets) {
-            Asset result = new Asset(Id = device.Id);
-            try {
-                Map<String, Object> response = callProvisioningApi(device);
-                result.Thing_ARN__c                = (String) response.get('thingArn');
-                result.Certificate_Id__c           = (String) response.get('certificateId');
-                result.Provisioning_Bundle_URL__c  = (String) response.get('bundleUrl');
-                result.Provisioning_Expires_At__c  = System.now().addMinutes(BUNDLE_TTL_MINUTES);
-                result.Provisioning_Status__c      = 'Provisioned';
-            } catch (Exception e) {
-                result.Provisioning_Status__c = 'Failed';
-                System.debug(LoggingLevel.ERROR,
-                    'Provisioning failed for ' + device.SerialNumber + ': ' + e.getMessage());
-            }
-            updates.add(result);
-        }
-
-        if (!updates.isEmpty()) {
-            update updates;
         }
     }
 
@@ -158,121 +125,17 @@ public with sharing class DeviceProvisioningService {
     @InvocableMethod(label='Re-provision Device'
                      description='Revokes the current certificate and issues a new one, keeping the Thing and all history.')
     public static void reprovision(List<Id> assetIds) {
-        reprovisionAsync(new Set<Id>(assetIds));
-    }
-
-    @future(callout=true)
-    public static void reprovisionAsync(Set<Id> assetIds) {
-        List<Asset> assets = [
-            SELECT Id, SerialNumber, Wi_Fi_Network__r.SSID__c, Wi_Fi_Network__r.Passphrase__c
-            FROM Asset WHERE Id IN :assetIds
-        ];
-        List<Asset> updates = new List<Asset>();
-
-        for (Asset device : assets) {
-            Asset result = new Asset(Id = device.Id);
-            try {
-                HttpRequest req = new HttpRequest();
-                req.setEndpoint('callout:AWS_IoT_Relay/reprovision-device');
-                req.setMethod('POST');
-                req.setHeader('Content-Type', 'application/json');
-                req.setTimeout(20000);
-                req.setBody(JSON.serialize(new Map<String, Object>{
-                    'thingName'  => device.SerialNumber,
-                    'ssid'       => device.Wi_Fi_Network__r.SSID__c,
-                    'passphrase' => device.Wi_Fi_Network__r.Passphrase__c,
-                    'ttlMinutes' => BUNDLE_TTL_MINUTES
-                }));
-                HttpResponse res = new Http().send(req);
-                if (res.getStatusCode() < 200 || res.getStatusCode() >= 300) {
-                    throw new ProvisioningException('HTTP ' + res.getStatusCode() + ': ' + res.getBody());
-                }
-                Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-                result.Certificate_Id__c          = (String) body.get('certificateId');
-                result.Provisioning_Bundle_URL__c = (String) body.get('bundleUrl');
-                result.Provisioning_Expires_At__c = System.now().addMinutes(BUNDLE_TTL_MINUTES);
-                result.Provisioning_Status__c     = 'Provisioned';
-            } catch (Exception e) {
-                result.Provisioning_Status__c = 'Failed';
-                System.debug(LoggingLevel.ERROR,
-                    'Re-provisioning failed for ' + device.SerialNumber + ': ' + e.getMessage());
-            }
-            updates.add(result);
-        }
-        if (!updates.isEmpty()) {
-            update updates;
-        }
-    }
-
-    /**
-     * Deletes a device's AWS IoT footprint so the name can be reused.
-     *
-     * Takes Thing names rather than record Ids on purpose: by the time this
-     * runs the Asset records are gone, so nothing could be queried. @future
-     * only accepts primitives, which makes this the natural shape anyway.
-     *
-     * Telemetry history is intentionally left alone - it is keyed on the device
-     * name and is usually needed for audit long after the hardware is retired.
-     */
-    @future(callout=true)
-    public static void teardownAsync(Set<String> thingNames) {
-        if (thingNames == null || thingNames.isEmpty()) {
+        if (assetIds == null || assetIds.isEmpty()) {
             return;
         }
-        try {
-            HttpRequest req = new HttpRequest();
-            req.setEndpoint('callout:AWS_IoT_Relay/teardown-device');
-            req.setMethod('POST');
-            req.setHeader('Content-Type', 'application/json');
-            req.setTimeout(30000);
-            req.setBody(JSON.serialize(new Map<String, Object>{
-                'thingNames' => new List<String>(thingNames)
-            }));
-
-            HttpResponse res = new Http().send(req);
-            // 207 means some succeeded and some did not; the body names which.
-            if (res.getStatusCode() >= 300 && res.getStatusCode() != 207) {
-                throw new ProvisioningException('HTTP ' + res.getStatusCode() + ': ' + res.getBody());
-            }
-            System.debug(LoggingLevel.INFO, 'Teardown result: ' + res.getBody());
-        } catch (Exception e) {
-            // The record is already deleted, so there is nothing left to mark
-            // as failed. Log loudly: an orphaned Thing silently blocks that
-            // serial number from ever being registered again.
-            System.debug(LoggingLevel.ERROR,
-                'AWS teardown FAILED for ' + String.join(new List<String>(thingNames), ', ')
-                + ' - these Things may block re-registration: ' + e.getMessage());
-        }
+        DeviceProvisioningJob.start(DeviceProvisioningJob.Action.REPROVISION, idsAsStrings(new Set<Id>(assetIds)));
     }
 
-    private static Map<String, Object> callProvisioningApi(Asset device) {
-        if (String.isBlank(device.SerialNumber)) {
-            throw new ProvisioningException('SerialNumber is required - it becomes the IoT Thing name.');
+    private static List<String> idsAsStrings(Set<Id> ids) {
+        List<String> keys = new List<String>();
+        for (Id recordId : ids) {
+            keys.add(String.valueOf(recordId));
         }
-        if (device.Wi_Fi_Network__c == null) {
-            throw new ProvisioningException('A Wi-Fi Network must be set before provisioning.');
-        }
-
-        Map<String, Object> body = new Map<String, Object>{
-            'thingName'  => device.SerialNumber,
-            'thingGroup' => String.isBlank(device.Thing_Group__c) ? 'fleet-patient-monitor' : device.Thing_Group__c,
-            'ssid'       => device.Wi_Fi_Network__r.SSID__c,
-            'passphrase' => device.Wi_Fi_Network__r.Passphrase__c,
-            'ttlMinutes' => BUNDLE_TTL_MINUTES
-        };
-
-        HttpRequest req = new HttpRequest();
-        // Named Credential (AWS SigV4) - no keys or endpoints in Apex.
-        req.setEndpoint('callout:AWS_IoT_Relay/provision-device');
-        req.setMethod('POST');
-        req.setHeader('Content-Type', 'application/json');
-        req.setTimeout(20000);
-        req.setBody(JSON.serialize(body));
-
-        HttpResponse res = new Http().send(req);
-        if (res.getStatusCode() < 200 || res.getStatusCode() >= 300) {
-            throw new ProvisioningException('AWS returned HTTP ' + res.getStatusCode() + ': ' + res.getBody());
-        }
-        return (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+        return keys;
     }
 }

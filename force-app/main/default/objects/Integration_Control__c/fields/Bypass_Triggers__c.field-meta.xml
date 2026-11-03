@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Bypass_Triggers__c</fullName>
+    <label>Bypass All Triggers</label>
+    <description>Every trigger handler in this project returns without doing anything for this user, profile or org.</description>
+    <defaultValue>false</defaultValue>
+    <type>Checkbox</type>
+</CustomField>

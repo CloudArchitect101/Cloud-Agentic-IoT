@@ -1,20 +1,6 @@
 @IsTest
 private class DeviceProvisioningServiceTest {
 
-    private class ProvisionMock implements HttpCalloutMock {
-        public HttpResponse respond(HttpRequest req) {
-            HttpResponse res = new HttpResponse();
-            res.setStatusCode(200);
-            if (req.getEndpoint().contains('teardown-device')) {
-                res.setBody('{"results":[{"thingName":"ESP32-T1","deleted":true}],"historyPreserved":true}');
-            } else {
-                res.setBody('{"thingArn":"arn:aws:iot:us-east-1:1:thing/ESP32-T1",'
-                          + '"certificateId":"cert-abc","bundleUrl":"https://s3/bundle","expiresInMinutes":15}');
-            }
-            return res;
-        }
-    }
-
     private static Asset newDevice(String serial) {
         Account patient = new Account(Name = 'Test Patient');
         insert patient;
@@ -28,7 +14,7 @@ private class DeviceProvisioningServiceTest {
 
     @IsTest
     static void newDeviceIsProvisioned() {
-        Test.setMock(HttpCalloutMock.class, new ProvisionMock());
+        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
         Asset device = newDevice('ESP32-T1');
 
         Test.startTest();
@@ -39,7 +25,7 @@ private class DeviceProvisioningServiceTest {
                               Provisioning_Bundle_URL__c, Provisioning_Expires_At__c
                        FROM Asset WHERE Id = :device.Id];
         Assert.areEqual('Provisioned', saved.Provisioning_Status__c, 'Should be provisioned');
-        Assert.areEqual('cert-abc', saved.Certificate_Id__c, 'Certificate id is stored for audit');
+        Assert.areEqual('cert-ESP32-T1', saved.Certificate_Id__c, 'Certificate id is stored for audit');
         Assert.isNotNull(saved.Provisioning_Expires_At__c, 'Bundle link must carry an expiry');
         Assert.isFalse(saved.Provisioning_Bundle_URL__c.contains('PRIVATE KEY'),
             'Only a link is stored - never the private key itself');
@@ -63,7 +49,7 @@ private class DeviceProvisioningServiceTest {
 
     @IsTest
     static void deletingAProvisionedDeviceTearsDownAws() {
-        Test.setMock(HttpCalloutMock.class, new ProvisionMock());
+        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
         Asset device = newDevice('ESP32-T1');
         insert device;
         // Simulate the provisioned state the async callout would have written.
@@ -98,7 +84,7 @@ private class DeviceProvisioningServiceTest {
 
     @IsTest
     static void undeleteClearsStaleAwsIdentifiers() {
-        Test.setMock(HttpCalloutMock.class, new ProvisionMock());
+        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
         Asset device = newDevice('ESP32-T1');
         insert device;
         update new Asset(Id = device.Id, Thing_ARN__c = 'arn:aws:iot:us-east-1:1:thing/ESP32-T1',
@@ -117,7 +103,7 @@ private class DeviceProvisioningServiceTest {
 
     @IsTest
     static void bulkDeleteCollectsEveryThingName() {
-        Test.setMock(HttpCalloutMock.class, new ProvisionMock());
+        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
         Account patient = new Account(Name = 'Bulk Patient');
         insert patient;
         Wi_Fi_Network__c net = new Wi_Fi_Network__c(Name = 'Clinic', SSID__c = 'clinic-wifi');
@@ -134,8 +120,56 @@ private class DeviceProvisioningServiceTest {
 
         Test.startTest();
         delete devices;
-        Assert.isTrue(Limits.getFutureCalls() <= 1,
-            'One teardown call for the whole batch, not one per device');
+        Assert.areEqual(1, Limits.getQueueableJobs(),
+            'One teardown job for the whole delete, not one per device');
         Test.stopTest();
+    }
+
+    @IsTest
+    static void twoHundredDevicesInOneSaveAreAllProvisioned() {
+        // One save of 200 used to mean 200 callouts in one @future: past 100
+        // it threw a LimitException nothing could catch, and none of the 200
+        // was provisioned or told why.
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        Account patient = new Account(Name = 'Ward');
+        insert patient;
+        Wi_Fi_Network__c net = new Wi_Fi_Network__c(Name = 'Ward', SSID__c = 'ward-wifi');
+        insert net;
+        List<Asset> devices = new List<Asset>();
+        for (Integer i = 0; i < 200; i++) {
+            devices.add(new Asset(Name = 'W-' + i, SerialNumber = 'W-' + i, AccountId = patient.Id,
+                                  Status = 'Installed', Wi_Fi_Network__c = net.Id));
+        }
+
+        Test.startTest();
+        insert devices;
+        Test.stopTest();
+
+        Assert.areEqual(20, aws.bodies.size(), '200 devices at Devices_Per_Callout__c = 10');
+        Assert.areEqual(200, [SELECT COUNT() FROM Asset WHERE Provisioning_Status__c = 'Provisioned'],
+            'Every device is provisioned');
+    }
+
+    @IsTest
+    static void reprovisionButtonStartsOneJob() {
+        DeviceTestSettings.use();
+        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
+        Asset device = newDevice('ESP32-T4');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        insert device;
+        update new Asset(Id = device.Id, Thing_ARN__c = 'arn:aws:iot:ca-central-1:1:thing/ESP32-T4',
+                         Certificate_Id__c = 'cert-old', Provisioning_Status__c = 'Provisioned');
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        DeviceProvisioningService.reprovision(new List<Id>{ device.Id });
+        Assert.areEqual(1, Limits.getQueueableJobs(), 'One background job');
+        Test.stopTest();
+
+        Asset saved = [SELECT Certificate_Id__c, Provisioning_Status__c FROM Asset WHERE Id = :device.Id];
+        Assert.areEqual('cert-ESP32-T4', saved.Certificate_Id__c, 'The certificate was replaced');
+        Assert.areEqual('Provisioned', saved.Provisioning_Status__c, 'Provisioned');
     }
 }

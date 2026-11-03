@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Device Platform Setting</label>
+    <pluralLabel>Device Platform Settings</pluralLabel>
+    <description>How Salesforce talks to the AWS device platform: which Named Credential, how long to wait, how many devices go in one callout, and the risk score bands. Apex reads the record named Default (DevicePlatformSettings.cls); change a value here and redeploy, no code change.</description>
+    <visibility>Public</visibility>
+</CustomObject>

@@ -37,6 +37,9 @@ public virtual class TriggerHandler {
      */
     private static Map<String, Integer> executionCountByHandlerName = new Map<String, Integer>();
 
+    // Not a setting on purpose: this is a guard against a code defect (a
+    // trigger re-entering itself without end), not a business rule anyone
+    // should tune.
     private static final Integer MAX_EXECUTIONS_PER_TRANSACTION = 5;
 
     /* Set from Trigger context so subclasses and tests can both reach it. */
@@ -121,8 +124,38 @@ public virtual class TriggerHandler {
         bypassedHandlerNames.clear();
     }
 
+    /**
+     * True when the handler was bypassed in code for this transaction, or
+     * switched off in the Integration_Control__c custom setting for the
+     * running user, their profile or the org. The setting is what a data load
+     * uses: an admin ticks Bypass All Triggers for the migration user, and a
+     * million Assets load without starting a million provisioning callouts,
+     * with no deploy either side.
+     */
     public static Boolean isBypassed(String handlerNameToCheck) {
-        return bypassedHandlerNames.contains(handlerNameToCheck);
+        return bypassedHandlerNames.contains(handlerNameToCheck)
+            || isSwitchedOffBySetting(handlerNameToCheck);
+    }
+
+    private static Boolean isSwitchedOffBySetting(String handlerNameToCheck) {
+        // getInstance() merges the user, profile and org levels; with no
+        // record at any level it returns one with every checkbox false.
+        Integration_Control__c control = Integration_Control__c.getInstance();
+        if (control == null) {
+            return false;
+        }
+        if (control.Bypass_Triggers__c == true) {
+            return true;
+        }
+        if (String.isBlank(control.Bypass_Handlers__c)) {
+            return false;
+        }
+        for (String name : control.Bypass_Handlers__c.split(',')) {
+            if (name.trim().equalsIgnoreCase(handlerNameToCheck)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /* --------------------------------------------------------- recursion */

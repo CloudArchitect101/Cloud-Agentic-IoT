@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Bundle_TTL_Minutes__c</fullName>
+    <label>Bundle Link Lifetime (minutes)</label>
+    <description>How long a provisioning bundle download link stays valid.</description>
+    <precision>4</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>
