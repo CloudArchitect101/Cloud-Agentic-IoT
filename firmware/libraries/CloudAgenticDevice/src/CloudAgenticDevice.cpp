@@ -1,7 +1,15 @@
 #include "CloudAgenticDevice.h"
 
+// esp_random() moved headers between ESP-IDF 4 (Arduino core 2.x) and 5 (3.x).
+#if __has_include(<esp_random.h>)
+#include <esp_random.h>
+#else
+#include <esp_system.h>
+#endif
+
 #define NVS_IDENTITY "identity"
 #define NVS_WIFI     "wifi"
+#define NVS_CONFIG   "config"
 #define WIFI_SLOTS   3
 #define WIFI_ATTEMPT_MS 15000
 
@@ -36,8 +44,9 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 
 CloudAgenticDevice* CloudAgenticDevice::_instance = nullptr;
 
-CloudAgenticDevice::CloudAgenticDevice(const char* sketchName, const char* version)
-  : _sketch(sketchName), _version(version), _mqtt(_net) {
+CloudAgenticDevice::CloudAgenticDevice(const char* sketchName, const char* version,
+                                       uint32_t defaultTelemetrySeconds)
+  : _sketch(sketchName), _version(version), _telemetrySeconds(defaultTelemetrySeconds), _mqtt(_net) {
   _instance = this;
 }
 
@@ -54,7 +63,53 @@ bool CloudAgenticDevice::loadIdentity() {
   _cert      = _prefs.getString("cert", "");
   _key       = _prefs.getString("key", "");
   _prefs.end();
-  return _thingName.length() && _endpoint.length() && _cert.length() && _key.length();
+  _haveIdentity = _thingName.length() && _endpoint.length() && _cert.length() && _key.length();
+  return _haveIdentity;
+}
+
+/* ------------------------------------------------------------- settings */
+
+// Settings the fleet changes at run time, kept apart from identity and Wi-Fi.
+void CloudAgenticDevice::loadSettings() {
+  _prefs.begin(NVS_CONFIG, false);   // read-write creates the namespace, so no "not found" log on a new board
+  uint32_t stored = _prefs.getUInt("telemetrySec", 0);
+  _prefs.end();
+  if (cad::validTelemetrySeconds(stored)) _telemetrySeconds = stored;
+  Serial.printf("telemetry: every %lu s\n", (unsigned long)_telemetrySeconds);
+}
+
+bool CloudAgenticDevice::setTelemetryInterval(long seconds, const char* source) {
+  if (!cad::validTelemetrySeconds(seconds)) {
+    Serial.printf("telemetry: %ld s from %s refused, allowed %lu-%lu\n", seconds, source,
+                  (unsigned long)cad::MIN_TELEMETRY_SECONDS, (unsigned long)cad::MAX_TELEMETRY_SECONDS);
+    return false;
+  }
+  if ((uint32_t)seconds != _telemetrySeconds) {
+    // Written only when it changes: flash wears out with every write.
+    _prefs.begin(NVS_CONFIG, false);
+    _prefs.putUInt("telemetrySec", (uint32_t)seconds);
+    _prefs.end();
+    _telemetrySeconds = (uint32_t)seconds;
+    _telemetryScheduled = false;   // spread again from now, at the new pace
+  }
+  Serial.printf("telemetry: every %ld s, set by %s\n", seconds, source);
+  return true;
+}
+
+bool CloudAgenticDevice::telemetryDue() {
+  if (!_mqtt.connected()) return false;
+  uint32_t now = millis();
+  uint32_t interval = _telemetrySeconds * 1000UL;
+  if (!_telemetryScheduled) {
+    _nextTelemetryAt = now + cad::between(0, interval, esp_random());
+    _telemetryScheduled = true;
+    return false;
+  }
+  if (!cad::due(now, _nextTelemetryAt, interval)) return false;
+  // From now, not from the missed slot: a board back from an outage sends one
+  // reading, not a burst of every one it missed.
+  _nextTelemetryAt = now + interval;
+  return true;
 }
 
 /* ----------------------------------------------------------------- wifi */
@@ -148,7 +203,9 @@ void CloudAgenticDevice::checkSerialWifiUpdate() {
   if (!doc.containsKey("ssid")) { Serial.println("wifi: no 'ssid' field, ignored"); return; }
   saveNetwork(doc["ssid"] | "", doc["passphrase"] | "");
   Serial.println("wifi: updated over serial - identity and certificate untouched");
-  if (WiFi.status() != WL_CONNECTED) connectWiFi();
+  // Someone is at the board: try the new network now, not after the backoff.
+  _waiting = false;
+  _retry.reset();
 }
 
 /* ------------------------------------------------------------------ OTA */
@@ -201,6 +258,12 @@ void CloudAgenticDevice::handleJobDocument(byte* payload, unsigned int length) {
   if (execution.isNull()) return;   // notify-next with nothing pending
 
   String jobId  = execution["jobId"].as<String>();
+  JsonObject jobDocument = execution["jobDocument"];
+  if (strcmp(jobDocument["operation"] | "", "SET_TELEMETRY_INTERVAL") == 0) {
+    handleConfigJob(jobId, jobDocument);
+    return;
+  }
+
   String url    = execution["jobDocument"]["url"].as<String>();
   String ver    = execution["jobDocument"]["version"].as<String>();
   String sketch = execution["jobDocument"]["sketch"].as<String>();
@@ -225,6 +288,20 @@ void CloudAgenticDevice::handleJobDocument(byte* payload, unsigned int length) {
   applyFirmware(jobId, url);
 }
 
+// A job that sets the reading interval for a whole Thing Group: one AWS call
+// reaches every board of a type, at the rollout pace and with the abort rules
+// of the job (scripts/ota.sh interval). Boards that are offline pick it up
+// when they reconnect, like firmware.
+void CloudAgenticDevice::handleConfigJob(const String& jobId, JsonObject jobDocument) {
+  long seconds = jobDocument["seconds"] | 0L;
+  if (!setTelemetryInterval(seconds, "job")) {
+    reportJobStatus(jobId, "REJECTED", "seconds must be " + String((unsigned long)cad::MIN_TELEMETRY_SECONDS)
+                                        + "-" + String((unsigned long)cad::MAX_TELEMETRY_SECONDS));
+    return;
+  }
+  reportJobStatus(jobId, "SUCCEEDED", "telemetry every " + String(seconds) + " s");
+}
+
 /* -------------------------------------------------------------- runtime */
 
 void CloudAgenticDevice::handleMessage(char* topic, byte* payload, unsigned int length) {
@@ -244,11 +321,17 @@ void CloudAgenticDevice::handleMessage(char* topic, byte* payload, unsigned int 
     Serial.println("wifi: updated over MQTT - identity and certificate untouched");
     return;
   }
+  // The same setting the fleet job carries, for one board or a list of them
+  // (the device-command API).
+  if (strcmp(doc["operation"] | "", "SET_TELEMETRY_INTERVAL") == 0) {
+    setTelemetryInterval(doc["seconds"] | 0L, "command");
+    return;
+  }
 
   if (_commandHandler) _commandHandler(doc);
 }
 
-void CloudAgenticDevice::connectAWS() {
+void CloudAgenticDevice::configureMqtt() {
   _net.setCACert(AWS_ROOT_CA);
   _net.setCertificate(_cert.c_str());
   _net.setPrivateKey(_key.c_str());
@@ -257,10 +340,17 @@ void CloudAgenticDevice::connectAWS() {
   // messages are dropped silently - it looks like AWS never sent anything.
   _mqtt.setBufferSize(2048);
   _mqtt.setCallback(trampoline);
+}
 
+// One attempt. Retrying is loop()'s job, paced by the backoff, so that a board
+// that cannot reach AWS keeps running its sketch instead of spinning here.
+bool CloudAgenticDevice::connectAWS() {
   Serial.printf("aws: connecting as %s\n", _thingName.c_str());
-  while (!_mqtt.connect(_thingName.c_str())) { Serial.print("."); delay(1000); }
-  Serial.printf("\naws: connected, %s v%s\n", _sketch, _version);
+  if (!_mqtt.connect(_thingName.c_str())) {
+    Serial.printf("aws: not connected, state %d\n", _mqtt.state());
+    return false;
+  }
+  Serial.printf("aws: connected, %s v%s\n", _sketch, _version);
 
   _mqtt.subscribe(("$aws/things/" + _thingName + "/jobs/notify-next").c_str());
   _mqtt.subscribe(("device/" + _thingName + "/command").c_str());
@@ -270,27 +360,55 @@ void CloudAgenticDevice::connectAWS() {
   _mqtt.subscribe(("$aws/things/" + _thingName + "/jobs/$next/get/accepted").c_str());
   // Ask for anything queued while this device was offline.
   _mqtt.publish(("$aws/things/" + _thingName + "/jobs/$next/get").c_str(), "{}");
+  return true;
+}
+
+void CloudAgenticDevice::retryLater(const char* what) {
+  uint32_t wait = _retry.fail(esp_random());
+  _nextAttemptAt = millis() + wait;
+  _waiting = true;
+  Serial.printf("%s: attempt %lu failed, next in %lu ms\n", what,
+                (unsigned long)_retry.failures(), (unsigned long)wait);
 }
 
 bool CloudAgenticDevice::begin() {
   if (!loadIdentity()) { provisionFromSerial(false); return false; }
+  loadSettings();
+  configureMqtt();
   if (!connectWiFi()) { provisionFromSerial(true); return false; }
-  connectAWS();
+  if (connectAWS()) _retry.reset();
+  else retryLater("aws");
   return true;
 }
 
 void CloudAgenticDevice::loop() {
   checkSerialWifiUpdate();
-  if (WiFi.status() != WL_CONNECTED) { if (!connectWiFi()) { delay(5000); return; } }
-  if (!_mqtt.connected()) connectAWS();
+  if (!_haveIdentity) return;   // still waiting to be provisioned
+  if (_mqtt.connected()) { _mqtt.loop(); return; }
+
+  // Offline. Until the next attempt is due, return at once.
+  if (_waiting && !cad::due(millis(), _nextAttemptAt, _retry.capMs())) return;
+  _waiting = false;
+
+  if (WiFi.status() != WL_CONNECTED && !connectWiFi()) { retryLater("wifi"); return; }
+  if (!connectAWS()) { retryLater("aws"); return; }
+  _retry.reset();
   _mqtt.loop();
 }
 
-bool CloudAgenticDevice::publish(const char* subTopic, const JsonDocument& doc) {
+bool CloudAgenticDevice::publishTo(const String& topic, const JsonDocument& doc) {
   if (!_mqtt.connected()) return false;
   char buf[512];
   serializeJson(doc, buf);
-  return _mqtt.publish(("device/" + _thingName + "/" + subTopic).c_str(), buf);
+  return _mqtt.publish(topic.c_str(), buf);
+}
+
+bool CloudAgenticDevice::publish(const char* subTopic, const JsonDocument& doc) {
+  return publishTo("device/" + _thingName + "/" + subTopic, doc);
+}
+
+bool CloudAgenticDevice::publishTelemetry(const JsonDocument& doc) {
+  return publishTo("$aws/rules/" TELEMETRY_RULE "/device/" + _thingName + "/telemetry", doc);
 }
 
 void CloudAgenticDevice::onCommand(void (*handler)(JsonDocument&)) { _commandHandler = handler; }

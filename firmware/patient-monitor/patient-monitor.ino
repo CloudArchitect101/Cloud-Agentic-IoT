@@ -19,12 +19,17 @@
 // Raise this to ship a change. The pipeline publishes each version once and a
 // board installs only a version it is not already running, so a change under
 // the same number never reaches a board; the pull request checks fail it.
-#define FIRMWARE_VERSION "2.0.1"
+#define FIRMWARE_VERSION "2.1.0"
+
+// Seconds between readings until the fleet sets its own. The fleet's value
+// (scripts/ota.sh interval, or SET_TELEMETRY_INTERVAL through the device
+// command API) is kept in NVS and wins over this from then on.
+#define DEFAULT_TELEMETRY_SECONDS 30
 
 // The sketch name MUST match this folder's name: it is sent in every OTA job
 // document and checked by the device, so a job aimed at the wrong device type
 // is refused rather than bricking the hardware.
-CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION);
+CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY_SECONDS);
 
 #define DHT_PIN   4
 #define SERVO_PIN 5
@@ -54,18 +59,15 @@ void setup() {
 
 void loop() {
   device.loop();
+  if (!device.telemetryDue()) return;
 
-  static unsigned long last = 0;
-  if (device.connected() && millis() - last > 30000) {
-    last = millis();
-    float h = dht.readHumidity(), t = dht.readTemperature();
-    if (isnan(h) || isnan(t)) { Serial.println("DHT read failed"); return; }
+  float h = dht.readHumidity(), t = dht.readTemperature();
+  if (isnan(h) || isnan(t)) { Serial.println("DHT read failed"); return; }
 
-    StaticJsonDocument<200> doc;
-    doc["deviceId"]    = device.thingName();
-    doc["temperature"] = t;
-    doc["humidity"]    = h;
-    device.publish("telemetry", doc);
-    Serial.printf("telemetry: %.1fC %.0f%%\n", t, h);
-  }
+  StaticJsonDocument<200> doc;
+  doc["deviceId"]    = device.thingName();
+  doc["temperature"] = t;
+  doc["humidity"]    = h;
+  device.publishTelemetry(doc);
+  Serial.printf("telemetry: %.1fC %.0f%%\n", t, h);
 }

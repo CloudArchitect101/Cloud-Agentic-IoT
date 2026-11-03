@@ -6,6 +6,7 @@
 #   scripts/ota.sh promote Prod <sketch> <version>           Prod canary -> every Prod board
 #   scripts/ota.sh join <Dev|Prod> <thing> <sketch> [canary] put a board in its group
 #   scripts/ota.sh status <Dev|Prod>                         recent jobs, board by board
+#   scripts/ota.sh interval <Dev|Prod> <sketch> [seconds]    how often every board of a type reports
 #
 # Where a release goes depends on the environment:
 #
@@ -23,7 +24,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 usage() {
-  sed -n '3,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 1
 }
 
@@ -37,6 +38,22 @@ resolve_ota_stack() {
   { [ -n "$BUCKET" ] && [ "$BUCKET" != "None" ]; } \
     || die "Stack $stack not found or has no outputs. Deploy AWS to $1 first: that creates it."
 }
+
+# Every rollout pace, timeout, abort rule and link lifetime comes from
+# config/<env>.json (.ota), next to the rest of that environment's settings: a
+# fleet of a million boards needs a different pace than a desk of three, and
+# that is a config change, not a code change.
+ota_config() {   # ota_config <env> <jq path>
+  local value
+  value=$(jq -ce "$2" "$REPO_ROOT/config/$1.json" 2> /dev/null) || die "config/$1.json sets no $2."
+  printf '%s' "$value"
+}
+
+# The interval range the firmware accepts (DeviceTiming.h); a job outside it
+# would only be refused by every board. test/firmware/contract.test.js keeps
+# the two in step.
+MIN_TELEMETRY_SECONDS=5
+MAX_TELEMETRY_SECONDS=86400
 
 known_sketch() {
   grep -qxF "$1" <<< "$(sketches)" || die "No sketch named '$1'. Sketches: $(sketches | tr '\n' ' ')"
@@ -56,29 +73,23 @@ create_job() {
     --arg url "\${aws:iot:s3-presigned-url:https://s3.$AWS_REGION.amazonaws.com/$BUCKET/$key}" \
     '{operation: "ota", sketch: $sketch, version: $version, url: $url}' > "$doc"
 
-  # The first ring rolls out slowly and stops once a quarter of its boards
-  # fail. The fleet ramps up gradually and stops sooner, at a tenth: more
-  # boards, more to lose.
-  local rollout timeout abort
-  if [ "$pace" = first-ring ]; then
-    rollout='{"maximumPerMinute":5}'
-    timeout='{"inProgressTimeoutInMinutes":10}'
-    abort='{"criteriaList":[{"failureType":"FAILED","action":"CANCEL","thresholdPercentage":25,"minNumberOfExecutedThings":2}]}'
-  else
-    rollout='{"maximumPerMinute":10,"exponentialRate":{"baseRatePerMinute":5,"incrementFactor":2,"rateIncreaseCriteria":{"numberOfSucceededThings":10}}}'
-    timeout='{"inProgressTimeoutInMinutes":15}'
-    abort='{"criteriaList":[{"failureType":"FAILED","action":"CANCEL","thresholdPercentage":10,"minNumberOfExecutedThings":5}]}'
-  fi
+  # The first ring rolls out slowly and stops early; the fleet ramps up and
+  # stops at a smaller share of failures: more boards, more to lose. The
+  # numbers for each are in config/<env>.json under .ota.firstRing and .ota.fleet.
+  local ring=fleet presign
+  [ "$pace" = first-ring ] && ring=firstRing
+  presign=$(jq -cn --arg role "$PRESIGN_ROLE" --argjson expires "$(ota_config "$env" .ota.presignedUrlExpiresInSec)" \
+              '{roleArn: $role, expiresInSec: $expires}')
 
   aws iot create-job \
     --job-id "$job_id" \
     --targets "arn:aws:iot:$AWS_REGION:$AWS_ACCOUNT_ID:thinggroup/$group" \
     --document "file://$doc" \
     --description "$sketch $version to $group ($env, $(git -C "$REPO_ROOT" rev-parse --short HEAD))" \
-    --presigned-url-config "{\"roleArn\":\"$PRESIGN_ROLE\",\"expiresInSec\":3600}" \
-    --job-executions-rollout-config "$rollout" \
-    --timeout-config "$timeout" \
-    --abort-config "$abort" > /dev/null
+    --presigned-url-config "$presign" \
+    --job-executions-rollout-config "$(ota_config "$env" ".ota.$ring.rollout")" \
+    --timeout-config "$(ota_config "$env" ".ota.$ring.timeout")" \
+    --abort-config "$(ota_config "$env" ".ota.$ring.abort")" > /dev/null
   rm -f "$doc"
 }
 
@@ -196,6 +207,48 @@ cmd_status() {
   done
 }
 
+# How often every board of a type sends a reading. One continuous job for the
+# type's fleet group carries the setting: boards that are offline get it when
+# they reconnect, boards added to the group later get it when they join, and
+# each keeps it in NVS. The group's previous interval job is cancelled once the
+# new one exists. Boards on firmware older than 2.1.0 cannot apply it and
+# answer FAILED, so send it once the fleet runs 2.1.0 (in Prod: after promote).
+cmd_interval() {
+  local env="$1" sketch="${2:-}" seconds="${3:-}" group job_id doc old
+  [ -n "$sketch" ] || die "Usage: scripts/ota.sh interval <Dev|Prod> <sketch> [seconds]"
+  known_sketch "$sketch"
+  refuse_local_prod "$env" "Prod boards are set from the pipeline: run the \"Fleet reading interval\" workflow from the Prod branch."
+  need jq "It builds the job document."
+  [ -n "$seconds" ] || seconds=$(ota_config "$env" ".devices[\"$sketch\"].telemetrySeconds")
+  { [[ "$seconds" =~ ^[0-9]+$ ]] && [ "$seconds" -ge "$MIN_TELEMETRY_SECONDS" ] && [ "$seconds" -le "$MAX_TELEMETRY_SECONDS" ]; } \
+    || die "The interval must be whole seconds from $MIN_TELEMETRY_SECONDS to $MAX_TELEMETRY_SECONDS, the range the firmware accepts (got '$seconds')."
+  aws_whoami
+  assert_aws_environment "$env"
+
+  group="fleet-$sketch"
+  job_id="interval-$sketch-$seconds-$(date +%s)"
+  doc=$(mktemp)
+  jq -n --argjson seconds "$seconds" '{operation: "SET_TELEMETRY_INTERVAL", seconds: $seconds}' > "$doc"
+
+  step "Every $sketch in $env reports every $seconds s"
+  aws iot create-job \
+    --job-id "$job_id" \
+    --targets "arn:aws:iot:$AWS_REGION:$AWS_ACCOUNT_ID:thinggroup/$group" \
+    --target-selection CONTINUOUS \
+    --document "file://$doc" \
+    --description "$sketch reports every $seconds s ($env, $(git -C "$REPO_ROOT" rev-parse --short HEAD))" \
+    --job-executions-rollout-config "$(ota_config "$env" .ota.fleet.rollout)" \
+    --timeout-config "$(ota_config "$env" .ota.fleet.timeout)" \
+    --abort-config "$(ota_config "$env" .ota.fleet.abort)" > /dev/null
+  rm -f "$doc"
+  for old in $(aws iot list-jobs --status IN_PROGRESS --thing-group-name "$group" \
+                 --query "jobs[?starts_with(jobId, 'interval-$sketch-')].jobId" --output text); do
+    [ "$old" = "$job_id" ] || aws iot cancel-job --job-id "$old" --comment "Replaced by $job_id" > /dev/null
+  done
+  endstep
+  note "Job $job_id sets $seconds s on every board in $group, and on every board that joins it later."
+}
+
 cmd="${1:-}"
 env="${2:-}"
 [ -n "$cmd" ] || usage
@@ -206,5 +259,6 @@ case "$cmd" in
   promote) cmd_promote "$env" "$@" ;;
   join)    cmd_join "$env" "$@" ;;
   status)  cmd_status "$env" ;;
+  interval) cmd_interval "$env" "$@" ;;
   *)       usage ;;
 esac

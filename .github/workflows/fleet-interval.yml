@@ -1,0 +1,48 @@
+name: Fleet reading interval
+
+# Sets how often every board of one type sends a reading, with one AWS IoT job
+# for the type's fleet group (scripts/ota.sh interval). Boards keep the value in
+# NVS; boards that are offline get it when they reconnect, and boards that join
+# the group later get it too.
+#
+# Run it from the branch of the environment to change, Dev or Prod. Left
+# empty, the interval comes from that branch's config/<env>.json
+# (devices.<sketch>.telemetrySeconds), so the reviewed file stays the record.
+# Boards on firmware older than 2.1.0 cannot apply it: in Prod, run it after
+# the 2.1.0 promote.
+on:
+  workflow_dispatch:
+    inputs:
+      sketch:
+        description: Device type
+        type: choice
+        options: [patient-monitor]
+      seconds:
+        description: Seconds between readings, 5 to 86400. Empty uses config/<env>.json.
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  interval:
+    if: github.ref_name == 'Dev' || github.ref_name == 'Prod'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Inputs reach the shell through env, never pasted into the script. Not
+      # SECONDS: bash keeps its own variable by that name.
+      - name: Set the interval
+        env:
+          ENVIRONMENT: ${{ github.ref_name }}
+          SKETCH: ${{ inputs.sketch }}
+          INTERVAL_SECONDS: ${{ inputs.seconds }}
+        run: scripts/ota.sh interval "$ENVIRONMENT" "$SKETCH" "$INTERVAL_SECONDS"
