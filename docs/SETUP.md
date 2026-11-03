@@ -935,7 +935,6 @@ credential in one.
 | `SF_INTEGRATION_CONSUMER_KEY` | Secret | **Integration** app consumer key | copied to SSM for the Lambdas |
 | `SF_INTEGRATION_JWT_KEY` | Secret | `base64 -i server-integration.key` | copied to SSM for the Lambdas |
 | `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` | copied to SSM for the Lambdas |
-| `SF_INSTANCE` | Variable | Your org's My Domain host without `.salesforce.com`, e.g. `acme-dev-ed.develop.my` | copied to SSM for the Lambdas |
 | `SLACK_SIGNING_SECRET` | Secret | Optional, from the Slack app | the Slack stack, skipped without it |
 
 The pipeline deploys as the **deploy** app and user. The integration values are

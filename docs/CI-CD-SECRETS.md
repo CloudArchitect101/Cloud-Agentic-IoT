@@ -47,7 +47,7 @@ The short version of what the pipelines need:
 | `SF_CONSUMER_KEY`, `SF_JWT_KEY`, `SF_USERNAME` | The **deploy** External Client App and user, never the runtime integration one |
 | `SF_INTEGRATION_CONSUMER_KEY`, `SF_INTEGRATION_JWT_KEY`, `SF_INTEGRATION_USERNAME` | The **integration** app and user the Lambdas run as, copied into SSM by the deploy |
 
-Variables (not secrets): `AWS_REGION`, `SF_LOGIN_URL`, `SF_INSTANCE`. The firmware bucket and the role AWS IoT signs download links with come from the `ota` stack, so OTA needs nothing set. One repository variable, `AUTO_DEPLOY`, switches automatic deploys on.
+Variables (not secrets): `AWS_REGION`, `SF_LOGIN_URL`. The Lambdas learn the org's instance from the token Salesforce returns, so nothing names it. The integration key and the Slack signing secret are stored in SSM as SecureString, which the Lambdas decrypt when they read them; neither ever appears in a CloudFormation parameter. The firmware bucket and the role AWS IoT signs download links with come from the `ota` stack, so OTA needs nothing set. One repository variable, `AUTO_DEPLOY`, switches automatic deploys on.
 
 ## Conventions the pipelines enforce
 

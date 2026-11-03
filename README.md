@@ -139,7 +139,7 @@ Three conventions the pipelines enforce, because each would otherwise fail at de
 
 Everything below is manual for a structural reason, not an oversight: it stores a secret, lives in another vendor's console, or is a deliberate human checkpoint. Do it once, in this order — later steps consume outputs from earlier ones.
 
-**1. Named Credential `AWS_IoT_Relay`.** Setup → Named Credentials → New. Type **AWS Signature Version 4**, service `execute-api`, URL = the `QueueDepthEndpoint` output of the `cloud-agentic-iot-queue-relay-Dev` stack. This one credential carries every Salesforce → AWS callout in the system — the queue indicator, device provisioning, re-provisioning, teardown, and the Wi-Fi credential push.
+**1. Named Credential `AWS_IoT_Relay`.** Setup → Named Credentials → New. Type **AWS Signature Version 4**, service `execute-api`, URL = the `QueueDepthEndpoint` output of the `cloud-agentic-iot-queue-relay-Dev` stack (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes). The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another. This one credential carries every Salesforce → AWS callout in the system — the queue indicator, device provisioning, re-provisioning, teardown, and the Wi-Fi credential push.
 
 **2. SSM Parameter Store.** Store `SLACK_SIGNING_SECRET` and the Salesforce JWT credentials the Slack Lambda uses at runtime. Use a **separate, least-privilege integration user** from the CI/CD deploy user — see [`docs/CI-CD-SECRETS.md`](docs/CI-CD-SECRETS.md). Never reuse deploy credentials for runtime access, and never put either in code.
 
@@ -258,11 +258,11 @@ Start at the device and walk outward; a break is easiest to find at the first ho
 arduino-cli monitor -p <port> -c baudrate=115200
 ```
 
-Expect the WiFi and AWS IoT connection lines, then telemetry every 30s. Then work outward:
+Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 s (or at the interval the fleet set). Then work outward:
 
 | Check | Where | Expect |
 |---|---|---|
-| Device is publishing | IoT Core → MQTT test client, subscribe `device/<thing>/telemetry` | JSON every 30s |
+| Device is publishing | S3 → the patient-vitals archive bucket, `readings/date=<today>/`. Readings go through Basic Ingest, straight to the rule, so the MQTT test client does not see them | A new `.ndjson.gz` object for each batch |
 | Device accepts commands | Publish `{ "operation": "DISPENSE_MEDICATION" }` to `device/<thing>/command` | The servo moves |
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |

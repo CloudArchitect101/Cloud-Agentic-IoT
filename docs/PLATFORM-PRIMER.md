@@ -43,18 +43,18 @@ Python instinct says `for r in requests: insert(r)` — on this platform that pa
 
 **2. Trigger delegates to a service class:**
 ```apex
-trigger AssetTrigger on Asset (after insert, after update) {
-    DeviceProvisioningService.provisionAsync(ids);   // logic lives in the class
+trigger AssetTrigger on Asset (after insert, after update, after delete, after undelete) {
+    new AssetTriggerHandler().run();   // routing in the handler, logic in DeviceProvisioningService
 }
 ```
 Triggers are like signal handlers: keep them thin, put logic where it can be tested.
 
 **3. Async for anything that leaves the building:**
 ```apex
-@future(callout=true)
-public static void provisionAsync(Set<Id> assetIds) { ... }
+public with sharing class DeviceProvisioningJob implements Queueable, Database.AllowsCallouts { ... }
+DeviceProvisioningJob.start(DeviceProvisioningJob.Action.PROVISION, assetIds);
 ```
-A trigger runs inside the user's save transaction — blocking that on an HTTP call to AWS would freeze their UI and hold locks. `@future` is "run this soon, separately", like queuing a Celery task, with the same delivery caveats.
+A trigger runs inside the user's save transaction — blocking that on an HTTP call to AWS would freeze their UI and hold locks. A Queueable is "run this soon, separately", like queuing a Celery task, with the same delivery caveats. The `@future` this replaced made one callout per device, so the 101st device in one save hit the limit of 100 callouts per transaction and none of them were provisioned. This job sends `Devices_Per_Callout__c` devices per call and hands the rest to a new job before it reaches the limit; `DeviceProvisioningBatch` does the same for a bulk load.
 
 ## Reading `__` suffixes at a glance
 

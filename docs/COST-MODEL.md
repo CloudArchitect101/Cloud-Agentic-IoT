@@ -16,15 +16,20 @@ Bulk (AliExpress, 100+): roughly half. Dev/demo software cost is $0 — Develope
 
 ## 2. AWS — per device per month (USD, us-east-1/west-2)
 
+86,400 readings a month per device. Firmware 2.1.0 sends them through IoT Basic Ingest, and the pipeline handles them in batches of 1,000 (Prod settings), so most lines are now per batch rather than per reading. [SCALING.md](SCALING.md) has the same model for a million devices, with a simulation behind it.
+
 | Line | Math | $/mo |
 |---|---|---|
-| IoT Core messages | 86,400 × $1.00/M | 0.086 |
-| IoT connectivity | $0.042/device/**year** | 0.004 |
+| IoT Core messages | Basic Ingest: not billed as messaging (2.0.x firmware: 86,400 × $1.00/M = 0.086) | 0.000 |
+| IoT connectivity | 43,200 min × $0.08/M | 0.003 |
 | Rules engine (rule + action) | 172,800 × $0.15/M | 0.026 |
-| Lambda (86k invokes ×100 ms ×128 MB) | compute + requests | 0.035 |
-| DynamoDB on-demand writes | 86,400 × $1.25/M | 0.108 |
-| EventBridge custom events | 86,400 × $1.00/M | 0.086 |
-| **Per patient device** | | **≈ $0.35 (≈ $0.48 CAD)** |
+| SQS telemetry queue (send, receive, delete) | ~103,700 requests × $0.40/M | 0.041 |
+| DynamoDB on-demand: one STATE read per reading | 43,200 read units × $0.125/M; writes only on a change | 0.005 |
+| Lambda (86 batch invocations × ~300 ms × 1 GB) | compute + requests | 0.0004 |
+| S3 archive (its share of 86 objects; ~4 MB a month gzipped) | requests + storage | 0.0005 |
+| **Per patient device** | | **≈ $0.077 (≈ $0.11 CAD)** |
+
+EventBridge is no longer on the per-reading path, and Prod keeps readings in S3 rather than writing each one to DynamoDB, which together were $0.19 of the old $0.35.
 
 Queue-indicator device (commands only): < $0.01/mo. **Per AWS account**: the account and Organizations are free; the only fixed baseline is CloudWatch logs/alarms, ~$1–5/account/mo at this scale. Bedrock Titan v2 embeddings are noise: 1,000 patients × ~500-token daily summary ≈ 15M tokens/mo ≈ **$0.30 total**.
 
@@ -44,17 +49,17 @@ Queue-indicator device (commands only): < $0.01/mo. **Per AWS account**: the acc
 | Data Cloud, credit model | Salesforce-data ingestion now free; identity resolution 100k credits/M rows → 0.1 credit ≈ $0.0005/run; queries/segments | ~0.01–0.05 |
 | Data Cloud, profile SKU (alternative) | $240–420 per 1,000 profiles | 0.24–0.42 |
 | Agentforce | $2/conversation flat, or $0.10/action (assume 1 conv or ~5 actions) | 0.50–2.00 |
-| AWS (from §2) | device telemetry pipeline | 0.35 |
-| **Total per B2C customer + device** | | **≈ $0.90–2.80 (≈ $1.25–3.85 CAD)** |
+| AWS (from §2) | device telemetry pipeline | 0.08 |
+| **Total per B2C customer + device** | | **≈ $0.60–2.50 (≈ $0.82–3.43 CAD)** |
 
-**The driver is Agentforce usage, not data or infrastructure** — hardware amortized over 24 mo adds ~$0.06/mo; AWS is $0.35; everything else is cents. Design effort should go into how often agents fire, not into shaving Lambda costs.
+**The driver is Agentforce usage, not data or infrastructure** — hardware amortized over 24 mo adds ~$0.06/mo; AWS is about $0.08; everything else is cents. Design effort should go into how often agents fire, not into shaving Lambda costs.
 
 ## 5. Worked examples (monthly, CAD ≈)
 
 | Scenario | Internal users | Customers+devices | Salesforce | Agentforce | Data Cloud | AWS | **Total/mo** |
 |---|---|---|---|---|---|---|---|
 | Pilot | 2 × EE | 100 | $480 | ~$0 (Foundations credits cover it) | ~$0 (free tier) | ~$5 | **≈ $485** |
-| Production | 10 × EE | 10,000 | $2,400 | ~$6,850 (1 conv/customer) | ~$700 (credit model) | ~$4,800 + $10 base | **≈ $14,760** |
+| Production | 10 × EE | 10,000 | $2,400 | ~$6,850 (1 conv/customer) | ~$700 (credit model) | ~$1,100 + $10 base | **≈ $11,060** |
 
 Pilot note: 100 customers × 1 conversation ≈ 2,000 flex credits-equivalent — the free Foundations allocation absorbs the entire pilot year. That is a deliberate Salesforce on-ramp and worth saying out loud in content.
 
