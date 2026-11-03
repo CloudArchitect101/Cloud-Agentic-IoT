@@ -3,27 +3,31 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { loadWithFakes, fakeAwsSdk, awsError, captureConsole } = require('../helpers/fakes');
+const { loadWithFakes, fakeAwsSdk, awsError, captureConsole, withEnv } = require('../helpers/fakes');
 
 const HANDLER = path.join(__dirname, '../../lambda/device-teardown/index.js');
 const COMMANDS = [
-  'ListThingPrincipalsCommand', 'DetachPolicyCommand', 'DetachThingPrincipalCommand',
+  'ListThingPrincipalsCommand', 'ListAttachedPoliciesCommand', 'DetachPolicyCommand', 'DetachThingPrincipalCommand',
   'UpdateCertificateCommand', 'DeleteCertificateCommand', 'DeleteThingCommand',
 ];
 const CERT_ARN = 'arn:aws:iot:ca-central-1:111122223333:cert/abc123';
 
-function load(respond) {
+function load(t, respond) {
+  withEnv(t, { IOT_PARALLEL_REQUESTS: '4' });
   const iot = fakeAwsSdk('IoTClient', COMMANDS, respond);
   const { handler } = loadWithFakes(HANDLER, { '@aws-sdk/client-iot': iot.sdk });
   return { handler, calls: iot.calls };
 }
 
-const listsOneCertificate = (command) =>
-  (command === 'ListThingPrincipalsCommand' ? { principals: [CERT_ARN] } : {});
+const listsOneCertificate = (command) => {
+  if (command === 'ListThingPrincipalsCommand') return { principals: [CERT_ARN] };
+  if (command === 'ListAttachedPoliciesCommand') return { policies: [{ policyName: 'cloud-agentic-iot-device' }] };
+  return {};
+};
 
 test('tears down in order, passing the certificate id as a string', async (t) => {
   captureConsole(t);
-  const { handler, calls } = load(listsOneCertificate);
+  const { handler, calls } = load(t, listsOneCertificate);
 
   const res = await handler({ thingName: 'pm-1' });
 
@@ -35,33 +39,61 @@ test('tears down in order, passing the certificate id as a string', async (t) =>
   const remove = calls.find((c) => c.command === 'DeleteCertificateCommand');
   assert.deepEqual(update.input, { certificateId: 'abc123', newStatus: 'INACTIVE' });
   assert.deepEqual(remove.input, { certificateId: 'abc123', forceDelete: true });
+  // Every policy on the certificate is detached, by the name AWS reports.
+  assert.deepEqual(calls.find((c) => c.command === 'DetachPolicyCommand').input, {
+    policyName: 'cloud-agentic-iot-device', target: CERT_ARN,
+  });
   assert.deepEqual(JSON.parse(res.body).results, [{ thingName: 'pm-1', deleted: true, certificatesDeleted: 1 }]);
+});
+
+test('a batch of Things gets one result each, in order', async (t) => {
+  captureConsole(t);
+  const { handler } = load(t, listsOneCertificate);
+  const thingNames = Array.from({ length: 25 }, (_, i) => `pm-${i}`);
+  const res = await handler({ body: JSON.stringify({ thingNames }) });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(JSON.parse(res.body).results.map((r) => r.thingName), thingNames);
 });
 
 test('a Thing that is already gone counts as torn down', async (t) => {
   captureConsole(t);
-  const { handler } = load(() => { throw awsError('ResourceNotFoundException'); });
+  const { handler } = load(t, () => { throw awsError('ResourceNotFoundException'); });
   const res = await handler({ thingNames: ['pm-1'] });
   assert.equal(res.statusCode, 200);
   assert.equal(JSON.parse(res.body).results[0].deleted, true);
 });
 
-test('any other failure is reported per Thing with a 207', async (t) => {
+test('a delete AWS refuses while a detach settles comes back retryable', async (t) => {
   captureConsole(t);
-  const { handler } = load((command) => {
+  const { handler } = load(t, (command) => {
     if (command === 'DeleteThingCommand') throw awsError('InvalidRequestException', 'principals still attached');
     return listsOneCertificate(command);
   });
   const res = await handler({ body: JSON.stringify({ thingNames: ['pm-1'] }) });
   assert.equal(res.statusCode, 207);
   assert.deepEqual(JSON.parse(res.body).results[0], {
-    thingName: 'pm-1', deleted: false, error: 'principals still attached',
+    thingName: 'pm-1', deleted: false, retryable: true, error: 'principals still attached',
   });
+});
+
+test('any other failure is reported per Thing with a 207, not retryable', async (t) => {
+  captureConsole(t);
+  const { handler } = load(t, (command, input) => {
+    if (command === 'ListThingPrincipalsCommand' && input.thingName === 'pm-2') {
+      throw awsError('UnauthorizedException', 'not allowed');
+    }
+    return listsOneCertificate(command);
+  });
+  const res = await handler({ thingNames: ['pm-1', 'pm-2'] });
+  assert.equal(res.statusCode, 207);
+  assert.deepEqual(JSON.parse(res.body).results.map((r) => [r.thingName, r.deleted, r.retryable]), [
+    ['pm-1', true, undefined], ['pm-2', false, false],
+  ]);
 });
 
 test('requires at least one Thing name', async (t) => {
   captureConsole(t);
-  const { handler, calls } = load();
+  const { handler, calls } = load(t);
   const res = await handler({});
   assert.equal(res.statusCode, 400);
   assert.equal(calls.length, 0);

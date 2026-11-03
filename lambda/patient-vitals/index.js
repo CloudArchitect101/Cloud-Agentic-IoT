@@ -1,134 +1,441 @@
+'use strict';
+
 /*
  * patient-vitals/index.js
  *
- * AWS Lambda function that ingests patient vitals from IoT telemetry,
- * calculates risk scores, and syncs to Salesforce via REST API.
+ * Scores every reading from the patient monitors, keeps it, and hands the
+ * readings Salesforce should act on to the sync queue.
  *
- * This is the first stage of the Data Cloud RAG pipeline:
- * 1. Receives raw telemetry from IoT Core
- * 2. Validates and transforms data
- * 3. Calculates clinical risk scores
- * 4. Syncs to Salesforce (Data Cloud External Object)
- * 5. Stores in DynamoDB for time-series analysis
+ *   device/+/telemetry --IoT rule--> telemetry queue (SQS) --batches--> this function
+ *       -> S3 archive        every reading, one object per batch
+ *       -> DynamoDB          one STATE item per device (and every reading, if
+ *                            KEEP_READINGS_IN_DYNAMODB is true)
+ *       -> sync queue (SQS)  state changes and due re-alerts only
+ *                            --> salesforce-sync --> Patient_Vitals__c
  *
- * Demonstrates: Data Cloud, RAG pipeline, ETL, data engineering, AWS Lambda
+ * Why it is shaped like this, at a million devices sending every 30 seconds
+ * (about 33,000 readings a second):
+ *
+ *   - The IoT rule used to invoke this function once per reading. Now it drops
+ *     readings on a queue and the function takes them in batches of
+ *     INGEST_BATCH_SIZE (the event source mapping), so 33,000 readings a
+ *     second is a few dozen invocations, not 33,000.
+ *   - DynamoDB is read and written in batches (100 keys, 25 items per call),
+ *     and a device's STATE item is written only when something changed.
+ *   - Salesforce never sees raw telemetry: 2,880 readings per device per day
+ *     would exhaust any org's storage and API limits. It gets transitions,
+ *     and a reminder every REALERT_INTERVAL_MINUTES while a patient stays
+ *     AT_RISK or CRITICAL. The write itself happens in salesforce-sync, at a
+ *     concurrency Salesforce can take, so a Salesforce outage backs up the
+ *     sync queue instead of telemetry.
+ *   - Every number here (batch sizes, retention, re-alert interval, the
+ *     clinical thresholds) comes from config/<env>.json through the template,
+ *     or from SSM, not from this file.
+ *
+ * A failure is reported per message (batchItemFailures), so SQS retries just
+ * the readings that need it. Everything is idempotent on retry: a reading's
+ * key is its device and timestamp, and a sync is an upsert on that same key.
  */
 
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, PutCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
-const { URLSearchParams } = require('url');
-const jwt = require('jsonwebtoken');
+const {
+  DynamoDBDocumentClient, BatchGetCommand, BatchWriteCommand, UpdateCommand,
+} = require('@aws-sdk/lib-dynamodb');
+const { SQSClient, SendMessageBatchCommand } = require('@aws-sdk/client-sqs');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { gzipSync } = require('node:zlib');
+const { randomUUID } = require('node:crypto');
+const { loadThresholds, assess } = require('@cloud-agentic-iot/shared/vitals');
+const { requiredEnv, numberEnv, booleanEnv } = require('@cloud-agentic-iot/shared/config');
 
-const dbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
-const docClient = DynamoDBDocumentClient.create({ client: dbClient });
+const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+  marshallOptions: { removeUndefinedValues: true },
+});
+const sqs = new SQSClient({});
+const s3 = new S3Client({});
 
-const DYNAMODB_TABLE = process.env.DYNAMODB_TABLE || 'patient-vitals';
-const SALESFORCE_ENDPOINT = process.env.SALESFORCE_ENDPOINT || 'https://instance.salesforce.com';
-const SALESFORCE_CLIENT_ID = process.env.SALESFORCE_CLIENT_ID;
-const SALESFORCE_USERNAME = process.env.SALESFORCE_USERNAME;
-const SALESFORCE_JWT_PRIVATE_KEY = process.env.SALESFORCE_JWT_PRIVATE_KEY;
-const SALESFORCE_LOGIN_URL = process.env.SALESFORCE_LOGIN_URL || 'https://test.salesforce.com';
+// Service limits, not settings: BatchGetItem takes 100 keys, BatchWriteItem
+// 25 items, SendMessageBatch 10 messages.
+const BATCH_GET_LIMIT = 100;
+const BATCH_WRITE_LIMIT = 25;
+const SQS_BATCH_LIMIT = 10;
+// Items DynamoDB leaves unprocessed (throttling) are retried this many times
+// with backoff. Whatever is still left goes back to SQS as a failed message,
+// and SQS retries it on its own schedule (maxReceiveCount, in the template).
+const UNPROCESSED_RETRIES = 4;
+const PARALLEL_REQUESTS = 8;
 
-/**
- * Main Lambda handler - processes incoming IoT telemetry events
- *
- * @param {Object} event - IoT event from AWS IoT Core
- * @param {Object} context - Lambda context
- * @returns {Object} Processed result
- */
-exports.handler = async (event, context) => {
-    console.log('Received event:', JSON.stringify(event));
-
-    try {
-        // Extract patient vitals from IoT telemetry payload. The IoT rule's
-        // Lambda action passes the device's message itself as the event;
-        // detail (EventBridge) and payload are the other shapes accepted.
-        const payload = event.detail || event.payload || event;
-        const vitals = parseVitals(payload);
-
-        if (!vitals) {
-            return createResponse(400, { message: 'Invalid vitals payload' });
-        }
-
-        // Calculate clinical risk score
-        vitals.riskScore = calculateRiskScore(vitals);
-
-        // Classify patient state based on risk
-        vitals.patientState = classifyPatientState(vitals.riskScore);
-
-        // DynamoDB keeps every reading (full-fidelity time series).
-        // Salesforce deliberately does not: at one reading per 30s a single
-        // device produces 2,880 rows/day of mostly "still normal", which
-        // fills a Developer Edition org (~5 MB) in under a day and is noise
-        // at any scale. Salesforce receives only transitions worth acting on.
-        const previousState = await getPreviousState(vitals.deviceId);
-        await storeReading(vitals);
-
-        const stateChanged = previousState !== vitals.patientState;
-        const isAlertable = vitals.patientState !== 'STABLE';
-        if (stateChanged || isAlertable) {
-            await syncToSalesforce(vitals, { previousState });
-        }
-        // Saved only once Salesforce has the reading. Saved first, a failed
-        // sync would be retried against a state that already looks
-        // unchanged, and the transition would never reach Salesforce.
-        await saveState(vitals);
-
-        return createResponse(200, {
-            message: 'Patient vitals processed successfully',
-            deviceId: vitals.deviceId,
-            riskScore: vitals.riskScore,
-            patientState: vitals.patientState,
-            vitals: omit(vitals, 'riskScore', 'patientState')
-        });
-
-    } catch (error) {
-        console.error('Error processing vitals:', error);
-        // Rethrown rather than returned as a 500. The IoT rule invokes this
-        // function asynchronously, where any return value counts as success
-        // and the reading is dropped; a thrown error is retried and shows up
-        // in the function's Errors metric.
-        throw error;
-    }
+exports.handler = async (event) => {
+  if (Array.isArray(event && event.Records)) {
+    return handleQueueBatch(event.Records);
+  }
+  return handleSingleReading(event);
 };
 
 /**
- * Parse raw IoT telemetry into structured patient vitals
- * Handles multiple device formats and data sources
- *
- * @param {Object} rawPayload - Raw telemetry from IoT device
- * @returns {Object} Structured vitals object
+ * This invocation's settings, all from the environment the template sets.
+ * Read before anything is written, so a missing one fails cleanly, by name.
+ */
+function settings() {
+  const keepReadings = booleanEnv('KEEP_READINGS_IN_DYNAMODB');
+  return {
+    table: requiredEnv('DYNAMODB_TABLE'),
+    queueUrl: requiredEnv('SYNC_QUEUE_URL'),
+    archiveBucket: requiredEnv('ARCHIVE_BUCKET'),
+    realertMs: numberEnv('REALERT_INTERVAL_MINUTES') * 60_000,
+    keepReadings,
+    retentionSeconds: keepReadings ? numberEnv('READING_RETENTION_DAYS') * 86_400 : null,
+  };
+}
+
+/** The telemetry queue's batch: one result for the whole batch, failures by message. */
+async function handleQueueBatch(records) {
+  const config = settings();
+  const thresholds = await loadThresholds();
+  const readings = [];
+  for (const record of records) {
+    const vitals = parseVitals(record.body);
+    if (!vitals) {
+      // No device id: retrying cannot fix it, so it is dropped, loudly.
+      console.warn('Dropping a message without a device id', { messageId: record.messageId });
+      continue;
+    }
+    readings.push({ id: record.messageId, vitals: score(vitals, thresholds) });
+  }
+  const failed = await ingest(readings, config);
+  if (failed.size) {
+    console.error('Readings to retry', { count: failed.size, of: records.length });
+  }
+  return { batchItemFailures: [...failed].map((itemIdentifier) => ({ itemIdentifier })) };
+}
+
+/**
+ * One reading, invoked directly: the shape the IoT rule's Lambda action used
+ * to send (the message itself), an EventBridge event (detail), or a wrapped
+ * payload. Kept so a reading can still be pushed through by hand.
+ */
+async function handleSingleReading(event) {
+  const config = settings();
+  const vitals = parseVitals(event && (event.detail || event.payload || event));
+  if (!vitals) {
+    return createResponse(400, { message: 'Invalid vitals payload' });
+  }
+  // The id names the archive object, so it must not repeat.
+  const reading = { id: `direct-${randomUUID()}`, vitals: score(vitals, await loadThresholds()) };
+  const failed = await ingest([reading], config);
+  if (failed.size) {
+    // Thrown, not returned as a 500: an asynchronous invocation counts any
+    // return value as success, and the reading would be dropped.
+    throw new Error(`Reading from ${vitals.deviceId} was not stored; see the errors above.`);
+  }
+  return createResponse(200, {
+    message: 'Patient vitals processed successfully',
+    deviceId: vitals.deviceId,
+    riskScore: reading.vitals.riskScore,
+    patientState: reading.vitals.patientState,
+  });
+}
+
+function score(vitals, thresholds) {
+  const { riskScore, patientState } = assess({
+    heartRate: vitals.heartRate,
+    spo2: vitals.spo2,
+    temperature: vitals.temperature,
+    bpSystolic: vitals.bloodPressureSystolic,
+  }, thresholds);
+  return { ...vitals, riskScore, patientState };
+}
+
+/**
+ * Stores, decides and enqueues for a set of scored readings. Returns the ids
+ * of readings that must be retried. A device's readings succeed or fail
+ * together, so a retry always sees a consistent STATE item.
+ */
+async function ingest(readings, config) {
+  const failed = new Set();
+  if (!readings.length) return failed;
+
+  // Throws: the archive is the one complete record of every reading, so a
+  // batch it cannot take is retried whole rather than half kept.
+  await archive(readings, config.archiveBucket);
+
+  const byDevice = groupByDevice(readings);
+  const states = await loadStates([...byDevice.keys()], config.table);
+
+  const plans = [];
+  for (const [deviceId, deviceReadings] of byDevice) {
+    plans.push(planDevice(deviceId, deviceReadings, states.get(deviceId), config.realertMs));
+  }
+
+  if (config.keepReadings) {
+    const unwritten = await writeReadings(readings, config);
+    failDevices(plans, (plan) => plan.readings.some((r) => unwritten.has(r)));
+  }
+
+  const notQueued = await enqueueSyncs(plans.filter((plan) => !plan.failed), config.queueUrl);
+  failDevices(plans, (plan) => plan.syncs.some((sync) => notQueued.has(sync)));
+
+  await mapLimit(
+    plans.filter((plan) => !plan.failed && plan.stateChanged),
+    PARALLEL_REQUESTS,
+    (plan) => saveState(plan, config.table),
+  );
+
+  for (const plan of plans) {
+    if (plan.failed) plan.readings.forEach((r) => failed.add(r.id));
+  }
+  return failed;
+}
+
+function groupByDevice(readings) {
+  const byDevice = new Map();
+  for (const reading of readings) {
+    const list = byDevice.get(reading.vitals.deviceId) || [];
+    list.push(reading);
+    byDevice.set(reading.vitals.deviceId, list);
+  }
+  for (const list of byDevice.values()) {
+    list.sort((a, b) => a.vitals.timestamp.localeCompare(b.vitals.timestamp));
+  }
+  return byDevice;
+}
+
+/**
+ * Walks one device's readings in time order against its STATE item and
+ * decides which ones Salesforce gets: a change of state, or a reminder while
+ * the patient is not STABLE and the last one went out REALERT_INTERVAL_MINUTES
+ * ago or more. A reading no newer than the state already recorded is stored
+ * but decides nothing: it is a retry, or it arrived late, and acting on it
+ * would report a transition that is already history.
+ */
+function planDevice(deviceId, readings, state, realertMs) {
+  let patientState = state ? state.PatientState : null;
+  let updatedAt = state ? state.UpdatedAt : null;
+  let lastSyncedAt = state ? state.LastSyncedAt || null : null;
+  let latest = null;
+  const syncs = [];
+
+  for (const reading of readings) {
+    const { vitals } = reading;
+    if (updatedAt && vitals.timestamp <= updatedAt) continue;
+
+    const changed = vitals.patientState !== patientState;
+    const reminderDue = vitals.patientState !== 'STABLE'
+      && (!lastSyncedAt || Date.parse(vitals.timestamp) - Date.parse(lastSyncedAt) >= realertMs);
+    if (changed || reminderDue) {
+      syncs.push(toSalesforceRecord(vitals, patientState));
+      lastSyncedAt = vitals.timestamp;
+    }
+    patientState = vitals.patientState;
+    updatedAt = vitals.timestamp;
+    latest = vitals;
+  }
+
+  const stateChanged = latest !== null
+    && (!state || state.PatientState !== latest.patientState || syncs.length > 0);
+  return {
+    deviceId, readings, syncs, failed: false, stateChanged,
+    next: latest && { PatientState: latest.patientState, RiskScore: latest.riskScore, UpdatedAt: updatedAt, LastSyncedAt: lastSyncedAt },
+  };
+}
+
+function failDevices(plans, predicate) {
+  for (const plan of plans) {
+    if (!plan.failed && predicate(plan)) plan.failed = true;
+  }
+}
+
+/** Every reading in the batch as one gzipped NDJSON object: the full-fidelity history. */
+async function archive(readings, bucket) {
+  const first = readings[0].vitals.receivedAt || readings[0].vitals.timestamp;
+  const day = first.slice(0, 10);
+  const hour = first.slice(11, 13);
+  const body = gzipSync(readings.map((r) => JSON.stringify(r.vitals)).join('\n') + '\n');
+  await s3.send(new PutObjectCommand({
+    Bucket: bucket,
+    // Partitioned by day and hour for Athena or Data Cloud. At-least-once: a
+    // retried batch writes a second object, so readers dedupe on
+    // (deviceId, timestamp), the same key DynamoDB and Salesforce use.
+    Key: `readings/date=${day}/hour=${hour}/${readings[0].id}-${readings.length}.ndjson.gz`,
+    Body: body,
+    ContentType: 'application/x-ndjson',
+    ContentEncoding: 'gzip',
+  }));
+}
+
+/** STATE items for these devices, by device id. Throws if DynamoDB cannot answer at all. */
+async function loadStates(deviceIds, table) {
+  const states = new Map();
+  const chunks = chunk(deviceIds, BATCH_GET_LIMIT);
+  await mapLimit(chunks, PARALLEL_REQUESTS, async (ids) => {
+    let keys = ids.map((id) => ({ PK: `PATIENT#${id}`, SK: 'STATE' }));
+    for (let attempt = 0; keys.length; attempt++) {
+      if (attempt > UNPROCESSED_RETRIES) {
+        throw new Error(`DynamoDB left ${keys.length} STATE reads unprocessed after ${UNPROCESSED_RETRIES} retries`);
+      }
+      if (attempt) await backoff(attempt);
+      const result = await dynamodb.send(new BatchGetCommand({ RequestItems: { [table]: { Keys: keys } } }));
+      for (const item of (result.Responses && result.Responses[table]) || []) {
+        states.set(item.PK.slice('PATIENT#'.length), item);
+      }
+      keys = (result.UnprocessedKeys && result.UnprocessedKeys[table] && result.UnprocessedKeys[table].Keys) || [];
+    }
+  });
+  return states;
+}
+
+/** Writes every reading; returns the ones DynamoDB would not take. */
+async function writeReadings(readings, { table, retentionSeconds }) {
+  const expiresAt = Math.floor(Date.now() / 1000) + retentionSeconds;
+  const unwritten = new Set();
+  await mapLimit(chunk(readings, BATCH_WRITE_LIMIT), PARALLEL_REQUESTS, async (group) => {
+    const byKey = new Map(group.map((r) => [`${r.vitals.deviceId}|${r.vitals.timestamp}`, r]));
+    let requests = [...byKey.values()].map((r) => ({ PutRequest: { Item: readingItem(r.vitals, expiresAt) } }));
+    for (let attempt = 0; requests.length && attempt <= UNPROCESSED_RETRIES; attempt++) {
+      if (attempt) await backoff(attempt);
+      try {
+        const result = await dynamodb.send(new BatchWriteCommand({ RequestItems: { [table]: requests } }));
+        requests = (result.UnprocessedItems && result.UnprocessedItems[table]) || [];
+      } catch (err) {
+        console.error('DynamoDB BatchWriteItem failed', { error: err.message, items: requests.length });
+        break;
+      }
+    }
+    for (const request of requests) {
+      const item = request.PutRequest.Item;
+      const deviceId = item.PK.slice('PATIENT#'.length);
+      const timestamp = item.SK.slice('VITAL#'.length);
+      for (const r of group) {
+        if (r.vitals.deviceId === deviceId && r.vitals.timestamp === timestamp) unwritten.add(r);
+      }
+    }
+  });
+  return unwritten;
+}
+
+function readingItem(vitals, expiresAt) {
+  return {
+    PK: `PATIENT#${vitals.deviceId}`,
+    SK: `VITAL#${vitals.timestamp}`,
+    HeartRate: vitals.heartRate,
+    SpO2: vitals.spo2,
+    Temperature: vitals.temperature,
+    Humidity: vitals.humidity,
+    BP_Systolic: vitals.bloodPressureSystolic,
+    BP_Diastolic: vitals.bloodPressureDiastolic,
+    RiskScore: vitals.riskScore,
+    PatientState: vitals.patientState,
+    SourceSystem: vitals.sourceSystem,
+    CreatedAt: vitals.timestamp,
+    // DynamoDB deletes the row after READING_RETENTION_DAYS (the table's TTL).
+    ExpiresAt: expiresAt,
+  };
+}
+
+/** Sends every planned sync to the sync queue; returns the syncs SQS did not accept. */
+async function enqueueSyncs(plans, queueUrl) {
+  const syncs = plans.flatMap((plan) => plan.syncs);
+  const notQueued = new Set();
+  await mapLimit(chunk(syncs, SQS_BATCH_LIMIT), PARALLEL_REQUESTS, async (group) => {
+    try {
+      const result = await sqs.send(new SendMessageBatchCommand({
+        QueueUrl: queueUrl,
+        Entries: group.map((record, i) => ({ Id: String(i), MessageBody: JSON.stringify(record) })),
+      }));
+      for (const failure of result.Failed || []) notQueued.add(group[Number(failure.Id)]);
+    } catch (err) {
+      console.error('SQS SendMessageBatch failed', { error: err.message, messages: group.length });
+      group.forEach((record) => notQueued.add(record));
+    }
+  });
+  return notQueued;
+}
+
+/**
+ * Saves a device's new STATE, unless a newer reading already did: two batches
+ * can hold readings of the same device, and the older one must not win.
+ */
+async function saveState(plan, table) {
+  try {
+    await dynamodb.send(new UpdateCommand({
+      TableName: table,
+      Key: { PK: `PATIENT#${plan.deviceId}`, SK: 'STATE' },
+      UpdateExpression: 'SET PatientState = :state, RiskScore = :score, UpdatedAt = :at, LastSyncedAt = :synced',
+      ConditionExpression: 'attribute_not_exists(UpdatedAt) OR UpdatedAt < :at',
+      ExpressionAttributeValues: {
+        ':state': plan.next.PatientState,
+        ':score': plan.next.RiskScore,
+        ':at': plan.next.UpdatedAt,
+        ':synced': plan.next.LastSyncedAt,
+      },
+    }));
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') return;   // a newer reading got there first
+    console.error('STATE update failed', { deviceId: plan.deviceId, error: err.message });
+    plan.failed = true;
+  }
+}
+
+/** The Patient_Vitals__c record salesforce-sync upserts. */
+function toSalesforceRecord(vitals, previousState) {
+  return {
+    // Upsert on a deterministic external ID (deviceId + timestamp), not
+    // create: deliveries retry, and a retried create duplicates the record.
+    // Apex DataIngestionService builds the same key.
+    Device_Reading_Id__c: `${vitals.deviceId}-${vitals.timestamp}`,
+    Device__c: vitals.deviceId,
+    Previous_State__c: previousState,
+    Heart_Rate__c: vitals.heartRate,
+    SpO2__c: vitals.spo2,
+    Temperature__c: vitals.temperature,
+    Humidity__c: vitals.humidity,
+    BP_Systolic__c: vitals.bloodPressureSystolic,
+    BP_Diastolic__c: vitals.bloodPressureDiastolic,
+    Timestamp__c: vitals.timestamp,
+    Risk_Score__c: vitals.riskScore,
+    Patient_State__c: vitals.patientState,
+    Source_System__c: vitals.sourceSystem,
+  };
+}
+
+/**
+ * Parse raw IoT telemetry into structured patient vitals.
+ * Handles multiple device formats and data sources.
  */
 function parseVitals(rawPayload) {
-    try {
-        const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
-        const deviceId = data && (data.deviceId || data.device_id);
-        if (!deviceId) return null;
+  try {
+    const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+    // thingName is the topic the IoT rule read the message from (topic(2)):
+    // the policy lets a device publish only to its own topic, so unlike the
+    // deviceId in the body, it cannot be another patient's.
+    const deviceId = data && (data.thingName || data.deviceId || data.device_id);
+    if (!deviceId) return null;
 
-        // A value the device did not send stays null. Defaulting it to a
-        // normal reading wrote measurements no sensor took (SpO2 98, BP
-        // 120/80) into the patient's record: the patient monitor's DHT11
-        // sends only temperature and humidity.
-        return {
-            deviceId,
-            heartRate: firstNumber(data.heartRate, data.hr),
-            spo2: firstNumber(data.spo2, data.o2_saturation),
-            temperature: firstNumber(data.temperature, data.temp),
-            humidity: firstNumber(data.humidity),
-            bloodPressureSystolic: firstNumber(data.bpSystolic, data.bp_sys),
-            bloodPressureDiastolic: firstNumber(data.bpDiastolic, data.bp_dia),
-            // receivedAt is the IoT rule's timestamp(). Unlike this Lambda's
-            // clock it is the same on every retry of the invocation, which is
-            // what keeps the upsert key below stable.
-            timestamp: toIsoTimestamp(data.timestamp)
-                || toIsoTimestamp(data.receivedAt)
-                || new Date().toISOString(),
-            sourceSystem: 'AWS_IoT'
-        };
-    } catch (error) {
-        console.error('Failed to parse vitals:', error);
-        return null;
-    }
+    // A value the device did not send stays null. Defaulting it to a
+    // normal reading wrote measurements no sensor took (SpO2 98, BP
+    // 120/80) into the patient's record: the patient monitor's DHT11
+    // sends only temperature and humidity.
+    return {
+      deviceId,
+      heartRate: firstNumber(data.heartRate, data.hr),
+      spo2: firstNumber(data.spo2, data.o2_saturation),
+      temperature: firstNumber(data.temperature, data.temp),
+      humidity: firstNumber(data.humidity),
+      bloodPressureSystolic: firstNumber(data.bpSystolic, data.bp_sys),
+      bloodPressureDiastolic: firstNumber(data.bpDiastolic, data.bp_dia),
+      // receivedAt is the IoT rule's timestamp(). Unlike this Lambda's
+      // clock it is the same on every retry, which is what keeps the
+      // upsert key stable.
+      timestamp: toIsoTimestamp(data.timestamp)
+        || toIsoTimestamp(data.receivedAt)
+        || new Date().toISOString(),
+      receivedAt: toIsoTimestamp(data.receivedAt),
+      sourceSystem: 'AWS_IoT',
+    };
+  } catch (error) {
+    console.error('Failed to parse vitals:', error.message);
+    return null;
+  }
 }
 
 /**
@@ -136,12 +443,12 @@ function parseVitals(rawPayload) {
  * reading; only absent values are skipped.
  */
 function firstNumber(...values) {
-    for (const value of values) {
-        if (value === null || value === undefined || value === '') continue;
-        const n = typeof value === 'number' ? value : parseFloat(value);
-        if (Number.isFinite(n)) return n;
-    }
-    return null;
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const n = typeof value === 'number' ? value : parseFloat(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }
 
 /**
@@ -149,230 +456,43 @@ function firstNumber(...values) {
  * null when absent or unparseable.
  */
 function toIsoTimestamp(value) {
-    if (value === null || value === undefined || value === '') return null;
-    const date = typeof value === 'number'
-        ? new Date(value < 1e12 ? value * 1000 : value)
-        : new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  if (value === null || value === undefined || value === '') return null;
+  const date = typeof value === 'number'
+    ? new Date(value < 1e12 ? value * 1000 : value)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-/**
- * Calculate clinical risk score (0-100)
- * Based on standard healthcare triage thresholds
- *
- * @param {Object} vitals - Structured patient vitals
- * @returns {number} Risk score from 0 (stable) to 100 (critical)
- */
-function calculateRiskScore(vitals) {
-    let score = 0;
+function chunk(items, size) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
 
-    // Heart rate assessment (normal: 60-100 bpm)
-    if (vitals.heartRate > 0) {
-        if (vitals.heartRate < 50 || vitals.heartRate > 120) score += 30;
-        else if (vitals.heartRate < 60 || vitals.heartRate > 100) score += 15;
+/** Runs fn over items, at most `limit` at a time. */
+async function mapLimit(items, limit, fn) {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
     }
-
-    // SpO2 assessment (normal: 95-100%)
-    if (vitals.spo2 > 0) {
-        if (vitals.spo2 < 90) score += 35;
-        else if (vitals.spo2 < 95) score += 20;
-    }
-
-    // Temperature assessment (normal: 36.1-37.2°C)
-    if (vitals.temperature > 0) {
-        if (vitals.temperature > 39.0 || vitals.temperature < 35.0) score += 25;
-        else if (vitals.temperature > 38.5 || vitals.temperature < 36.5) score += 15;
-    }
-
-    // Blood pressure assessment (systolic)
-    if (vitals.bloodPressureSystolic > 0) {
-        if (vitals.bloodPressureSystolic > 160) score += 20;
-        else if (vitals.bloodPressureSystolic > 140) score += 10;
-    }
-
-    return Math.min(100, score);
+  });
+  await Promise.all(workers);
 }
 
-/**
- * Classify patient state based on risk score
- * Mirrors clinical triage categories
- *
- * @param {number} riskScore - Calculated risk score (0-100)
- * @returns {string} Patient state classification
- */
-function classifyPatientState(riskScore) {
-    if (riskScore >= 70) return 'CRITICAL';
-    if (riskScore >= 40) return 'AT_RISK';
-    return 'STABLE';
+function backoff(attempt) {
+  // Full jitter: random between 0 and 50 ms x 2^attempt.
+  return new Promise((resolve) => setTimeout(resolve, Math.random() * 50 * 2 ** attempt));
 }
 
-/**
- * Reads the device's last known state from a per-device STATE item.
- * A dedicated item (not a query over the time series) keeps this a single
- * cheap GetItem regardless of history size. Returns null for a new device,
- * which makes the first reading always sync - correct, since "unknown ->
- * anything" is a transition worth recording.
- */
-async function getPreviousState(deviceId) {
-    const result = await docClient.send(new GetCommand({
-        TableName: DYNAMODB_TABLE,
-        Key: { PK: `PATIENT#${deviceId}`, SK: 'STATE' },
-    }));
-    return result.Item ? result.Item.PatientState : null;
-}
-
-/**
- * Store vitals in DynamoDB for time-series queries
- * Uses deviceId as partition key, timestamp as sort key.
- *
- * @param {Object} vitals - Structured patient vitals
- * @returns {Promise} DynamoDB put operation
- */
-async function storeReading(vitals) {
-    const params = {
-        TableName: DYNAMODB_TABLE,
-        Item: {
-            PK: `PATIENT#${vitals.deviceId}`,
-            SK: `VITAL#${vitals.timestamp}`,
-            HeartRate: vitals.heartRate,
-            SpO2: vitals.spo2,
-            Temperature: vitals.temperature,
-            Humidity: vitals.humidity,
-            BP_Systolic: vitals.bloodPressureSystolic,
-            BP_Diastolic: vitals.bloodPressureDiastolic,
-            RiskScore: vitals.riskScore,
-            PatientState: vitals.patientState,
-            SourceSystem: vitals.sourceSystem,
-            CreatedAt: vitals.timestamp
-        }
-    };
-
-    await docClient.send(new PutCommand(params));
-}
-
-/**
- * Maintains the per-device STATE item that getPreviousState reads.
- */
-async function saveState(vitals) {
-    await docClient.send(new PutCommand({
-        TableName: DYNAMODB_TABLE,
-        Item: {
-            PK: `PATIENT#${vitals.deviceId}`,
-            SK: 'STATE',
-            PatientState: vitals.patientState,
-            UpdatedAt: vitals.timestamp,
-        },
-    }));
-}
-
-/**
- * Sync vitals to Salesforce via REST API
- * Uses JWT Bearer Flow for authentication (OAuth 2.0)
- * Creates Patient_Vitals__c records for Data Cloud ingestion
- *
- * @param {Object} vitals - Structured patient vitals
- * @returns {Promise} Salesforce API response
- */
-async function syncToSalesforce(vitals, { previousState } = {}) {
-    try {
-        // Get Salesforce access token using JWT Bearer Flow
-        const accessToken = await getSalesforceToken();
-
-        // Upsert on a deterministic external ID (deviceId + timestamp), not
-        // create: IoT deliveries retry, and a retried create duplicates the
-        // record. Same idempotency pattern as the MuleSoft flow in branch 07.
-        const externalId = encodeURIComponent(`${vitals.deviceId}-${vitals.timestamp}`);
-        const response = await fetch(`${SALESFORCE_ENDPOINT}/services/data/v59.0/sobjects/Patient_Vitals__c/Device_Reading_Id__c/${externalId}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`
-            },
-            body: JSON.stringify({
-                Device__c: vitals.deviceId,
-                Previous_State__c: previousState,
-                Heart_Rate__c: vitals.heartRate,
-                SpO2__c: vitals.spo2,
-                Temperature__c: vitals.temperature,
-                BP_Systolic__c: vitals.bloodPressureSystolic,
-                BP_Diastolic__c: vitals.bloodPressureDiastolic,
-                Timestamp__c: vitals.timestamp,
-                Risk_Score__c: vitals.riskScore,
-                Patient_State__c: vitals.patientState,
-                Source_System__c: vitals.sourceSystem
-            })
-        });
-
-        // Thrown, not just logged: a rejected upsert has to fail the
-        // invocation, or the reading is silently missing from Salesforce.
-        if (!response.ok) {
-            throw new Error(`Salesforce upsert failed (${response.status}): ${await response.text()}`);
-        }
-
-        return response;
-    } catch (error) {
-        console.error('Failed to sync to Salesforce:', error);
-        throw error;
-    }
-}
-
-/**
- * Authenticate with Salesforce using JWT Bearer Flow (OAuth 2.0)
- * This is the standard pattern for server-to-server Salesforce integration
- *
- * @returns {string} Salesforce access token
- */
-async function getSalesforceToken() {
-    // JWT Bearer Flow: a signed assertion exchanged for a short-lived token.
-    // No password exists anywhere in this system - the username-password
-    // OAuth flow is deprecated and blocked by default in current orgs.
-    // The private key comes from SSM/Secrets Manager via the environment,
-    // same pattern as the Slack integration in branch 04.
-    const assertion = jwt.sign(
-        {
-            iss: SALESFORCE_CLIENT_ID,
-            sub: SALESFORCE_USERNAME,
-            aud: SALESFORCE_LOGIN_URL,
-        },
-        SALESFORCE_JWT_PRIVATE_KEY,
-        { algorithm: 'RS256', expiresIn: '3m' }
-    );
-
-    const response = await fetch(`${SALESFORCE_LOGIN_URL}/services/oauth2/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-            assertion,
-        })
-    });
-
-    if (!response.ok) {
-        throw new Error(`Salesforce JWT auth failed: ${await response.text()}`);
-    }
-    const data = await response.json();
-    return data.access_token;
-}
-
-/**
- * Helper to omit fields from an object
- */
-function omit(obj, ...keys) {
-    const copy = { ...obj };
-    keys.forEach(k => delete copy[k]);
-    return copy;
-}
-
-/**
- * Create standardized API response
- */
 function createResponse(statusCode, body) {
-    return {
-        statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify(body)
-    };
+  return {
+    statusCode,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  };
 }
+
+// For the load simulation and the tests.
+exports._internal = { parseVitals, planDevice, toSalesforceRecord };

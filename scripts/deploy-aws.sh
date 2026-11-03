@@ -18,6 +18,7 @@ check_environment "$ENV"
 refuse_local_prod "$ENV"
 need zip "It packages the Lambda source."
 need npm "It installs each function's dependencies."
+need node "It reads config/$ENV.json."
 cd "$REPO_ROOT"
 
 aws_whoami
@@ -32,6 +33,22 @@ for t in $templates; do
 done
 endstep
 
+# The clinical bands every function scores with. The functions read them from
+# SSM at runtime, so a change to config/vital-thresholds.json reaches them on
+# this deploy without touching any code; Salesforce holds the same numbers as
+# Vital_Sign_Threshold__mdt, and the checks fail when the two differ.
+step "Publish the clinical bands to $THRESHOLDS_PARAM"
+bands=$(cat config/vital-thresholds.json)
+current=$(aws ssm get-parameter --name "$THRESHOLDS_PARAM" --query Parameter.Value --output text 2> /dev/null || true)
+if [ "$current" != "$bands" ]; then
+  aws ssm put-parameter --name "$THRESHOLDS_PARAM" --type String --overwrite --value "$bands" \
+    --description "Clinical bands, from config/vital-thresholds.json. Written by scripts/deploy-aws.sh." > /dev/null
+  echo "  updated"
+else
+  echo "  unchanged"
+fi
+endstep
+
 # Several templates read Salesforce settings from SSM Parameter Store, and
 # CloudFormation fails a stack with "Unable to fetch parameters" when one is
 # missing - after it has started. Check them all first and name what is missing.
@@ -42,21 +59,36 @@ for p in $(grep -h "Default: /$PROJECT/" $templates /dev/null | grep -v /slack/ 
 done
 [ -z "$missing" ] || die "Missing from SSM in this account:$missing. The pipeline's seed step writes them from the $ENV environment's secrets (docs/SETUP.md, 'Secrets and variables'), so run Deploy once from GitHub, or put them by hand."
 
-# Each template becomes the stack cloud-agentic-iot-<its directory>-<env>.
-# Slack is left out here: it is the one stack that needs a third-party app to
-# exist first, so one unconfigured integration must not fail the deploy of the
-# device pipeline, which has nothing to do with Slack.
-deployed=0
-for t in $templates; do
+# deploy_stack <template> - deploys it as cloud-agentic-iot-<its directory>-<env>,
+# sized by the stacks.<directory> section of config/<env>.json: batch sizes,
+# concurrency, retention, timeouts. Nothing environment-specific is written in
+# a template; its defaults are for a first Dev deploy.
+deploy_stack() {
+  local t="$1" name overrides line
   name=$(basename "$(dirname "$t")")
-  [ "$name" = "slack-integration" ] && continue
+  overrides=$(node scripts/lib/stack-parameters.js "$ENV" "$t") || die "config/$ENV.json does not fit $t (above)."
+  local args=()
+  if [ -n "$overrides" ]; then
+    args=(--parameter-overrides)
+    while IFS= read -r line; do args+=("$line"); done <<< "$overrides"
+  fi
   step "Deploy $t as $(stack_name "$name" "$ENV")"
   aws cloudformation deploy \
     --template-file "$t" \
     --stack-name "$(stack_name "$name" "$ENV")" \
     --capabilities CAPABILITY_NAMED_IAM \
-    --no-fail-on-empty-changeset
+    --no-fail-on-empty-changeset \
+    ${args[@]+"${args[@]}"}
   endstep
+}
+
+# Slack is left out here: it is the one stack that needs a third-party app to
+# exist first, so one unconfigured integration must not fail the deploy of the
+# device pipeline, which has nothing to do with Slack.
+deployed=0
+for t in $templates; do
+  [ "$(basename "$(dirname "$t")")" = "slack-integration" ] && continue
+  deploy_stack "$t"
   deployed=$((deployed + 1))
 done
 
@@ -65,13 +97,7 @@ done
 # skip with a plain message instead of dying on "Unable to fetch parameters".
 slack_deployed=false
 if aws ssm get-parameter --name /cloud-agentic-iot/slack/signing-secret > /dev/null 2>&1; then
-  step "Deploy lambda/slack-integration/cloudformation.yaml"
-  aws cloudformation deploy \
-    --template-file lambda/slack-integration/cloudformation.yaml \
-    --stack-name "$(stack_name slack-integration "$ENV")" \
-    --capabilities CAPABILITY_NAMED_IAM \
-    --no-fail-on-empty-changeset
-  endstep
+  deploy_stack lambda/slack-integration/cloudformation.yaml
   slack_deployed=true
   deployed=$((deployed + 1))
 else
@@ -107,19 +133,11 @@ while IFS= read -r src; do
     || die "$fn is declared in a template but does not exist in this account. FunctionName must be $PROJECT-<source directory name>."
 
   step "Package $dir as $fn"
-  # Built in a scratch copy, so whatever node_modules your checkout has never
-  # ends up in the zip: the function gets exactly its declared dependencies.
-  build=$(mktemp -d)
-  cp -R "$dir/." "$build/"
-  rm -rf "$build/node_modules"
-  if [ -f "$build/package.json" ]; then
-    (cd "$build" && npm install --omit=dev --no-audit --no-fund --loglevel=error)
-  fi
-  (cd "$build" && zip -qr "$build.zip" .)
+  zipfile=$(package_function "$dir")
   aws lambda wait function-updated --function-name "$fn"
   aws lambda update-function-code --function-name "$fn" \
-    --zip-file "fileb://$build.zip" --publish > /dev/null
-  rm -rf "$build" "$build.zip"
+    --zip-file "fileb://$zipfile" --publish > /dev/null
+  rm -f "$zipfile"
   packaged=$((packaged + 1))
   endstep
 done < <(find lambda -name index.js -not -path "*/node_modules/*" | sort)

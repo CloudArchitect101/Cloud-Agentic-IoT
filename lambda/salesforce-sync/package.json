@@ -1,0 +1,10 @@
+{
+  "name": "salesforce-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Upserts the readings patient-vitals queued for Salesforce into Patient_Vitals__c, 200 per request, at the concurrency the org can take.",
+  "main": "index.js",
+  "dependencies": {
+    "@cloud-agentic-iot/shared": "file:../shared"
+  }
+}

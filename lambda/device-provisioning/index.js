@@ -1,101 +1,175 @@
-const { IoTClient, CreateThingCommand, CreateKeysAndCertificateCommand,
-        AttachPolicyCommand, AttachThingPrincipalCommand,
-        AddThingToThingGroupCommand, DescribeEndpointCommand } = require('@aws-sdk/client-iot');
+'use strict';
+
+const iotSdk = require('@aws-sdk/client-iot');
 const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const {
+  BadRequest, parseBody, respond, batchResponse, mapLimit, isTransient, isThingName, deadline,
+} = require('@cloud-agentic-iot/shared/api');
+const { discardCertificate } = require('@cloud-agentic-iot/shared/certificates');
+const { requiredEnv, numberEnv } = require('@cloud-agentic-iot/shared/env');
 
-const iot = new IoTClient({});
+const {
+  IoTClient, CreateThingCommand, ListThingPrincipalsCommand, CreateKeysAndCertificateCommand,
+  AttachPolicyCommand, AttachThingPrincipalCommand, AddThingToThingGroupCommand, DescribeEndpointCommand,
+} = iotSdk;
+
+// Adaptive retries slow this client down when IoT throttles it: the control
+// plane allows about 10 new certificates a second per account, and a burst of
+// provisioning would otherwise spend its retries all at once.
+const iot = new IoTClient({ retryMode: 'adaptive' });
 const s3 = new S3Client({});
 
-const POLICY_NAME = process.env.IOT_POLICY_NAME || 'ESP32-Patient-Monitor-Policy';
-const BUNDLE_BUCKET = process.env.BUNDLE_BUCKET;
+// How long before the function's timeout it stops starting devices, so that
+// it always answers. Devices not reached come back as retryable.
+const TIME_TO_ANSWER_MS = 4000;
+// A pre-signed URL cannot outlive seven days (SigV4).
+const MAX_TTL_MINUTES = 7 * 24 * 60;
+
+// The account's IoT data endpoint never changes, so it is asked for once per
+// container. The promise is kept, not the value: devices provisioned in
+// parallel would otherwise all ask at once.
+let endpoint = null;
 
 /**
- * Provisions one device and returns a short-lived link to its credentials.
+ * Provisions devices and returns, for each, a short-lived link to its
+ * credentials.
+ *
+ *   { devices: [{ thingName, ssid, passphrase, thingGroup }], ttlMinutes }
+ *     -> 200 or 207 { results: [{ thingName, ok, retryable, error, thingArn,
+ *                                 certificateId, thingGroup, bundleUrl }] }
  *
  * The private key is the reason this is shaped the way it is: AWS returns it
- * exactly once, at creation, and never again. It is written straight to S3 and
- * surfaced as a pre-signed URL that expires. It is never returned in this
- * response body and never stored in Salesforce - so it stays out of CRM
- * backups, exports and reports.
+ * exactly once, at creation, and never again. It is written straight to S3
+ * and surfaced as a pre-signed URL that expires. It is never returned in the
+ * response and never stored in Salesforce, so it stays out of CRM backups,
+ * exports and reports.
+ *
+ * Salesforce sends Devices_Per_Callout__c devices per request. The older
+ * one-device shape ({ thingName, ssid, ... } at the top level) still works.
  */
-exports.handler = async (event) => {
-  const body = typeof event.body === 'string' ? JSON.parse(event.body) : event;
-  // OTA finds a board through this group. infra/ota/cloudformation.yaml creates
-  // fleet-<type> and canary-<type> for each device type, and adding a Thing to a
-  // group that does not exist fails, so the default is a group that does.
-  const { thingName, thingGroup = 'fleet-patient-monitor', ssid, passphrase, ttlMinutes = 15 } = body;
-
-  if (!thingName || !ssid) {
-    return respond(400, { error: 'thingName and ssid are required' });
+exports.handler = async (event, context) => {
+  let body;
+  try {
+    body = parseBody(event);
+  } catch (err) {
+    if (err instanceof BadRequest) return respond(400, { error: err.message });
+    throw err;
+  }
+  const single = !Array.isArray(body.devices);
+  const devices = single ? (body.thingName ? [body] : []) : body.devices;
+  if (!devices.length) {
+    return respond(400, { error: 'devices is required: [{ thingName, ssid, passphrase, thingGroup }]' });
+  }
+  if (single && problemWith(body)) {
+    return respond(400, { error: problemWith(body) });
+  }
+  const ttlMinutes = body.ttlMinutes === undefined ? numberEnv('DEFAULT_BUNDLE_TTL_MINUTES') : Number(body.ttlMinutes);
+  if (!Number.isFinite(ttlMinutes) || ttlMinutes <= 0 || ttlMinutes > MAX_TTL_MINUTES) {
+    return respond(400, { error: `ttlMinutes must be between 1 and ${MAX_TTL_MINUTES}` });
   }
 
+  const settings = {
+    policyName: requiredEnv('IOT_POLICY_NAME'),
+    bucket: requiredEnv('BUNDLE_BUCKET'),
+    defaultThingGroup: requiredEnv('DEFAULT_THING_GROUP'),
+    ttlMinutes,
+  };
+  const late = deadline(context, TIME_TO_ANSWER_MS);
+  const results = await mapLimit(devices, numberEnv('IOT_PARALLEL_REQUESTS'), (device) => (late.passed()
+    ? notReached(device)
+    : provision(device, settings)));
+  return batchResponse(results, (result) => result.ok);
+};
+
+async function provision(device, { policyName, bucket, defaultThingGroup, ttlMinutes }) {
+  const { thingName, ssid, passphrase } = device || {};
+  const thingGroup = (device && device.thingGroup) || defaultThingGroup;
+  const problem = problemWith(device);
+  if (problem) return failed(thingName, problem, false);
+
+  let cert = null;
   try {
+    // Idempotent: the same name with no attributes returns the existing Thing.
     const { thingArn } = await iot.send(new CreateThingCommand({ thingName }));
 
-    // Keys are generated by AWS and returned once. Nothing here logs them.
-    const cert = await iot.send(new CreateKeysAndCertificateCommand({ setAsActive: true }));
+    // A Thing that already has a certificate was provisioned before, perhaps
+    // by a request whose answer never reached Salesforce. A second
+    // certificate would leave two working credentials for one device.
+    const { principals = [] } = await iot.send(new ListThingPrincipalsCommand({ thingName }));
+    if (principals.length) {
+      return failed(thingName, `${thingName} already has a certificate in AWS IoT. Use Re-provision to replace it.`, false);
+    }
 
-    await iot.send(new AttachPolicyCommand({
-      policyName: POLICY_NAME,
-      target: cert.certificateArn,
-    }));
-    await iot.send(new AttachThingPrincipalCommand({
-      thingName,
-      principal: cert.certificateArn,
-    }));
-    // Group membership is what OTA Jobs target. Without this the device is
-    // reachable but invisible to fleet rollouts.
+    // Keys are generated by AWS and returned once. Nothing here logs them.
+    cert = await iot.send(new CreateKeysAndCertificateCommand({ setAsActive: true }));
+    await iot.send(new AttachPolicyCommand({ policyName, target: cert.certificateArn }));
+    await iot.send(new AttachThingPrincipalCommand({ thingName, principal: cert.certificateArn }));
+    // Group membership is what OTA Jobs target. Without it the device is
+    // reachable but invisible to fleet rollouts. infra/ota creates the groups.
     await iot.send(new AddThingToThingGroupCommand({ thingName, thingGroupName: thingGroup }));
 
-    const { endpointAddress } = await iot.send(new DescribeEndpointCommand({
-      endpointType: 'iot:Data-ATS',
-    }));
-
-    // Everything the device needs, in the shape its serial provisioning mode
-    // expects. One file, one paste, no per-device firmware build.
-    const bundle = {
+    const bundleUrl = await storeBundle(bucket, ttlMinutes, {
       thingName,
-      endpoint: endpointAddress,
+      endpoint: await dataEndpoint(),
       ssid,
       passphrase,
       certificatePem: cert.certificatePem,
       privateKey: cert.keyPair.PrivateKey,
-    };
-
-    const key = `provisioning/${thingName}-${Date.now()}.json`;
-    await s3.send(new PutObjectCommand({
-      Bucket: BUNDLE_BUCKET,
-      Key: key,
-      Body: JSON.stringify(bundle, null, 2),
-      ContentType: 'application/json',
-      ServerSideEncryption: 'AES256',
-    }));
-
-    // Signed for GetObject: the technician downloads this file. A link
-    // signed for PutObject cannot download it, and lets whoever holds it
-    // overwrite the bundle until it expires.
-    const bundleUrl = await getSignedUrl(
-      s3,
-      new GetObjectCommand({ Bucket: BUNDLE_BUCKET, Key: key }),
-      { expiresIn: ttlMinutes * 60 }
-    );
+    });
 
     console.log('provisioned', { thingName, thingGroup, certificateId: cert.certificateId });
-
-    return respond(200, {
-      thingArn,
-      certificateId: cert.certificateId,
-      thingGroup,
-      bundleUrl,
-      expiresInMinutes: ttlMinutes,
-    });
+    return {
+      thingName, ok: true, thingArn, certificateId: cert.certificateId, thingGroup, bundleUrl, expiresInMinutes: ttlMinutes,
+    };
   } catch (err) {
-    console.error('provisioning failed', { thingName, error: err.message });
-    return respond(500, { error: err.message });
+    if (cert) await discardCertificate(iot, iotSdk, thingName, cert.certificateArn);
+    console.error('provisioning failed', { thingName, error: err.message, name: err.name });
+    return failed(thingName, err.message, isTransient(err));
   }
-};
-
-function respond(statusCode, body) {
-  return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
+
+function dataEndpoint() {
+  if (!endpoint) {
+    endpoint = iot.send(new DescribeEndpointCommand({ endpointType: 'iot:Data-ATS' }))
+      .then((result) => result.endpointAddress)
+      .catch((err) => {
+        endpoint = null;   // asked again by the next device
+        throw err;
+      });
+  }
+  return endpoint;
+}
+
+/** Writes the bundle and returns a link that downloads it until ttlMinutes pass. */
+async function storeBundle(bucket, ttlMinutes, bundle) {
+  const key = `provisioning/${bundle.thingName}-${Date.now()}.json`;
+  await s3.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: JSON.stringify(bundle, null, 2),
+    ContentType: 'application/json',
+    ServerSideEncryption: 'AES256',
+  }));
+  // Signed for GetObject: the technician downloads this file. A link signed
+  // for PutObject cannot download it, and lets whoever holds it overwrite the
+  // bundle until it expires.
+  return getSignedUrl(s3, new GetObjectCommand({ Bucket: bucket, Key: key }), { expiresIn: ttlMinutes * 60 });
+}
+
+function problemWith(device) {
+  if (!device || !isThingName(device.thingName)) {
+    return 'thingName must be an AWS IoT Thing name: letters, digits, : _ and -, up to 128 characters.';
+  }
+  if (!device.ssid) return 'ssid is required';
+  return null;
+}
+
+function failed(thingName, error, retryable) {
+  return { thingName, ok: false, retryable, error };
+}
+
+function notReached(device) {
+  return failed(device && device.thingName, 'Not reached before the request ran out of time; send it again.', true);
+}
+

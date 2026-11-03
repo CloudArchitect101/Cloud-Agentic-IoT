@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { getSalesforceConnection } = require('./salesforce-client');
-
-const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
+const { getParameter } = require('@cloud-agentic-iot/shared/config');
+const { requiredEnv } = require('@cloud-agentic-iot/shared/env');
 
 /**
  * Verifies the request actually came from Slack (HMAC over the raw body +
@@ -9,7 +9,7 @@ const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
  * This is the only "identity" check in the whole flow — there is no
  * Salesforce login involved anywhere in this request path.
  */
-function verifySlackSignature(event) {
+function verifySlackSignature(event, signingSecret) {
   const headers = Object.fromEntries(
     Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v])
   );
@@ -19,9 +19,13 @@ function verifySlackSignature(event) {
   if (Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
 
   const baseString = `v0:${timestamp}:${event.body}`;
-  const computed = `v0=${crypto.createHmac('sha256', SLACK_SIGNING_SECRET).update(baseString).digest('hex')}`;
+  const computed = `v0=${crypto.createHmac('sha256', signingSecret).update(baseString).digest('hex')}`;
 
-  return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature));
+  // timingSafeEqual throws on buffers of different lengths, which turned a
+  // malformed signature into a 500 instead of a 401.
+  const expected = Buffer.from(computed);
+  const received = Buffer.from(String(signature));
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
 function slackResponse(text) {
@@ -33,7 +37,10 @@ function slackResponse(text) {
 }
 
 exports.handler = async (event) => {
-  if (!verifySlackSignature(event)) {
+  // A SecureString read at runtime and kept for CONFIG_CACHE_SECONDS, not an
+  // environment variable anyone who can read the function's configuration sees.
+  const signingSecret = await getParameter(requiredEnv('SLACK_SIGNING_SECRET_PARAMETER'), { decrypt: true });
+  if (!verifySlackSignature(event, signingSecret)) {
     return { statusCode: 401, body: 'Invalid Slack signature' };
   }
 

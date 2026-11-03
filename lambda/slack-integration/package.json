@@ -4,7 +4,8 @@
   "description": "Headless Slack <-> Salesforce integration via JWT Bearer Flow",
   "main": "index.js",
   "dependencies": {
-    "jsonwebtoken": "^9.0.2",
+    "@cloud-agentic-iot/shared": "file:../shared",
     "jsforce": "^3.4.1"
-  }
+  },
+  "private": true
 }

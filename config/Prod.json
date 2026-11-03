@@ -1,0 +1,105 @@
+{
+  "description": "Sizing and behaviour of the Prod environment, set for a fleet of up to 1,000,000 devices sending every 30 seconds (about 33,000 readings a second). See config/Dev.json for how this file is used, and docs/SCALING.md for where each number comes from and which AWS quotas must be raised before the fleet reaches it.",
+  "stacks": {
+    "patient-vitals": {
+      "KeepReadingsInDynamoDB": "false",
+      "ReadingRetentionDays": 7,
+      "ArchiveRetentionDays": 365,
+      "RealertIntervalMinutes": 60,
+      "IngestBatchSize": 1000,
+      "IngestBatchWindowSeconds": 5,
+      "IngestMaxConcurrency": 100,
+      "IngestMemoryMB": 1024,
+      "SyncBatchSize": 1000,
+      "SyncBatchWindowSeconds": 10,
+      "SyncMaxConcurrency": 5,
+      "QueueMaxReceiveCount": 5,
+      "QueueRetentionSeconds": 345600,
+      "IngestMaxAgeSeconds": 120,
+      "SalesforceApiVersion": "64.0",
+      "SalesforceTokenCacheMinutes": 30,
+      "ConfigCacheSeconds": 300,
+      "LogRetentionDays": 30
+    },
+    "queue-relay": {
+      "DeviceApiTimeoutSeconds": 20,
+      "IotParallelRequests": 4,
+      "PublishParallelRequests": 32,
+      "ProvisioningMaxConcurrency": 2,
+      "DefaultBundleTtlMinutes": 15,
+      "BundleRetentionDays": 1,
+      "DefaultThingGroup": "fleet-patient-monitor",
+      "ApiRateLimit": 50,
+      "ApiBurstLimit": 100
+    },
+    "streaming": {
+      "SalesforceApiVersion": "64.0",
+      "SalesforceTokenCacheMinutes": 30,
+      "ConfigCacheSeconds": 300,
+      "AlertRetryAttempts": 5,
+      "AlertMaxEventAgeSeconds": 3600
+    },
+    "slack-integration": {
+      "SalesforceApiVersion": "64.0",
+      "SalesforceTokenCacheMinutes": 30,
+      "ConfigCacheSeconds": 300
+    }
+  },
+  "ota": {
+    "presignedUrlExpiresInSec": 3600,
+    "firstRing": {
+      "rollout": {
+        "maximumPerMinute": 20
+      },
+      "timeout": {
+        "inProgressTimeoutInMinutes": 15
+      },
+      "abort": {
+        "criteriaList": [
+          {
+            "failureType": "FAILED",
+            "action": "CANCEL",
+            "thresholdPercentage": 10,
+            "minNumberOfExecutedThings": 10
+          }
+        ]
+      }
+    },
+    "fleet": {
+      "rollout": {
+        "maximumPerMinute": 1000,
+        "exponentialRate": {
+          "baseRatePerMinute": 50,
+          "incrementFactor": 2,
+          "rateIncreaseCriteria": {
+            "numberOfSucceededThings": 500
+          }
+        }
+      },
+      "timeout": {
+        "inProgressTimeoutInMinutes": 30
+      },
+      "abort": {
+        "criteriaList": [
+          {
+            "failureType": "FAILED",
+            "action": "CANCEL",
+            "thresholdPercentage": 5,
+            "minNumberOfExecutedThings": 200
+          },
+          {
+            "failureType": "TIMED_OUT",
+            "action": "CANCEL",
+            "thresholdPercentage": 10,
+            "minNumberOfExecutedThings": 200
+          }
+        ]
+      }
+    }
+  },
+  "devices": {
+    "patient-monitor": {
+      "telemetrySeconds": 30
+    }
+  }
+}

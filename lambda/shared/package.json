@@ -1,0 +1,10 @@
+{
+  "name": "@cloud-agentic-iot/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Code every Lambda that talks to Salesforce or reads runtime settings shares. Not a function of its own: scripts/deploy-aws.sh copies it into node_modules/@cloud-agentic-iot/shared of each function that requires it.",
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.665.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

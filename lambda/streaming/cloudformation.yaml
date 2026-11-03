@@ -1,23 +1,54 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Cloud-Agentic-IoT Branch 02 - Real-time Streams to Agents (EventBridge + Platform Events)
 
-# Both of these were referenced in the Resources block without ever being
-# declared, so the template failed validation with "Unresolved resource
-# dependencies" before CloudFormation looked at a single resource.
+# The alert dispatcher reaches Salesforce through the JWT bearer flow in
+# lambda/shared/salesforce.js, like every other function: the long-lived
+# session token this template used to take, and the instance name it built a
+# URL from, are gone. Values below come from config/<env>.json ("streaming").
 Parameters:
-  # SSM-backed, matching the other templates. Seeded from GitHub Environment
-  # secrets by the seed step in .github/workflows/deploy.yml.
-  SfInstanceParam:
+  # Seeded from GitHub Environment secrets by the seed step in
+  # .github/workflows/deploy.yml.
+  SfConsumerKeyParam:
     Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: /cloud-agentic-iot/salesforce/instance
-  SalesforceAccessToken:
+    Default: /cloud-agentic-iot/salesforce/consumer-key
+  SfUsernameParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/username
+  SfLoginUrlParam:
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /cloud-agentic-iot/salesforce/login-url
+  # Names the function reads at runtime: a SecureString cannot be resolved
+  # into a template, and the bands change without a deploy.
+  SalesforceJwtKeyParameterName:
     Type: String
-    NoEcho: true
-    Default: ''
-    Description: >-
-      Session token for the alert dispatcher. A long-lived token here is a
-      stopgap; the rest of this repo uses the JWT bearer flow and this Lambda
-      should be moved onto it.
+    Default: /cloud-agentic-iot/salesforce/jwt-private-key
+    AllowedPattern: '^/.+'
+  ThresholdsParameterName:
+    Type: String
+    Default: /cloud-agentic-iot/config/vital-thresholds
+    AllowedPattern: '^/.+'
+  SalesforceApiVersion:
+    Type: String
+    Default: '64.0'
+    AllowedPattern: '^\d+\.\d$'
+  SalesforceTokenCacheMinutes:
+    Type: Number
+    Default: 30
+    MinValue: 1
+  ConfigCacheSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 0
+  AlertRetryAttempts:
+    Type: Number
+    Default: 2
+    MinValue: 0
+    MaxValue: 185
+  AlertMaxEventAgeSeconds:
+    Type: Number
+    Default: 3600
+    MinValue: 60
+    MaxValue: 86400
 
 
 Resources:
@@ -45,8 +76,8 @@ Resources:
         - Arn: !GetAtt AlertDispatcherLambda.Arn
           Id: AlertDispatcher
           RetryPolicy:
-            MaximumRetryAttempts: 2
-            MaximumEventAgeInSeconds: 3600
+            MaximumRetryAttempts: !Ref AlertRetryAttempts
+            MaximumEventAgeInSeconds: !Ref AlertMaxEventAgeSeconds
           DeadLetterConfig:
             Arn: !GetAtt AlertDLQ.Arn
         # The event router is not a target. It is the publisher: every event
@@ -73,31 +104,32 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      # Inline policies need a nested PolicyDocument holding Version and
-      # Statement. PolicyDocumentVersion is not a property and made the whole
-      # changeset fail early validation.
-      #
-      # The second policy was named SalesforceAccess but granted only the same
-      # CloudWatch Logs actions as the first - a copy-paste that granted nothing
-      # it claimed to. Dropped rather than left as misleading dead weight: this
-      # Lambda reaches Salesforce over HTTPS with a token, which needs no IAM.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: CloudWatchLogs
+        # The bands, and the Salesforce private key (a SecureString, which
+        # SSM decrypts with KMS on the function's behalf).
+        - PolicyName: ReadSettings
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ThresholdsParameterName}'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SalesforceJwtKeyParameterName}'
+              - Effect: Allow
+                Action: kms:Decrypt
                 Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
 
   AlertDispatcherLambda:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: cloud-agentic-iot-alert-dispatcher
-      Runtime: nodejs20.x
+      Runtime: nodejs22.x
       Handler: index.handler
       Role: !GetAtt AlertDispatcherRole.Arn
       Timeout: 30
@@ -110,15 +142,24 @@ Resources:
           });
       Environment:
         Variables:
-          SALESFORCE_ENDPOINT: !Sub https://${SfInstanceParam}.salesforce.com
-          SALESFORCE_ACCESS_TOKEN: !Ref SalesforceAccessToken
+          SALESFORCE_CLIENT_ID: !Ref SfConsumerKeyParam
+          SALESFORCE_USERNAME: !Ref SfUsernameParam
+          SALESFORCE_LOGIN_URL: !Ref SfLoginUrlParam
+          SALESFORCE_JWT_KEY_PARAMETER: !Ref SalesforceJwtKeyParameterName
+          SALESFORCE_API_VERSION: !Ref SalesforceApiVersion
+          SALESFORCE_TOKEN_CACHE_MINUTES: !Ref SalesforceTokenCacheMinutes
+          THRESHOLDS_PARAMETER: !Ref ThresholdsParameterName
+          CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds
 
   # The event router: publishes validated telemetry to the bus above.
   # The logical IDs still say DataSink so that existing stacks update this
   # function in place instead of trying to recreate it under the same name.
   #
-  # Nothing invokes it yet. It needs an IoT rule on device/+/telemetry, which
-  # should wait until the alert dispatcher authenticates with the JWT flow.
+  # Nothing invokes it, deliberately. Wired to device/+/telemetry it would put
+  # every reading on the bus: 33,000 events a second at a million devices,
+  # past EventBridge's PutEvents quota and about as costly as IoT Core itself.
+  # To drive alerts at that scale, feed it from patient-vitals' sync queue,
+  # which carries state changes only (docs/SCALING.md).
   DataSinkRole:
     Type: AWS::IAM::Role
     Properties:
@@ -148,7 +189,7 @@ Resources:
       # Named to match its source directory (lambda/streaming/event-router) so
       # the deploy pipeline can map source to function without a lookup table.
       FunctionName: cloud-agentic-iot-event-router
-      Runtime: nodejs20.x
+      Runtime: nodejs22.x
       Handler: index.handler
       Role: !GetAtt DataSinkRole.Arn
       Timeout: 30
@@ -159,6 +200,9 @@ Resources:
             statusCode: 200,
             body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
           });
+      Environment:
+        Variables:
+          EVENT_BUS_NAME: !Ref PatientVitalsEventBus
 
   # Dead Letter Queue for failed events
   AlertDLQ:

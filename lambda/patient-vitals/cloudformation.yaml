@@ -1,18 +1,22 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Cloud-Agentic-IoT Branch 01 - Data Cloud RAG Pipeline (Lambda + DynamoDB)
+Description: >-
+  Cloud-Agentic-IoT telemetry ingestion: IoT rule -> telemetry queue -> patient-vitals
+  (scores, archives to S3, keeps per-device state in DynamoDB) -> sync queue ->
+  salesforce-sync (Patient_Vitals__c, 200 records per call). Sized by config/<env>.json.
 
-# SalesforceInstance/ClientId/Username were referenced without being declared,
-# which failed validation outright. SalesforceClientSecret and SalesforcePassword
-# are gone entirely: lambda/patient-vitals/index.js authenticates with the JWT
-# bearer flow and never reads them - they were left over from a password-flow
-# version of this template and contradicted the rest of the repo.
+# Every number below comes from config/<env>.json: scripts/deploy-aws.sh
+# passes the "patient-vitals" section as parameter overrides, and a test fails
+# the checks if that file names a parameter this template does not declare.
+# The defaults are for a first deploy into a small Dev account.
+#
+# Shaped for a million devices sending every 30 seconds, about 33,000 readings
+# a second (docs/SCALING.md): IoT Core puts readings on a queue instead of
+# invoking a function per reading, the function takes them in batches, and
+# Salesforce sees only state changes, through a queue of its own that it
+# drains at the concurrency the org can take.
 Parameters:
-  # SSM-backed, matching lambda/slack-integration. The values are seeded from
-  # GitHub Environment secrets by .github/workflows/deploy.yml, so GitHub stays the single
-  # source of truth and SSM is only the delivery path the templates read.
-  SfInstanceParam:
-    Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: /cloud-agentic-iot/salesforce/instance
+  # Settings Salesforce owns, seeded into SSM from the environment's GitHub
+  # secrets by the pipeline's seed step. Plain values, resolved at deploy time.
   SfConsumerKeyParam:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: /cloud-agentic-iot/salesforce/consumer-key
@@ -22,16 +26,137 @@ Parameters:
   SfLoginUrlParam:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: /cloud-agentic-iot/salesforce/login-url
-  SfJwtPrivateKeyParam:
-    Type: 'AWS::SSM::Parameter::Value<String>'
+  # Names, not values: the functions read these at runtime. The private key is
+  # a SecureString, which CloudFormation cannot resolve into a template and
+  # which must not sit in an environment variable anyway; the thresholds are
+  # read at runtime so a change in SSM needs no deploy.
+  SalesforceJwtKeyParameterName:
+    Type: String
     Default: /cloud-agentic-iot/salesforce/jwt-private-key
+    AllowedPattern: '^/.+'
+  ThresholdsParameterName:
+    Type: String
+    Default: /cloud-agentic-iot/config/vital-thresholds
+    AllowedPattern: '^/.+'
+    Description: The clinical bands, seeded from config/vital-thresholds.json by scripts/deploy-aws.sh.
+
   PatientVitalsTableName:
     Type: String
     Default: patient-vitals
     Description: DynamoDB table name for patient vitals storage
+  KeepReadingsInDynamoDB:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Also write every reading to DynamoDB, for READING_RETENTION_DAYS. The S3
+      archive always has them. At a million devices this is 33,000 writes a
+      second, so Prod keeps it off.
+  ReadingRetentionDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+  ArchiveRetentionDays:
+    Type: Number
+    Default: 365
+    MinValue: 1
+    Description: How long the S3 archive keeps readings. Set it from your records retention policy.
+  RealertIntervalMinutes:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    Description: While a patient stays AT_RISK or CRITICAL, how often Salesforce is reminded.
+
+  IngestBatchSize:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 10000
+  IngestBatchWindowSeconds:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    MaxValue: 300
+    Description: Must be at least 1 when IngestBatchSize is over 10 (an SQS event source rule).
+  IngestMaxConcurrency:
+    Type: Number
+    Default: 2
+    MinValue: 2
+    MaxValue: 1000
+  IngestMemoryMB:
+    Type: Number
+    Default: 512
+    MinValue: 128
+    MaxValue: 10240
+
+  SyncBatchSize:
+    Type: Number
+    Default: 200
+    MinValue: 1
+    MaxValue: 10000
+  SyncBatchWindowSeconds:
+    Type: Number
+    Default: 5
+    MinValue: 0
+    MaxValue: 300
+  SyncMaxConcurrency:
+    Type: Number
+    Default: 2
+    MinValue: 2
+    MaxValue: 1000
+    Description: Parallel Salesforce writers. Each holds one API request open at a time.
+
+  QueueMaxReceiveCount:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    Description: Deliveries before a message moves to its dead-letter queue.
+  QueueRetentionSeconds:
+    Type: Number
+    Default: 345600
+    MinValue: 60
+    MaxValue: 1209600
+    Description: How long a reading waits in a queue when its consumer is down (default 4 days).
+  IngestMaxAgeSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 60
+    Description: Alarm when the oldest waiting reading is older than this - ingestion is falling behind.
+
+  SalesforceApiVersion:
+    Type: String
+    Default: '64.0'
+    AllowedPattern: '^\d+\.\d$'
+  SalesforceTokenCacheMinutes:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: Keep under the integration user's session timeout in Salesforce.
+  ConfigCacheSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    Description: How long a function keeps an SSM value before reading it again.
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653]
+  AlarmTopicArn:
+    Type: String
+    Default: ''
+    Description: SNS topic for the alarms below. Empty, they show in CloudWatch only.
+
+Conditions:
+  HasAlarmTopic: !Not [!Equals [!Ref AlarmTopicArn, '']]
 
 Resources:
-  # DynamoDB Table for patient vitals time-series storage
+  # ------------------------------------------------------------------ storage
+
+  # One STATE item per device (PK PATIENT#<id>, SK STATE), and, with
+  # KeepReadingsInDynamoDB, one item per reading (SK VITAL#<timestamp>) that
+  # the TTL removes after ReadingRetentionDays. On demand, so it scales with
+  # the fleet; docs/SCALING.md has the point at which provisioned capacity
+  # becomes cheaper.
   PatientVitalsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -50,8 +175,159 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ExpiresAt
         Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
 
-  # Lambda Execution Role
+  # Every reading, gzipped NDJSON, one object per batch, partitioned
+  # readings/date=YYYY-MM-DD/hour=HH/ for Athena or Data Cloud. Kept when the
+  # stack is deleted: it is clinical history.
+  ArchiveBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'cloud-agentic-iot-readings-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-readings
+            Status: Enabled
+            Prefix: readings/
+            ExpirationInDays: !Ref ArchiveRetentionDays
+
+  ArchiveBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArchiveBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: TlsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ArchiveBucket.Arn
+              - !Sub '${ArchiveBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # ------------------------------------------------------------------ queues
+
+  # Readings wait here between IoT Core and the function. A burst, a slow
+  # deploy or a DynamoDB throttle backs up the queue instead of dropping
+  # readings, and the function drains it in batches.
+  TelemetryDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-telemetry-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  TelemetryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-telemetry
+      # At least six times the function's timeout (60 s), as AWS recommends
+      # for an SQS event source, so a batch being retried is not handed to a
+      # second invocation while the first still holds it.
+      VisibilityTimeout: 360
+      MessageRetentionPeriod: !Ref QueueRetentionSeconds
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TelemetryDeadLetterQueue.Arn
+        maxReceiveCount: !Ref QueueMaxReceiveCount
+
+  # What Salesforce should hear: state changes and due re-alerts only.
+  SyncDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-salesforce-sync-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  SyncQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-salesforce-sync
+      VisibilityTimeout: 360   # six times salesforce-sync's 60 s timeout
+      MessageRetentionPeriod: !Ref QueueRetentionSeconds
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SyncDeadLetterQueue.Arn
+        maxReceiveCount: !Ref QueueMaxReceiveCount
+
+  # ------------------------------------------------------------------ IoT rule
+
+  # topic(2) is the Thing name in device/<thing>/telemetry. The device policy
+  # lets a device publish only to its own topic, so unlike a deviceId in the
+  # body it cannot name another patient. timestamp() is when IoT Core received
+  # the message: identical on every retry, so the keys built from it are too.
+  PatientVitalsIoTRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: cloud_agentic_iot_patient_vitals
+      TopicRulePayload:
+        Sql: "SELECT *, topic(2) AS thingName, timestamp() AS receivedAt FROM 'device/+/telemetry'"
+        AwsIotSqlVersion: '2016-03-23'
+        RuleDisabled: false
+        Actions:
+          - Sqs:
+              QueueUrl: !Ref TelemetryQueue
+              RoleArn: !GetAtt IoTRuleRole.Arn
+              UseBase64: false
+        # A reading the rule cannot deliver is logged, not silently dropped.
+        ErrorAction:
+          CloudwatchLogs:
+            LogGroupName: !Ref IoTRuleErrorLogGroup
+            RoleArn: !GetAtt IoTRuleRole.Arn
+
+  IoTRuleErrorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /cloud-agentic-iot/iot-rule-errors/patient-vitals
+      RetentionInDays: !Ref LogRetentionDays
+
+  IoTRuleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: iot.amazonaws.com }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: DeliverReadings
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt TelemetryQueue.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt IoTRuleErrorLogGroup.Arn
+
+  # ------------------------------------------------------------------ ingest
+
   PatientVitalsLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -59,98 +335,224 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
+            Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
       Policies:
-        - PolicyName: DynamoDBAccess
+        - PolicyName: Ingest
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - dynamodb:PutItem
-                  - dynamodb:GetItem
-                  - dynamodb:Query
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:UpdateItem
                 Resource: !GetAtt PatientVitalsTable.Arn
-        - PolicyName: CloudWatchLogs
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: '*'
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:ChangeMessageVisibility
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt TelemetryQueue.Arn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt SyncQueue.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${ArchiveBucket.Arn}/readings/*'
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ThresholdsParameterName}'
 
-  # Lambda Function for patient vital processing
   PatientVitalsLambda:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: cloud-agentic-iot-patient-vitals
-      Runtime: nodejs20.x
+      Runtime: nodejs22.x
       Handler: index.handler
       Code:
         ZipFile: |
-          # See index.js for full implementation
+          exports.handler = async () => {
+            throw new Error('Placeholder - the deploy pipeline replaces this with the real bundle');
+          };
       Role: !GetAtt PatientVitalsLambdaRole.Arn
-      Timeout: 30
-      MemorySize: 256
+      # The queues' visibility timeout (360 s) is six times this.
+      Timeout: 60
+      MemorySize: !Ref IngestMemoryMB
       Environment:
         Variables:
-          DYNAMODB_TABLE: !Ref PatientVitalsTableName
-          SALESFORCE_ENDPOINT: !Sub 'https://${SfInstanceParam}.salesforce.com'
-          SALESFORCE_CLIENT_ID: !Ref SfConsumerKeyParam
-          SALESFORCE_USERNAME: !Ref SfUsernameParam
-          SALESFORCE_LOGIN_URL: !Ref SfLoginUrlParam
-          SALESFORCE_JWT_PRIVATE_KEY: !Ref SfJwtPrivateKeyParam
+          DYNAMODB_TABLE: !Ref PatientVitalsTable
+          SYNC_QUEUE_URL: !Ref SyncQueue
+          ARCHIVE_BUCKET: !Ref ArchiveBucket
+          THRESHOLDS_PARAMETER: !Ref ThresholdsParameterName
+          REALERT_INTERVAL_MINUTES: !Ref RealertIntervalMinutes
+          KEEP_READINGS_IN_DYNAMODB: !Ref KeepReadingsInDynamoDB
+          READING_RETENTION_DAYS: !Ref ReadingRetentionDays
+          CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds
       TracingConfig:
         Mode: Active
 
-  # IoT Rule to trigger Lambda on telemetry events
-  #
-  # The previous version of this resource nested TopicRulePayload inside itself,
-  # carried a "Payload" property that does not exist on AWS::IoT::TopicRule, and
-  # gave the Lambda action RoleArn/Endpoint instead of FunctionArn. That is what
-  # CloudFormation rejected as AWS::EarlyValidation::PropertyValidation - a
-  # message that names no property, so the shape had to be read against the
-  # resource schema.
-  PatientVitalsIoTRule:
-    Type: AWS::IoT::TopicRule
+  IngestEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
     Properties:
-      RuleName: cloud_agentic_iot_patient_vitals
-      TopicRulePayload:
-        # timestamp() is when IoT Core received the message. The device sends
-        # no clock of its own, and this value - unlike the Lambda's clock - is
-        # identical on every retry, so the Salesforce upsert key built from it
-        # really is idempotent.
-        Sql: "SELECT *, timestamp() AS receivedAt FROM 'device/+/telemetry'"
-        AwsIotSqlVersion: '2016-03-23'
-        RuleDisabled: false
-        Actions:
-          - Lambda:
-              FunctionArn: !GetAtt PatientVitalsLambda.Arn
+      EventSourceArn: !GetAtt TelemetryQueue.Arn
+      FunctionName: !Ref PatientVitalsLambda
+      BatchSize: !Ref IngestBatchSize
+      MaximumBatchingWindowInSeconds: !Ref IngestBatchWindowSeconds
+      # Only the readings that failed go back to the queue, not the batch.
+      FunctionResponseTypes: [ReportBatchItemFailures]
+      ScalingConfig:
+        MaximumConcurrency: !Ref IngestMaxConcurrency
 
-  # Without this, the rule exists but IoT Core is not allowed to invoke the
-  # function, and telemetry silently goes nowhere.
-  PatientVitalsIoTInvokePermission:
-    Type: AWS::Lambda::Permission
+  # ------------------------------------------------------------------ Salesforce
+
+  SalesforceSyncRole:
+    Type: AWS::IAM::Role
     Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt PatientVitalsLambda.Arn
-      Principal: iot.amazonaws.com
-      SourceArn: !GetAtt PatientVitalsIoTRule.Arn
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: Sync
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:ChangeMessageVisibility
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt SyncQueue.Arn
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SalesforceJwtKeyParameterName}'
+              # The key is a SecureString: SSM decrypts it with KMS on the
+              # function's behalf, and only on SSM's behalf.
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
+
+  SalesforceSyncFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-salesforce-sync
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async () => {
+            throw new Error('Placeholder - the deploy pipeline replaces this with the real bundle');
+          };
+      Role: !GetAtt SalesforceSyncRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          SALESFORCE_CLIENT_ID: !Ref SfConsumerKeyParam
+          SALESFORCE_USERNAME: !Ref SfUsernameParam
+          SALESFORCE_LOGIN_URL: !Ref SfLoginUrlParam
+          SALESFORCE_JWT_KEY_PARAMETER: !Ref SalesforceJwtKeyParameterName
+          SALESFORCE_API_VERSION: !Ref SalesforceApiVersion
+          SALESFORCE_TOKEN_CACHE_MINUTES: !Ref SalesforceTokenCacheMinutes
+          CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds
+
+  SyncEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt SyncQueue.Arn
+      FunctionName: !Ref SalesforceSyncFunction
+      BatchSize: !Ref SyncBatchSize
+      MaximumBatchingWindowInSeconds: !Ref SyncBatchWindowSeconds
+      FunctionResponseTypes: [ReportBatchItemFailures]
+      ScalingConfig:
+        MaximumConcurrency: !Ref SyncMaxConcurrency
+
+  # ------------------------------------------------------------------ alarms
+
+  # A message in a dead-letter queue is a reading or a sync that failed every
+  # retry. Someone should look at each one.
+  TelemetryDeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloud-agentic-iot-telemetry-dead-letters
+      AlarmDescription: Readings failed every retry. Inspect cloud-agentic-iot-telemetry-dlq, fix, then redrive.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt TelemetryDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmTopic, [!Ref AlarmTopicArn], !Ref AWS::NoValue]
+
+  SyncDeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloud-agentic-iot-salesforce-sync-dead-letters
+      AlarmDescription: Salesforce refused records on every retry. Inspect cloud-agentic-iot-salesforce-sync-dlq and the salesforce-sync logs.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SyncDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmTopic, [!Ref AlarmTopicArn], !Ref AWS::NoValue]
+
+  # The first sign that the fleet outgrew IngestMaxConcurrency or a quota.
+  IngestFallingBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloud-agentic-iot-telemetry-falling-behind
+      AlarmDescription: Readings are waiting longer than IngestMaxAgeSeconds. Raise IngestMaxConcurrency or IngestBatchSize in config/<env>.json, or look for throttling.
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt TelemetryQueue.QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref IngestMaxAgeSeconds
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmTopic, [!Ref AlarmTopicArn], !Ref AWS::NoValue]
 
 Outputs:
   PatientVitalsTableArn:
     Description: DynamoDB table ARN
     Value: !GetAtt PatientVitalsTable.Arn
-
   PatientVitalsLambdaArn:
     Description: Lambda function ARN
     Value: !GetAtt PatientVitalsLambda.Arn
-
   PatientVitalsLambdaFunctionName:
     Description: Lambda function name
     Value: !Ref PatientVitalsLambda
+  TelemetryQueueUrl:
+    Value: !Ref TelemetryQueue
+  SyncQueueUrl:
+    Value: !Ref SyncQueue
+  ArchiveBucketName:
+    Description: Every reading, for Athena or Data Cloud
+    Value: !Ref ArchiveBucket

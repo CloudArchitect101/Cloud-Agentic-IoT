@@ -3,200 +3,424 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { gunzipSync } = require('node:zlib');
 const {
-  loadWithFakes, fakeFetch, jsonResponse, captureConsole, withEnv,
+  loadWithFakes, fakeAwsSdk, fakeDynamoDb, fakeSqs, fakeSsm, awsError, captureConsole, withEnv,
 } = require('../helpers/fakes');
 
 const HANDLER = path.join(__dirname, '../../lambda/patient-vitals/index.js');
+const THRESHOLDS = require('../../config/vital-thresholds.json');
+const THRESHOLDS_PARAMETER = '/cloud-agentic-iot/config/vital-thresholds';
+const TABLE = 'patient-vitals';
 const RECEIVED_AT = 1761580800000;                // what timestamp() adds in the IoT rule
 const RECEIVED_ISO = '2025-10-27T16:00:00.000Z';
+const HALF_A_MINUTE_EARLIER = '2025-10-27T15:59:30.000Z';
 
-// Exactly what the patient monitor publishes, plus the rule's receivedAt.
-const dht11Message = () => ({ deviceId: 'pm-1', temperature: 23.4, humidity: 41, receivedAt: RECEIVED_AT });
+// What the template sets. Every test starts from these.
+const ENV = {
+  DYNAMODB_TABLE: TABLE,
+  SYNC_QUEUE_URL: 'https://sqs.ca-central-1.amazonaws.com/123456789012/cloud-agentic-iot-sync',
+  ARCHIVE_BUCKET: 'patient-vitals-archive',
+  THRESHOLDS_PARAMETER,
+  REALERT_INTERVAL_MINUTES: '15',
+  KEEP_READINGS_IN_DYNAMODB: 'true',
+  READING_RETENTION_DAYS: '30',
+  CONFIG_CACHE_SECONDS: '300',
+};
+
+// What the IoT rule puts on the telemetry queue: exactly what the patient
+// monitor publishes, plus topic(2) as thingName and timestamp() as receivedAt.
+const dht11Message = (overrides = {}) => ({
+  deviceId: 'pm-1', temperature: 23.4, humidity: 41, thingName: 'pm-1', receivedAt: RECEIVED_AT, ...overrides,
+});
+// 30 + 35 + 25 points with the deployed bands: 90, CRITICAL.
+const criticalMessage = (overrides = {}) => dht11Message({ heartRate: 130, spo2: 85, temperature: 39.5, ...overrides });
+const device = (n) => ({ deviceId: `pm-${n}`, thingName: `pm-${n}` });
+
+/** An SQS event as the event source mapping delivers it. */
+const queueBatch = (...bodies) => ({
+  Records: bodies.map((body, i) => ({ messageId: `m-${i}`, body: JSON.stringify(body), eventSource: 'aws:sqs' })),
+});
+
+const stateItem = (deviceId, PatientState, UpdatedAt, LastSyncedAt = UpdatedAt) => ({
+  PK: `PATIENT#${deviceId}`, SK: 'STATE', PatientState, RiskScore: 0, UpdatedAt, LastSyncedAt,
+});
 
 /**
- * Loads the handler against a fake DynamoDB table holding one STATE item, a
- * fake JWT signer, and a fake Salesforce. `timeline` records DynamoDB writes
- * and Salesforce upserts in the order they happen.
+ * Loads the handler against a fake DynamoDB table, a fake sync queue, a fake
+ * archive bucket and the deployed thresholds in a fake Parameter Store.
  */
-function load(t, { state = null, upsert = () => new Response(null, { status: 204 }) } = {}) {
-  withEnv(t, {
-    DYNAMODB_TABLE: 'patient-vitals',
-    SALESFORCE_ENDPOINT: 'https://example.my.salesforce.com',
-    SALESFORCE_CLIENT_ID: 'consumer-key',
-    SALESFORCE_USERNAME: 'integration@example.com',
-    SALESFORCE_JWT_PRIVATE_KEY: 'unused: the signer is faked',
-    SALESFORCE_LOGIN_URL: 'https://login.salesforce.com',
+function load(t, {
+  items = [], env = {}, thresholds = THRESHOLDS, dynamo: dynamoOptions, sqs: sqsOptions, s3Error = null,
+} = {}) {
+  withEnv(t, { ...ENV, ...env });
+  t.mock.method(Math, 'random', () => 0);         // DynamoDB retries back off for 0 ms
+  const dynamo = fakeDynamoDb(items, dynamoOptions);
+  const sqs = fakeSqs(sqsOptions);
+  const s3 = fakeAwsSdk('S3Client', ['PutObjectCommand'], () => {
+    if (s3Error) throw s3Error;
+    return {};
   });
-
-  const table = { state };
-  const timeline = [];
-  const writes = [];
-  class GetCommand { constructor(input) { this.input = input; } }
-  class PutCommand { constructor(input) { this.input = input; } }
-  const docClient = {
-    async send(command) {
-      if (command instanceof GetCommand) {
-        return table.state ? { Item: { PatientState: table.state } } : {};
-      }
-      const item = command.input.Item;
-      writes.push(item);
-      timeline.push(`dynamodb ${item.SK.split('#')[0]}`);
-      if (item.SK === 'STATE') table.state = item.PatientState;
-      return {};
-    },
-  };
-
-  const requests = fakeFetch(t, (request) => {
-    if (request.url.endsWith('/services/oauth2/token')) {
-      return jsonResponse(200, { access_token: 'token-123', instance_url: 'https://example.my.salesforce.com' });
-    }
-    timeline.push(`salesforce ${request.method}`);
-    return upsert(request);
-  });
-
+  const ssm = fakeSsm({ [THRESHOLDS_PARAMETER]: JSON.stringify(thresholds) });
   const { handler } = loadWithFakes(HANDLER, {
     '@aws-sdk/client-dynamodb': { DynamoDBClient: class {} },
-    '@aws-sdk/lib-dynamodb': { DynamoDBDocumentClient: { create: () => docClient }, GetCommand, PutCommand },
-    jsonwebtoken: { sign: () => 'signed-assertion' },
+    '@aws-sdk/lib-dynamodb': dynamo.sdk,
+    '@aws-sdk/client-sqs': sqs.sdk,
+    '@aws-sdk/client-s3': s3.sdk,
+    '@aws-sdk/client-ssm': ssm.sdk,
   });
-
-  const upserts = () => requests.filter((r) => r.method === 'PATCH');
-  return { handler, table, timeline, writes, upserts };
+  return {
+    handler,
+    dynamo,
+    sqs,
+    s3,
+    ssm,
+    syncs: () => sqs.messages.map((message) => message.body),
+    state: (deviceId = 'pm-1') => dynamo.table.get(`PATIENT#${deviceId}|STATE`),
+    readings: (deviceId = 'pm-1') => [...dynamo.table.values()]
+      .filter((item) => item.PK === `PATIENT#${deviceId}` && item.SK.startsWith('VITAL#')),
+    writtenKeys: () => dynamo.calls
+      .filter((call) => call.command === 'BatchWriteCommand')
+      .flatMap((call) => call.input.RequestItems[TABLE].map((request) => request.PutRequest.Item.SK)),
+  };
 }
 
-test('processes the message the IoT rule delivers, as it arrives', async (t) => {
+test('stores and scores the reading the IoT rule puts on the queue', async (t) => {
   captureConsole(t);
-  const { handler, writes, upserts } = load(t);
+  const { handler, readings, syncs, state } = load(t);
 
-  // The rule passes the device's message itself as the event. Reading only
-  // event.detail or event.payload, every real reading was rejected with 400.
-  const res = await handler(dht11Message());
+  const result = await handler(queueBatch(dht11Message()));
 
-  assert.equal(res.statusCode, 200);
-  const reading = writes.find((item) => item.SK.startsWith('VITAL#'));
+  assert.deepEqual(result, { batchItemFailures: [] });
+  const [reading] = readings();
   assert.equal(reading.SK, `VITAL#${RECEIVED_ISO}`);
   assert.equal(reading.Temperature, 23.4);
   assert.equal(reading.Humidity, 41);
+  // Deleted by the table's TTL after READING_RETENTION_DAYS.
+  assert.ok(reading.ExpiresAt >= Math.floor(Date.now() / 1000) + 30 * 86_400 - 5);
 
   // First reading from a new device: unknown -> STABLE is a transition.
-  assert.equal(upserts().length, 1);
-  const [upsert] = upserts();
-  assert.equal(
-    upsert.url,
-    `https://example.my.salesforce.com/services/data/v59.0/sobjects/Patient_Vitals__c/Device_Reading_Id__c/${encodeURIComponent(`pm-1-${RECEIVED_ISO}`)}`,
-  );
-  assert.equal(upsert.headers.Authorization, 'Bearer token-123');
-  const record = JSON.parse(upsert.body);
-  assert.equal(record.Device__c, 'pm-1');
-  assert.equal(record.Temperature__c, 23.4);
-  assert.equal(record.Timestamp__c, RECEIVED_ISO);
-  assert.equal(record.Patient_State__c, 'STABLE');
-  assert.equal(record.Previous_State__c, null);
+  const [sync] = syncs();
+  assert.equal(sync.Device_Reading_Id__c, `pm-1-${RECEIVED_ISO}`);
+  assert.equal(sync.Device__c, 'pm-1');
+  assert.equal(sync.Temperature__c, 23.4);
+  assert.equal(sync.Humidity__c, 41);
+  assert.equal(sync.Timestamp__c, RECEIVED_ISO);
+  assert.equal(sync.Patient_State__c, 'STABLE');
+  assert.equal(sync.Previous_State__c, null);
+  assert.equal(state().PatientState, 'STABLE');
+  assert.equal(state().LastSyncedAt, RECEIVED_ISO);
+});
+
+test('the device is the one whose topic the reading came in on, whatever the body says', async (t) => {
+  captureConsole(t);
+  const { handler, syncs } = load(t);
+  // The policy lets a device publish only to its own topic, so thingName
+  // (topic(2) in the rule) cannot be spoofed. A deviceId in the body can.
+  await handler(queueBatch(dht11Message({ deviceId: 'another-patient' })));
+  assert.equal(syncs()[0].Device__c, 'pm-1');
 });
 
 test('values the sensor did not send stay empty instead of looking normal', async (t) => {
   captureConsole(t);
-  const { handler, writes, upserts } = load(t);
-  await handler(dht11Message());
+  const { handler, readings, syncs } = load(t);
+  await handler(queueBatch(dht11Message()));
 
   // These used to be filled in as SpO2 98, BP 120/80 and heart rate 0.
-  const record = JSON.parse(upserts()[0].body);
+  const [sync] = syncs();
   for (const field of ['Heart_Rate__c', 'SpO2__c', 'BP_Systolic__c', 'BP_Diastolic__c']) {
-    assert.equal(record[field], null, field);
+    assert.equal(sync[field], null, field);
   }
-  const reading = writes.find((item) => item.SK.startsWith('VITAL#'));
+  const [reading] = readings();
   for (const field of ['HeartRate', 'SpO2', 'BP_Systolic', 'BP_Diastolic']) {
     assert.equal(reading[field], null, field);
   }
 });
 
-test('a retried invocation upserts the same record', async (t) => {
+test('a retried batch sends the same record, whatever the clock says', async (t) => {
   captureConsole(t);
   t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-01-01T00:00:00Z') });
-  const { handler, upserts } = load(t, { upsert: () => jsonResponse(500, [{ message: 'busy' }]) });
+  let calls = 0;
+  const { handler, sqs } = load(t, { sqs: { outage: () => ++calls === 1 } });
+  const batch = queueBatch(dht11Message());
 
-  await assert.rejects(handler(dht11Message()));
-  t.mock.timers.tick(60_000);                      // Lambda retries a minute later
-  await assert.rejects(handler(dht11Message()));
+  assert.deepEqual((await handler(batch)).batchItemFailures, [{ itemIdentifier: 'm-0' }]);
+  t.mock.timers.tick(60_000);                     // SQS hands the message back later
+  assert.deepEqual((await handler(batch)).batchItemFailures, []);
 
-  const [first, retry] = upserts();
-  assert.equal(first.url, retry.url);
+  const [first, retry] = sqs.calls.map((call) => call.input.Entries[0].MessageBody);
+  assert.equal(first, retry);
 });
 
-test('a rejected upsert fails the invocation and leaves the state unsaved', async (t) => {
-  captureConsole(t);
-  const { handler, table, timeline } = load(t, {
-    upsert: () => jsonResponse(400, [{ message: 'No such column', errorCode: 'INVALID_FIELD' }]),
-  });
+test('a sync the queue does not take sends the reading back, with its state unsaved', async (t) => {
+  const lines = captureConsole(t);
+  const { handler, state, syncs } = load(t, { sqs: { reject: () => 'InternalError' } });
 
-  // Used to log the error and return 200, so the reading was simply lost.
-  await assert.rejects(handler(dht11Message()), /Salesforce upsert failed \(400\).*No such column/);
-  assert.equal(table.state, null);
-  assert.deepEqual(timeline, ['dynamodb VITAL', 'salesforce PATCH']);
+  const result = await handler(queueBatch(dht11Message()));
+
+  assert.deepEqual(result.batchItemFailures, [{ itemIdentifier: 'm-0' }]);
+  assert.equal(syncs().length, 0);
+  // Saved anyway, the retry would see "no change" and never sync the transition.
+  assert.equal(state(), undefined);
+  assert.ok(lines.some((line) => line.includes('Readings to retry')));
 });
 
-test('the retry after a failed sync still reaches Salesforce', async (t) => {
+test('the retry after a failed enqueue still syncs the transition', async (t) => {
   captureConsole(t);
-  let attempts = 0;
-  const { handler, table, timeline, upserts } = load(t, {
-    upsert: () => (++attempts === 1 ? jsonResponse(503, []) : new Response(null, { status: 204 })),
+  let calls = 0;
+  const { handler, state, syncs } = load(t, { sqs: { outage: () => ++calls === 1 } });
+  const batch = queueBatch(dht11Message());
+
+  await handler(batch);
+  const result = await handler(batch);
+
+  assert.deepEqual(result.batchItemFailures, []);
+  assert.equal(syncs().length, 1);
+  assert.equal(state().PatientState, 'STABLE');
+});
+
+test('an unchanged stable reading stays out of Salesforce and leaves the state item alone', async (t) => {
+  captureConsole(t);
+  const { handler, dynamo, readings, syncs } = load(t, { items: [stateItem('pm-1', 'STABLE', HALF_A_MINUTE_EARLIER)] });
+
+  await handler(queueBatch(dht11Message()));
+
+  assert.equal(syncs().length, 0);
+  assert.equal(readings().length, 1);
+  // Nothing changed, so nothing is written: at a million devices, rewriting
+  // every STATE item every 30 seconds would be 33,000 writes a second.
+  assert.equal(dynamo.count('UpdateCommand'), 0);
+});
+
+test('a patient who stays critical is sent again once the re-alert interval has passed', async (t) => {
+  captureConsole(t);
+  const lastSent = '2025-10-27T15:45:00.000Z';    // exactly 15 minutes earlier
+  const { handler, syncs, state } = load(t, { items: [stateItem('pm-1', 'CRITICAL', HALF_A_MINUTE_EARLIER, lastSent)] });
+
+  await handler(queueBatch(criticalMessage()));
+
+  const [sync] = syncs();
+  assert.equal(sync.Risk_Score__c, 90);
+  assert.equal(sync.Patient_State__c, 'CRITICAL');
+  assert.equal(sync.Previous_State__c, 'CRITICAL');
+  assert.equal(state().LastSyncedAt, RECEIVED_ISO);
+});
+
+test('but not before the interval has passed', async (t) => {
+  captureConsole(t);
+  const lastSent = '2025-10-27T15:50:00.000Z';    // 10 minutes earlier
+  const { handler, syncs } = load(t, { items: [stateItem('pm-1', 'CRITICAL', HALF_A_MINUTE_EARLIER, lastSent)] });
+  await handler(queueBatch(criticalMessage()));
+  assert.equal(syncs().length, 0);
+});
+
+test("a device's readings in one batch are taken in time order", async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t);
+  const at = (seconds) => RECEIVED_AT + seconds * 1000;
+
+  // SQS does not keep order: the batch holds them newest first.
+  await handler(queueBatch(
+    dht11Message({ temperature: 37, receivedAt: at(60) }),
+    criticalMessage({ receivedAt: at(30) }),
+    dht11Message({ temperature: 37, receivedAt: at(0) }),
+  ));
+
+  assert.deepEqual(
+    syncs().map((sync) => [sync.Previous_State__c, sync.Patient_State__c]),
+    [[null, 'STABLE'], ['STABLE', 'CRITICAL'], ['CRITICAL', 'STABLE']],
+  );
+  assert.equal(state().PatientState, 'STABLE');
+  assert.equal(state().UpdatedAt, new Date(at(60)).toISOString());
+});
+
+test('a reading older than the saved state is kept but decides nothing', async (t) => {
+  captureConsole(t);
+  const later = '2025-10-27T16:05:00.000Z';
+  const { handler, syncs, readings, state } = load(t, { items: [stateItem('pm-1', 'STABLE', later)] });
+
+  // Arrived late, or a retry: acting on it would report a transition that is already history.
+  await handler(queueBatch(criticalMessage()));
+
+  assert.equal(readings().length, 1);
+  assert.equal(syncs().length, 0);
+  assert.equal(state().UpdatedAt, later);
+});
+
+test('an older batch cannot overwrite the state a newer one saved', async (t) => {
+  captureConsole(t);
+  const newer = '2025-10-27T16:10:00.000Z';
+  const { handler, state } = load(t, {
+    items: [stateItem('pm-1', 'STABLE', HALF_A_MINUTE_EARLIER)],
+    dynamo: {
+      // Another batch, holding a later reading, saves first.
+      beforeUpdate: (table) => table.set('PATIENT#pm-1|STATE', stateItem('pm-1', 'AT_RISK', newer)),
+    },
   });
 
-  await assert.rejects(handler(dht11Message()));
-  const res = await handler(dht11Message());
+  const result = await handler(queueBatch(criticalMessage()));
 
-  // With the state saved before the sync, the retry saw "no change" and
-  // never synced the transition.
+  assert.deepEqual(result.batchItemFailures, []);   // lost the race, which is not an error
+  assert.equal(state().PatientState, 'AT_RISK');
+  assert.equal(state().UpdatedAt, newer);
+});
+
+test('DynamoDB throttling is retried, and only a device it never takes goes back to SQS', async (t) => {
+  captureConsole(t);
+  let gets = 0;
+  const { handler, dynamo, syncs, state } = load(t, {
+    dynamo: {
+      unprocessed: (command, entries) => {
+        if (command === 'BatchGetCommand') return gets++ === 0 ? entries.slice(0, 1) : [];
+        return entries.filter((request) => request.PutRequest.Item.PK === 'PATIENT#pm-2');
+      },
+    },
+  });
+
+  const result = await handler(queueBatch(dht11Message(), dht11Message(device(2))));
+
+  assert.deepEqual(result.batchItemFailures, [{ itemIdentifier: 'm-1' }]);
+  assert.equal(dynamo.count('BatchGetCommand'), 2);    // the key it left, read again
+  assert.equal(dynamo.count('BatchWriteCommand'), 5);  // the call, then 4 retries for pm-2
+  assert.deepEqual(syncs().map((sync) => sync.Device__c), ['pm-1']);
+  assert.equal(state('pm-2'), undefined);
+});
+
+test('a reading SQS delivered twice in one batch is written and synced once', async (t) => {
+  captureConsole(t);
+  const { handler, writtenKeys, syncs } = load(t);
+  // Two copies of one item in a BatchWriteItem fail the whole request.
+  const result = await handler(queueBatch(dht11Message(), dht11Message()));
+  assert.deepEqual(result.batchItemFailures, []);
+  assert.deepEqual(writtenKeys(), [`VITAL#${RECEIVED_ISO}`]);
+  assert.equal(syncs().length, 1);
+});
+
+test('every reading in a batch is archived in one gzipped object, by day and hour', async (t) => {
+  captureConsole(t);
+  const { handler, s3 } = load(t);
+
+  await handler(queueBatch(dht11Message(), dht11Message({ receivedAt: RECEIVED_AT + 30_000 }), criticalMessage(device(2))));
+
+  assert.equal(s3.calls.length, 1);
+  const { input } = s3.calls[0];
+  assert.equal(input.Bucket, 'patient-vitals-archive');
+  assert.equal(input.Key, 'readings/date=2025-10-27/hour=16/m-0-3.ndjson.gz');
+  assert.equal(input.ContentEncoding, 'gzip');
+  const lines = gunzipSync(input.Body).toString().trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(lines.map((line) => line.deviceId), ['pm-1', 'pm-1', 'pm-2']);
+  assert.equal(lines[2].riskScore, 90);
+});
+
+test('a batch the archive cannot take is retried whole, before anything else is written', async (t) => {
+  captureConsole(t);
+  const { handler, dynamo, sqs } = load(t, { s3Error: awsError('ServiceUnavailable') });
+  await assert.rejects(handler(queueBatch(dht11Message())), /ServiceUnavailable/);
+  assert.equal(dynamo.calls.length, 0);
+  assert.equal(sqs.calls.length, 0);
+});
+
+test('with KEEP_READINGS_IN_DYNAMODB false, DynamoDB holds only the state', async (t) => {
+  captureConsole(t);
+  const { handler, dynamo, state, s3 } = load(t, {
+    env: { KEEP_READINGS_IN_DYNAMODB: 'false', READING_RETENTION_DAYS: undefined },
+  });
+  await handler(queueBatch(dht11Message()));
+  assert.equal(dynamo.count('BatchWriteCommand'), 0);
+  assert.equal(state().PatientState, 'STABLE');
+  assert.equal(s3.calls.length, 1);               // the archive still has the reading
+});
+
+test('the bands come from Parameter Store, read once per container', async (t) => {
+  captureConsole(t);
+  const stricter = structuredClone(THRESHOLDS);
+  stricter.vitals = [{ field: 'temperature', unit: 'C', critical: { above: 40, points: 30 }, warning: { above: 22, points: 45 } }];
+  const { handler, syncs, ssm } = load(t, { thresholds: stricter });
+
+  await handler(queueBatch(dht11Message()));
+  await handler(queueBatch(dht11Message(device(2))));
+
+  // 23.4 C is above the new warning limit: 45 points, AT_RISK. No code changed.
+  assert.deepEqual(syncs().map((sync) => [sync.Patient_State__c, sync.Risk_Score__c]), [['AT_RISK', 45], ['AT_RISK', 45]]);
+  assert.equal(ssm.calls.length, 1);
+});
+
+test('a message without a device id is dropped, and the rest of the batch goes through', async (t) => {
+  const lines = captureConsole(t);
+  const { handler, readings } = load(t);
+  const result = await handler(queueBatch({ temperature: 23.4 }, dht11Message()));
+  // Retrying cannot give it a device, so it is not sent back.
+  assert.deepEqual(result.batchItemFailures, []);
+  assert.equal(readings().length, 1);
+  assert.ok(lines.some((line) => line.includes('Dropping a message without a device id')));
+});
+
+test('a missing setting fails before anything is written, and names itself', async (t) => {
+  captureConsole(t);
+  const { handler, s3, dynamo } = load(t, { env: { SYNC_QUEUE_URL: undefined } });
+  await assert.rejects(handler(queueBatch(dht11Message())), /SYNC_QUEUE_URL is not set/);
+  assert.equal(s3.calls.length + dynamo.calls.length, 0);
+});
+
+test('1,000 readings from 1,000 devices: batched calls, and Salesforce hears only the changes', async (t) => {
+  captureConsole(t);
+  const ids = Array.from({ length: 1000 }, (_, n) => n);
+  const { handler, dynamo, sqs, s3, syncs } = load(t, {
+    items: ids.map((n) => stateItem(`pm-${n}`, 'STABLE', HALF_A_MINUTE_EARLIER)),
+  });
+
+  // One in ten patients turns critical.
+  const result = await handler(queueBatch(...ids.map((n) => (n % 10 ? dht11Message : criticalMessage)(device(n)))));
+
+  assert.deepEqual(result.batchItemFailures, []);
+  assert.equal(s3.calls.length, 1);
+  assert.equal(dynamo.count('BatchGetCommand'), 10);     // 100 keys a call
+  assert.equal(dynamo.count('BatchWriteCommand'), 40);   // 25 readings a call
+  assert.equal(dynamo.count('UpdateCommand'), 100);      // only the states that changed
+  assert.equal(syncs().length, 100);
+  assert.equal(sqs.calls.length, 10);                    // 10 messages a call
+});
+
+// Invoked directly, by hand or from a test event: the shapes the IoT rule's
+// old Lambda action and EventBridge send.
+
+test('a reading invoked directly is processed and answered', async (t) => {
+  captureConsole(t);
+  const { handler, syncs } = load(t);
+  const res = await handler(criticalMessage());
   assert.equal(res.statusCode, 200);
-  assert.equal(upserts().length, 2);
-  assert.equal(table.state, 'STABLE');
-  assert.deepEqual(timeline.slice(-3), ['dynamodb VITAL', 'salesforce PATCH', 'dynamodb STATE']);
-});
-
-test('an unchanged stable reading stays out of Salesforce', async (t) => {
-  captureConsole(t);
-  const { handler, upserts, writes } = load(t, { state: 'STABLE' });
-  const res = await handler(dht11Message());
-  assert.equal(res.statusCode, 200);
-  assert.equal(upserts().length, 0);
-  assert.ok(writes.some((item) => item.SK.startsWith('VITAL#')));
-});
-
-test('a critical reading is synced even when the state has not changed', async (t) => {
-  captureConsole(t);
-  const { handler, upserts } = load(t, { state: 'CRITICAL' });
-  const res = await handler({
-    deviceId: 'pm-1', heartRate: 130, spo2: 85, temperature: 39.5, receivedAt: RECEIVED_AT,
+  assert.deepEqual(JSON.parse(res.body), {
+    message: 'Patient vitals processed successfully', deviceId: 'pm-1', riskScore: 90, patientState: 'CRITICAL',
   });
-
-  assert.equal(JSON.parse(res.body).patientState, 'CRITICAL');
-  const record = JSON.parse(upserts()[0].body);
-  assert.equal(record.Risk_Score__c, 90);
-  assert.equal(record.Previous_State__c, 'CRITICAL');
+  assert.equal(syncs().length, 1);
 });
 
 test('still accepts the EventBridge and wrapped shapes', async (t) => {
   captureConsole(t);
-  const { handler } = load(t, { state: 'STABLE' });
+  const { handler } = load(t, { items: [stateItem('pm-1', 'STABLE', HALF_A_MINUTE_EARLIER)] });
   assert.equal((await handler({ detail: dht11Message() })).statusCode, 200);
   assert.equal((await handler({ payload: JSON.stringify(dht11Message()) })).statusCode, 200);
 });
 
-test('a message without a device id is rejected before anything is written', async (t) => {
+test('a direct reading without a device id is rejected before anything is written', async (t) => {
   captureConsole(t);
-  const { handler, writes, upserts } = load(t);
+  const { handler, dynamo, sqs, s3 } = load(t);
   const res = await handler({ temperature: 23.4 });
   assert.equal(res.statusCode, 400);
-  assert.equal(writes.length, 0);
-  assert.equal(upserts().length, 0);
+  assert.equal(dynamo.calls.length + sqs.calls.length + s3.calls.length, 0);
+});
+
+test('a direct reading that could not be stored throws, so Lambda retries it', async (t) => {
+  captureConsole(t);
+  const { handler } = load(t, { sqs: { outage: () => true } });
+  // Invoked asynchronously, a returned 500 would count as delivered.
+  await assert.rejects(handler(dht11Message()), /Reading from pm-1 was not stored/);
 });
 
 test('timestamps from the device are normalised to ISO 8601', async (t) => {
   captureConsole(t);
-  const { handler, writes } = load(t, { state: 'STABLE' });
+  const { handler, writtenKeys } = load(t);
   await handler({ deviceId: 'pm-1', temperature: 23.4, timestamp: RECEIVED_AT / 1000 });
   await handler({ deviceId: 'pm-1', temperature: 23.4, timestamp: RECEIVED_ISO });
-  const keys = writes.filter((item) => item.SK.startsWith('VITAL#')).map((item) => item.SK);
-  assert.deepEqual(keys, [`VITAL#${RECEIVED_ISO}`, `VITAL#${RECEIVED_ISO}`]);
+  assert.deepEqual(writtenKeys(), [`VITAL#${RECEIVED_ISO}`, `VITAL#${RECEIVED_ISO}`]);
 });

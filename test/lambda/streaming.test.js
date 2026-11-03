@@ -4,7 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const {
-  loadWithFakes, fakeAwsSdk, fakeFetch, jsonResponse, captureConsole, withEnv,
+  loadWithFakes, fakeAwsSdk, fakeSsm, fakeFetch, jsonResponse, captureConsole, withEnv,
 } = require('../helpers/fakes');
 
 const ROUTER = path.join(__dirname, '../../lambda/streaming/event-router/index.js');
@@ -12,7 +12,8 @@ const DISPATCHER = path.join(__dirname, '../../lambda/streaming/alert-dispatcher
 
 /* ------------------------------------------------------------ event router */
 
-function loadRouter(respond = () => ({ FailedEntryCount: 0, Entries: [{ EventId: 'e-1' }] })) {
+function loadRouter(t, respond = () => ({ FailedEntryCount: 0, Entries: [{ EventId: 'e-1' }] })) {
+  withEnv(t, { EVENT_BUS_NAME: 'patient-vitals-event-bus' });
   const eventbridge = fakeAwsSdk('EventBridgeClient', ['PutEventsCommand'], respond);
   const { handler } = loadWithFakes(ROUTER, { '@aws-sdk/client-eventbridge': eventbridge.sdk });
   return { handler, calls: eventbridge.calls };
@@ -20,7 +21,7 @@ function loadRouter(respond = () => ({ FailedEntryCount: 0, Entries: [{ EventId:
 
 test('router: publishes the reading to the bus as Entries', async (t) => {
   captureConsole(t);
-  const { handler, calls } = loadRouter();
+  const { handler, calls } = loadRouter(t);
 
   const res = await handler({ deviceId: 'pm-1', temperature: 23.4, humidity: 41 });
 
@@ -44,7 +45,7 @@ test('router: publishes the reading to the bus as Entries', async (t) => {
 
 test('router: an entry EventBridge rejects fails the invocation', async (t) => {
   captureConsole(t);
-  const { handler } = loadRouter(() => ({
+  const { handler } = loadRouter(t, () => ({
     FailedEntryCount: 1,
     Entries: [{ ErrorCode: 'InternalFailure', ErrorMessage: 'try again' }],
   }));
@@ -53,7 +54,7 @@ test('router: an entry EventBridge rejects fails the invocation', async (t) => {
 
 test('router: a reading without a device id is not published', async (t) => {
   captureConsole(t);
-  const { handler, calls } = loadRouter();
+  const { handler, calls } = loadRouter(t);
   const res = await handler({ temperature: 23.4 });
   assert.equal(res.statusCode, 400);
   assert.equal(calls.length, 0);
@@ -61,10 +62,34 @@ test('router: a reading without a device id is not published', async (t) => {
 
 /* -------------------------------------------------------- alert dispatcher */
 
-function loadDispatcher(t, respond) {
-  withEnv(t, { SALESFORCE_ENDPOINT: 'https://example.my.salesforce.com', SALESFORCE_ACCESS_TOKEN: 'token-123' });
-  const requests = fakeFetch(t, respond);
-  const { handler } = loadWithFakes(DISPATCHER);
+const THRESHOLDS = require('../../config/vital-thresholds.json');
+
+function loadDispatcher(t, respond, thresholds = THRESHOLDS) {
+  withEnv(t, {
+    SALESFORCE_CLIENT_ID: 'consumer-key',
+    SALESFORCE_USERNAME: 'integration@example.com',
+    SALESFORCE_LOGIN_URL: 'https://login.salesforce.com',
+    SALESFORCE_JWT_KEY_PARAMETER: '/cloud-agentic-iot/salesforce/jwt-private-key',
+    SALESFORCE_API_VERSION: '64.0',
+    SALESFORCE_TOKEN_CACHE_MINUTES: '30',
+    THRESHOLDS_PARAMETER: '/cloud-agentic-iot/config/vital-thresholds',
+    CONFIG_CACHE_SECONDS: '300',
+  });
+  const ssm = fakeSsm({
+    '/cloud-agentic-iot/salesforce/jwt-private-key': 'pem',
+    '/cloud-agentic-iot/config/vital-thresholds': JSON.stringify(thresholds),
+  });
+  const all = fakeFetch(t, (request) => (request.url.endsWith('/services/oauth2/token')
+    ? jsonResponse(200, { access_token: 'token-123', instance_url: 'https://example.my.salesforce.com' })
+    : respond(request)));
+  const { handler } = loadWithFakes(DISPATCHER, {
+    '@aws-sdk/client-ssm': ssm.sdk,
+    jsonwebtoken: { sign: () => 'signed-assertion' },
+  });
+  // The Salesforce calls, without the token requests.
+  const requests = new Proxy(all, {
+    get: (target, key) => Reflect.get(target.filter((r) => !r.url.endsWith('/services/oauth2/token')), key),
+  });
   return { handler, requests };
 }
 
@@ -73,8 +98,8 @@ const succeeded = () => jsonResponse(200, [{
   outputValues: { deviceId: 'pm-1', alertPublished: true, alertType: 'CRITICAL_VITALS' },
 }]);
 
-const alertTypeFor = async (t, detail) => {
-  const { handler } = loadDispatcher(t, succeeded);
+const alertTypeFor = async (t, detail, thresholds) => {
+  const { handler } = loadDispatcher(t, succeeded, thresholds);
   return JSON.parse((await handler({ detail })).body).alertType;
 };
 
@@ -93,6 +118,18 @@ test('dispatcher: reported vitals are judged against the thresholds', async (t) 
   assert.equal(await alertTypeFor(t, { deviceId: 'pm-1', heartRate: 55 }), 'ABNORMAL_TREND');
   assert.equal(await alertTypeFor(t, { deviceId: 'pm-1', spo2: 93 }), 'ABNORMAL_TREND');
   assert.equal(await alertTypeFor(t, { deviceId: 'pm-1', heartRate: 72, spo2: 98 }), 'NONE');
+  // As in StreamingAlertService: a warning on any vital is a trend, not only
+  // heart rate and SpO2.
+  assert.equal(await alertTypeFor(t, { deviceId: 'pm-1', temperature: 38.7 }), 'ABNORMAL_TREND');
+  assert.equal(await alertTypeFor(t, { deviceId: 'pm-1', bpSystolic: 150 }), 'ABNORMAL_TREND');
+});
+
+test('dispatcher: the bands are the ones in Parameter Store, not code', async (t) => {
+  captureConsole(t);
+  const stricter = structuredClone(THRESHOLDS);
+  stricter.vitals.find((v) => v.field === 'heartRate').critical.above = 110;
+  assert.equal(await alertTypeFor(t, { deviceId: 'pm-1', heartRate: 115 }), 'ABNORMAL_TREND');
+  assert.equal(await alertTypeFor(t, { deviceId: 'pm-1', heartRate: 115 }, stricter), 'CRITICAL_VITALS');
 });
 
 test('dispatcher: calls the invocable action endpoint with one input', async (t) => {
@@ -123,10 +160,12 @@ test('dispatcher: no alert, no call to Salesforce', async (t) => {
 
 test('dispatcher: an error from Salesforce fails the invocation with its text', async (t) => {
   captureConsole(t);
-  const { handler } = loadDispatcher(t, () => new Response('Session expired or invalid', { status: 401 }));
+  const { handler, requests } = loadDispatcher(t, () => new Response('Session expired or invalid', { status: 401 }));
   // response.text without () used to log the function's source instead, and
   // the alert was dropped with a 500 that counted as delivered.
   await assert.rejects(handler({ detail: { deviceId: 'pm-1', spo2: 85 } }), /401: Session expired or invalid/);
+  // A 401 gets one new token and one more try, not a loop.
+  assert.equal(requests.length, 2);
 });
 
 test('dispatcher: a failed action result fails the invocation', async (t) => {

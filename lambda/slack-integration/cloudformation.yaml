@@ -5,10 +5,31 @@ Description: >
   JWT Bearer Flow (a dedicated integration user — no per-user Salesforce
   login anywhere in this path) and reads/writes records.
 
+# Values below come from config/<env>.json ("slack-integration").
 Parameters:
-  SlackSigningSecretParam:
-    Type: 'AWS::SSM::Parameter::Value<String>'
+  # Secrets are SecureStrings, read by the function at runtime: CloudFormation
+  # cannot resolve a SecureString into a template, and an environment variable
+  # is readable by anyone allowed to see the function's configuration.
+  SlackSigningSecretParameterName:
+    Type: String
     Default: /cloud-agentic-iot/slack/signing-secret
+    AllowedPattern: '^/.+'
+  SalesforceJwtKeyParameterName:
+    Type: String
+    Default: /cloud-agentic-iot/salesforce/jwt-private-key
+    AllowedPattern: '^/.+'
+  SalesforceApiVersion:
+    Type: String
+    Default: '64.0'
+    AllowedPattern: '^\d+\.\d$'
+  SalesforceTokenCacheMinutes:
+    Type: Number
+    Default: 30
+    MinValue: 1
+  ConfigCacheSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 0
   SfConsumerKeyParam:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: /cloud-agentic-iot/salesforce/consumer-key
@@ -18,9 +39,6 @@ Parameters:
   SfLoginUrlParam:
     Type: 'AWS::SSM::Parameter::Value<String>'
     Default: /cloud-agentic-iot/salesforce/login-url
-  SfJwtPrivateKeyParam:
-    Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: /cloud-agentic-iot/salesforce/jwt-private-key
 
 Resources:
   SlackIntegrationRole:
@@ -34,6 +52,22 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ReadSecrets
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SlackSigningSecretParameterName}'
+                  - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SalesforceJwtKeyParameterName}'
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
 
   SlackIntegrationFunction:
     Type: AWS::Lambda::Function
@@ -57,11 +91,14 @@ Resources:
           });
       Environment:
         Variables:
-          SLACK_SIGNING_SECRET: !Ref SlackSigningSecretParam
-          SF_CONSUMER_KEY: !Ref SfConsumerKeyParam
-          SF_USERNAME: !Ref SfUsernameParam
-          SF_LOGIN_URL: !Ref SfLoginUrlParam
-          SF_JWT_PRIVATE_KEY: !Ref SfJwtPrivateKeyParam
+          SLACK_SIGNING_SECRET_PARAMETER: !Ref SlackSigningSecretParameterName
+          SALESFORCE_CLIENT_ID: !Ref SfConsumerKeyParam
+          SALESFORCE_USERNAME: !Ref SfUsernameParam
+          SALESFORCE_LOGIN_URL: !Ref SfLoginUrlParam
+          SALESFORCE_JWT_KEY_PARAMETER: !Ref SalesforceJwtKeyParameterName
+          SALESFORCE_API_VERSION: !Ref SalesforceApiVersion
+          SALESFORCE_TOKEN_CACHE_MINUTES: !Ref SalesforceTokenCacheMinutes
+          CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds
 
   SlackApi:
     Type: AWS::ApiGatewayV2::Api
