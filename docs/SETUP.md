@@ -387,6 +387,8 @@ successfully, with the secrets stripped:
 
 We eliminate the use of permanent, long-lived AWS IAM Access Keys inside GitHub. Instead, we register GitHub as a federated identity provider via OpenID Connect (OIDC) to safely hand out short-lived, 1-hour session credentials.
 
+> **Just trying it out?** [SANDBOX.md](SANDBOX.md) deploys the AWS side into an AWS project with a spend limit, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
+
 ### Step 0: Provision the Developer Identity (AWS Console UI)
 Before setting up passwordless pipelines, you must create a standard programmatic identity for your local terminal and VS Code work. 
 
@@ -792,6 +794,8 @@ Note: The app defines what mechanisms are technically open, but a user identity 
 ---
 
 ## 3. AWS Dev account
+
+> **Just trying it out?** [SANDBOX.md](SANDBOX.md) deploys the AWS side into an AWS project with a spend limit, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
 
 ### 3.1 Root: three actions, then never again
 

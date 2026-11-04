@@ -73,6 +73,8 @@ Pilot note: 100 customers × 1 conversation ≈ 2,000 flex credits-equivalent �
 3. **Free-plan accounts auto-close at 6 months** (or when credits run out), with a 90-day recovery window. The sprint calendar finishes well inside that.
 4. Some services are excluded from the free plan; everything this repo uses (IoT Core, Lambda, DynamoDB, EventBridge, SQS, API Gateway, CloudWatch, Bedrock invocation) is available.
 
+**Want a hard cap while you learn?** A budget alert only tells you; it stops nothing. An AWS project on the paid plan takes a monthly spend limit from $20, and at the limit AWS pauses the project instead of billing more. Projects can't use GitHub OIDC, so deploy to one from your laptop and move to regular accounts when you want the pipelines: [SANDBOX.md](SANDBOX.md).
+
 **MuleSoft (chapter 07):** the one thing with no free tier — Anypoint is a **30-day trial**. Build, record, and publish that chapter inside one window.
 
 **Slack (chapter 04):** a free workspace supports slash commands. Free.
@@ -83,4 +85,4 @@ Pilot note: 100 customers × 1 conversation ≈ 2,000 flex credits-equivalent �
 - [Data Cloud pricing changes (Salesforce Ben)](https://www.salesforceben.com/new-pricing-for-salesforce-data-cloud-is-here-what-you-need-to-know/), [credit consumption](https://davidpalencia.com/salesforce-data-cloud-pricing-credit-consumption/)
 - [AWS IoT Core pricing](https://aws.amazon.com/iot-core/pricing/)
 - [Salesforce editions 2026](https://tech.co/crm-software/salesforce-pricing-how-much-does-salesforce-cost)
-- [AWS Free Tier $200/6-month plan](https://aws.amazon.com/about-aws/whats-new/2025/07/aws-free-tier-credits-month-free-plan/), [Free Tier FAQs (new customers only)](https://aws.amazon.com/free/free-tier-faqs/), [Free account plan (joining an Organization upgrades to paid)](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html)
+- [AWS Free Tier $200/6-month plan](https://aws.amazon.com/about-aws/whats-new/2025/07/aws-free-tier-credits-month-free-plan/), [Free Tier FAQs (new customers only)](https://aws.amazon.com/free/free-tier-faqs/), [Free account plan (joining an Organization upgrades to paid)](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html), [Project spend limits (AWS News Blog)](https://aws.amazon.com/blogs/aws/aws-reimagines-the-getting-started-experience/)

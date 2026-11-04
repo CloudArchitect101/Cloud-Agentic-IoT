@@ -11,7 +11,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 ## Start here
 
 1. **Clone:** `git clone https://github.com/<username>/Cloud-Agentic-IoT.git`
-2. **Work through [`docs/SETUP.md`](docs/SETUP.md)** — CLI installs (`sf`, `aws`, `gh`, `arduino-cli`), then accounts, identities, and credentials. Everything below assumes it is done.
+2. **Work through [`docs/SETUP.md`](docs/SETUP.md)** — CLI installs (`sf`, `aws`, `gh`, `arduino-cli`), then accounts, identities, and credentials. Everything below assumes it is done. Just trying it out? [`docs/SANDBOX.md`](docs/SANDBOX.md) runs the AWS side in an AWS project with a spend limit, deployed from your laptop, and shows how to move to regular accounts for the pipelines later.
 3. **Read [How the pieces connect](docs/HOW-IT-CONNECTS.md)** for the shape of the system before you stand it up.
 4. **Deploy the whole system once** — [Deployment](#deployment) below. It is one sequence, not fourteen.
 5. **Read [The chapters](#the-chapters)** to understand what you just deployed and why each piece is built the way it is.
@@ -23,6 +23,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | Doc | What it answers |
 |---|---|
 | [SETUP.md](docs/SETUP.md) | Accounts, the five identities, licenses, Connected Apps, IAM roles, VS Code auth, GitHub secrets. Dev end-to-end; Prod is the same sequence. |
+| [SANDBOX.md](docs/SANDBOX.md) | Trying it out: the AWS side in an AWS project with a spend limit, deployed from your laptop, then the move to regular accounts and the pipelines. |
 | [PLATFORM-PRIMER.md](docs/PLATFORM-PRIMER.md) | Apex, SOQL, governor limits, LWC and triggers explained via their Python equivalents. Read this if Salesforce is new to you. |
 | [ARCHITECTURE-OVERVIEW.md](docs/ARCHITECTURE-OVERVIEW.md) | The whole system in one diagram, and what each component is for. |
 | [HOW-IT-CONNECTS.md](docs/HOW-IT-CONNECTS.md) | How the chapters form one system, the three shared integration seams, and the order to demo them in. |
