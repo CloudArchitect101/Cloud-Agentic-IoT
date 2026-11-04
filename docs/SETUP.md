@@ -387,7 +387,7 @@ successfully, with the secrets stripped:
 
 We eliminate the use of permanent, long-lived AWS IAM Access Keys inside GitHub. Instead, we register GitHub as a federated identity provider via OpenID Connect (OIDC) to safely hand out short-lived, 1-hour session credentials.
 
-> **Just trying it out?** [SANDBOX.md](SANDBOX.md) deploys the AWS side into an AWS project with a spend limit, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
+> **Just trying it out?** [TRY-IT.md](TRY-IT.md) runs it on your own AWS project with a spend limit and a Developer Edition org, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
 
 ### Step 0: Provision the Developer Identity (AWS Console UI)
 Before setting up passwordless pipelines, you must create a standard programmatic identity for your local terminal and VS Code work. 
@@ -753,40 +753,53 @@ Assign it to `deploy@…` user.
 
 ### 2.4 Two External Apps, not one
 
-Step 1: Generate your certificates
-Run your OpenSSL commands exactly as planned to generate your separate keys and certificates.
+One app per service user, each with its own certificate, so a leaked key
+reaches one identity only.
 
-For Deploy user:
+**Step 1: Generate the certificates.** One key pair per app.
+
+For the Deploy user:
+
+```bash
 openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
   -keyout server-deploy.key -out server-deploy.crt \
   -subj "/CN=CloudAgenticIoT-Deploy/O=Personal/C=CA"
+```
 
-For Integration user:
+For the Integration user:
+
+```bash
 openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
   -keyout server-integration.key -out server-integration.crt \
   -subj "/CN=CloudAgenticIoT-Integration/O=Personal/C=CA"
+```
 
-Step 2: Configure the External Client Apps
-Go to Setup in Salesforce.
-In the Quick Find box, type External Client Apps.
-Click External Client App Manager (or click New External Client App if available in your view).
-Fill out the basic details for Cloud Agentic IoT Deploy
-Under the OAuth Settings, check the box to Enable OAuth.
-Select scopes: 
-- Manage User data via APIs (api) 
-- Perfrom requests at any time (refresh_token, offline_access)
-Enable Enable JWT Bearer Flow and upload server-integration.crt
-Save the app.
+`.gitignore` keeps `*.key` and `*.crt` out of Git anywhere in the repo.
 
-Repeat for the Integration user.
+**Step 2: Create the External Client Apps.**
 
-Step 3: Authorize via Policies
-In the External Client App Manager list, locate your newly created app.
-Click the dropdown arrow next to it and select Manage Policies (or edit OAuth policies).
-Set "Admin approved users are pre-authorized"
-Associate your dedicated Salesforce Integration User via the designated Permission Set [Meatadate_Deploy]
+1. Setup → Quick Find → **External Client Apps** → **External Client App
+   Manager** → **New External Client App** (if your view shows it).
+2. Fill in the basic details for the first app, `Cloud Agentic IoT Deploy`.
+3. Under **OAuth Settings**, check **Enable OAuth** and select these scopes:
+   - Manage user data via APIs (`api`)
+   - Perform requests at any time (`refresh_token`, `offline_access`)
+4. Check **Enable JWT Bearer Flow** and upload the app's certificate from the
+   table below.
+5. Save the app.
 
-Repeat for the Integration user.
+Then repeat for the second app:
+
+| App | Certificate to upload | Its user | Permission set in its policy |
+|---|---|---|---|
+| `Cloud Agentic IoT Deploy` | `server-deploy.crt` | `deploy@…` | `Metadata_Deploy` (§2.3) |
+| `Cloud Agentic IoT Integration` | `server-integration.crt` | `integration@…` | `Device_Integration`, which the first deploy creates |
+
+**Step 3: Authorize through the policies.** In the External Client App Manager
+list, open each app's dropdown → **Manage Policies** (or edit its OAuth
+policies). Set **Admin approved users are pre-authorized**, and add the app's
+permission set from the table. Only users who hold that permission set can sign
+in through the app.
 
 Note: The app defines what mechanisms are technically open, but a user identity dictates who owns the data and which records they have the permission to modify.
 
@@ -795,7 +808,7 @@ Note: The app defines what mechanisms are technically open, but a user identity 
 
 ## 3. AWS Dev account
 
-> **Just trying it out?** [SANDBOX.md](SANDBOX.md) deploys the AWS side into an AWS project with a spend limit, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
+> **Just trying it out?** [TRY-IT.md](TRY-IT.md) runs it on your own AWS project with a spend limit and a Developer Edition org, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
 
 ### 3.1 Root: three actions, then never again
 

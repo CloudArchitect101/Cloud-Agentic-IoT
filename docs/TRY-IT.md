@@ -1,13 +1,19 @@
-# Try it in a capped AWS sandbox
+# Try it on your own AWS project and Salesforce org
 
-Cloned this repo to learn or experiment? Run the AWS side in an AWS **project**
-with a spend limit, and deploy it from your laptop. At the limit AWS pauses the
-project instead of billing you more, so a bug or a loop cannot run up a large
-bill. You skip the GitHub setup until you need it.
+Cloned this repo to learn or experiment? Run it on two things of your own: an
+AWS **project** with a spend limit, and a free Salesforce Developer Edition
+org. You deploy both from your laptop and skip the GitHub setup until you need
+it. At the limit AWS pauses the project instead of billing you more, so a bug or
+a loop cannot run up a large bill.
 
-When you are ready for the pipelines, move to a regular AWS account:
-[Moving to the pipelines](#moving-to-the-pipelines). Salesforce needs no
-sandbox of its own, because Developer Edition orgs are free.
+**Give both the same name.** Use one name for your AWS CLI profile and your
+Salesforce CLI alias, for example `test-<your GitHub name>`. This guide calls it
+`<name>`, and its commands read it from `NAME`. It is not called a sandbox here,
+because in Salesforce a sandbox is a copy of a production org, which a
+Developer Edition org is not.
+
+When you are ready for the pipelines, move to regular AWS accounts:
+[Moving to the pipelines](#moving-to-the-pipelines).
 
 ## Why a project, and what it costs you
 
@@ -25,26 +31,32 @@ can't be undone. A regular account can't hand access to a project either,
 because a project only trusts accounts in its own organization. So this guide
 deploys from your laptop, and GitHub comes in only with the regular account.
 
-## 1. Create the project
+## 1. Create the project and the org
 
 1. Sign up through the new AWS experience, or add a project in
    [AWS Settings](https://settings.aws.com).
 2. Upgrade to the paid plan, then set a monthly spend limit. The lowest is $20.
 3. Note the project's Region: AWS Settings, **Projects**, your project,
    **Overview**, **Additional Info**.
+4. Sign up for a Developer Edition org, as in
+   [SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin). It is free.
 
-## 2. Sign the AWS CLI in to the project
+## 2. Sign both CLIs in as `<name>`
 
 `aws login` needs AWS CLI 2.32.0 or later. It opens a browser, and you choose
 your project to finish signing in. Give the project's Region when it asks.
+`sf org login web` opens a browser too: sign in as the org's admin.
 
 ```bash
-aws login --profile iot-sandbox
-export AWS_PROFILE=iot-sandbox     # per shell, as in DEVELOPMENT.md
-aws sts get-caller-identity        # shows the project's account ID
+NAME=test-yourname                                 # your <name>
+aws login --profile "$NAME"
+sf org login web --alias "$NAME"
+export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"   # per shell, as in DEVELOPMENT.md
+aws sts get-caller-identity                        # shows the project's account ID
+sf org display                                     # shows the org and your admin username
 ```
 
-The credentials refresh themselves and last up to 12 hours. Run the same
+The AWS credentials refresh themselves and last up to 12 hours. Run the same
 `aws login` again when they expire. No access key is created, so there is none
 to leak.
 
@@ -61,24 +73,59 @@ aws ssm put-parameter --type String --name /cloud-agentic-iot/salesforce/consume
 aws ssm put-parameter --type SecureString --name /cloud-agentic-iot/salesforce/jwt-private-key --value file://scripts/server-integration.key
 ```
 
-No Salesforce org yet? Put `placeholder` as each value. The stacks deploy, and
-only the calls to Salesforce fail until you replace the values with
-`--overwrite`.
+The last three come from step 5, so you won't have them on a first deploy. Put
+`placeholder` as each of their values for now. The stacks deploy, and only the
+calls to Salesforce fail until step 5 replaces the values.
 
 ## 4. Deploy and test
 
 ```bash
-scripts/check.sh            # no credentials needed
-scripts/deploy-aws.sh Dev   # every stack and the real Lambda code
+scripts/check.sh                   # no credentials needed
+scripts/deploy-aws.sh Dev          # every stack and the real Lambda code
+scripts/deploy-salesforce.sh Dev   # everything in force-app/, with every local Apex test
 ```
 
-The sandbox is your Dev environment. Its first deploy labels the account `Dev`
-in SSM (`/cloud-agentic-iot/environment`), and the rest of
-[DEVELOPMENT.md, "On your laptop"](DEVELOPMENT.md#1-on-your-laptop) works
-against it unchanged: flash a board, watch it, deploy Salesforce to a free
-Developer Edition org. Boards are provisioned the same way as in the
-[README, Stage 3](../README.md#stage-3--hardware), against the sandbox's IoT
-endpoint.
+The `<name>` project is your Dev environment. Its first deploy labels the
+account `Dev` in SSM (`/cloud-agentic-iot/environment`), and every later deploy
+checks that label, so a wrong `AWS_PROFILE` stops before it changes anything.
+
+The Salesforce deploy goes to the org in `SF_TARGET_ORG`, as your admin, and the
+script warns that you aren't the deploy user. That is expected here. The deploy
+user matters once a pipeline deploys, because an admin deploy can pass where the
+pipeline's would fail, and [Moving to the pipelines](#moving-to-the-pipelines)
+sets it up.
+
+## 5. Connect the org and the project
+
+Each direction has its own identity, made once.
+
+**AWS to Salesforce** (readings and alerts) signs in as the integration user:
+
+1. Create the `integration@…` user from
+   [SETUP.md §2.2](SETUP.md#22-create-the-two-service-users), and the
+   Integration app with its certificate from
+   [§2.4](SETUP.md#24-two-external-apps-not-one).
+2. Assign the user the `Device_Integration` permission set, which step 4
+   deployed.
+3. Replace the three placeholders, typing the values in your terminal:
+
+```bash
+aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/username     --value '<integration username>'
+aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/consumer-key --value '<integration consumer key>'
+aws ssm put-parameter --overwrite --type SecureString --name /cloud-agentic-iot/salesforce/jwt-private-key --value file://scripts/server-integration.key   # wherever you saved it
+```
+
+The deploy user and the Deploy app aren't needed until the pipelines.
+
+**Salesforce to AWS** (provisioning, the queue indicator, Wi-Fi pushes) signs
+with the `AWS_IoT_Relay` named credential:
+[README, Stage 2, step 1](../README.md#stage-2--connect-the-seams-ci-cannot-reach).
+Make its IAM user as `<name>`, the profile you signed in with in step 2.
+
+Boards are provisioned as in the [README, Stage 3](../README.md#stage-3--hardware),
+against the `<name>` project's IoT endpoint, and
+[DEVELOPMENT.md, "On your laptop"](DEVELOPMENT.md#1-on-your-laptop) covers
+flashing and watching one.
 
 ## What happens near the limit
 
@@ -101,8 +148,10 @@ move to regular AWS accounts:
 2. Deploy through the pipeline. Stacks don't move between accounts: the regular
    account gets new resources, a new IoT endpoint and new certificates, so
    provision each board again against it.
-3. Copy anything you want to keep out of the sandbox's S3 buckets and DynamoDB
-   table, then delete its `cloud-agentic-iot-*` stacks, or close the project.
+3. Keep `<name>` for trying changes from your laptop. It stays connected, and
+   the pipelines never touch it. If you'd rather not keep it, copy anything you
+   want out of its S3 buckets and DynamoDB table, then delete its
+   `cloud-agentic-iot-*` stacks, or close the project.
 
 ## Sources
 

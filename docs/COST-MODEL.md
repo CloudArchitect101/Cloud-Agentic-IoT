@@ -73,7 +73,7 @@ Pilot note: 100 customers × 1 conversation ≈ 2,000 flex credits-equivalent �
 3. **Free-plan accounts auto-close at 6 months** (or when credits run out), with a 90-day recovery window. The sprint calendar finishes well inside that.
 4. Some services are excluded from the free plan; everything this repo uses (IoT Core, Lambda, DynamoDB, EventBridge, SQS, API Gateway, CloudWatch, Bedrock invocation) is available.
 
-**Want a hard cap while you learn?** A budget alert only tells you; it stops nothing. An AWS project on the paid plan takes a monthly spend limit from $20, and at the limit AWS pauses the project instead of billing more. Projects can't use GitHub OIDC, so deploy to one from your laptop and move to regular accounts when you want the pipelines: [SANDBOX.md](SANDBOX.md).
+**Want a hard cap while you learn?** A budget alert only tells you; it stops nothing. An AWS project on the paid plan takes a monthly spend limit from $20, and at the limit AWS pauses the project instead of billing more. Projects can't use GitHub OIDC, so deploy to one from your laptop and move to regular accounts when you want the pipelines: [TRY-IT.md](TRY-IT.md).
 
 **MuleSoft (chapter 07):** the one thing with no free tier — Anypoint is a **30-day trial**. Build, record, and publish that chapter inside one window.
 

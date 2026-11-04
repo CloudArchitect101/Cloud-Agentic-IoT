@@ -48,9 +48,10 @@ a label, the SSM parameter `/cloud-agentic-iot/environment`, written by its firs
 deploy and checked by every deploy after that. The wrong `AWS_PROFILE` stops a
 deploy before it changes anything.
 
-While you're only trying the system, Dev can be an AWS project with a spend
-limit that you deploy to from your laptop. [SANDBOX.md](SANDBOX.md) covers that
-setup, and how to move to regular accounts when you want the pipelines.
+While you're only trying the system, Dev can be your own AWS project with a
+spend limit and a Developer Edition org, under one profile and alias name, that
+you deploy to from your laptop. [TRY-IT.md](TRY-IT.md) covers that setup, and
+how to move to regular accounts when you want the pipelines.
 
 ## 1. On your laptop
 
