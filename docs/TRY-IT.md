@@ -75,7 +75,7 @@ aws ssm put-parameter --type SecureString --name /cloud-agentic-iot/salesforce/j
 
 The last three come from step 5, so you won't have them on a first deploy. Put
 `placeholder` as each of their values for now. The stacks deploy, and only the
-calls to Salesforce fail until step 5 replaces the values.
+calls to Salesforce fail until step 5 replaces the values and deploys again.
 
 ## 4. Deploy and test
 
@@ -107,13 +107,19 @@ Each direction has its own identity, made once.
    [§2.4](SETUP.md#24-two-external-apps-not-one).
 2. Assign the user the `Device_Integration` permission set, which step 4
    deployed.
-3. Replace the three placeholders, typing the values in your terminal:
+3. Replace the three placeholders, typing the values in your terminal, and
+   deploy again:
 
 ```bash
 aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/username     --value '<integration username>'
 aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/consumer-key --value '<integration consumer key>'
 aws ssm put-parameter --overwrite --type SecureString --name /cloud-agentic-iot/salesforce/jwt-private-key --value file://scripts/server-integration.key   # wherever you saved it
+scripts/deploy-aws.sh Dev
 ```
+
+The deploy at the end is needed. The stacks read the username and consumer key
+from SSM only when they deploy, so the functions keep `placeholder` until then.
+Only the private key is read at run time.
 
 The deploy user and the Deploy app aren't needed until the pipelines.
 
