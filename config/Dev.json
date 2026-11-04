@@ -30,7 +30,8 @@
       "BundleRetentionDays": 1,
       "DefaultThingGroup": "fleet-patient-monitor",
       "ApiRateLimit": 20,
-      "ApiBurstLimit": 40
+      "ApiBurstLimit": 40,
+      "SalesforceCallerUserName": "cloud-agentic-iot-salesforce-caller"
     },
     "streaming": {
       "SalesforceApiVersion": "64.0",

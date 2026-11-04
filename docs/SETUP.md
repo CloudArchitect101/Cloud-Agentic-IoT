@@ -803,6 +803,8 @@ Sign in as root, then:
 IAM → Users → Create `iot-operator`, console access on, MFA on.
 Create and assign policy from `scripts/aws-project-policy.json`
 
+One more root step comes later: the IAM user Salesforce signs its calls with, in the README's Stage 2, step 1. `iot-operator` can't make it, because that policy denies creating users and access keys.
+
 Note: the AWS Free plan is only for new AWS customers. If you have, or ever had, an AWS account, this one starts on the paid plan, so create an AWS Budget with an email alert (Billing and Cost Management → Budgets) before you deploy anything.
 
 ### 3.2 GitHub Actions deploy role — OIDC, no keys

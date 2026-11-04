@@ -140,7 +140,38 @@ Three conventions the pipelines enforce, because each would otherwise fail at de
 
 Everything below is manual for a structural reason, not an oversight: it stores a secret, lives in another vendor's console, or is a deliberate human checkpoint. Do it once, in this order — later steps consume outputs from earlier ones.
 
-**1. Named Credential `AWS_IoT_Relay`.** Setup → Named Credentials → New. Type **AWS Signature Version 4**, service `execute-api`, URL = the `QueueDepthEndpoint` output of the `cloud-agentic-iot-queue-relay-Dev` stack (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes). The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another. This one credential carries every Salesforce → AWS callout in the system — the queue indicator, device provisioning, re-provisioning, teardown, and the Wi-Fi credential push.
+**1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown and the Wi-Fi credential push. The device API accepts only requests signed by an AWS identity, so it takes four parts.
+
+*a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in a [sandbox](docs/SANDBOX.md), root in a regular account. In your own terminal:
+
+```bash
+STACK=cloud-agentic-iot-queue-relay-Dev       # -Prod in Prod
+CALLER=cloud-agentic-iot-salesforce-caller    # SalesforceCallerUserName in config/<env>.json
+ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+  --query "Stacks[0].Outputs[?OutputKey=='SalesforceCallerRoleArn'].OutputValue" --output text)
+aws iam create-user --user-name "$CALLER"
+aws iam put-user-policy --user-name "$CALLER" --policy-name assume-salesforce-caller-role \
+  --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Resource\":\"$ROLE_ARN\"}]}"
+aws iam create-access-key --user-name "$CALLER"
+```
+
+The last command prints the key once. Type it into Salesforce in part b and nowhere else: not a file, not the repo, not a chat.
+
+*b. The external credential.* Setup → Named Credentials → External Credentials → New. Authentication Protocol **AWS Signature Version 4**, Service `execute-api`, Region = the stack's Region. Check **Obtain Temporary IAM Credentials via STS**, choose **IAM User Identified by Access Key**, and enter the key as the **STS Access Key** and **STS Access Secret**. Leave **STS Duration** empty, or at 3600 seconds or less, the role's maximum. Then add a principal whose **IAM Role ARN** is the stack's `SalesforceCallerRoleArn` output.
+
+*c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
+
+*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API:
+
+```bash
+sf apex run --target-org <your admin alias> <<'EOF'
+insert new PermissionSetAssignment(
+    AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' LIMIT 1].Id,
+    PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'].Id);
+EOF
+```
+
+A keyless alternative is the external credential's **Roles Anywhere** option, which replaces the access key with a certificate and an AWS trust anchor. This repo doesn't set that up yet.
 
 **2. SSM Parameter Store.** Store `SLACK_SIGNING_SECRET` and the Salesforce JWT credentials the Slack Lambda uses at runtime. Use a **separate, least-privilege integration user** from the CI/CD deploy user — see [`docs/CI-CD-SECRETS.md`](docs/CI-CD-SECRETS.md). Never reuse deploy credentials for runtime access, and never put either in code.
 
@@ -166,6 +197,7 @@ Two pieces are written and tested but **not yet wired** into the agent's action 
 | First-time device credentials | The AWS private key is issued once and must never transit CI |
 | Creating the AWS IoT Thing + policy | One-time per device; the automated path is chapter 13 |
 | Named Credentials in Salesforce | Store secrets; created in Setup, not in metadata |
+| The Salesforce caller's IAM user and access key | The deploy identities may not create users or keys, and the key should exist only in Salesforce |
 | Slack app creation + signing secret | Lives in Slack's console |
 | Data Cloud ingestion config | Point-and-click configuration, no metadata API coverage |
 | Activating the Agentforce agent | A deliberate human checkpoint, not a deploy step |

@@ -65,6 +65,15 @@ Parameters:
     Type: Number
     Default: 100
     MinValue: 1
+  SalesforceCallerUserName:
+    Type: String
+    Default: cloud-agentic-iot-salesforce-caller
+    AllowedPattern: '[\w+=,.@-]{1,64}'
+    Description: >-
+      The IAM user whose access key the AWS_IoT_Relay external credential in
+      Salesforce holds. It is made by hand (README, Stage 2), because the
+      deploy identities may not create users, and it may only assume
+      SalesforceCallerRole.
 
 Conditions:
   ReserveProvisioningConcurrency: !Not [!Equals [!Ref ProvisioningMaxConcurrency, 0]]
@@ -436,6 +445,37 @@ Resources:
         ThrottlingRateLimit: !Ref ApiRateLimit
         ThrottlingBurstLimit: !Ref ApiBurstLimit
 
+  # The identity Salesforce signs with. Its external credential holds the
+  # access key of SalesforceCallerUserName, a user made by hand that may only
+  # assume this role through STS, and this role may only call this API. A
+  # leaked key reaches these five routes and nothing else, and every signed
+  # request uses credentials that expire within the hour.
+  SalesforceCallerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by Salesforce, through STS, to call the device API.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # The account, narrowed to one user. Naming the user as the
+          # principal would fail until the user exists; the condition does not.
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${SalesforceCallerUserName}'
+      Policies:
+        - PolicyName: invoke-device-api
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: execute-api:Invoke
+                Resource: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*/POST/*'
+
   # Without SourceArn any API Gateway API, in any account, that learns a
   # function's ARN may invoke it. These limit each to this API.
   QueueRelayPermission:
@@ -478,6 +518,9 @@ Outputs:
   QueueDepthEndpoint:
     Description: Use as the URL of the AWS_IoT_Relay Named Credential in Salesforce.
     Value: !Sub 'https://${QueueRelayApi}.execute-api.${AWS::Region}.amazonaws.com'
+  SalesforceCallerRoleArn:
+    Description: Use as the IAM Role ARN of the AWS_IoT_Relay external credential's principal in Salesforce.
+    Value: !GetAtt SalesforceCallerRole.Arn
   DevicePolicyName:
     Description: The IoT policy every new device certificate gets.
     Value: !Ref DevicePolicy
