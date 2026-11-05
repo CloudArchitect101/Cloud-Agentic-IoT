@@ -148,22 +148,24 @@ Everything below is manual for a structural reason, not an oversight: it stores 
 
 **1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown and the Wi-Fi credential push. The device API accepts only requests signed by an AWS identity, so it takes four parts.
 
-*a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in an [AWS project](docs/TRY-IT.md), root in a regular account. In your own terminal:
+*a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in an [AWS project](docs/TRY-IT.md), root in a regular account. In your own terminal, with the `-Prod` stack in Prod and `CALLER` set to `SalesforceCallerUserName` from `config/<env>.json`:
 
 ```bash
-STACK=cloud-agentic-iot-queue-relay-Dev       # -Prod in Prod
-CALLER=cloud-agentic-iot-salesforce-caller    # SalesforceCallerUserName in config/<env>.json
+STACK=cloud-agentic-iot-queue-relay-Dev
+CALLER=cloud-agentic-iot-salesforce-caller
 ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "$STACK" \
   --query "Stacks[0].Outputs[?OutputKey=='SalesforceCallerRoleArn'].OutputValue" --output text)
-aws iam create-user --user-name "$CALLER"
+echo "$ROLE_ARN"
+aws iam create-user --user-name "$CALLER" > /dev/null
 aws iam put-user-policy --user-name "$CALLER" --policy-name assume-salesforce-caller-role \
   --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Resource\":\"$ROLE_ARN\"}]}"
 aws iam create-access-key --user-name "$CALLER"
+echo "IAM Role ARN for part b: $ROLE_ARN"
 ```
 
-The last command prints the key once. Type it into Salesforce in part b and nowhere else: not a file, not the repo, not a chat.
+The first `echo` must print the role's ARN before anything is created; an empty line means the stack name or the profile's Region is wrong. `create-access-key` prints the key once. Type it into Salesforce in part b and nowhere else: not a file, not the repo, not a chat. The last line repeats the role ARN for part b.
 
-*b. The external credential.* Setup → Named Credentials → External Credentials → New. Authentication Protocol **AWS Signature Version 4**, Service `execute-api`, Region = the stack's Region. Check **Obtain Temporary IAM Credentials via STS**, choose **IAM User Identified by Access Key**, and enter the key as the **STS Access Key** and **STS Access Secret**. Leave **STS Duration** empty, or at 3600 seconds or less, the role's maximum. Then add a principal whose **IAM Role ARN** is the stack's `SalesforceCallerRoleArn` output.
+*b. The external credential.* Setup → Named Credentials → External Credentials → New. Authentication Protocol **AWS Signature Version 4**, Service `execute-api`, Region = the stack's Region. Check **Obtain Temporary IAM Credentials via STS**, choose **IAM User Identified by Access Key**, and enter the key as the **STS Access Key** and **STS Access Secret**. Leave **STS Duration** empty, or at 3600 seconds or less, the role's maximum. Then add a principal whose **IAM Role ARN** is the stack's `SalesforceCallerRoleArn` output, the line part a printed last. That is the role, with `:role/` in it. The caller user's ARN, with `:user/`, looks much the same, and STS refuses it.
 
 *c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
 
@@ -176,6 +178,21 @@ insert new PermissionSetAssignment(
     PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'].Id);
 EOF
 ```
+
+*If a callout fails.* `HTTP 0` with *We couldn't get credentials from Amazon Session Token Service* means STS refused the AssumeRole call. CloudTrail's record of it, in the stack's Region, names the cause:
+
+```bash
+aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRole \
+  --max-results 5 --query 'Events[].CloudTrailEvent' --output text \
+  | grep -oE '"(eventTime|errorCode|errorMessage)":"[^"]*"'
+```
+
+- `AccessDenied` on the caller user's own ARN (`…:user/cloud-agentic-iot-salesforce-caller`): the principal's **IAM Role ARN** holds the user's ARN. Put the role's there (part b).
+- `AccessDenied` on the role's ARN: the user's policy is missing or names another role (part a).
+- An error about `DurationSeconds`: **STS Duration** is over 3600 (part b).
+- No AssumeRole event within a few minutes: usually a mistyped **STS Access Key** or **STS Access Secret** (part b).
+
+`HTTP 0` with *We couldn't access the credential(s)* means the user making the callout lacks the part d permission set.
 
 A keyless alternative is the external credential's **Roles Anywhere** option, which replaces the access key with a certificate and an AWS trust anchor. This repo doesn't set that up yet.
 
