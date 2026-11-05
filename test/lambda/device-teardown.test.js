@@ -10,11 +10,13 @@ const COMMANDS = [
   'ListThingPrincipalsCommand', 'ListAttachedPoliciesCommand', 'DetachPolicyCommand', 'DetachThingPrincipalCommand',
   'UpdateCertificateCommand', 'DeleteCertificateCommand', 'DeleteThingCommand',
 ];
+// Asked only for a leftover, so not part of the full teardown's order above.
+const LEFTOVER_COMMANDS = [...COMMANDS, 'ListThingGroupsForThingCommand'];
 const CERT_ARN = 'arn:aws:iot:ca-central-1:111122223333:cert/abc123';
 
 function load(t, respond) {
   withEnv(t, { IOT_PARALLEL_REQUESTS: '4' });
-  const iot = fakeAwsSdk('IoTClient', COMMANDS, respond);
+  const iot = fakeAwsSdk('IoTClient', LEFTOVER_COMMANDS, respond);
   const { handler } = loadWithFakes(HANDLER, { '@aws-sdk/client-iot': iot.sdk });
   return { handler, calls: iot.calls };
 }
@@ -102,15 +104,34 @@ test('requires at least one Thing name', async (t) => {
 // A deleted device whose provisioning failed, or had not finished, comes as a
 // leftover: Salesforce never recorded a Thing for it, so the Thing named after
 // its serial number is either what that attempt left, or not this device's.
-test('a leftover Thing with no certificate is deleted', async (t) => {
+test('a leftover Thing with no certificate and no Thing Group is deleted', async (t) => {
   captureConsole(t);
   const { handler, calls } = load(t, (command) => (command === 'ListThingPrincipalsCommand' ? { principals: [] } : {}));
   const res = await handler({ body: JSON.stringify({ leftoverThingNames: ['1Test1'] }) });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(calls.map((c) => [c.command, c.input.thingName]), [
-    ['ListThingPrincipalsCommand', '1Test1'], ['DeleteThingCommand', '1Test1'],
+    ['ListThingPrincipalsCommand', '1Test1'], ['ListThingGroupsForThingCommand', '1Test1'], ['DeleteThingCommand', '1Test1'],
   ]);
   assert.deepEqual(JSON.parse(res.body).results, [{ thingName: '1Test1', deleted: true, certificatesDeleted: 0 }]);
+});
+
+// Provisioning adds a Thing to its group only after attaching its
+// certificate, so a Thing in a group with none may be a provisioned device's
+// whose certificate is being replaced, not a failed attempt's.
+test('a leftover Thing in a Thing Group is kept, even with no certificate', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t, (command) => {
+    if (command === 'ListThingPrincipalsCommand') return { principals: [] };
+    if (command === 'ListThingGroupsForThingCommand') return { thingGroups: [{ groupName: 'fleet-patient-monitor' }] };
+    return {};
+  });
+  const res = await handler({ body: JSON.stringify({ leftoverThingNames: ['pm-1'] }) });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(calls.map((c) => c.command), ['ListThingPrincipalsCommand', 'ListThingGroupsForThingCommand']);
+  const [result] = JSON.parse(res.body).results;
+  assert.equal(result.kept, true);
+  assert.equal(result.deleted, false);
+  assert.match(result.reason, /pm-1 is in the Thing Group fleet-patient-monitor/);
 });
 
 test('a leftover Thing that has a certificate is kept, certificate and all', async (t) => {

@@ -214,7 +214,103 @@ private class DeviceProvisioningJobTest {
         Assert.areEqual('arn:aws:iot:ca-central-1:111122223333:thing/PM-0', saved.Thing_ARN__c,
             'The Thing AWS made is recorded, so Re-provision and delete can reach it');
         Assert.areEqual('cert-PM-0', saved.Certificate_Id__c, 'So is the certificate it issued');
+        Assert.areEqual('fleet-patient-monitor', [SELECT Thing_Group__c FROM Asset WHERE Id = :devices[0].Id].Thing_Group__c,
+            'And the Thing Group it was put in');
         Assert.isNull(saved.Provisioning_Bundle_Link__c, 'No link was saved');
+    }
+
+    @IsTest
+    static void reprovisioningRefusesAThingArnThatNamesAnotherThing() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        List<Asset> devices = readyDevices(1, 'PM-');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        // Provisioned as PM-9; its serial number reads PM-0 now.
+        update new Asset(Id = devices[0].Id, Thing_ARN__c = 'arn:aws:iot:ca-central-1:111122223333:thing/PM-9',
+                         Provisioning_Status__c = 'Provisioned');
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        new DeviceProvisioningJob(DeviceProvisioningJob.Action.REPROVISION, idsOf(devices)).execute(null);
+        Test.stopTest();
+
+        Assert.areEqual(0, aws.bodies.size(), 'AWS is not asked to replace the certificate of Thing PM-0');
+        Asset saved = [SELECT Provisioning_Status__c, Provisioning_Error__c, Thing_ARN__c FROM Asset WHERE Id = :devices[0].Id];
+        Assert.areEqual('Failed', saved.Provisioning_Status__c, 'Refused');
+        Assert.isTrue(saved.Provisioning_Error__c.contains('does not name the Thing PM-0'), saved.Provisioning_Error__c);
+        Assert.isTrue(saved.Thing_ARN__c.endsWith(':thing/PM-9'), 'The Thing ARN is left as it was');
+    }
+
+    @IsTest
+    static void teardownsKeepThingsAnotherAssetStillUses() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        // Remaining devices: PM-0 by its serial number, and one provisioned
+        // as PM-1 whose serial number has changed since.
+        List<Asset> remaining = readyDevices(2, 'PM-');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        update new Asset(Id = remaining[1].Id, SerialNumber = 'PM-1-NEW', Provisioning_Status__c = 'Provisioned',
+                         Thing_ARN__c = 'arn:aws:iot:ca-central-1:111122223333:thing/PM-1');
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        DeviceProvisioningJob.Run leftovers = DeviceProvisioningJob.process(
+            DeviceProvisioningJob.Action.TEARDOWN_LEFTOVER, new List<String>{ 'PM-0', 'pm-1', 'PM-2' });
+        DeviceProvisioningJob.Run full = DeviceProvisioningJob.process(
+            DeviceProvisioningJob.Action.TEARDOWN, new List<String>{ 'PM-1' });
+        Test.stopTest();
+
+        Assert.areEqual(1, aws.bodies.size(), 'One callout, for the leftover no one uses');
+        List<Object> sent = (List<Object>) aws.bodies[0].get('leftoverThingNames');
+        Assert.areEqual(1, sent.size(), 'Only one name sent: ' + sent);
+        Assert.areEqual('PM-2', sent[0], 'PM-2, the one no remaining device uses; case does not matter');
+        Assert.areEqual(3, leftovers.succeeded, 'Keeping the other two is a decision, not a failure');
+        Assert.areEqual(0, leftovers.failed, 'Nothing failed');
+        Assert.areEqual(1, full.succeeded, 'A full teardown keeps a Thing in use too');
+        Assert.areEqual(0, full.failed, 'Nothing failed');
+    }
+
+    @IsTest
+    static void theInUseCheckCoversEveryNameOfALargeDelete() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        // More names than one query asks about, with one in use in each query:
+        // PM-7 by a serial number, PM-77 and PM-119 by Thing ARNs.
+        List<Asset> remaining = readyDevices(3, 'KEEP-');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        update new List<Asset>{
+            new Asset(Id = remaining[0].Id, SerialNumber = 'PM-7'),
+            new Asset(Id = remaining[1].Id, Provisioning_Status__c = 'Provisioned',
+                      Thing_ARN__c = 'arn:aws:iot:ca-central-1:111122223333:thing/PM-77'),
+            new Asset(Id = remaining[2].Id, Provisioning_Status__c = 'Provisioned',
+                      Thing_ARN__c = 'arn:aws:iot:ca-central-1:111122223333:thing/PM-119')
+        };
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+        List<String> thingNames = new List<String>();
+        for (Integer i = 0; i < 120; i++) {
+            thingNames.add('PM-' + i);
+        }
+
+        Test.startTest();
+        DeviceProvisioningJob.Run run = DeviceProvisioningJob.process(
+            DeviceProvisioningJob.Action.TEARDOWN_LEFTOVER, thingNames);
+        Test.stopTest();
+
+        Set<String> sent = new Set<String>();
+        for (Map<String, Object> body : aws.bodies) {
+            for (Object thingName : (List<Object>) body.get('leftoverThingNames')) {
+                sent.add((String) thingName);
+            }
+        }
+        Assert.areEqual(117, sent.size(), 'Every name but the three in use');
+        Assert.isFalse(sent.contains('PM-7') || sent.contains('PM-77') || sent.contains('PM-119'),
+            'The three in use are kept: ' + sent);
+        Assert.areEqual(120, run.succeeded, 'All 120 decided');
+        Assert.areEqual(0, run.failed, 'Nothing failed');
+        Assert.isTrue(run.notReached.isEmpty(), 'All reached in one job');
     }
 
     @IsTest

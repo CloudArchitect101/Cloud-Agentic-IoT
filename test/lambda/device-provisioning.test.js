@@ -181,6 +181,8 @@ test('device-provisioning: a Thing that already has a certificate is not given a
   assert.equal(result.ok, false);
   assert.equal(result.retryable, false);
   assert.match(result.error, /already has a certificate.*Re-provision/);
+  // Re-provision refuses a device with no Thing ARN, so the answer names it.
+  assert.match(result.error, /set its Thing ARN to arn:aws:iot:\S+:thing\/pm-1 /);
   assert.equal(callsOf('CreateKeysAndCertificateCommand').length, 0);
 });
 

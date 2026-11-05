@@ -256,6 +256,7 @@ Resources:
                   - iot:CreateThing
                   - iot:DeleteThing
                   - iot:ListThingPrincipals
+                  - iot:ListThingGroupsForThing
                   - iot:AddThingToThingGroup
                 Resource:
                   - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thing/*'

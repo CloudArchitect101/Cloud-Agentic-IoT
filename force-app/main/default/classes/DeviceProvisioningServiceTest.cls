@@ -33,17 +33,26 @@ private class DeviceProvisioningServiceTest {
             'The whole link is stored, longer than a URL field could hold');
     }
 
+    // A callout these tests do not expect would not fail them on its own:
+    // DeviceApiClient turns any callout exception, an unmocked callout's
+    // included, into an answer of AWS being busy. So the tests below that
+    // expect none set the mock anyway, and assert that it was never called.
+
     @IsTest
     static void deviceWithoutNetworkIsNotProvisioned() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
         Account patient = new Account(Name = 'Test Patient');
         insert patient;
 
         Test.startTest();
-        // No mock set: if a callout fired, this test would fail outright.
         insert new Asset(Name = 'ESP32-T2', SerialNumber = 'ESP32-T2',
                          AccountId = patient.Id, Status = 'Installed');
+        Assert.areEqual(0, Limits.getQueueableJobs(), 'No provisioning job');
         Test.stopTest();
 
+        Assert.areEqual(0, aws.bodies.size(), 'No callout');
         Asset saved = [SELECT Provisioning_Status__c FROM Asset WHERE SerialNumber = 'ESP32-T2'];
         Assert.areNotEqual('Provisioned', saved.Provisioning_Status__c,
             'A device with no network must not be provisioned');
@@ -51,9 +60,13 @@ private class DeviceProvisioningServiceTest {
 
     @IsTest
     static void deletingAProvisionedDeviceTearsDownAws() {
-        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
         Asset device = newDevice('ESP32-T1');
+        TriggerHandler.bypass('AssetTriggerHandler');
         insert device;
+        TriggerHandler.clearBypass('AssetTriggerHandler');
         // Simulate the provisioned state the async callout would have written.
         update new Asset(Id = device.Id, Thing_ARN__c = 'arn:aws:iot:us-east-1:1:thing/ESP32-T1');
 
@@ -61,14 +74,19 @@ private class DeviceProvisioningServiceTest {
         delete device;
         Test.stopTest();
 
-        // The teardown callout is mocked; reaching here without an unmocked
-        // callout exception proves the delete path invoked it.
+        Assert.areEqual(1, aws.bodies.size(), 'One callout');
+        Assert.areEqual('teardown-device', aws.paths[0], 'To the teardown route');
+        Assert.areEqual(new List<Object>{ 'ESP32-T1' }, (List<Object>) aws.bodies[0].get('thingNames'),
+            'The Thing torn down in full');
         Assert.areEqual(0, [SELECT COUNT() FROM Asset WHERE Id = :device.Id],
             'Asset is deleted');
     }
 
     @IsTest
     static void unprovisionedDeleteMakesNoCallout() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
         Account patient = new Account(Name = 'Test Patient');
         insert patient;
         Asset device = new Asset(Name = 'ESP32-T3', SerialNumber = 'ESP32-T3',
@@ -76,12 +94,63 @@ private class DeviceProvisioningServiceTest {
         insert device;
 
         Test.startTest();
-        // No mock: a device that never had a Wi-Fi Network never reached AWS,
-        // so a teardown callout would be wasted work and would fail here.
+        // A device that never had a Wi-Fi Network never reached AWS.
         delete device;
+        Assert.areEqual(0, Limits.getQueueableJobs(), 'No teardown job');
         Test.stopTest();
 
+        Assert.areEqual(0, aws.bodies.size(), 'No callout');
         Assert.areEqual(0, [SELECT COUNT() FROM Asset WHERE Id = :device.Id], 'Deleted');
+    }
+
+    @IsTest
+    static void deletingACopyOfAProvisionedDeviceKeepsTheThingTheOriginalUses() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        String thingArn = 'arn:aws:iot:us-east-2:111122223333:thing/ESP32-C1';
+        Asset original = newDevice('ESP32-C1');
+        Asset copy = newDevice('ESP32-C1');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        insert new List<Asset>{ original, copy };
+        // Cloning a record copies its Thing ARN too.
+        update new List<Asset>{
+            new Asset(Id = original.Id, Thing_ARN__c = thingArn, Provisioning_Status__c = 'Provisioned'),
+            new Asset(Id = copy.Id, Thing_ARN__c = thingArn, Provisioning_Status__c = 'Provisioned')
+        };
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        delete copy;
+        Test.stopTest();
+
+        Assert.areEqual(0, aws.bodies.size(), 'Nothing torn down: the original still uses that Thing');
+    }
+
+    @IsTest
+    static void deletingADuplicateKeepsTheThingTheProvisionedDeviceUses() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        Asset provisioned = newDevice('ESP32-D1');
+        Asset duplicate = newDevice('ESP32-D1');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        insert new List<Asset>{ provisioned, duplicate };
+        // The duplicate was refused, since the Thing already had a certificate.
+        // While the provisioned device's certificate is being replaced, that
+        // Thing has none, and is not what a failed attempt left.
+        update new List<Asset>{
+            new Asset(Id = provisioned.Id, Provisioning_Status__c = 'Provisioned',
+                      Thing_ARN__c = 'arn:aws:iot:us-east-2:111122223333:thing/ESP32-D1'),
+            new Asset(Id = duplicate.Id, Provisioning_Status__c = 'Failed')
+        };
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        delete duplicate;
+        Test.stopTest();
+
+        Assert.areEqual(0, aws.bodies.size(), 'Nothing sent as a leftover: the provisioned device uses that Thing');
     }
 
     @IsTest

@@ -76,10 +76,13 @@ public with sharing class DeviceProvisioningService {
      * names, which is the Thing it was provisioned as even if its serial
      * number was edited since. A device whose provisioning failed, or had not
      * finished, has no Thing ARN but may have left a Thing named after its
-     * serial number: AWS deletes that Thing while it has no certificate, and
-     * keeps one that has, since that is an identity this record never got,
-     * perhaps another device's with the same serial number. A device that
-     * never had a Wi-Fi Network never reached AWS, so it makes no callout.
+     * serial number: AWS deletes that Thing only while it has no certificate
+     * and is in no Thing Group, which is what a failed attempt leaves, and
+     * keeps any other, since that may be an identity this record never got,
+     * or another device's with the same serial number. A device that never
+     * had a Wi-Fi Network never reached AWS, so it makes no callout. Either
+     * way, a Thing that a remaining Asset still uses, as its serial number or
+     * in its Thing ARN, is kept: the job checks before it calls AWS.
      */
     public static void tearDownAwsResourcesFor(List<Asset> deletedAssetRecords) {
         Set<String> thingNamesToTearDown = new Set<String>();
@@ -105,8 +108,12 @@ public with sharing class DeviceProvisioningService {
         }
     }
 
-    // arn:aws:iot:<region>:<account>:thing/<name>, or null for anything else.
-    private static String thingNameIn(String thingArn) {
+    /**
+     * The Thing a Thing ARN names: arn:aws:iot:<region>:<account>:thing/<name>,
+     * or null for anything else. Teardown, Re-provision and the check that no
+     * other device still uses a Thing all read the name from here.
+     */
+    public static String thingNameIn(String thingArn) {
         String name = String.isBlank(thingArn) ? null : thingArn.substringAfter(':thing/');
         return String.isBlank(name) ? null : name;
     }

@@ -61,6 +61,19 @@ private class DeviceReprovisionControllerTest {
     }
 
     @IsTest
+    static void aThingArnThatNamesAnotherThingIsRefusedAtOnce() {
+        Asset device = device('ESP32-R4', 'arn:aws:iot:us-east-2:1:thing/ESP32-OTHER');
+
+        Test.startTest();
+        String refusal = refusalFor(device.Id);
+        Assert.areEqual(0, Limits.getQueueableJobs(), 'No background job');
+        Test.stopTest();
+
+        Assert.isNotNull(refusal, 'Refused');
+        Assert.isTrue(refusal.contains('ESP32-OTHER') && refusal.contains('ESP32-R4'), refusal);
+    }
+
+    @IsTest
     static void deletedDeviceIsRefused() {
         Asset device = device('ESP32-R3', null);
         TriggerHandler.bypass('AssetTriggerHandler');

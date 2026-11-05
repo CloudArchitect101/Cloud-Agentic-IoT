@@ -7,7 +7,9 @@ const {
 const { retireCertificate, stillDetaching } = require('@cloud-agentic-iot/shared/certificates');
 const { numberEnv } = require('@cloud-agentic-iot/shared/env');
 
-const { IoTClient, ListThingPrincipalsCommand, DeleteThingCommand } = iotSdk;
+const {
+  IoTClient, ListThingPrincipalsCommand, ListThingGroupsForThingCommand, DeleteThingCommand,
+} = iotSdk;
 
 const iot = new IoTClient({ retryMode: 'adaptive' });   // see device-provisioning
 
@@ -22,12 +24,14 @@ const TIME_TO_ANSWER_MS = 4000;
  * thingNames are devices that were provisioned: their certificates go, then
  * the Thing. leftoverThingNames are deleted devices that never got that far,
  * because provisioning failed or had not finished, so they may have left a
- * Thing named after their serial number. That Thing is deleted only while no
- * certificate is attached. One with a certificate is a working identity that
- * Salesforce never recorded for this device, perhaps another device's with
- * the same serial number, so it is kept and reported as kept. A function
- * from before leftoverThingNames answers such a request with a 400 instead
- * of tearing those Things down in full.
+ * Thing named after their serial number. That Thing is deleted only while it
+ * has no certificate and is in no Thing Group, which is what a failed attempt
+ * leaves: provisioning adds a Thing to its group only after attaching its
+ * certificate. Any other Thing of that name is kept and reported as kept. It
+ * may be another device's with the same serial number, one whose certificate
+ * is being replaced right now, or this device's own identity that Salesforce
+ * never recorded. A function from before leftoverThingNames answers such a
+ * request with a 400 instead of tearing those Things down in full.
  *
  * The blocker this removes: a Thing that keeps its certificate blocks its
  * name. Provisioning refuses to give one Thing a second credential, and AWS
@@ -80,12 +84,10 @@ async function tearDown(thingName, leftover) {
   }
   try {
     const { principals = [] } = await iot.send(new ListThingPrincipalsCommand({ thingName }));
-    if (leftover && principals.length) {
-      console.log('kept', { thingName, certificates: principals.length });
-      return {
-        thingName, deleted: false, kept: true,
-        reason: `${thingName} has a certificate, so it may be another device's. Delete it in AWS IoT if it is not.`,
-      };
+    const reason = leftover ? await reasonToKeep(thingName, principals) : null;
+    if (reason) {
+      console.log('kept', { thingName, reason });
+      return { thingName, deleted: false, kept: true, reason };
     }
     for (const principal of principals) {
       await retireCertificate(iot, iotSdk, thingName, principal);
@@ -104,4 +106,22 @@ async function tearDown(thingName, leftover) {
     console.error('teardown failed', { thingName, error: err.message, name: err.name });
     return { thingName, deleted: false, retryable: isTransient(err) || stillDetaching(err), error: err.message };
   }
+}
+
+/**
+ * Why a leftover Thing must stay, or null when it is what a failed
+ * provisioning leaves: no certificate, and no Thing Group. A Thing in a group
+ * had its certificate attached at least once, so it may be another device's,
+ * or a provisioned one between its old certificate and its new one.
+ */
+async function reasonToKeep(thingName, principals) {
+  if (principals.length) {
+    return `${thingName} has a certificate, so it may be another device's. Delete it in AWS IoT if it is not.`;
+  }
+  const { thingGroups = [] } = await iot.send(new ListThingGroupsForThingCommand({ thingName, maxResults: 1 }));
+  if (thingGroups.length) {
+    return `${thingName} is in the Thing Group ${thingGroups[0].groupName}, so it may be another device's. `
+      + 'Delete it in AWS IoT if it is not.';
+  }
+  return null;
 }

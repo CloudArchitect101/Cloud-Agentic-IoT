@@ -574,7 +574,7 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 2. Create an **Asset**: SerialNumber = intended IoT Thing name, set the Wi-Fi Network, optionally a Thing Group
 3. `AssetTrigger` fires → `DeviceProvisioningService` calls AWS via a SigV4 Named Credential
 4. The Lambda creates the Thing and certificate, attaches the least-privilege policy, adds it to the Thing Group, writes the bundle to S3, returns the pre-signed URL
-5. The Asset updates to **Provisioned** with the link and its expiry. The link is in **Provisioning Bundle Link**, a long text field: signed with the Lambda's temporary credentials, it carries their session token and runs far past the 255 characters a URL field holds. If AWS finished but Salesforce cannot save the result, the Asset turns **Failed** with the reason and keeps the Thing ARN, so **Re-provision** issues a new link once the cause is fixed
+5. The Asset updates to **Provisioned** with the link and its expiry. The link is in **Provisioning Bundle Link**, a long text field: signed with the Lambda's temporary credentials, it carries their session token and runs far past the 255 characters a URL field holds. If AWS finished but Salesforce cannot save the result, the Asset turns **Failed** with the reason and keeps the Thing ARN, so **Re-provision** issues a new link once the cause is fixed. If even that update fails, for example because the device was deleted meanwhile, only the job's debug log says so
 6. The technician downloads the bundle and runs `./scripts/provision-device.sh bundle.json` (or `.\scripts\provision-device.ps1 -Bundle bundle.json -Port COM5`)
 7. The device stores it in NVS, reboots, connects, and subscribes to its Jobs topic
 8. Delete the bundle — it contains the private key
@@ -590,17 +590,26 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 
 The two NVS namespaces (`identity`, `wifi`) make this structural rather than careful: updating Wi-Fi is *incapable* of touching the certificate, not merely unlikely to.
 
-**If NVS is erased: rotate the certificate, keep the device.** An erased NVS loses the private key, and AWS issues it exactly once — but that is recoverable and **no historical data is lost.** The Thing is preserved (the Thing *name* is the identity; the certificate is only how it proves that identity, so rotating one is like changing a password). Every row keyed on the device name survives — DynamoDB, `Patient_Vitals__c.Device__c`, Data Cloud, the Asset itself. Thing Group membership survives, so OTA keeps targeting it. Deleting and recreating the Thing is what would break all of this, which is why the rotation Lambda never does. Trigger it from a **Re-provision** button on the Asset: it revokes and deletes every attached certificate — so a copied key stops working — issues a new one, attaches it to the same Thing, and returns a fresh 15-minute bundle link.
+**If NVS is erased: rotate the certificate, keep the device.** An erased NVS loses the private key, and AWS issues it exactly once — but that is recoverable and **no historical data is lost.** The Thing is preserved (the Thing *name* is the identity; the certificate is only how it proves that identity, so rotating one is like changing a password). Every row keyed on the device name survives — DynamoDB, `Patient_Vitals__c.Device__c`, Data Cloud, the Asset itself. Thing Group membership survives, so OTA keeps targeting it. Deleting and recreating the Thing is what would break all of this, which is why the rotation Lambda never does. Trigger it from a **Re-provision** button on the Asset: it revokes and deletes every attached certificate — so a copied key stops working — issues a new one, attaches it to the same Thing, and returns a fresh 15-minute bundle link. It refuses a device whose Thing ARN names a different Thing than its serial number, since one of the two is wrong and going ahead would replace another Thing's certificate.
 
-**Deleting a device cleans up AWS,** so the serial number is immediately reusable. Without this, a Thing that keeps its certificate blocks that name: provisioning refuses to give one Thing a second credential, and AWS refuses to delete a Thing that still has principals attached. Order is not optional: **detach policy → detach principal → deactivate → delete certificate → delete Thing.**
+**Deleting a device cleans up AWS,** so its serial number can be used again. Without this, a Thing that keeps its certificate blocks that name: provisioning refuses to give one Thing a second credential, and AWS refuses to delete a Thing that still has principals attached. Order is not optional: **detach policy → detach principal → deactivate → delete certificate → delete Thing.** A Thing that a remaining Asset still uses, as its serial number or in its Thing ARN, is never torn down: a copy of a record carries the same Thing ARN, and nothing stops two records sharing a serial number.
 
 | Action | Effect |
 |---|---|
-| Delete a provisioned device | Certificates revoked and deleted, then the Thing its Thing ARN names (the one it was provisioned as, even if its serial number was edited since), so the name is free to reuse |
+| Delete a device that has a Thing ARN | Certificates revoked and deleted, then the Thing its Thing ARN names (the one it was provisioned as, even if its serial number was edited since), so the name is free to reuse |
 | **Telemetry history** | **Preserved.** DynamoDB rows and `Patient_Vitals__c` are keyed on the device name and are usually needed for audit long after the hardware is retired. Destroying clinical history as a side effect of deleting a CRM record would be the wrong default |
 | Restore from Recycle Bin | The record returns; the AWS resources do not. The trigger clears the stale Thing ARN and certificate id and sets status to `Not Provisioned`, so the record re-provisions cleanly instead of *looking* provisioned while pointing at nothing |
-| Delete a device whose provisioning failed or hadn't finished | The Thing named after its serial number is deleted while it has no certificate, which is what a failed attempt leaves. A Thing that has a certificate is kept and logged: that is an identity this record never got, perhaps another device's with the same serial number |
+| Delete a device with no Thing ARN that had a Wi-Fi Network or a status other than `Not Provisioned` | Its provisioning failed or hadn't finished, so it may have left a Thing named after its serial number. That Thing is deleted only while it has no certificate and is in no Thing Group, which is what a failed attempt leaves: provisioning adds a Thing to its group only after attaching its certificate. Any other is kept, and the teardown function's log says why. It may be another device's, or this device's own identity that Salesforce never recorded (below) |
 | Delete a device that never had a Wi-Fi Network | No callout: it never reached AWS |
+
+**A device AWS provisioned but Salesforce never recorded** has no Thing ARN, and provisioning it again answers that its Thing already has a certificate. If that Thing is this device's, copy its ARN onto the Asset, then press **Re-provision**: it replaces the certificate, keeps the Thing and its group, and issues a new link. Setting a Thing ARN starts no provisioning.
+
+```bash
+ARN=$(aws iot describe-thing --thing-name <serial number> --query thingArn --output text)
+sf data update record --sobject Asset --record-id <Asset Id> --values "Thing_ARN__c='$ARN'"
+```
+
+If the Thing is not this device's, give the device another serial number, or remove the Thing in AWS IoT, after detaching and deleting its certificate.
 
 All four Asset contexts live in **one `AssetTrigger`** rather than several, so execution order is explicit rather than left to whichever trigger the platform runs first.
 

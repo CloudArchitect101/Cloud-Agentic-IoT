@@ -26,8 +26,9 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
 
     // TEARDOWN removes provisioned devices: their certificates, then their
     // Things. TEARDOWN_LEFTOVER is for deleted devices that never got a Thing
-    // ARN: AWS deletes the Thing named after the serial number only while no
-    // certificate is attached, and keeps one that has a certificate.
+    // ARN: AWS deletes the Thing named after the serial number only while it
+    // has no certificate and is in no Thing Group, and keeps any other. Both
+    // keep a Thing that a remaining Asset still uses, without a callout.
     public enum Action { PROVISION, REPROVISION, TEARDOWN, TEARDOWN_LEFTOVER }
 
     private static final Map<Action, String> PATH_BY_ACTION = new Map<Action, String>{
@@ -36,6 +37,9 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
         Action.TEARDOWN          => 'teardown-device',
         Action.TEARDOWN_LEFTOVER => 'teardown-device'
     };
+
+    // How many Thing names one ThingsInUse query asks about.
+    private static final Integer THING_NAMES_PER_QUERY = 50;
 
     @TestVisible
     private final Action kind;
@@ -127,6 +131,9 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
      */
     public static Run process(Action kind, List<String> keys) {
         Run run = new Run(kind);
+        if (isTeardown(kind)) {
+            keys = run.withoutThingsStillInUse(keys);
+        }
         DeviceApiClient api = new DeviceApiClient();
         Integer perCallout = DevicePlatformSettings.devicesPerCallout();
         Map<String, Asset> assetsByKey = isTeardown(kind) ? null : loadAssets(keys);
@@ -162,6 +169,55 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
 
     private static Boolean isTeardown(Action kind) {
         return kind == Action.TEARDOWN || kind == Action.TEARDOWN_LEFTOVER;
+    }
+
+    /**
+     * The Thing names, in lower case, that a remaining Asset still uses: as
+     * its serial number, or in its Thing ARN. A deleted device's Thing may be
+     * another's too, for example a duplicate record with the same serial
+     * number, or a copy of the record with the Thing ARN copied. The deleted
+     * records are already gone when this runs, so only remaining ones match.
+     *
+     * Without sharing, since an Asset this user cannot see uses its Thing all
+     * the same. Asked in the job, not the trigger: on a large Asset table a
+     * trigger may not run a query like this. Case is ignored, which can only
+     * keep more Things, never delete more.
+     *
+     * SOQL documents a list bind for IN but not for LIKE, so each Thing ARN
+     * pattern gets a bind of its own, THING_NAMES_PER_QUERY names to a query
+     * so that no WHERE clause grows long. A LIKE wildcard in a name, such as
+     * an underscore, can only match more Assets, and only the names those
+     * Assets really use are kept.
+     */
+    private without sharing class ThingsInUse {
+        public Set<String> among(List<String> thingNames) {
+            Set<String> inUse = new Set<String>();
+            for (Integer first = 0; first < thingNames.size(); first += THING_NAMES_PER_QUERY) {
+                List<String> names = new List<String>();
+                List<String> arnMatches = new List<String>();
+                Map<String, Object> binds = new Map<String, Object>();
+                for (Integer i = first; i < Math.min(first + THING_NAMES_PER_QUERY, thingNames.size()); i++) {
+                    names.add(thingNames[i]);
+                    binds.put('arn' + i, '%:thing/' + thingNames[i]);
+                    arnMatches.add('Thing_ARN__c LIKE :arn' + i);
+                }
+                binds.put('names', names);
+                List<Asset> devices = Database.queryWithBinds(
+                    'SELECT SerialNumber, Thing_ARN__c FROM Asset WHERE SerialNumber IN :names OR '
+                        + String.join(arnMatches, ' OR '),
+                    binds, AccessLevel.SYSTEM_MODE);
+                for (Asset device : devices) {
+                    if (String.isNotBlank(device.SerialNumber)) {
+                        inUse.add(device.SerialNumber.toLowerCase());
+                    }
+                    String provisionedAs = DeviceProvisioningService.thingNameIn(device.Thing_ARN__c);
+                    if (provisionedAs != null) {
+                        inUse.add(provisionedAs.toLowerCase());
+                    }
+                }
+            }
+            return inUse;
+        }
     }
 
     private static void chain(DeviceProvisioningJob next, Integer delayMinutes) {
@@ -206,6 +262,26 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
             this.kind = kind;
             this.bundleTtlMinutes = DevicePlatformSettings.bundleTtlMinutes();
             this.defaultThingGroup = DevicePlatformSettings.defaultThingGroup();
+        }
+
+        /**
+         * The Thing names no remaining Asset uses. One that another Asset
+         * uses is kept in AWS: tearing it down would take that device's
+         * identity. An empty Thing costs nothing, and provisioning reuses it.
+         */
+        List<String> withoutThingsStillInUse(List<String> thingNames) {
+            Set<String> inUse = new ThingsInUse().among(thingNames);
+            List<String> free = new List<String>();
+            for (String thingName : thingNames) {
+                if (!inUse.contains(thingName.toLowerCase())) {
+                    free.add(thingName);
+                    continue;
+                }
+                succeeded++;
+                System.debug(kind == Action.TEARDOWN ? LoggingLevel.WARN : LoggingLevel.INFO,
+                    'Kept in AWS: ' + thingName + ' is still the serial number or Thing ARN of another Asset.');
+            }
+            return free;
         }
 
         void send(DeviceApiClient api, List<String> batch, Map<String, Asset> assetsByKey) {
@@ -320,6 +396,14 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
             if (kind == Action.REPROVISION && String.isBlank(device.Thing_ARN__c)) {
                 return 'This device was never provisioned, so it has no certificate to replace.';
             }
+            // AWS is asked for the Thing named after the serial number, so a
+            // Thing ARN that names another Thing means one of the two is wrong,
+            // and going ahead would replace that other Thing's certificate.
+            if (kind == Action.REPROVISION
+                    && !device.SerialNumber.equals(DeviceProvisioningService.thingNameIn(device.Thing_ARN__c))) {
+                return 'Its Thing ARN does not name the Thing ' + device.SerialNumber
+                    + ', so Re-provision would replace the certificate of another Thing. Correct the Serial Number or the Thing ARN first.';
+            }
             return null;
         }
 
@@ -392,12 +476,14 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
         /**
          * One update for every device this run decided about.
          *
-         * A device AWS provisioned or re-provisioned is never left looking as
-         * if nothing happened because its outcome could not be saved: it is
-         * marked Failed instead, with the reason. It keeps the Thing ARN and
+         * A device AWS provisioned or re-provisioned whose outcome cannot be
+         * saved is marked Failed instead, with the reason, so it does not look
+         * as if nothing happened. It keeps the Thing ARN, Thing Group and
          * certificate id AWS reported, so Re-provision can issue a new bundle
          * once the cause is fixed, and deleting the device tears the Thing
-         * down. What cannot be saved even then is logged.
+         * down. If that update fails too, for example because the device was
+         * deleted meanwhile, only the debug log says so, with the Thing and
+         * certificate to look for in AWS IoT.
          */
         public void save() {
             if (outcomeByKey.isEmpty()) {
@@ -443,6 +529,9 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
             if (outcome.Thing_ARN__c != null) {
                 fallback.Thing_ARN__c = outcome.Thing_ARN__c;
             }
+            if (outcome.Thing_Group__c != null) {
+                fallback.Thing_Group__c = outcome.Thing_Group__c;
+            }
             if (outcome.Certificate_Id__c != null) {
                 fallback.Certificate_Id__c = outcome.Certificate_Id__c;
             }
@@ -452,6 +541,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
         private void logUnsaved(Asset outcome, String error) {
             System.debug(LoggingLevel.ERROR, 'Could not record the ' + kind + ' outcome on ' + outcome.Id
                 + (outcome.Thing_ARN__c == null ? '' : ', which AWS provisioned as ' + outcome.Thing_ARN__c)
+                + (outcome.Certificate_Id__c == null ? '' : ' with certificate ' + outcome.Certificate_Id__c)
                 + ': ' + error);
         }
 

@@ -52,6 +52,7 @@ const CHECKED_AGAINST = {
   CreateThing: ['thing'],         // and billinggroup, when a request names one
   DeleteThing: ['thing'],
   ListThingPrincipals: ['thing'],
+  ListThingGroupsForThing: ['thing'],
   AddThingToThingGroup: ['thing', 'thinggroup'],
   AttachThingPrincipal: ['cert'],
   DetachThingPrincipal: ['cert'],
