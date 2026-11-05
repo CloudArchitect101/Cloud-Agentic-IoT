@@ -231,7 +231,9 @@ Resources:
 
   # Provisioning, re-provisioning and teardown manage Things and certificates.
   # The IoT control plane scopes most of these actions by resource type, not
-  # by name, so the statements are by action.
+  # by name, so there is one statement per type AWS checks the actions against.
+  # test/lambda/device-lifecycle-role.test.js checks this policy against the
+  # calls the three functions make.
   DeviceLifecycleRole:
     Type: AWS::IAM::Role
     Properties:
@@ -253,25 +255,27 @@ Resources:
                   - iot:CreateThing
                   - iot:DeleteThing
                   - iot:ListThingPrincipals
-                  - iot:AttachThingPrincipal
-                  - iot:DetachThingPrincipal
                   - iot:AddThingToThingGroup
                 Resource:
                   - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thing/*'
                   - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thinggroup/*'
+              # Attaching a certificate to a Thing, and detaching it, is checked
+              # against the certificate. The Thing is only a condition key.
               - Effect: Allow
                 Action:
                   - iot:AttachPolicy
                   - iot:DetachPolicy
-                  - iot:ListAttachedPolicies
+                  - iot:AttachThingPrincipal
+                  - iot:DetachThingPrincipal
                   - iot:UpdateCertificate
                   - iot:DeleteCertificate
                 Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:cert/*'
-              # These two cannot be scoped to a resource.
+              # These cannot be scoped to a resource.
               - Effect: Allow
                 Action:
                   - iot:CreateKeysAndCertificate
                   - iot:DescribeEndpoint
+                  - iot:ListAttachedPolicies
                 Resource: '*'
               # GetObject is what the pre-signed link exercises: it is signed
               # with this role's credentials.
