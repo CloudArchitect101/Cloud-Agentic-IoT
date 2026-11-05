@@ -77,6 +77,14 @@ check_salesforce() {
   out=$(mktemp -d)
   sf project convert source --output-dir "$out/mdapi" > /dev/null
   rm -rf "$out"
+
+  # An object's child files (fields, compact layouts, list views...) are
+  # merged into the object on deploy, and the org names each child by its
+  # <fullName>. The conversion above accepts a child without one; the deploy
+  # then rejects it with "element fullName missing", and the object with it.
+  local unnamed
+  unnamed=$(find force-app -path '*/objects/*/*/*-meta.xml' -exec grep -L '<fullName>' {} + || true)
+  [ -z "$unnamed" ] || die "Each of these needs a <fullName> with its own name, or the deploy rejects it: $unnamed"
   endstep
 }
 
