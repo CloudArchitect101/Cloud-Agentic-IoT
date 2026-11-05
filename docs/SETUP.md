@@ -101,6 +101,7 @@ Navigate to **Setup** ➡️ **Users** ➡️ **Users** ➡️ **New User**. You
 #### Identity B: The Live Runtime Engine (`integration@...`)
 * **User License:** `Integration`
 * **Profile:** `Salesforce API Only System Integrations`
+* **Permission Set License:** `Salesforce API Integration`. Salesforce usually adds it with the user license, but not always: check the user's Permission Set License Assignments. Without it, `Device_Integration` can't be assigned ("The user license doesn't allow the permission: Create Assets").
 * **Username:** `integration@iot-dev.<yourdomain.com>`
 * **Email:** Use your primary email account address.
 
@@ -699,7 +700,7 @@ Setup → **Users** → New User, twice:
 | User License | **Integration** | **Salesforce** |
 | Profile | Salesforce API Only System Integrations | Minimum Access – Salesforce |
 | Username | `integration@iot-dev.<yourdomain>` | `deploy@iot-dev.<yourdomain>` |
-| Gets permissions from | `Device_Integration` permission set (from the repo) | `Metadata_Deploy` permission set (created by hand — see §2.3) |
+| Gets permissions from | The `Salesforce API Integration` permission set license, then the `Device_Integration` permission set (from the repo) | `Metadata_Deploy` permission set (created by hand — see §2.3) |
 
 Note: For the last name, you can use "Integration" / "Deploy" and reuse your original email address for that ORG.
 
@@ -728,7 +729,7 @@ That gives three phases, and only the first is manual:
 |---|---|---|
 | **1. Bootstrap** | You, in Setup UI | Grant `deploy@…` the two permissions below. Nothing else. |
 | **2. First deploy** | GitHub Actions | Deploys the entire repo — objects, Apex, LWC, the agent, and the `Device_Integration` permission set |
-| **3. Activation** | You, once | Assign `Device_Integration` to `integration@…`; activate the agent |
+| **3. Activation** | You, once | Give `integration@…` the Salesforce API Integration permission set license, then `Device_Integration`; activate the agent |
 
 Phases 1 and 3 are one-time. From then on, every change ships through GitHub.
 
@@ -1020,7 +1021,13 @@ what creates the `Device_Integration` permission set in the org.
 
 ### 6.4 Then finish the bootstrap
 
+The permission set license comes first: the Integration user license alone
+doesn't allow `Device_Integration`'s object permissions, such as Create on
+Assets.
+
 ```bash
+sf org assign permsetlicense --name SalesforceAPIIntegrationPsl \
+  --on-behalf-of integration@iot-dev.<yourdomain> --target-org iot-dev-admin
 sf org assign permset --name Device_Integration \
   --on-behalf-of integration@iot-dev.<yourdomain> --target-org iot-dev-admin
 ```

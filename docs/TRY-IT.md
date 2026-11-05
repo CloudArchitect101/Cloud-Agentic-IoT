@@ -119,8 +119,11 @@ Each direction has its own identity, made once.
    [SETUP.md §2.2](SETUP.md#22-create-the-two-service-users), and the
    Integration app with its certificate from
    [§2.4](SETUP.md#24-two-external-apps-not-one).
-2. Assign the user the `Device_Integration` permission set, which step 4
-   deployed.
+2. Give the user the **Salesforce API Integration** permission set license
+   (the user's page → Permission Set License Assignments → Edit Assignments),
+   then the `Device_Integration` permission set, which step 4 deployed.
+   Without that license, Salesforce refuses the permission set: "The user
+   license doesn't allow the permission: Create Assets".
 3. Replace the three placeholders, typing the values in your terminal, and
    deploy again:
 
