@@ -48,13 +48,18 @@ your project to finish signing in. Give the project's Region when it asks.
 `sf org login web` opens a browser too: sign in as the org's admin.
 
 ```bash
-NAME=test-yourname                                 # your <name>
+NAME=test-yourname
 aws login --profile "$NAME"
 sf org login web --alias "$NAME"
-export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"   # per shell, as in DEVELOPMENT.md
-aws sts get-caller-identity                        # shows the project's account ID
-sf org display                                     # shows the org and your admin username
+export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
+aws sts get-caller-identity
+sf org display
 ```
+
+Put your own `<name>` in the first line. The `export` holds for this shell only,
+as in [DEVELOPMENT.md](DEVELOPMENT.md), so set `NAME` and export again in each
+new terminal. The last two commands show the project's account ID, and the org
+with your admin username.
 
 The AWS credentials refresh themselves and last up to 12 hours. Run the same
 `aws login` again when they expire. No access key is created, so there is none
@@ -79,10 +84,14 @@ calls to Salesforce fail until step 5 replaces the values and deploys again.
 
 ## 4. Deploy and test
 
+`scripts/check.sh` needs no credentials. `scripts/deploy-aws.sh Dev` deploys
+every stack and the real Lambda code, and `scripts/deploy-salesforce.sh Dev`
+deploys everything in `force-app/` and runs every local Apex test.
+
 ```bash
-scripts/check.sh                   # no credentials needed
-scripts/deploy-aws.sh Dev          # every stack and the real Lambda code
-scripts/deploy-salesforce.sh Dev   # everything in force-app/, with every local Apex test
+scripts/check.sh
+scripts/deploy-aws.sh Dev
+scripts/deploy-salesforce.sh Dev
 ```
 
 The `<name>` project is your Dev environment. Its first deploy labels the
@@ -103,11 +112,12 @@ Administrator isn't enough: fields deployed through the Metadata API come with
 no field access.
 
 ```bash
-sf org assign permset --name Device_Platform_Admin   # to you, in SF_TARGET_ORG
+sf org assign permset --name Device_Platform_Admin
 ```
 
-Open it from the App Launcher. In an org without Person Accounts, any Account
-will do for a device's Account.
+That assigns the set to you, in the org `SF_TARGET_ORG` names. Open the app from
+the App Launcher. In an org without Person Accounts, any Account will do for a
+device's Account.
 
 ## 5. Connect the org and the project
 
@@ -125,18 +135,29 @@ Each direction has its own identity, made once.
    Without that license, Salesforce refuses the permission set: "The user
    license doesn't allow the permission: Create Assets".
 3. Replace the three placeholders, typing the values in your terminal, and
-   deploy again:
+   deploy again. The third command reads the key from
+   `scripts/server-integration.key`; change the path if yours is elsewhere.
 
 ```bash
 aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/username     --value '<integration username>'
 aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/consumer-key --value '<integration consumer key>'
-aws ssm put-parameter --overwrite --type SecureString --name /cloud-agentic-iot/salesforce/jwt-private-key --value file://scripts/server-integration.key   # wherever you saved it
+aws ssm put-parameter --overwrite --type SecureString --name /cloud-agentic-iot/salesforce/jwt-private-key --value file://scripts/server-integration.key
 scripts/deploy-aws.sh Dev
 ```
 
-The deploy at the end is needed. The stacks read the username and consumer key
-from SSM only when they deploy, so the functions keep `placeholder` until then.
-Only the private key is read at run time.
+The deploy at the end is needed. Two functions sign in to Salesforce as the
+integration user: `cloud-agentic-iot-salesforce-sync` for readings and
+`cloud-agentic-iot-alert-dispatcher` for alerts. CloudFormation copies the
+username and consumer key from SSM into their settings only when it deploys, so
+until then they still hold `placeholder`. They read the private key from SSM
+each time they sign in, so it needs no deploy.
+
+To check, this prints the integration username, not `placeholder`:
+
+```bash
+aws lambda get-function-configuration --function-name cloud-agentic-iot-salesforce-sync \
+  --query Environment.Variables.SALESFORCE_USERNAME --output text
+```
 
 The deploy user and the Deploy app aren't needed until the pipelines.
 
