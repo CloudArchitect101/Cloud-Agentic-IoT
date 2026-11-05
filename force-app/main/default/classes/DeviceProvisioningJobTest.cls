@@ -193,6 +193,54 @@ private class DeviceProvisioningJobTest {
     }
 
     @IsTest
+    static void aProvisioningSalesforceCannotSaveIsFailedWithWhatAwsMade() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        aws.bundleUrlLength = 40000;   // more than Provisioning_Bundle_Link__c holds
+        Test.setMock(HttpCalloutMock.class, aws);
+        List<Asset> devices = readyDevices(1, 'PM-');
+
+        Test.startTest();
+        new DeviceProvisioningJob(DeviceProvisioningJob.Action.PROVISION, idsOf(devices)).execute(null);
+        Test.stopTest();
+
+        Asset saved = [SELECT Provisioning_Status__c, Provisioning_Error__c, Thing_ARN__c, Certificate_Id__c,
+                              Provisioning_Bundle_Link__c
+                       FROM Asset WHERE Id = :devices[0].Id];
+        Assert.areEqual('Failed', saved.Provisioning_Status__c, 'Not left looking as if nothing happened');
+        Assert.isTrue(saved.Provisioning_Error__c.contains('Re-provision'), saved.Provisioning_Error__c);
+        Assert.isFalse(saved.Provisioning_Error__c.contains('https://'),
+            'A bundle link is a credential, so the reason never quotes it: ' + saved.Provisioning_Error__c);
+        Assert.areEqual('arn:aws:iot:ca-central-1:111122223333:thing/PM-0', saved.Thing_ARN__c,
+            'The Thing AWS made is recorded, so Re-provision and delete can reach it');
+        Assert.areEqual('cert-PM-0', saved.Certificate_Id__c, 'So is the certificate it issued');
+        Assert.isNull(saved.Provisioning_Bundle_Link__c, 'No link was saved');
+    }
+
+    @IsTest
+    static void aReprovisioningSalesforceCannotSaveKeepsTheThingArn() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        aws.bundleUrlLength = 40000;
+        Test.setMock(HttpCalloutMock.class, aws);
+        List<Asset> devices = readyDevices(1, 'PM-');
+        String thingArn = 'arn:aws:iot:ca-central-1:111122223333:thing/PM-0';
+        TriggerHandler.bypass('AssetTriggerHandler');
+        update new Asset(Id = devices[0].Id, Thing_ARN__c = thingArn, Certificate_Id__c = 'cert-old',
+                         Provisioning_Status__c = 'Provisioned');
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        new DeviceProvisioningJob(DeviceProvisioningJob.Action.REPROVISION, idsOf(devices)).execute(null);
+        Test.stopTest();
+
+        Asset saved = [SELECT Provisioning_Status__c, Thing_ARN__c, Certificate_Id__c FROM Asset WHERE Id = :devices[0].Id];
+        Assert.areEqual('Failed', saved.Provisioning_Status__c, 'The old certificate is revoked, so it cannot stay Provisioned');
+        Assert.areEqual(thingArn, saved.Thing_ARN__c, 'Still the same Thing, so Re-provision can run again');
+        Assert.areEqual('cert-PM-0', saved.Certificate_Id__c, 'The certificate AWS issued, not the revoked one');
+    }
+
+    @IsTest
     static void teardownSendsThingNamesInBatches() {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();

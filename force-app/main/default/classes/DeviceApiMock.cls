@@ -15,6 +15,12 @@ public class DeviceApiMock implements HttpCalloutMock {
     public Set<String> keptThingNames = new Set<String>();
     public List<String> paths = new List<String>();
     public List<Map<String, Object>> bodies = new List<Map<String, Object>>();
+    /**
+     * How long each bundle link is. A real one is signed with a Lambda's
+     * temporary credentials, so it carries their session token and runs to
+     * well over a thousand characters. A test can make it longer still.
+     */
+    public Integer bundleUrlLength = 1500;
 
     public HttpResponse respond(HttpRequest request) {
         Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(request.getBody());
@@ -51,7 +57,7 @@ public class DeviceApiMock implements HttpCalloutMock {
                     'thingArn' => 'arn:aws:iot:ca-central-1:111122223333:thing/' + thingName,
                     'certificateId' => 'cert-' + thingName,
                     'thingGroup' => device.get('thingGroup'),
-                    'bundleUrl' => 'https://bundles.s3.amazonaws.com/' + thingName + '?signed'
+                    'bundleUrl' => bundleUrl(thingName)
                 });
             }
             results.add(result);
@@ -59,6 +65,13 @@ public class DeviceApiMock implements HttpCalloutMock {
         response.setStatusCode(anyFailed ? 207 : 200);
         response.setBody(JSON.serialize(new Map<String, Object>{ 'results' => results, 'historyPreserved' => true }));
         return response;
+    }
+
+    private String bundleUrl(String thingName) {
+        String link = 'https://bundles.s3.us-east-2.amazonaws.com/provisioning/' + thingName
+            + '.json?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&X-Amz-Signature=' + '0'.repeat(64)
+            + '&X-Amz-Security-Token=';
+        return link + 'A'.repeat(Math.max(0, bundleUrlLength - link.length()));
     }
 
     /** Every device a request names, whichever shape it uses. */

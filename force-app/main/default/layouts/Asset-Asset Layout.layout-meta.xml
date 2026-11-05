@@ -65,7 +65,7 @@
             </layoutItems>
             <layoutItems>
                 <behavior>Readonly</behavior>
-                <field>Provisioning_Bundle_URL__c</field>
+                <field>Provisioning_Bundle_Link__c</field>
             </layoutItems>
             <layoutItems>
                 <behavior>Readonly</behavior>

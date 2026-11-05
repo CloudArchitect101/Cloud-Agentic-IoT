@@ -574,7 +574,7 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 2. Create an **Asset**: SerialNumber = intended IoT Thing name, set the Wi-Fi Network, optionally a Thing Group
 3. `AssetTrigger` fires → `DeviceProvisioningService` calls AWS via a SigV4 Named Credential
 4. The Lambda creates the Thing and certificate, attaches the least-privilege policy, adds it to the Thing Group, writes the bundle to S3, returns the pre-signed URL
-5. The Asset updates to **Provisioned** with the link and expiry
+5. The Asset updates to **Provisioned** with the link and its expiry. The link is in **Provisioning Bundle Link**, a long text field: signed with the Lambda's temporary credentials, it carries their session token and runs far past the 255 characters a URL field holds. If AWS finished but Salesforce cannot save the result, the Asset turns **Failed** with the reason and keeps the Thing ARN, so **Re-provision** issues a new link once the cause is fixed
 6. The technician downloads the bundle and runs `./scripts/provision-device.sh bundle.json` (or `.\scripts\provision-device.ps1 -Bundle bundle.json -Port COM5`)
 7. The device stores it in NVS, reboots, connects, and subscribes to its Jobs topic
 8. Delete the bundle — it contains the private key

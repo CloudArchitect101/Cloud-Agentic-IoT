@@ -128,13 +128,13 @@ public with sharing class DeviceProvisioningService {
         for (Asset device : restoredAssetRecords) {
             if (String.isNotBlank(device.Thing_ARN__c)) {
                 assetsNeedingReset.add(new Asset(
-                    Id                         = device.Id,
-                    Thing_ARN__c               = null,
-                    Certificate_Id__c          = null,
-                    Provisioning_Bundle_URL__c = null,
-                    Provisioning_Expires_At__c = null,
-                    Provisioning_Error__c      = null,
-                    Provisioning_Status__c     = 'Not Provisioned'
+                    Id                          = device.Id,
+                    Thing_ARN__c                = null,
+                    Certificate_Id__c           = null,
+                    Provisioning_Bundle_Link__c = null,
+                    Provisioning_Expires_At__c  = null,
+                    Provisioning_Error__c       = null,
+                    Provisioning_Status__c      = 'Not Provisioned'
                 ));
             }
         }

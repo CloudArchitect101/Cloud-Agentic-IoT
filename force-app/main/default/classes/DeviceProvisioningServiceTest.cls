@@ -22,13 +22,15 @@ private class DeviceProvisioningServiceTest {
         Test.stopTest();
 
         Asset saved = [SELECT Thing_ARN__c, Certificate_Id__c, Provisioning_Status__c,
-                              Provisioning_Bundle_URL__c, Provisioning_Expires_At__c
+                              Provisioning_Bundle_Link__c, Provisioning_Expires_At__c
                        FROM Asset WHERE Id = :device.Id];
         Assert.areEqual('Provisioned', saved.Provisioning_Status__c, 'Should be provisioned');
         Assert.areEqual('cert-ESP32-T1', saved.Certificate_Id__c, 'Certificate id is stored for audit');
         Assert.isNotNull(saved.Provisioning_Expires_At__c, 'Bundle link must carry an expiry');
-        Assert.isFalse(saved.Provisioning_Bundle_URL__c.contains('PRIVATE KEY'),
+        Assert.isFalse(saved.Provisioning_Bundle_Link__c.contains('PRIVATE KEY'),
             'Only a link is stored - never the private key itself');
+        Assert.isTrue(saved.Provisioning_Bundle_Link__c.length() > 255,
+            'The whole link is stored, longer than a URL field could hold');
     }
 
     @IsTest

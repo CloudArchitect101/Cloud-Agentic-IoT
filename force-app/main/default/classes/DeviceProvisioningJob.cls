@@ -345,12 +345,12 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
                 return;
             }
             Asset outcome = new Asset(
-                Id                         = key,
-                Certificate_Id__c          = (String) entry.get('certificateId'),
-                Provisioning_Bundle_URL__c = (String) entry.get('bundleUrl'),
-                Provisioning_Expires_At__c = System.now().addMinutes(bundleTtlMinutes),
-                Provisioning_Status__c     = 'Provisioned',
-                Provisioning_Error__c      = null
+                Id                          = key,
+                Certificate_Id__c           = (String) entry.get('certificateId'),
+                Provisioning_Bundle_Link__c = (String) entry.get('bundleUrl'),
+                Provisioning_Expires_At__c  = System.now().addMinutes(bundleTtlMinutes),
+                Provisioning_Status__c      = 'Provisioned',
+                Provisioning_Error__c       = null
             );
             if (kind == Action.PROVISION) {
                 outcome.Thing_ARN__c = (String) entry.get('thingArn');
@@ -389,19 +389,76 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
             busyReasonByKey.put(key, reason);
         }
 
-        /** One update for every device this run decided about. */
+        /**
+         * One update for every device this run decided about.
+         *
+         * A device AWS provisioned or re-provisioned is never left looking as
+         * if nothing happened because its outcome could not be saved: it is
+         * marked Failed instead, with the reason. It keeps the Thing ARN and
+         * certificate id AWS reported, so Re-provision can issue a new bundle
+         * once the cause is fixed, and deleting the device tears the Thing
+         * down. What cannot be saved even then is logged.
+         */
         public void save() {
             if (outcomeByKey.isEmpty()) {
                 return;
             }
             List<Asset> outcomes = outcomeByKey.values();
+            List<Asset> fallbacks = new List<Asset>();
             List<Database.SaveResult> saves = Database.update(outcomes, false);
             for (Integer i = 0; i < saves.size(); i++) {
-                if (!saves[i].isSuccess()) {
-                    System.debug(LoggingLevel.ERROR, 'Could not record the ' + kind + ' outcome on '
-                        + outcomes[i].Id + ': ' + saves[i].getErrors()[0].getMessage());
+                if (saves[i].isSuccess()) {
+                    continue;
+                }
+                String error = withoutLinks(saves[i].getErrors()[0].getMessage());
+                if (outcomes[i].Provisioning_Status__c == 'Provisioned') {
+                    fallbacks.add(failedSave(outcomes[i], error));
+                } else {
+                    // Marking it Failed is the update that just did not go through.
+                    logUnsaved(outcomes[i], error);
                 }
             }
+            if (fallbacks.isEmpty()) {
+                return;
+            }
+            List<Database.SaveResult> retries = Database.update(fallbacks, false);
+            for (Integer i = 0; i < retries.size(); i++) {
+                if (!retries[i].isSuccess()) {
+                    logUnsaved(fallbacks[i], withoutLinks(retries[i].getErrors()[0].getMessage()));
+                }
+            }
+        }
+
+        // What to save for a device AWS finished with when its outcome could
+        // not be saved. Only what AWS reported is copied: a field left unset on
+        // the outcome, such as a re-provisioned device's Thing ARN, stays unset
+        // here too, since a field set to null would be cleared.
+        private Asset failedSave(Asset outcome, String error) {
+            Asset fallback = new Asset(
+                Id                     = outcome.Id,
+                Provisioning_Status__c = 'Failed',
+                Provisioning_Error__c  = ('AWS finished, but Salesforce could not save the result. Fix the cause, '
+                    + 'then use Re-provision for a new bundle link. Cause: ' + error).abbreviate(255)
+            );
+            if (outcome.Thing_ARN__c != null) {
+                fallback.Thing_ARN__c = outcome.Thing_ARN__c;
+            }
+            if (outcome.Certificate_Id__c != null) {
+                fallback.Certificate_Id__c = outcome.Certificate_Id__c;
+            }
+            return fallback;
+        }
+
+        private void logUnsaved(Asset outcome, String error) {
+            System.debug(LoggingLevel.ERROR, 'Could not record the ' + kind + ' outcome on ' + outcome.Id
+                + (outcome.Thing_ARN__c == null ? '' : ', which AWS provisioned as ' + outcome.Thing_ARN__c)
+                + ': ' + error);
+        }
+
+        // A save error can quote the value it refused, and a bundle link is a
+        // credential until it expires, so no link is logged or kept as text.
+        private String withoutLinks(String message) {
+            return message == null ? null : message.replaceAll('https?://\\S+', '(link removed)');
         }
     }
 }
