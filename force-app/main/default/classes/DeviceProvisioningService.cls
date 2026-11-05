@@ -70,21 +70,52 @@ public with sharing class DeviceProvisioningService {
 
     /**
      * Deletes the AWS footprint of devices being deleted, so their serial
-     * numbers can be reused. Only devices that were actually provisioned have
-     * anything in AWS to remove.
+     * numbers can be reused.
+     *
+     * A provisioned device loses its certificates and the Thing its Thing ARN
+     * names, which is the Thing it was provisioned as even if its serial
+     * number was edited since. A device whose provisioning failed, or had not
+     * finished, has no Thing ARN but may have left a Thing named after its
+     * serial number: AWS deletes that Thing while it has no certificate, and
+     * keeps one that has, since that is an identity this record never got,
+     * perhaps another device's with the same serial number. A device that
+     * never had a Wi-Fi Network never reached AWS, so it makes no callout.
      */
     public static void tearDownAwsResourcesFor(List<Asset> deletedAssetRecords) {
         Set<String> thingNamesToTearDown = new Set<String>();
+        Set<String> leftoverThingNames = new Set<String>();
         for (Asset device : deletedAssetRecords) {
-            if (String.isNotBlank(device.Thing_ARN__c) && String.isNotBlank(device.SerialNumber)) {
-                thingNamesToTearDown.add(device.SerialNumber);
+            String provisionedAs = thingNameIn(device.Thing_ARN__c);
+            if (provisionedAs != null) {
+                thingNamesToTearDown.add(provisionedAs);
+            } else if (String.isNotBlank(device.SerialNumber) && mayHaveReachedAws(device)) {
+                leftoverThingNames.add(device.SerialNumber);
             }
         }
-        // One job for the whole delete, however many devices: it batches the
-        // Thing names into as few callouts as Device_Platform_Setting__mdt allows.
+        // The full teardown of a Thing removes whatever a leftover would.
+        leftoverThingNames.removeAll(thingNamesToTearDown);
+
+        // One job for each kind, however many devices: each batches its Thing
+        // names into as few callouts as Device_Platform_Setting__mdt allows.
         if (!thingNamesToTearDown.isEmpty()) {
             DeviceProvisioningJob.start(DeviceProvisioningJob.Action.TEARDOWN, new List<String>(thingNamesToTearDown));
         }
+        if (!leftoverThingNames.isEmpty()) {
+            DeviceProvisioningJob.start(DeviceProvisioningJob.Action.TEARDOWN_LEFTOVER, new List<String>(leftoverThingNames));
+        }
+    }
+
+    // arn:aws:iot:<region>:<account>:thing/<name>, or null for anything else.
+    private static String thingNameIn(String thingArn) {
+        String name = String.isBlank(thingArn) ? null : thingArn.substringAfter(':thing/');
+        return String.isBlank(name) ? null : name;
+    }
+
+    // Provisioning starts once a device has a Wi-Fi Network, and leaves it
+    // Provisioned or Failed: either way a Thing may have been made for it.
+    private static Boolean mayHaveReachedAws(Asset device) {
+        return device.Wi_Fi_Network__c != null
+            || (String.isNotBlank(device.Provisioning_Status__c) && device.Provisioning_Status__c != 'Not Provisioned');
     }
 
     /**

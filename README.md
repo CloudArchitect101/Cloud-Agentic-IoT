@@ -592,14 +592,15 @@ The two NVS namespaces (`identity`, `wifi`) make this structural rather than car
 
 **If NVS is erased: rotate the certificate, keep the device.** An erased NVS loses the private key, and AWS issues it exactly once — but that is recoverable and **no historical data is lost.** The Thing is preserved (the Thing *name* is the identity; the certificate is only how it proves that identity, so rotating one is like changing a password). Every row keyed on the device name survives — DynamoDB, `Patient_Vitals__c.Device__c`, Data Cloud, the Asset itself. Thing Group membership survives, so OTA keeps targeting it. Deleting and recreating the Thing is what would break all of this, which is why the rotation Lambda never does. Trigger it from a **Re-provision** button on the Asset: it revokes and deletes every attached certificate — so a copied key stops working — issues a new one, attaches it to the same Thing, and returns a fresh 15-minute bundle link.
 
-**Deleting a device cleans up AWS,** so the serial number is immediately reusable. Without this, AWS refuses to create a Thing whose name already exists — and refuses to delete a Thing that still has principals attached — so an orphaned Thing permanently blocks that name. Order is not optional: **detach policy → detach principal → deactivate → delete certificate → delete Thing.**
+**Deleting a device cleans up AWS,** so the serial number is immediately reusable. Without this, a Thing that keeps its certificate blocks that name: provisioning refuses to give one Thing a second credential, and AWS refuses to delete a Thing that still has principals attached. Order is not optional: **detach policy → detach principal → deactivate → delete certificate → delete Thing.**
 
 | Action | Effect |
 |---|---|
-| Delete the Asset | Certificates revoked and deleted, Thing deleted, name free to reuse |
+| Delete a provisioned device | Certificates revoked and deleted, then the Thing its Thing ARN names (the one it was provisioned as, even if its serial number was edited since), so the name is free to reuse |
 | **Telemetry history** | **Preserved.** DynamoDB rows and `Patient_Vitals__c` are keyed on the device name and are usually needed for audit long after the hardware is retired. Destroying clinical history as a side effect of deleting a CRM record would be the wrong default |
 | Restore from Recycle Bin | The record returns; the AWS resources do not. The trigger clears the stale Thing ARN and certificate id and sets status to `Not Provisioned`, so the record re-provisions cleanly instead of *looking* provisioned while pointing at nothing |
-| Delete a device that was never provisioned | No callout — there is nothing in AWS to remove |
+| Delete a device whose provisioning failed or hadn't finished | The Thing named after its serial number is deleted while it has no certificate, which is what a failed attempt leaves. A Thing that has a certificate is kept and logged: that is an identity this record never got, perhaps another device's with the same serial number |
+| Delete a device that never had a Wi-Fi Network | No callout: it never reached AWS |
 
 All four Asset contexts live in **one `AssetTrigger`** rather than several, so execution order is explicit rather than left to whichever trigger the platform runs first.
 

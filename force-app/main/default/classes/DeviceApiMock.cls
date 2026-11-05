@@ -11,6 +11,8 @@ public class DeviceApiMock implements HttpCalloutMock {
     public Integer statusCode = 200;
     public Set<String> refusedThingNames = new Set<String>();
     public Set<String> busyThingNames = new Set<String>();
+    /** Leftover Things the mock keeps, as AWS does one that has a certificate. */
+    public Set<String> keptThingNames = new Set<String>();
     public List<String> paths = new List<String>();
     public List<Map<String, Object>> bodies = new List<Map<String, Object>>();
 
@@ -40,6 +42,9 @@ public class DeviceApiMock implements HttpCalloutMock {
                 result.putAll(new Map<String, Object>{ 'ok' => false, 'deleted' => false, 'retryable' => true,
                     'error' => 'ThrottlingException: Rate exceeded' });
                 anyFailed = true;
+            } else if (keptThingNames.contains(thingName)) {
+                result.putAll(new Map<String, Object>{ 'deleted' => false, 'kept' => true,
+                    'reason' => thingName + ' has a certificate, so it may be another device\'s.' });
             } else {
                 result.putAll(new Map<String, Object>{
                     'ok' => true, 'deleted' => true, 'published' => true,
@@ -63,9 +68,14 @@ public class DeviceApiMock implements HttpCalloutMock {
             for (Object device : (List<Object>) body.get('devices')) {
                 devices.add((Map<String, Object>) device);
             }
-        } else if (body.get('thingNames') != null) {
-            for (Object thingName : (List<Object>) body.get('thingNames')) {
-                devices.add(new Map<String, Object>{ 'thingName' => thingName });
+        } else if (body.get('thingNames') != null || body.get('leftoverThingNames') != null) {
+            for (String listName : new List<String>{ 'thingNames', 'leftoverThingNames' }) {
+                if (body.get(listName) == null) {
+                    continue;
+                }
+                for (Object thingName : (List<Object>) body.get(listName)) {
+                    devices.add(new Map<String, Object>{ 'thingName' => thingName });
+                }
             }
         } else if (body.get('commands') != null) {
             for (Object command : (List<Object>) body.get('commands')) {

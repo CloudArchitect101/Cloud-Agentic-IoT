@@ -74,12 +74,62 @@ private class DeviceProvisioningServiceTest {
         insert device;
 
         Test.startTest();
-        // No mock: a device that was never provisioned has nothing in AWS, so
-        // firing a teardown callout would be wasted work and would fail here.
+        // No mock: a device that never had a Wi-Fi Network never reached AWS,
+        // so a teardown callout would be wasted work and would fail here.
         delete device;
         Test.stopTest();
 
         Assert.areEqual(0, [SELECT COUNT() FROM Asset WHERE Id = :device.Id], 'Deleted');
+    }
+
+    @IsTest
+    static void deletingDevicesThatNeverFinishedProvisioningRemovesWhatTheyLeft() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        Asset failed = newDevice('ESP32-F1');
+        Asset pending = newDevice('ESP32-P1');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        insert new List<Asset>{ failed, pending };
+        // One failed and then lost its Wi-Fi Network; the other is still
+        // waiting for its first try.
+        update new Asset(Id = failed.Id, Provisioning_Status__c = 'Failed', Wi_Fi_Network__c = null);
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        delete new List<Asset>{ failed, pending };
+        Test.stopTest();
+
+        Assert.areEqual(1, aws.bodies.size(), 'One callout for both');
+        Assert.areEqual('teardown-device', aws.paths[0], 'To the teardown route');
+        Assert.isNull(aws.bodies[0].get('thingNames'), 'Not torn down in full: they have no Thing ARN');
+        List<Object> leftovers = (List<Object>) aws.bodies[0].get('leftoverThingNames');
+        Assert.areEqual(2, leftovers.size(), 'Both, by serial number');
+        Assert.isTrue(leftovers.contains('ESP32-F1') && leftovers.contains('ESP32-P1'), 'Named after their serial numbers');
+    }
+
+    @IsTest
+    static void deletingAProvisionedDeviceTearsDownTheThingItsArnNames() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        Asset device = newDevice('ESP32-OLD');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        insert device;
+        // Provisioned as ESP32-OLD; its serial number was edited afterwards.
+        update new Asset(Id = device.Id, SerialNumber = 'ESP32-NEW', Provisioning_Status__c = 'Provisioned',
+                         Thing_ARN__c = 'arn:aws:iot:us-east-2:111122223333:thing/ESP32-OLD');
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        delete device;
+        Test.stopTest();
+
+        Assert.areEqual(1, aws.bodies.size(), 'One callout');
+        List<Object> thingNames = (List<Object>) aws.bodies[0].get('thingNames');
+        Assert.areEqual(1, thingNames.size(), 'One Thing');
+        Assert.areEqual('ESP32-OLD', thingNames[0], 'The Thing it was provisioned as, not its current serial number');
+        Assert.isNull(aws.bodies[0].get('leftoverThingNames'), 'Torn down in full, certificate and all');
     }
 
     @IsTest

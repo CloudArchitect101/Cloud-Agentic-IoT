@@ -24,19 +24,25 @@
  */
 public with sharing class DeviceProvisioningJob implements Queueable, Database.AllowsCallouts {
 
-    public enum Action { PROVISION, REPROVISION, TEARDOWN }
+    // TEARDOWN removes provisioned devices: their certificates, then their
+    // Things. TEARDOWN_LEFTOVER is for deleted devices that never got a Thing
+    // ARN: AWS deletes the Thing named after the serial number only while no
+    // certificate is attached, and keeps one that has a certificate.
+    public enum Action { PROVISION, REPROVISION, TEARDOWN, TEARDOWN_LEFTOVER }
 
     private static final Map<Action, String> PATH_BY_ACTION = new Map<Action, String>{
-        Action.PROVISION   => 'provision-device',
-        Action.REPROVISION => 'reprovision-device',
-        Action.TEARDOWN    => 'teardown-device'
+        Action.PROVISION         => 'provision-device',
+        Action.REPROVISION       => 'reprovision-device',
+        Action.TEARDOWN          => 'teardown-device',
+        Action.TEARDOWN_LEFTOVER => 'teardown-device'
     };
 
     @TestVisible
     private final Action kind;
 
-    // Asset Ids for PROVISION and REPROVISION. Thing names for TEARDOWN: by
-    // the time it runs the Assets are deleted, so there is nothing to query.
+    // Asset Ids for PROVISION and REPROVISION. Thing names for the two
+    // teardowns: by the time they run the Assets are deleted, so there is
+    // nothing to query.
     @TestVisible
     private final List<String> keys;
 
@@ -123,7 +129,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
         Run run = new Run(kind);
         DeviceApiClient api = new DeviceApiClient();
         Integer perCallout = DevicePlatformSettings.devicesPerCallout();
-        Map<String, Asset> assetsByKey = kind == Action.TEARDOWN ? null : loadAssets(keys);
+        Map<String, Asset> assetsByKey = isTeardown(kind) ? null : loadAssets(keys);
 
         Integer index = 0;
         while (index < keys.size() && api.canCall()) {
@@ -152,6 +158,10 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
             byKey.put(String.valueOf(device.Id), device);
         }
         return byKey;
+    }
+
+    private static Boolean isTeardown(Action kind) {
+        return kind == Action.TEARDOWN || kind == Action.TEARDOWN_LEFTOVER;
     }
 
     private static void chain(DeviceProvisioningJob next, Integer delayMinutes) {
@@ -187,7 +197,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
         /** Keys AWS was too busy for. */
         public final List<String> busy = new List<String>();
         public final Map<String, String> busyReasonByKey = new Map<String, String>();
-        /** Assets to update, by Id. Empty for TEARDOWN. */
+        /** Assets to update, by Id. Empty for the teardowns. */
         public final Map<String, Asset> outcomeByKey = new Map<String, Asset>();
         public Integer succeeded = 0;
         public Integer failed = 0;
@@ -203,7 +213,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
             List<Map<String, Object>> devices = new List<Map<String, Object>>();
 
             for (String key : batch) {
-                if (kind == Action.TEARDOWN) {
+                if (isTeardown(kind)) {
                     keyByThingName.put(key, key);
                     continue;
                 }
@@ -229,9 +239,14 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
                 return;
             }
 
-            Map<String, Object> body = kind == Action.TEARDOWN
-                ? new Map<String, Object>{ 'thingNames' => new List<String>(keyByThingName.keySet()) }
-                : new Map<String, Object>{ 'devices' => devices, 'ttlMinutes' => bundleTtlMinutes };
+            Map<String, Object> body;
+            if (kind == Action.TEARDOWN) {
+                body = new Map<String, Object>{ 'thingNames' => new List<String>(keyByThingName.keySet()) };
+            } else if (kind == Action.TEARDOWN_LEFTOVER) {
+                body = new Map<String, Object>{ 'leftoverThingNames' => new List<String>(keyByThingName.keySet()) };
+            } else {
+                body = new Map<String, Object>{ 'devices' => devices, 'ttlMinutes' => bundleTtlMinutes };
+            }
             DeviceApiClient.Result result = api.post(PATH_BY_ACTION.get(kind), body);
 
             if (result.isTransient()) {
@@ -274,7 +289,11 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
                     continue;
                 }
                 answered.add(thingName);
-                Boolean ok = kind == Action.TEARDOWN ? entry.get('deleted') == true : entry.get('ok') == true;
+                // A leftover AWS kept, because it has a certificate, is the
+                // answer asked for, not a failure to retry.
+                Boolean ok = isTeardown(kind)
+                    ? entry.get('deleted') == true || entry.get('kept') == true
+                    : entry.get('ok') == true;
                 String error = entry.get('error') == null ? 'AWS reported a failure without a reason.' : String.valueOf(entry.get('error'));
                 if (ok) {
                     succeed(key, entry);
@@ -319,8 +338,10 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
 
         private void succeed(String key, Map<String, Object> entry) {
             succeeded++;
-            if (kind == Action.TEARDOWN) {
-                System.debug(LoggingLevel.INFO, 'Torn down in AWS: ' + key);
+            if (isTeardown(kind)) {
+                System.debug(LoggingLevel.INFO, entry.get('kept') == true
+                    ? 'Kept in AWS: ' + String.valueOf(entry.get('reason'))
+                    : 'Torn down in AWS: ' + key);
                 return;
             }
             Asset outcome = new Asset(
@@ -348,6 +369,12 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
                 // from ever being registered again.
                 System.debug(LoggingLevel.ERROR, 'AWS teardown FAILED for ' + key
                     + ' - this Thing may block re-registration: ' + reason);
+                return;
+            }
+            if (kind == Action.TEARDOWN_LEFTOVER) {
+                // An empty Thing blocks nothing: provisioning reuses it.
+                System.debug(LoggingLevel.WARN, 'Could not remove the Thing ' + key
+                    + ' that a failed provisioning may have left: ' + reason);
                 return;
             }
             outcomeByKey.put(key, new Asset(

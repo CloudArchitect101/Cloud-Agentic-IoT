@@ -98,3 +98,52 @@ test('requires at least one Thing name', async (t) => {
   assert.equal(res.statusCode, 400);
   assert.equal(calls.length, 0);
 });
+
+// A deleted device whose provisioning failed, or had not finished, comes as a
+// leftover: Salesforce never recorded a Thing for it, so the Thing named after
+// its serial number is either what that attempt left, or not this device's.
+test('a leftover Thing with no certificate is deleted', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t, (command) => (command === 'ListThingPrincipalsCommand' ? { principals: [] } : {}));
+  const res = await handler({ body: JSON.stringify({ leftoverThingNames: ['1Test1'] }) });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(calls.map((c) => [c.command, c.input.thingName]), [
+    ['ListThingPrincipalsCommand', '1Test1'], ['DeleteThingCommand', '1Test1'],
+  ]);
+  assert.deepEqual(JSON.parse(res.body).results, [{ thingName: '1Test1', deleted: true, certificatesDeleted: 0 }]);
+});
+
+test('a leftover Thing that has a certificate is kept, certificate and all', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t, listsOneCertificate);
+  const res = await handler({ body: JSON.stringify({ leftoverThingNames: ['pm-1'] }) });
+  // Kept is the answer asked for, not a failure: nothing is retried.
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(calls.map((c) => c.command), ['ListThingPrincipalsCommand']);
+  const [result] = JSON.parse(res.body).results;
+  assert.equal(result.deleted, false);
+  assert.equal(result.kept, true);
+  assert.match(result.reason, /pm-1 has a certificate/);
+});
+
+test('provisioned and leftover Things in one request each get their own teardown', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t, listsOneCertificate);
+  const res = await handler({ body: JSON.stringify({ thingNames: ['pm-1'], leftoverThingNames: ['pm-2'] }) });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(JSON.parse(res.body).results.map((r) => [r.thingName, r.deleted, r.kept]), [
+    ['pm-1', true, undefined], ['pm-2', false, true],
+  ]);
+  // Only pm-1's certificate is retired.
+  assert.equal(calls.filter((c) => c.command === 'DeleteCertificateCommand').length, 1);
+  assert.deepEqual(calls.filter((c) => c.command === 'DeleteThingCommand').map((c) => c.input.thingName), ['pm-1']);
+});
+
+test('a leftover serial number AWS would not take as a Thing name was never a Thing', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t);
+  const res = await handler({ leftoverThingNames: ['SN 42/7'] });
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls.length, 0);
+  assert.equal(JSON.parse(res.body).results[0].deleted, true);
+});

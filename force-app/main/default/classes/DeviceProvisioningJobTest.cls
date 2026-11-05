@@ -210,4 +210,24 @@ private class DeviceProvisioningJobTest {
         Assert.areEqual(25, aws.devicesSent(), 'Every Thing name is sent once');
         Assert.areEqual('teardown-device', aws.paths[0], 'Calls the teardown route');
     }
+
+    @IsTest
+    static void aLeftoverThatAwsKeepsIsNotAFailure() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        aws.keptThingNames.add('PM-1');
+        Test.setMock(HttpCalloutMock.class, aws);
+
+        Test.startTest();
+        DeviceProvisioningJob.Run run = DeviceProvisioningJob.process(
+            DeviceProvisioningJob.Action.TEARDOWN_LEFTOVER, new List<String>{ 'PM-0', 'PM-1' });
+        Test.stopTest();
+
+        Assert.areEqual('teardown-device', aws.paths[0], 'Calls the teardown route');
+        Assert.isNull(aws.bodies[0].get('thingNames'), 'Never as Things to tear down in full');
+        Assert.areEqual(2, ((List<Object>) aws.bodies[0].get('leftoverThingNames')).size(), 'Both, as leftovers');
+        Assert.areEqual(2, run.succeeded, 'Removed and kept are both what was asked for');
+        Assert.areEqual(0, run.failed, 'Nothing failed');
+        Assert.areEqual(0, run.busy.size(), 'Nothing to retry');
+    }
 }

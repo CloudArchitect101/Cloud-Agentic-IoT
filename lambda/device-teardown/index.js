@@ -2,7 +2,7 @@
 
 const iotSdk = require('@aws-sdk/client-iot');
 const {
-  BadRequest, parseBody, respond, batchResponse, mapLimit, isTransient, deadline,
+  BadRequest, parseBody, respond, batchResponse, mapLimit, isTransient, isThingName, deadline,
 } = require('@cloud-agentic-iot/shared/api');
 const { retireCertificate, stillDetaching } = require('@cloud-agentic-iot/shared/certificates');
 const { numberEnv } = require('@cloud-agentic-iot/shared/env');
@@ -16,11 +16,23 @@ const TIME_TO_ANSWER_MS = 4000;
 /**
  * Tears down devices' AWS IoT footprint so their names can be reused.
  *
- *   { thingNames: [...] } -> 200 or 207 { results: [{ thingName, deleted, retryable, error }] }
+ *   { thingNames: [...], leftoverThingNames: [...] }
+ *     -> 200 or 207 { results: [{ thingName, deleted, kept, retryable, error }] }
  *
- * The blocker this removes: AWS refuses to create a Thing whose name already
- * exists, and refuses to delete a Thing that still has principals attached.
- * So a Salesforce record deleted without cleanup leaves an orphan that blocks
+ * thingNames are devices that were provisioned: their certificates go, then
+ * the Thing. leftoverThingNames are deleted devices that never got that far,
+ * because provisioning failed or had not finished, so they may have left a
+ * Thing named after their serial number. That Thing is deleted only while no
+ * certificate is attached. One with a certificate is a working identity that
+ * Salesforce never recorded for this device, perhaps another device's with
+ * the same serial number, so it is kept and reported as kept. A function
+ * from before leftoverThingNames answers such a request with a 400 instead
+ * of tearing those Things down in full.
+ *
+ * The blocker this removes: a Thing that keeps its certificate blocks its
+ * name. Provisioning refuses to give one Thing a second credential, and AWS
+ * refuses to delete a Thing that still has principals attached. So a
+ * Salesforce record deleted without cleanup leaves an orphan that blocks
  * ever re-registering that serial number.
  *
  * Order is not optional. A certificate cannot be deleted while it is attached
@@ -45,20 +57,36 @@ exports.handler = async (event, context) => {
     throw err;
   }
   const thingNames = Array.isArray(body.thingNames) ? body.thingNames : (body.thingName ? [body.thingName] : []);
-  if (!thingNames.length) {
-    return respond(400, { error: 'thingNames is required' });
+  const leftoverThingNames = Array.isArray(body.leftoverThingNames) ? body.leftoverThingNames : [];
+  if (!thingNames.length && !leftoverThingNames.length) {
+    return respond(400, { error: 'thingNames or leftoverThingNames is required' });
   }
+  const things = [
+    ...thingNames.map((thingName) => ({ thingName, leftover: false })),
+    ...leftoverThingNames.map((thingName) => ({ thingName, leftover: true })),
+  ];
 
   const late = deadline(context, TIME_TO_ANSWER_MS);
-  const results = await mapLimit(thingNames, numberEnv('IOT_PARALLEL_REQUESTS'), (thingName) => (late.passed()
+  const results = await mapLimit(things, numberEnv('IOT_PARALLEL_REQUESTS'), ({ thingName, leftover }) => (late.passed()
     ? { thingName, deleted: false, retryable: true, error: 'Not reached before the request ran out of time; send it again.' }
-    : tearDown(thingName)));
-  return batchResponse(results, (result) => result.deleted, { historyPreserved: true });
+    : tearDown(thingName, leftover)));
+  return batchResponse(results, (result) => result.deleted || result.kept, { historyPreserved: true });
 };
 
-async function tearDown(thingName) {
+async function tearDown(thingName, leftover) {
+  // A serial number AWS would not take as a Thing name never became a Thing.
+  if (leftover && !isThingName(thingName)) {
+    return { thingName, deleted: true, certificatesDeleted: 0 };
+  }
   try {
     const { principals = [] } = await iot.send(new ListThingPrincipalsCommand({ thingName }));
+    if (leftover && principals.length) {
+      console.log('kept', { thingName, certificates: principals.length });
+      return {
+        thingName, deleted: false, kept: true,
+        reason: `${thingName} has a certificate, so it may be another device's. Delete it in AWS IoT if it is not.`,
+      };
+    }
     for (const principal of principals) {
       await retireCertificate(iot, iotSdk, thingName, principal);
     }
