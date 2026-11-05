@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompactLayout xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fields>Name</fields>
+    <fields>Device__c</fields>
+    <fields>Command__c</fields>
+    <fields>Status__c</fields>
+    <fields>Requested_By__c</fields>
+    <label>Device Command Compact</label>
+</CompactLayout>

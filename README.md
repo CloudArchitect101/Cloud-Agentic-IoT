@@ -136,6 +136,12 @@ Three conventions the pipelines enforce, because each would otherwise fail at de
 - A sketch folder must contain a `.ino` named after the folder, or `arduino-cli` reports "main file missing from sketch".
 - A sketch must declare `#define FIRMWARE_VERSION`, and raise it to ship a change. A board installs only a version it is not already running.
 
+**Then give yourself the interface.** The Salesforce deploy adds a Lightning app, **Cloud Agentic IoT**, with tabs, record pages and page layouts for devices (Assets), patient vitals, device commands and Wi-Fi networks, and the Re-provision button on a device. The app and the device fields stay hidden until a person holds the `Device_Platform_Admin` permission set, System Administrators included: fields deployed through the Metadata API come with no field access for any profile. Assign it to each person who runs the devices, then open the app from the App Launcher:
+
+```bash
+sf org assign permset --name Device_Platform_Admin --target-org <your admin alias>
+```
+
 ### Stage 2 — Connect the seams CI cannot reach
 
 Everything below is manual for a structural reason, not an oversight: it stores a secret, lives in another vendor's console, or is a deliberate human checkpoint. Do it once, in this order — later steps consume outputs from earlier ones.
@@ -161,12 +167,12 @@ The last command prints the key once. Type it into Salesforce in part b and nowh
 
 *c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
 
-*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API:
+*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
 
 ```bash
 sf apex run --target-org <your admin alias> <<'EOF'
 insert new PermissionSetAssignment(
-    AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' LIMIT 1].Id,
+    AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' AND Username LIKE 'autoproc@%' LIMIT 1].Id,
     PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'].Id);
 EOF
 ```
@@ -256,7 +262,7 @@ Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a poli
 
 **3. Download and attach.** Download the certificate, the private key, and Amazon Root CA 1 into one folder. Attach the policy to the certificate.
 
-**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. SerialNumber = the IoT Thing name, Account = the patient's Person Account, Status = `Installed`.
+**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. In the Cloud Agentic IoT app, Assets → New: Serial Number = the IoT Thing name, Account = the patient's Person Account (any Account, in an org without Person Accounts), Status = `Installed`.
 
 #### Getting a device online
 
@@ -580,7 +586,7 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 **Scalability, honestly stated:** this is the **one-device-at-a-time** pattern, automated. It scales to hundreds because nothing is manual except plugging in a USB cable. Beyond that, **Fleet Provisioning by claim** is the answer — firmware ships with a shared claim certificate, the device generates its own keypair and receives a unique certificate on first connect, and no key transits anything at all. Same data model, same Thing Groups, same OTA; only step 6 disappears. Documented as the next step rather than implied to be already done.
 
-**Key files:** `objects/Wi_Fi_Network__c/`, `objects/Asset/fields/`, `classes/DeviceProvisioningService.cls`, `classes/WiFiCredentialService.cls`, `triggers/AssetTrigger.trigger`, `lambda/device-provisioning/`, `lambda/device-reprovision/`, `lambda/device-teardown/`, `scripts/provision-device.sh` / `.ps1`
+**Key files:** `objects/Wi_Fi_Network__c/`, `objects/Asset/fields/`, `classes/DeviceProvisioningService.cls`, `classes/DeviceReprovisionController.cls` and `lwc/reprovisionDevice/` (the Re-provision button), `classes/WiFiCredentialService.cls`, `triggers/AssetTrigger.trigger`, `lambda/device-provisioning/`, `lambda/device-reprovision/`, `lambda/device-teardown/`, `scripts/provision-device.sh` / `.ps1`
 
 **To see it work:** create a Wi-Fi Network record, then an Asset with a SerialNumber, and watch the Asset flip to **Provisioned** with a bundle link. The SigV4 Named Credential it uses is step 1 of [Stage 2](#stage-2--connect-the-seams-ci-cannot-reach).
 

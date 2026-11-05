@@ -8,6 +8,7 @@
         <type>AutoNumber</type>
         <displayFormat>CMD-{000000}</displayFormat>
     </nameField>
+    <compactLayoutAssignment>Device_Command_Compact</compactLayoutAssignment>
     <deploymentStatus>Deployed</deploymentStatus>
     <sharingModel>Private</sharingModel>
     <enableHistory>true</enableHistory>

@@ -165,10 +165,11 @@ Doing it through the UI instead — or checking what an existing set already gra
 |---|---|---|
 | — | — | **API Enabled** (JWT token exchange; needed regardless) |
 | — | — | **Modify Metadata Through Metadata API Functions** (Metadata API access at all) |
-| `ApexClass`, `ApexTrigger` | 20 + 4 | **Author Apex** |
-| `LightningComponentBundle` | 1 | **Author Apex** *and* **Customize Application** — Author Apex alone still fails with `insufficient access rights on entity: LightningComponentResource` |
-| `CustomObject`, `CustomField`, `CustomMetadata` | 7 + 44 + 1 | **Customize Application** |
-| `PermissionSet` | 1 | **Manage Profiles and Permission Sets** |
+| `ApexClass`, `ApexTrigger` | 35 + 4 | **Author Apex** |
+| `LightningComponentBundle` | 2 | **Author Apex** *and* **Customize Application** — Author Apex alone still fails with `insufficient access rights on entity: LightningComponentResource` |
+| `CustomObject`, `CustomField`, `CustomMetadata` | 10 + 72 + 6 | **Customize Application** |
+| `CustomApplication`, `CustomTab`, `FlexiPage`, `Layout`, `CompactLayout`, `QuickAction` | 1 + 3 + 4 + 4 + 3 + 1 | **Customize Application** |
+| `PermissionSet` | 2 | **Manage Profiles and Permission Sets** |
 | `Bot`, `BotVersion`, `GenAiFunction`, `GenAiPlannerBundle`, `GenAiPlugin` | 5 | An Agentforce builder permission set — assigned separately, not a System Permission checkbox (see below) |
 
 4. Click **Save**, then select **Manage Assignments** to assign this set directly to your `deploy@...` identity.

@@ -95,6 +95,20 @@ user matters once a pipeline deploys, because an admin deploy can pass where the
 pipeline's would fail, and [Moving to the pipelines](#moving-to-the-pipelines)
 sets it up.
 
+Then give yourself the interface. The deploy adds the **Cloud Agentic IoT** app,
+with tabs, record pages and page layouts for devices, patient vitals, device
+commands and Wi-Fi networks, but the app and the device fields stay hidden
+until you hold the `Device_Platform_Admin` permission set. Being System
+Administrator isn't enough: fields deployed through the Metadata API come with
+no field access.
+
+```bash
+sf org assign permset --name Device_Platform_Admin   # to you, in SF_TARGET_ORG
+```
+
+Open it from the App Launcher. In an org without Person Accounts, any Account
+will do for a device's Account.
+
 ## 5. Connect the org and the project
 
 Each direction has its own identity, made once.

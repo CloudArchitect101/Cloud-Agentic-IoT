@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompactLayout xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fields>Name</fields>
+    <fields>Device__c</fields>
+    <fields>Patient_State__c</fields>
+    <fields>Risk_Score__c</fields>
+    <fields>Heart_Rate__c</fields>
+    <fields>SpO2__c</fields>
+    <fields>Timestamp__c</fields>
+    <label>Patient Vitals Compact</label>
+</CompactLayout>

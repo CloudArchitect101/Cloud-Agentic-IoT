@@ -1,0 +1,27 @@
+<template>
+    <lightning-quick-action-panel header="Re-provision this device">
+        <p class="slds-p-bottom_small">
+            This revokes the device's certificate and issues a new one. Use it when the
+            board lost its credentials, for example after its NVS was erased. The Thing,
+            its Thing Group and every reading it sent stay as they are.
+        </p>
+        <p>
+            When Provisioning Status shows Provisioned again, download the bundle from
+            Provisioning Bundle URL before Bundle Expires At, and send it to the board with
+            scripts/provision-device.sh.
+        </p>
+        <template lwc:if={errorMessage}>
+            <p class="slds-text-color_error slds-p-top_small" role="alert">{errorMessage}</p>
+        </template>
+        <div slot="footer">
+            <lightning-button label="Cancel" onclick={close}></lightning-button>
+            <lightning-button
+                class="slds-m-left_x-small"
+                variant="brand"
+                label="Re-provision"
+                disabled={working}
+                onclick={reprovision}
+            ></lightning-button>
+        </div>
+    </lightning-quick-action-panel>
+</template>
