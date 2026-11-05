@@ -231,7 +231,8 @@ Resources:
 
   # Provisioning, re-provisioning and teardown manage Things and certificates.
   # The IoT control plane scopes most of these actions by resource type, not
-  # by name, so there is one statement per type AWS checks the actions against.
+  # by name, so the IoT statements group the actions by what AWS checks them
+  # against: Things and Thing groups, certificates, and no resource at all.
   # test/lambda/device-lifecycle-role.test.js checks this policy against the
   # calls the three functions make.
   DeviceLifecycleRole:
