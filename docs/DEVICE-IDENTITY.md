@@ -26,8 +26,10 @@ GitHub secrets are the wrong home for any of this: the firmware build in CI is a
 
    ```bash
    ./scripts/setup-device.sh          # macOS / Linux
-   .\scripts\setup-device.ps1         # Windows
+   .\scripts\setup-device.ps1         # Windows: not safe yet, see below
    ```
+
+   The Windows wizard still sends the credentials in one burst without waiting for the board to ask, which can store a damaged identity. Use the macOS / Linux one until it works the same way.
 
 It asks, one line at a time, and fills in a sensible default wherever it can work one out:
 
@@ -49,7 +51,7 @@ The credential bundle is assembled in a temp file with owner-only permissions an
 **One step after the wizard:** it provisions a single network, which lands in slot 0. Add your phone hotspot as slot 1 straight away —
 
 ```bash
-./scripts/update-wifi.sh "<hotspot-SSID>" "<hotspot-passphrase>"
+./scripts/update-wifi.sh "<hotspot-SSID>"      # asks for the passphrase without showing it
 ```
 
 — because that anchor is what makes the third slot remotely updatable. See [what the 3 slots actually do](#what-the-3-slots-actually-do).
@@ -82,7 +84,7 @@ The one thing that destroys this is `esptool erase_flash`, which wipes NVS inclu
 
 **No recompile and no reflash.** The `wifi` namespace is separate from `identity`, so credentials can be replaced on their own:
 
-- **Over USB, no rebuild** — `./scripts/update-wifi.sh "<SSID>" "<passphrase>"` sends just `{"ssid":…,"passphrase":…}`. `checkSerialWifiUpdate()` accepts this at any time while the device is running, and the certificate is untouched.
+- **Over USB, no rebuild** — `./scripts/update-wifi.sh "<SSID>"` asks for the passphrase and sends just `{"ssid":…,"passphrase":…}`. `checkSerialWifiUpdate()` accepts this at any time while the device is running, and the certificate is untouched.
 - **Remotely, while the device is still online** — updating a `Wi_Fi_Network__c` record in Salesforce makes `WiFiCredentialService` push the credentials through the `device-command` Lambda to `device/<thing>/command`, where the library stores them. The device is by definition still on the *old* network to have received this, so it keeps that connection and only falls back to the new entry once the old one is gone. **Send it before the network changes, not after.**
 - **Automatically** — NVS holds up to 3 networks and `connectWiFi()` tries each in turn with a 15-second timeout. Add the venue's WiFi before you travel and the device connects to whichever it finds, with no intervention at all.
 

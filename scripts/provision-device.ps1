@@ -5,11 +5,12 @@
 # Deliberately does not erase flash: that would wipe the NVS partition holding
 # the device identity we want to survive firmware updates.
 #
-# Unlike provision-device.sh, this still sends the bundle in one burst and
-# does not wait for the board to ask for it. The board asks only in the two
-# minutes after it starts, and a burst can lose characters, so press EN just
-# before running this, and keep the bundle until the board says
-# "aws: connected".
+# NOT SAFE YET: unlike provision-device.sh, this still sends the bundle in one
+# burst and does not wait for the board to ask for it. If the board is asking
+# when the burst arrives, it can lose characters from inside the certificate
+# or key and still store the result, once. Provision from macOS or Linux with
+# provision-device.sh until this waits and paces the same way, and keep the
+# bundle until the board says "aws: connected".
 param(
     [Parameter(Mandatory=$true)][string]$Bundle,
     [Parameter(Mandatory=$true)][string]$Port

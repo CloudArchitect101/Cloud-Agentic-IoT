@@ -32,6 +32,7 @@ import select
 import subprocess
 import sys
 import tempfile
+import termios
 import threading
 import time
 import tty
@@ -316,15 +317,15 @@ class FakeBoard:
 class Session:
     """One run of a command against a FakeBoard, pressing EN when it asks."""
 
-    def __init__(self, command, env=None, **board):
+    def __init__(self, command, env=None, stdin=subprocess.DEVNULL, **board):
         master, slave = pty.openpty()
         tty.setraw(slave)
         self.port = os.ttyname(slave)
         self.board = FakeBoard(master, **board)
         environ = dict(os.environ, BOARD_SERIAL_TIME_SCALE='0.1', PYTHONUNBUFFERED='1')
         environ.update(env or {})
-        proc = subprocess.Popen(command(self.port), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, env=environ, cwd=REPO)
+        proc = subprocess.Popen(command(self.port), stdin=stdin, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, env=environ, cwd=REPO)
         watchdog = threading.Timer(90, proc.kill)
         watchdog.start()
         self.output = []
@@ -448,8 +449,23 @@ class ProvisionTest(unittest.TestCase):
 
     def test_a_board_holding_this_identity_that_aws_refuses_keeps_the_bundle(self):
         run = self.provision(identity=IDENTITY, networks=['Home'], aws_ok=False)
-        self.assertEqual(run.code, 3, run.text)
+        self.assertEqual(run.code, 4, run.text)
+        self.assertIn('the secure connection to the endpoint failed', run.text)
         self.assertIn('intact copy', run.text)
+        self.assertEqual(run.board.lines_read, [])
+
+    def test_a_board_holding_an_identity_without_wifi_is_given_a_network_first(self):
+        # Without Wi-Fi the board never says which Thing it is, so nothing is
+        # sent and the bundle is not called unused: it may be this board's.
+        script = os.path.join(REPO, 'scripts', 'provision-device.sh')
+        run = Session(lambda port: ['bash', script, self.bundle, port],
+                      identity=IDENTITY, networks=['Old'], working=())
+        self.assertEqual(run.code, 4, run.text)
+        self.assertIn('cannot say which identity', run.text)
+        self.assertIn('./scripts/update-wifi.sh "<SSID>"', run.text)
+        self.assertIn('Keep the bundle: the board may hold this same identity', run.text)
+        self.assertNotIn('unused', run.text)
+        self.assertNotIn('Delete the bundle now', run.text)
         self.assertEqual(run.board.lines_read, [])
 
     def test_a_board_that_restarts_without_the_bundle_kept_nothing(self):
@@ -524,7 +540,7 @@ class WifiTest(unittest.TestCase):
         run = self.update(identity=IDENTITY, networks=['Home'])
         self.assertEqual(run.code, 0, run.text)
         self.assertIn(('Hotspot', 'hotspot-pass'), run.board.networks)
-        self.assertIn('keeps its identity', run.text)
+        self.assertIn('identity and certificate are untouched', run.text)
         self.assertEqual(run.board.early, b'')
 
     def test_a_board_asking_for_wifi_gets_online_with_it(self):
@@ -532,12 +548,16 @@ class WifiTest(unittest.TestCase):
         self.assertEqual(run.code, 0, run.text)
         self.assertIn('Online', run.text)
 
-    def test_does_not_claim_an_identity_the_board_never_showed(self):
-        # A board whose 120 s ran out unprovisioned still reads Wi-Fi lines.
-        run = self.update(starts='quiet')
-        self.assertEqual(run.code, 0, run.text)
-        self.assertIn('may have no identity yet', run.text)
-        self.assertNotIn('keeps its identity', run.text)
+    def test_says_the_same_whether_or_not_the_board_has_an_identity(self):
+        # A board whose 120 s ran out unprovisioned still reads Wi-Fi lines,
+        # and one that has been online a while says nothing either: the reply
+        # cannot tell them apart, so the result claims neither.
+        for board in (dict(starts='quiet'), dict(identity=IDENTITY, networks=['Home'], starts='quiet')):
+            run = self.update(**board)
+            self.assertEqual(run.code, 0, run.text)
+            self.assertIn('Stored. The board tries this network', run.text)
+            self.assertNotIn('no identity', run.text)
+            self.assertNotIn('keeps its identity', run.text)
 
     def test_a_board_asking_for_its_bundle_is_left_alone(self):
         run = self.update()
@@ -551,6 +571,45 @@ class WifiTest(unittest.TestCase):
                       identity=IDENTITY, networks=['Home'], starts='quiet')
         self.assertEqual(run.code, 0, run.text)
         self.assertIn(('Hotspot', 'hotspot-pass'), run.board.networks)
+
+    def test_the_script_asks_for_the_passphrase_without_showing_it(self):
+        script = os.path.join(REPO, 'scripts', 'update-wifi.sh')
+        keyboard, terminal = pty.openpty()
+        self.addCleanup(os.close, keyboard)
+        self.addCleanup(os.close, terminal)
+
+        def type_passphrase():
+            # Type once the prompt has turned echo off, as a person would after
+            # reading it (anything typed sooner is echoed whatever the script
+            # does), or after 10 s, so a script that leaves echo on fails below.
+            end = time.monotonic() + 10
+            while time.monotonic() < end and termios.tcgetattr(terminal)[3] & termios.ECHO:
+                time.sleep(0.02)
+            os.write(keyboard, b'hotspot-pass\n')
+
+        typist = threading.Thread(target=type_passphrase, daemon=True)
+        typist.start()
+        # The second argument names the port, so it is not taken for a passphrase.
+        run = Session(lambda port: ['bash', script, 'Hotspot', port], stdin=terminal,
+                      identity=IDENTITY, networks=['Home'], starts='quiet')
+        typist.join(5)
+        self.assertEqual(run.code, 0, run.text)
+        self.assertIn('Passphrase for Hotspot (not shown', run.text)
+        self.assertIn(('Hotspot', 'hotspot-pass'), run.board.networks)
+        self.assertNotIn('hotspot-pass', run.text)
+        os.set_blocking(keyboard, False)
+        try:
+            echoed = os.read(keyboard, 4096)
+        except BlockingIOError:
+            echoed = b''
+        self.assertNotIn(b'hotspot-pass', echoed)
+
+    def test_the_script_does_not_wait_for_a_passphrase_nobody_can_type(self):
+        script = os.path.join(REPO, 'scripts', 'update-wifi.sh')
+        result = subprocess.run(['bash', script, 'Hotspot', '/dev/no-such-port'],
+                                stdin=subprocess.DEVNULL, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('Run this in a terminal', result.stdout + result.stderr)
 
 
 def load_helper():

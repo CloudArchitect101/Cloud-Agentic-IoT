@@ -44,8 +44,10 @@ import time
 # Exit codes. The shell scripts turn these into advice about the bundle file.
 DONE = 0          # stored and confirmed: online, or the Wi-Fi network stored
 NOT_STORED = 1    # nothing was stored: bad input, no port, or the board said no
-HAS_IDENTITY = 2  # the board already has an identity, so nothing was sent
+OTHER_THING = 2   # the board has another Thing's identity, so nothing was sent
 UNCONFIRMED = 3   # stored, but the board did not confirm it got online
+ALREADY_HELD = 4  # the board already held an identity, this Thing's or one it
+                  # could not name, and is not online with it; nothing was sent
 
 # Tests run the same waits faster. Nothing else sets this.
 SCALE = float(os.environ.get('BOARD_SERIAL_TIME_SCALE') or 1)
@@ -60,8 +62,6 @@ NVS_LIMIT = 4000           # NVS refuses a string longer than this, NUL included
 ASKS_FOR_BUNDLE = 'PROVISIONING MODE'
 ASKS_FOR_WIFI = 'WIFI RECOVERY MODE'
 RUNNING = ('telemetry:', 'wifi:', 'aws:', 'OTA:', 'command:')
-# Lines only a board with an identity prints: begin() stops before them without one.
-WITH_IDENTITY = ('telemetry:', 'wifi: trying', 'wifi: connected', 'aws:')
 
 # PubSubClient's connection states, as connectAWS() prints them.
 MQTT_STATES = {
@@ -130,7 +130,6 @@ class Board:
         self.pending = b''
         self.heard = False
         self.empty_reads = 0
-        self.said = []
         try:
             self.fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         except OSError as err:
@@ -214,7 +213,6 @@ class Board:
                 text = printable(raw)
                 if text:
                     say('  | ' + text)
-                    self.said = self.said[-200:] + [text]
                 yield text
             left = deadline - time.monotonic()
             if left <= 0:
@@ -375,8 +373,8 @@ def watch_it_connect(board, thing):
         if ASKS_FOR_WIFI in line:
             say()
             say("The board could not join any Wi-Fi network it knows, so it is asking for one. "
-                'Within 2 minutes, or after pressing EN, run:')
-            say('  ./scripts/update-wifi.sh "<SSID>" "<passphrase>"')
+                'Within 2 minutes, or after pressing EN, run this, and it asks for the passphrase:')
+            say('  ./scripts/update-wifi.sh "<SSID>"')
             return UNCONFIRMED
     say()
     say('The board did not say within 90 seconds whether it got online. Watch it with: '
@@ -439,32 +437,36 @@ def provision(path, bundle_path):
 
 
 def already_has_identity(board, shown, thing):
+    """Nothing is sent to a board that has an identity: it keeps the first one it
+    gets. Says what the board showed, and returns DONE, OTHER_THING or ALREADY_HELD."""
     on_board, outcome, line = identity_on_board(board, shown)
     say()
-    if on_board == thing:
-        if outcome == 'online':
-            say('This board is already online as {}, so it does not need the bundle.'.format(thing))
-            return DONE
-        if outcome == 'refused':
-            say('This board already holds an identity for {}, so nothing was sent, but AWS IoT does '
-                'not accept it: {}. Check in AWS IoT that {} has an active certificate with the '
-                'device policy attached. If it does, the copy on the board is likely damaged, for '
-                'example by an earlier attempt that sent the bundle in one burst, and this bundle '
-                'file is the intact copy: keep it.'.format(thing, explain_mqtt(line), thing))
-        else:
-            say('This board already holds an identity for {}, so nothing was sent. It did not get '
-                'online while this watched.'.format(thing))
-        return UNCONFIRMED
-    if on_board:
+    if on_board and on_board != thing:
         say('This board already has another identity, {}, so nothing was sent: it keeps the '
             'first identity it gets.'.format(on_board))
+        return OTHER_THING
+    if on_board and outcome == 'online':
+        say('This board is already online as {}, so it does not need the bundle.'.format(thing))
+        return DONE
+    if on_board and outcome == 'refused':
+        say('This board already holds an identity for {}, so nothing was sent, but AWS IoT does '
+            'not accept it: {}. Check in AWS IoT that {} has an active certificate with the '
+            'device policy attached. If it does, the copy on the board is likely damaged, for '
+            'example by an earlier attempt that sent the bundle in one burst. Keep the bundle '
+            '(or the certificate and key files it was made from): it is the intact copy, and the '
+            "board takes it again only once its NVS is cleared.".format(thing, explain_mqtt(line), thing))
+    elif on_board:
+        say('This board already holds an identity for {}, so nothing was sent. It did not get '
+            'online while this watched: scripts/firmware.sh monitor shows why.'.format(thing))
+    elif outcome == 'no wifi':
+        say('This board already holds an identity, so nothing was sent, but it cannot join any '
+            'Wi-Fi network it knows, so it cannot say which identity. Within 2 minutes, or after '
+            'pressing EN, give it a network: ./scripts/update-wifi.sh "<SSID>". Then run this '
+            'again to see whether it is {}.'.format(thing))
     else:
-        say('This board already has an identity, so nothing was sent: it keeps the first '
-            'identity it gets.')
-    if outcome == 'no wifi':
-        say('It cannot join any Wi-Fi network it knows. Within 2 minutes, or after pressing EN, '
-            'run: ./scripts/update-wifi.sh "<SSID>" "<passphrase>"')
-    return HAS_IDENTITY
+        say('This board already holds an identity, so nothing was sent. It did not say which '
+            'while this watched: scripts/firmware.sh monitor shows it.')
+    return ALREADY_HELD
 
 
 # --------------------------------------------------------------------- Wi-Fi
@@ -474,8 +476,9 @@ def wifi_line(ssid, passphrase):
         raise Stop(NOT_STORED, 'No network name (WIFI_SSID) was given.')
     line = json.dumps({'ssid': ssid, 'passphrase': passphrase},
                       separators=(',', ':'), ensure_ascii=False).encode('utf-8')
-    # An SSID is at most 32 bytes and a WPA passphrase 63 characters. The
-    # firmware reads Wi-Fi lines into a 512-byte document.
+    # An SSID is at most 32 bytes and a WPA passphrase 63 characters, so a
+    # line longer than this holds a mistake. It also stays well inside the
+    # few hundred bytes the board holds between reads.
     if len(line) > 240:
         raise Stop(NOT_STORED, 'That network name or passphrase is too long for Wi-Fi.')
     return line
@@ -509,12 +512,8 @@ def update_wifi(path, ssid, passphrase):
         for said in board.lines(60):
             if 'wifi: updated over serial' in said:
                 say()
-                if any(line.startswith(WITH_IDENTITY) for line in board.said):
-                    say('Stored. The board keeps its identity and certificate, and tries this '
-                        'network whenever it needs to connect.')
-                else:
-                    say('Stored the network. The board printed nothing else, so it may have no '
-                        'identity yet: ./scripts/provision-device.sh restarts it and says.')
+                say('Stored. The board tries this network whenever it needs to connect, and its '
+                    'identity and certificate are untouched.')
                 return DONE
             if 'identity left untouched' in said:
                 say('Stored. The board restarts and connects...')

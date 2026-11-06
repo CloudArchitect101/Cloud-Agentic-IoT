@@ -291,15 +291,17 @@ Plug the ESP32 in and run the wizard:
 
 ```bash
 ./scripts/setup-device.sh          # macOS / Linux
-.\scripts\setup-device.ps1         # Windows
+.\scripts\setup-device.ps1         # Windows: not safe yet, see below
 ```
+
+The Windows wizard still sends the credentials in one burst without waiting for the board to ask for them, and a burst that arrives while the board is asking can lose characters from inside the certificate or key and still be stored, once. Run the macOS / Linux one until it works the same way.
 
 It asks for the folder holding your downloaded certificates, which file is which, the Thing name, the endpoint, and the WiFi network — filling in a default wherever it can work one out. Then it compiles, flashes over USB, sends the credentials, and prints what the device says back.
 
 **Add your phone hotspot as the second network right after:**
 
 ```bash
-./scripts/update-wifi.sh "<hotspot-SSID>" "<hotspot-passphrase>"
+./scripts/update-wifi.sh "<hotspot-SSID>"      # asks for the passphrase without showing it
 ```
 
 NVS holds three networks and only the third ever rotates, so the first two are permanent anchors. A hotspot in slot 1 means the device can reach AWS from almost anywhere — which is what lets the third slot be updated remotely later, with no USB and no rebuild.
@@ -575,7 +577,7 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 3. `AssetTrigger` fires → `DeviceProvisioningService` calls AWS via a SigV4 Named Credential
 4. The Lambda creates the Thing and certificate, attaches the least-privilege policy, adds it to the Thing Group, writes the bundle to S3, returns the pre-signed URL. If a step fails, it undoes the group membership it added and deletes the certificate again, so a failed attempt leaves only an empty Thing
 5. The Asset updates to **Provisioned** with the link and its expiry. The link is in **Provisioning Bundle Link**, a long text field: signed with the Lambda's temporary credentials, it carries their session token and runs far past the 255 characters a URL field holds. If AWS finished but Salesforce cannot save the result, the Asset turns **Failed** with the reason and keeps the Thing ARN, so **Re-provision** issues a new link once the cause is fixed. If even that update fails, for example because the device was deleted meanwhile, only the job's debug log says so
-6. The technician downloads the bundle, closes any serial monitor (only one program can hold the port), and runs `./scripts/provision-device.sh bundle.json`. The board asks for its bundle only in the two minutes after it starts, and the ESP32 holds only a few hundred bytes between the firmware's reads, so the script restarts the board, waits for it to ask, and sends the bundle in small paced pieces. A bundle sent in one burst can lose characters, and a loss inside the certificate or key would still be stored, once. If the board cannot be restarted from USB, the script asks you to press EN. On Windows, `.\scripts\provision-device.ps1 -Bundle bundle.json -Port COM5` still sends in one burst without waiting, so press EN just before running it, or provision from a Mac or Linux machine
+6. The technician downloads the bundle, closes any serial monitor (only one program can hold the port), and runs `./scripts/provision-device.sh bundle.json`. The board asks for its bundle only in the two minutes after it starts, and the ESP32 holds only a few hundred bytes between the firmware's reads, so the script restarts the board, waits for it to ask, and sends the bundle in small paced pieces. A bundle sent in one burst can lose characters, and a loss inside the certificate or key would still be stored, once. If the board cannot be restarted from USB, the script asks you to press EN. The Windows script, `.\scripts\provision-device.ps1`, still sends the bundle in one burst without waiting for the board to ask, which can store a damaged identity: provision from macOS or Linux until it works the same way
 7. The device stores it in NVS, reboots, connects, and subscribes to its Jobs topic. The script shows what the board says until it reports `aws: connected`
 8. Delete the bundle — it contains the private key. The script prints the `rm` command once the board is online, and says to keep the bundle if it is not
 
@@ -584,7 +586,7 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 | Situation | What happens |
 |---|---|
 | Password changes while the device is **online** | Editing `Wi_Fi_Network__c` fires a trigger → `WiFiCredentialService` → per-device MQTT command → the device stores the new network **alongside** the old. No reboot, no outage |
-| Deliberate update **from a terminal** (USB attached) | `./scripts/update-wifi.sh "SSID" "pass"`. Writes the `wifi` namespace only. Works whether the device is online or not, and needs no reboot. The script waits for the board to confirm |
+| Deliberate update **from a terminal** (USB attached) | `./scripts/update-wifi.sh "SSID"`, which asks for the passphrase rather than leaving it in your shell history. Writes the `wifi` namespace only. Works whether the device is online or not, and needs no reboot. The script waits for the board to confirm |
 | Password already changed, device **offline** | It cannot be messaged. It tries each stored network, fails, and drops into **Wi-Fi recovery mode** on serial, which updates credentials without touching identity |
 | Migrating to a new access point | Add the new network while the old still works. Devices roll over on their own; the old AP can then be switched off |
 

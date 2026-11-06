@@ -34,6 +34,8 @@ case "$status" in
      printf '  rm %q\n' "$BUNDLE" ;;
   3) echo "Keep the bundle until the board says \"aws: connected\" (scripts/firmware.sh monitor), then delete it." ;;
   2) echo "Nothing was sent, so the bundle is unused. Keep it until the board it is for has it." ;;
+  4) echo "Nothing was sent. Keep the bundle: the board may hold this same identity, and until it" \
+          "says \"aws: connected\" the bundle is the copy to fall back on." ;;
   *) echo "Nothing was stored. Keep the bundle and run this again once the problem above is fixed." ;;
 esac
 exit "$status"

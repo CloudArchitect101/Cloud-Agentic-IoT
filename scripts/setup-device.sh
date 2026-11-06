@@ -217,6 +217,7 @@ python3 "$REPO/scripts/lib/board_serial.py" provision "$PORT" "$BUNDLE" || STATU
 case "$STATUS" in
   0) ;;
   3) warn "The device stored its identity but has not confirmed it is online - see above." ;;
+  2|4) die "The device already holds an identity, so nothing was sent - see above. Keep the certificate and key files in $CERT_DIR." ;;
   *) die "The device did not store the credentials - see above. Run this again once that is fixed." ;;
 esac
 
@@ -243,7 +244,7 @@ keep it somewhere safe or delete it, but do not leave it in Downloads.
 
 Do this next: add your phone hotspot as the second network.
 
-    ./scripts/update-wifi.sh "<hotspot-SSID>" "<hotspot-passphrase>"
+    ./scripts/update-wifi.sh "<hotspot-SSID>"      (it asks for the passphrase)
 
 NVS has 3 slots and only the third one ever rotates, so the first two are
 permanent anchors. The network you just provisioned took slot 0; a hotspot in
