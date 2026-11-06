@@ -6,6 +6,9 @@
 #else
 #include <esp_system.h>
 #endif
+// esp_timer_get_time(), for uptime: 64 bits of microseconds, where millis()
+// wraps after 49 days. The same header in both cores.
+#include <esp_timer.h>
 
 #define NVS_IDENTITY "identity"
 #define NVS_WIFI     "wifi"
@@ -110,6 +113,29 @@ bool CloudAgenticDevice::telemetryDue() {
   // reading, not a burst of every one it missed.
   _nextTelemetryAt = now + interval;
   return true;
+}
+
+/* ----------------------------------------------------------------- live */
+
+// Someone has the board's card open in Salesforce: the device-live API sends
+// LIVE when the card opens and again every few minutes while it stays open,
+// and each one starts the window over. When the card closes the renewals stop
+// and the window runs out by itself.
+void CloudAgenticDevice::setLive(long seconds, long minutes) {
+  if (!cad::validLive(seconds, minutes)) {
+    Serial.printf("live: refused %ld s for %ld min, allowed %lu-%lu s for 1-%lu min, or 0 min to stop\n",
+                  seconds, minutes, (unsigned long)cad::MIN_LIVE_SECONDS,
+                  (unsigned long)cad::MAX_LIVE_SECONDS, (unsigned long)cad::MAX_LIVE_MINUTES);
+    return;
+  }
+  _live.start(millis(), (uint32_t)seconds, (uint32_t)minutes);
+  if (minutes == 0) Serial.println("live: off");
+  else Serial.printf("live: every %ld s for %ld min\n", seconds, minutes);
+}
+
+bool CloudAgenticDevice::liveDue() {
+  if (!_mqtt.connected()) return false;
+  return _live.due(millis());
 }
 
 /* ----------------------------------------------------------------- wifi */
@@ -221,7 +247,12 @@ void CloudAgenticDevice::reportJobStatus(const String& jobId, const char* status
 }
 
 void CloudAgenticDevice::applyFirmware(const String& jobId, const String& url) {
-  Serial.printf("OTA: downloading %s\n", url.c_str());
+  // AWS IoT pre-signs the link with the OTA role: its query string holds the
+  // signature and that role's session token, which have no place in a console
+  // log that gets pasted into tickets. The part before it names the image,
+  // which is all the console needs.
+  int query = url.indexOf('?');
+  Serial.printf("OTA: downloading %s\n", (query < 0 ? url : url.substring(0, query)).c_str());
   reportJobStatus(jobId, "IN_PROGRESS", "downloading");
 
   WiFiClientSecure otaClient;
@@ -327,6 +358,13 @@ void CloudAgenticDevice::handleMessage(char* topic, byte* payload, unsigned int 
     setTelemetryInterval(doc["seconds"] | 0L, "command");
     return;
   }
+  // Live readings for a card that is open, sent by the device-live API. The
+  // library keeps the schedule; the sketch only says what a reading is. A
+  // missing minutes is refused, not taken as 0, which would end live mode.
+  if (strcmp(doc["operation"] | "", "LIVE") == 0) {
+    setLive(doc["seconds"] | 0L, doc["minutes"] | -1L);
+    return;
+  }
 
   if (_commandHandler) _commandHandler(doc);
 }
@@ -384,6 +422,8 @@ bool CloudAgenticDevice::begin() {
 void CloudAgenticDevice::loop() {
   checkSerialWifiUpdate();
   if (!_haveIdentity) return;   // still waiting to be provisioned
+  // A live window ends on time whether the board is online or not.
+  if (_live.ended(millis())) Serial.println("live: off");
   if (_mqtt.connected()) { _mqtt.loop(); return; }
 
   // Offline. Until the next attempt is due, return at once.
@@ -409,6 +449,15 @@ bool CloudAgenticDevice::publish(const char* subTopic, const JsonDocument& doc) 
 
 bool CloudAgenticDevice::publishTelemetry(const JsonDocument& doc) {
   return publishTo("$aws/rules/" TELEMETRY_RULE "/device/" + _thingName + "/telemetry", doc);
+}
+
+// What the card shows besides the reading itself: which firmware answers, how
+// well it hears the access point, and whether it restarted since last time.
+bool CloudAgenticDevice::publishLive(JsonDocument& doc) {
+  doc["firmware"] = _version;
+  doc["rssi"]     = (int)WiFi.RSSI();
+  doc["uptime"]   = (uint32_t)(esp_timer_get_time() / 1000000);
+  return publishTo("device/" + _thingName + "/live", doc);
 }
 
 void CloudAgenticDevice::onCommand(void (*handler)(JsonDocument&)) { _commandHandler = handler; }

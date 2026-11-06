@@ -80,6 +80,141 @@ static void telemetry_bounds() {
   CHECK(!cad::validTelemetrySeconds(-30));
 }
 
+static void live_bounds() {
+  CHECK(cad::validLive(2, 15));
+  CHECK(cad::validLive(1, 1));
+  CHECK(cad::validLive(60, 30));
+  CHECK(!cad::validLive(0, 15));      // no interval
+  CHECK(!cad::validLive(61, 15));
+  CHECK(!cad::validLive(-2, 15));
+  CHECK(!cad::validLive(2, 31));      // past the cap
+  CHECK(!cad::validLive(2, -1));      // a command without minutes reads as -1
+  CHECK(cad::validLive(0, 0));        // 0 minutes ends it, and needs no interval
+  CHECK(cad::validLive(999, 0));
+}
+
+// After a LIVE command the first reading is due at once, then one per interval.
+static void live_first_reading_at_once() {
+  cad::LiveWindow w;
+  CHECK(!w.open(0));                  // off until a command opens it
+  CHECK(!w.due(0));
+
+  const uint32_t t0 = 123456;
+  w.start(t0, 2, 15);
+  CHECK(w.open(t0));
+  CHECK(w.due(t0));                   // at once, not 2 s later
+  CHECK(!w.due(t0));                  // and once
+  CHECK(!w.due(t0 + 1999));
+  CHECK(w.due(t0 + 2000));
+  CHECK(!w.due(t0 + 2001));
+
+  // Not asked for 10 s (the board was offline): one reading on its return,
+  // not the five it missed, and the next an interval after that one.
+  CHECK(w.due(t0 + 12000));
+  CHECK(!w.due(t0 + 12001));
+  CHECK(!w.due(t0 + 13999));
+  CHECK(w.due(t0 + 14000));
+}
+
+// The window runs out by itself `minutes` after the command, and says so once.
+static void live_window_runs_out() {
+  const uint32_t t0 = 5000, end = t0 + 15 * 60000u;
+
+  cad::LiveWindow w;
+  w.start(t0, 2, 15);
+  CHECK(w.open(end - 1));
+  CHECK(!w.open(end));
+  CHECK(!w.ended(end - 1));
+  CHECK(w.ended(end));
+  CHECK(!w.ended(end + 1));           // once
+  CHECK(!w.due(end + 1));
+
+  // Asked every millisecond, as loop() does: 450 readings, at 0, 2, ... 898 s.
+  cad::LiveWindow every;
+  every.start(t0, 2, 15);
+  uint32_t readings = 0, endings = 0, endedAt = 0;
+  for (uint32_t now = t0; now != end + 5000; now++) {
+    if (every.due(now)) readings++;
+    if (every.ended(now)) { endings++; endedAt = now; }
+  }
+  CHECK(readings == 450);
+  CHECK(endings == 1);
+  CHECK(endedAt == end);
+}
+
+// The card renews the window while it stays open: each LIVE command starts it
+// over from its own time, so it ends `minutes` after the last command.
+static void live_second_command_extends() {
+  const uint32_t t0 = 1000, renew = t0 + 10 * 60000u;
+
+  cad::LiveWindow w;
+  w.start(t0, 2, 15);
+  CHECK(w.due(t0));
+  w.start(renew, 5, 15);              // renewed, at another pace
+  CHECK(w.due(renew));                // at once again, for a card just opened
+  CHECK(!w.due(renew + 4999));        // the new pace
+  CHECK(w.due(renew + 5000));
+  CHECK(w.open(t0 + 15 * 60000u));    // past the first command's end
+  CHECK(!w.ended(t0 + 15 * 60000u));  // and no "live: off" there
+  CHECK(w.open(renew + 15 * 60000u - 1));
+  CHECK(!w.open(renew + 15 * 60000u));
+  CHECK(w.ended(renew + 15 * 60000u));
+
+  // A shorter command shortens it: the last one is the one that counts.
+  cad::LiveWindow s;
+  s.start(t0, 2, 15);
+  s.start(t0 + 60000, 2, 1);
+  CHECK(s.open(t0 + 119999));
+  CHECK(!s.open(t0 + 120000));
+}
+
+// LIVE with 0 minutes: off at once. The command says so itself, so the
+// window must not say it again when the old one would have run out.
+static void live_zero_minutes() {
+  cad::LiveWindow never;
+  never.start(1000, 2, 0);
+  CHECK(!never.open(1000));
+  CHECK(!never.due(1000));
+  CHECK(!never.ended(1000));
+
+  cad::LiveWindow w;
+  w.start(1000, 2, 15);
+  CHECK(w.due(1000));
+  w.start(61000, 2, 0);               // turned off a minute in
+  CHECK(!w.open(61000));
+  CHECK(!w.due(63000));
+  for (uint32_t now = 61000; now < 1000 + 16 * 60000u; now += 1000) {
+    bool said = w.ended(now);
+    CHECK(!said);
+    if (said) break;
+  }
+}
+
+// millis() wraps to zero every 49.7 days, and a window can straddle the wrap.
+static void live_millis_wrap() {
+  const uint32_t t0 = 0xFFFFFFFFu - 4999u;   // 5 s before the wrap
+
+  cad::LiveWindow w;
+  w.start(t0, 2, 1);
+  uint32_t readings = 0, endings = 0, endedAfter = 0;
+  for (uint32_t step = 0; step < 70000; step++) {
+    uint32_t now = t0 + step;
+    if (w.due(now)) readings++;
+    if (w.ended(now)) { endings++; endedAfter = step; }
+  }
+  CHECK(readings == 30);              // 0, 2, ... 58 s: none lost at the wrap
+  CHECK(endings == 1);
+  CHECK(endedAfter == 60000);         // a minute, not at the wrap
+
+  cad::LiveWindow b;
+  b.start(t0, 2, 1);
+  CHECK(b.open(t0 + 5000));           // millis() is 0 here
+  CHECK(b.open(t0 + 59999));
+  CHECK(!b.open(t0 + 60000));
+  // Not asked for 25 days, past half the wrap: long over, not "just begun".
+  CHECK(!b.open(t0 + 0x80000005u));
+}
+
 // A million boards lose AWS at second 0; AWS is back at second `outage`. From
 // then on the account accepts `quota` connects a second (the default connect
 // quota is 3,000) and refuses the rest, which count as failures. Each board
@@ -141,6 +276,12 @@ int main() {
   between_bounds();
   backoff_doubles_to_the_cap();
   telemetry_bounds();
+  live_bounds();
+  live_first_reading_at_once();
+  live_window_runs_out();
+  live_second_command_extends();
+  live_zero_minutes();
+  live_millis_wrap();
   fleet_reconnect_storm();
   if (failures) { std::printf("%d check(s) failed\n", failures); return 1; }
   std::printf("all device timing checks passed\n");

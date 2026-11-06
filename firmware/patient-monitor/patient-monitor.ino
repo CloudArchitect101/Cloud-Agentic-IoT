@@ -19,7 +19,7 @@
 // Raise this to ship a change. The pipeline publishes each version once and a
 // board installs only a version it is not already running, so a change under
 // the same number never reaches a board; the pull request checks fail it.
-#define FIRMWARE_VERSION "2.1.0"
+#define FIRMWARE_VERSION "2.2.0"
 
 // Seconds between readings until the fleet sets its own. The fleet's value
 // (scripts/ota.sh interval, or SET_TELEMETRY_INTERVAL through the device
@@ -59,15 +59,38 @@ void setup() {
 
 void loop() {
   device.loop();
-  if (!device.telemetryDue()) return;
+  // Two schedules: the stored reading every telemetry interval, and while a
+  // card is open in Salesforce a live one every few seconds (the library
+  // keeps both). Ask both on every pass; either can fall due alone.
+  bool store = device.telemetryDue();
+  bool live  = device.liveDue();
+  if (!store && !live) return;
 
+  // One read serves both. Live mode's default of 2 s is as fast as it helps to
+  // go: asked again sooner, the DHT library returns the reading it already has.
   float h = dht.readHumidity(), t = dht.readTemperature();
-  if (isnan(h) || isnan(t)) { Serial.println("DHT read failed"); return; }
+  bool ok = !isnan(h) && !isnan(t);
 
-  StaticJsonDocument<200> doc;
-  doc["deviceId"]    = device.thingName();
-  doc["temperature"] = t;
-  doc["humidity"]    = h;
-  device.publishTelemetry(doc);
-  Serial.printf("telemetry: %.1fC %.0f%%\n", t, h);
+  StaticJsonDocument<256> doc;   // room for what publishLive() adds
+  doc["deviceId"] = device.thingName();
+  if (ok) {
+    doc["temperature"] = t;
+    doc["humidity"]    = h;
+  }
+
+  if (store) {
+    if (ok) {
+      device.publishTelemetry(doc);
+      Serial.printf("telemetry: %.1fC %.0f%%\n", t, h);
+    } else {
+      // Said on stored readings only: every 2 s it would bury the console.
+      Serial.println("DHT read failed");
+    }
+  }
+  if (live) {
+    // The card then says the board is up but its sensor is not reading,
+    // rather than going quiet as if the board were offline.
+    if (!ok) doc["sensorError"] = "DHT read failed";
+    device.publishLive(doc);   // after publishTelemetry: it adds to doc
+  }
 }

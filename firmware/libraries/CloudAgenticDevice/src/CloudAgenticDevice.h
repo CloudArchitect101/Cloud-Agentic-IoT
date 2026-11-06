@@ -74,6 +74,23 @@ public:
 
   uint32_t telemetrySeconds() const { return _telemetrySeconds; }
 
+  /** True once per live interval while connected and a LIVE window is open.
+   *  The first is due at once after each LIVE command, not an interval later,
+   *  so a card that has just opened is not kept waiting. Stored readings go on
+   *  as before: telemetryDue() keeps its own schedule. */
+  bool liveDue();
+
+  /** True while a LIVE window is open, whether or not the board is online. */
+  bool live() const { return _live.open(millis()); }
+
+  /** Publish a live reading to device/<thing>/live: a plain MQTT topic, QoS 0,
+   *  through the message broker rather than Basic Ingest, because a card
+   *  subscribes to it and Basic Ingest reaches only rules. That is also why it
+   *  flows only while someone watches: AWS bills it as messaging. Adds
+   *  firmware (this version), rssi (Wi-Fi signal, dBm) and uptime (whole
+   *  seconds since boot) to `doc` first. */
+  bool publishLive(JsonDocument& doc);
+
   /** Register a handler for commands on device/<thing>/command. */
   void onCommand(void (*handler)(JsonDocument& doc));
 
@@ -89,6 +106,11 @@ private:
   uint32_t _telemetrySeconds;
   bool _telemetryScheduled = false;
   uint32_t _nextTelemetryAt = 0;
+
+  // Live mode is kept in RAM only, never NVS: a restart ends it, so a board
+  // can never be left streaming for good, and flash is not worn by a setting
+  // that changes every few minutes.
+  cad::LiveWindow _live;
 
   // Reconnect pacing: 1 s, then random waits doubling up to 5 minutes.
   cad::Backoff _retry{1000, 300000, 1000};
@@ -107,6 +129,7 @@ private:
   bool connectAWS();
   void retryLater(const char* what);
   bool setTelemetryInterval(long seconds, const char* source);
+  void setLive(long seconds, long minutes);
   void saveNetwork(const String& ssid, const String& pass);
   bool provisionFromSerial(bool hasIdentity);
   void checkSerialWifiUpdate();

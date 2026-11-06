@@ -1,9 +1,10 @@
 'use strict';
 
 // Compiles and runs device_timing_test.cpp: the firmware's reconnect backoff,
-// millis() wraparound and interval bounds, plus a simulated reconnect of a
-// million boards. The header it tests is plain C++, so any host compiler will
-// do; without one (a bare laptop) the test is skipped, and CI always has one.
+// millis() wraparound, interval bounds and live window, plus a simulated
+// reconnect of a million boards. The header it tests is plain C++, so any host
+// compiler will do; without one (a bare laptop) the test is skipped, and CI
+// always has one.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -21,7 +22,7 @@ function compiler() {
   return null;
 }
 
-test('firmware timing: backoff, millis() wrap, interval bounds, fleet reconnect', (t) => {
+test('firmware timing: backoff, millis() wrap, interval bounds, live window, fleet reconnect', (t) => {
   const cxx = compiler();
   if (!cxx) {
     t.skip('no C++ compiler on this machine');

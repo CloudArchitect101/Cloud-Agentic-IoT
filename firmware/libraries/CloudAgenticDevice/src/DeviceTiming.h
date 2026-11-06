@@ -1,7 +1,7 @@
 #pragma once
 /**
  * DeviceTiming - the fleet-safety arithmetic of CloudAgenticDevice: when to
- * retry a connection, and when to send the next reading.
+ * retry a connection, when to send the next reading, and when live mode ends.
  *
  * Nothing here touches Arduino, so test/firmware compiles and checks it on any
  * machine with a C++ compiler. Randomness comes in as an argument
@@ -84,5 +84,77 @@ const uint32_t MAX_TELEMETRY_SECONDS = 86400;   // a day
 inline bool validTelemetrySeconds(long seconds) {
   return seconds >= (long)MIN_TELEMETRY_SECONDS && seconds <= (long)MAX_TELEMETRY_SECONDS;
 }
+
+// Live mode (the LIVE command) asks for a reading every MIN_LIVE_SECONDS to
+// MAX_LIVE_SECONDS, for 1 to MAX_LIVE_MINUTES minutes; 0 minutes ends it. The
+// card that asks renews it while it stays open, so the cap is how long a board
+// can go on streaming, and being billed for it, after its viewer has gone.
+const uint32_t MIN_LIVE_SECONDS = 1;
+const uint32_t MAX_LIVE_SECONDS = 60;
+const uint32_t MAX_LIVE_MINUTES = 30;
+
+// Ending live mode needs no interval, so 0 minutes is accepted whatever
+// `seconds` says.
+inline bool validLive(long seconds, long minutes) {
+  if (minutes == 0) return true;
+  return seconds >= (long)MIN_LIVE_SECONDS && seconds <= (long)MAX_LIVE_SECONDS
+      && minutes >= 1 && minutes <= (long)MAX_LIVE_MINUTES;
+}
+
+/**
+ * The live window: a reading every few seconds for a few minutes, on top of
+ * the stored ones, while someone watches the board.
+ *
+ * The window is kept as the time it started and its length, and "open" is
+ * measured as time elapsed since the start. That difference is right across
+ * the millis() wrap for 49 days, where a deadline compared as "now < end"
+ * would close a window that crosses the wrap at once.
+ */
+class LiveWindow {
+ public:
+  LiveWindow() : _open(false), _startedAt(0), _lengthMs(0), _intervalMs(0), _nextAt(0) {}
+
+  /** A LIVE command at `now`, already checked with validLive(): the window
+   *  opens for `minutes` from now, with a reading every `seconds`, the first
+   *  one due at once so a viewer is not left waiting a whole interval. A
+   *  command while it is open starts it over from now: the card renews it
+   *  that way. 0 minutes closes it. */
+  void start(uint32_t now, uint32_t seconds, uint32_t minutes) {
+    _open = minutes > 0;
+    _startedAt = now;
+    _lengthMs = minutes * 60000u;
+    _intervalMs = seconds * 1000u;
+    _nextAt = now;
+  }
+
+  /** Open at `now`: started, and not yet run out. */
+  bool open(uint32_t now) const {
+    return _open && (uint32_t)(now - _startedAt) < _lengthMs;
+  }
+
+  /** True once per interval while the window is open. Like telemetry, the
+   *  next reading is an interval from now, not from the slot that was missed:
+   *  a board back from a dropped connection sends one reading, not a burst. */
+  bool due(uint32_t now) {
+    if (!open(now) || !cad::due(now, _nextAt, _intervalMs)) return false;
+    _nextAt = now + _intervalMs;
+    return true;
+  }
+
+  /** True once, the first time it is asked after the window ran out by
+   *  itself: the moment to say so. A window closed by a 0-minute command
+   *  never reports this; that command says so itself. The library asks on
+   *  every pass of loop(), so the elapsed time it measures never comes near
+   *  the 49 days after which it would repeat. */
+  bool ended(uint32_t now) {
+    if (!_open || open(now)) return false;
+    _open = false;
+    return true;
+  }
+
+ private:
+  bool _open;
+  uint32_t _startedAt, _lengthMs, _intervalMs, _nextAt;
+};
 
 }  // namespace cad

@@ -6,7 +6,7 @@
 |---|---|---|
 | `patient-monitor/` | DHT11 vitals + medication servo | `canary-patient-monitor` → `fleet-patient-monitor` |
 | `queue-indicator/` | Servo driven by Salesforce Case queue depth | `canary-queue-indicator` → `fleet-queue-indicator` |
-| `libraries/CloudAgenticDevice/` | Shared: NVS credentials and settings, provisioning, WiFi, MQTT with backoff, OTA | — |
+| `libraries/CloudAgenticDevice/` | Shared: NVS credentials and settings, provisioning, WiFi, MQTT with backoff, OTA, live mode | — |
 
 ## Why a shared library
 
@@ -36,7 +36,7 @@ compiles, flashes, and provisions in one interactive pass. See
 Each sketch declares its own name, which must match its folder:
 
 ```cpp
-#define FIRMWARE_VERSION "2.1.0"
+#define FIRMWARE_VERSION "2.2.0"
 CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY_SECONDS);
 ```
 
@@ -50,10 +50,39 @@ Three behaviours of the shared library exist for the day there are a million boa
 - **The reading interval belongs to the fleet.** Each board keeps it in NVS. `scripts/ota.sh interval <env> patient-monitor [seconds]` (in Prod, the "Fleet reading interval" workflow) sets it on every board of a type with one AWS IoT job, at the rollout pace in `config/<env>.json`; boards that are offline or join later get it too. For one board or a list, send `{"operation":"SET_TELEMETRY_INTERVAL","seconds":60}` through the device command API. The board accepts 5 seconds to a day. Until set, a sketch uses its `DEFAULT_TELEMETRY_SECONDS`, and the first reading after power-up comes at a random point in the first interval so a ward of boards does not report in lockstep.
 - **Readings skip the message broker.** `publishTelemetry()` publishes to `$aws/rules/cloud_agentic_iot_patient_vitals/device/<thing>/telemetry`: AWS IoT Basic Ingest hands it straight to the rule, and AWS does not bill it as messaging, the largest line of the IoT bill at fleet scale. The rule still sees `device/<thing>/telemetry`. One consequence: the MQTT test client cannot show readings any more; the serial console and the archive bucket can. `test/firmware/contract.test.js` keeps the rule name, the device policy and the firmware in step.
 
+## Live mode: readings while someone watches (from 2.2.0)
+
+A board stores a reading every telemetry interval whether anyone looks or not. While someone has its card open in Salesforce it also streams one every 2 seconds. Opening the card sends this command, through the device-live API, on `device/<thing>/command`:
+
+```json
+{"operation":"LIVE","seconds":2,"minutes":15}
+```
+
+From then on the board publishes a reading every `seconds` to `device/<thing>/live`, the first one at once, until `minutes` have passed since the last LIVE command. The card sends it again every 10 minutes while it stays open, so the board streams while someone watches and stops by itself within 15 minutes of the card closing. Stored readings carry on exactly as before; live ones are extra, and nothing stores them.
+
+```json
+{"deviceId":"Test7","temperature":22.5,"humidity":41,"firmware":"2.2.0","rssi":-61,"uptime":5321}
+```
+
+`rssi` is the Wi-Fi signal in dBm and `uptime` the whole seconds since the board started. When the DHT11 does not answer, the reading says so instead of going quiet, so the card can tell a board that is up but not sensing from one that is offline:
+
+```json
+{"deviceId":"Test7","sensorError":"DHT read failed","firmware":"2.2.0","rssi":-61,"uptime":5323}
+```
+
+- **Bounds.** `seconds` 1 to 60 and `minutes` 1 to 30 (`MIN_LIVE_SECONDS`, `MAX_LIVE_SECONDS` and `MAX_LIVE_MINUTES` in `DeviceTiming.h`). `{"operation":"LIVE","minutes":0}` ends it at once. Anything else is refused, changes nothing, and the console says `live: refused` with what is allowed.
+- **2 seconds** is the default because faster gains nothing: asked again within 2 seconds, the DHT library returns the reading it already has. One read serves a stored reading and a live one that fall due together.
+- **RAM only.** Live mode is never written to NVS, so a restart ends it.
+- **A plain MQTT topic.** Live readings go through the message broker at QoS 0 rather than Basic Ingest, because the card subscribes to them and Basic Ingest reaches only rules. AWS bills them as messaging, which is why they flow only while someone watches.
+- **The console** says `live: every 2 s for 15 min` for each command and `live: off` when it ends, by itself or by `minutes` 0. Live readings print nothing, and `DHT read failed` appears on stored readings only, so the console stays readable.
+- **The queue indicator** accepts the command too, since the library handles it, but its sketch has no reading to send. Firmware older than 2.2.0 ignores the command.
+
+`test/firmware/device_timing_test.cpp` checks the window on the host: the first reading at once, a second command extending the window, 0 minutes, and a window that straddles the `millis()` wrap.
+
 ## Lifecycle: manual once, automatic thereafter
 
 1. **Once per device** — `./scripts/setup-device.sh`: USB flash + serial provisioning bundle. The only hands-on step in a device's life, because the ROM bootloader has no network stack and cannot fetch its own first firmware.
-2. **Every update after that** is over the air. Raise `FIRMWARE_VERSION` (a pull request that changes firmware without raising it fails its checks) and merge. Merged into `Dev`, the pipeline builds, publishes, and sends it to every Dev board; merged into `Prod`, to that type's canary ring. A device that was offline during the rollout asks for pending jobs when it reconnects. To try a build over the air before merging, `scripts/ota.sh try Dev <type>` sends your working copy to every Dev board of that type as `<version>-try.<n>`, a version no release uses.
+2. **Every update after that** is over the air. Raise `FIRMWARE_VERSION` (a pull request that changes firmware without raising it fails its checks) and merge. Merged into `Dev`, the pipeline builds, publishes, and sends it to every Dev board; merged into `Prod`, to that type's canary ring. A device that was offline during the rollout asks for pending jobs when it reconnects. To try a build over the air before merging, `scripts/ota.sh try Dev <type>` sends your working copy to every Dev board of that type as `<version>-try.<n>`, a version no release uses. The console names the image a board downloads (`OTA: downloading https://s3.<region>.amazonaws.com/<bucket>/firmware/...bin`); from 2.2.0 it leaves out the link's query string, which holds its signature and the OTA role's session token.
 3. **One click per release** promotes a Prod release from canary to fleet, for that device type only.
 
 See [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) for the whole path from your desk to Prod.
