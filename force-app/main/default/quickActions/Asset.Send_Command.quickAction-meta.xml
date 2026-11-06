@@ -1,13 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <QuickAction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <!-- Requested By is left to DeviceCommandService.prepare, which fills it
+         with the user's name cut to the field's 80 characters: a formula of
+         first and last name can be longer and would refuse the save. -->
     <description>Creates a Device Command for this device's board. It is sent in the background, and its Status shows when the board answers.</description>
     <fieldOverrides>
         <field>Device__c</field>
         <formula>Asset.SerialNumber</formula>
-    </fieldOverrides>
-    <fieldOverrides>
-        <field>Requested_By__c</field>
-        <formula>$User.FirstName &amp; &quot; &quot; &amp; $User.LastName</formula>
     </fieldOverrides>
     <label>Send Command</label>
     <optionsCreateFeedItem>false</optionsCreateFeedItem>
