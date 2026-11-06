@@ -16,6 +16,10 @@
         <enabled>true</enabled>
     </classAccesses>
     <classAccesses>
+        <apexClass>DeviceCommandAckService</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>DeviceConnectionService</apexClass>
         <enabled>true</enabled>
     </classAccesses>
@@ -173,6 +177,20 @@
         <field>Asset.Wi_Fi_Network__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <!-- Answered_At__c and Status_Detail__c come from the board's answer,
+         which the device-command-ack Lambda records through
+         DeviceCommandAckService. Sent_At__c is set only by the send job,
+         whose update runs in system mode, so this user only reads it. -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Answered_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Asset__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>Device_Command__c.Command__c</field>
@@ -181,6 +199,16 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>Device_Command__c.Requested_By__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Device_Command__c.Sent_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Status_Detail__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

@@ -5,6 +5,7 @@
     <columns>Device__c</columns>
     <columns>Command__c</columns>
     <columns>Status__c</columns>
+    <columns>Status_Detail__c</columns>
     <columns>Requested_By__c</columns>
     <columns>CREATED_DATE</columns>
     <filterScope>Everything</filterScope>

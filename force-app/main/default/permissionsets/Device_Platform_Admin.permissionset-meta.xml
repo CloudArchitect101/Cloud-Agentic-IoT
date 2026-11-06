@@ -91,6 +91,20 @@
         <field>Asset.Wi_Fi_Network__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <!-- Answered_At__c, Sent_At__c and Status_Detail__c are read-only: the
+         send job and the board's answer set them, and a hand-edited value
+         would say a board did something it did not. Asset__c is editable:
+         Send Command on an Asset sets it. -->
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Device_Command__c.Answered_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Asset__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>Device_Command__c.Command__c</field>
@@ -99,6 +113,16 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>Device_Command__c.Requested_By__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Device_Command__c.Sent_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Device_Command__c.Status_Detail__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
