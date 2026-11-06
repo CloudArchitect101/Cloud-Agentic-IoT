@@ -61,10 +61,21 @@ check_templates() {
 }
 
 check_scripts() {
-  has shellcheck || { skip shellcheck scripts "brew install shellcheck"; return 0; }
-  step "Shell scripts: shellcheck"
-  shellcheck --external-sources --severity=warning scripts/*.sh scripts/lib/*.sh
-  endstep
+  if has shellcheck; then
+    step "Shell scripts: shellcheck"
+    shellcheck --external-sources --severity=warning scripts/*.sh scripts/lib/*.sh
+    endstep
+  else
+    skip shellcheck scripts "brew install shellcheck"
+  fi
+  # The serial helper the board scripts share, against a simulated board.
+  if has python3; then
+    step "Board serial helper: tests against a simulated board"
+    python3 -m unittest discover -s test/scripts
+    endstep
+  else
+    skip python3 scripts "it comes with the Xcode command line tools: xcode-select --install"
+  fi
 }
 
 check_salesforce() {

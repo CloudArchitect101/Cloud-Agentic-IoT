@@ -4,6 +4,12 @@
 #
 # Deliberately does not erase flash: that would wipe the NVS partition holding
 # the device identity we want to survive firmware updates.
+#
+# Unlike provision-device.sh, this still sends the bundle in one burst and
+# does not wait for the board to ask for it. The board asks only in the two
+# minutes after it starts, and a burst can lose characters, so press EN just
+# before running this, and keep the bundle until the board says
+# "aws: connected".
 param(
     [Parameter(Mandatory=$true)][string]$Bundle,
     [Parameter(Mandatory=$true)][string]$Port
@@ -26,5 +32,6 @@ $sp.Close()
 
 Write-Host "Sent. The device stores it in NVS and reboots."
 Write-Host ""
-Write-Host "Delete the bundle now - it contains the device private key:"
+Write-Host "Keep the bundle until the serial monitor shows 'aws: connected', then delete it -"
+Write-Host "it contains the device private key:"
 Write-Host "  Remove-Item $Bundle"

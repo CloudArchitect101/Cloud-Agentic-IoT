@@ -44,6 +44,18 @@ refuse_local_prod() {
   fi
 }
 
+# detect_port - prints the first serial port with the usual name an ESP32's
+# USB-serial chip gets on macOS or Linux, or fails if none is plugged in. A
+# loop rather than `ls ... | head`: with pipefail, ls failing on the names
+# that match nothing would stop the calling script without a word.
+detect_port() {
+  local p
+  for p in /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/cu.wchusbserial* /dev/ttyUSB* /dev/ttyACM*; do
+    if [ -e "$p" ]; then printf '%s' "$p"; return 0; fi
+  done
+  return 1
+}
+
 stack_name() { printf '%s-%s-%s' "$PROJECT" "$1" "$2"; }   # stack_name <dir> <env>
 
 # Where scripts/deploy-aws.sh publishes config/vital-thresholds.json. The

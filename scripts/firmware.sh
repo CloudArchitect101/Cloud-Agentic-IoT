@@ -26,15 +26,6 @@ usage() {
   exit 1
 }
 
-# The usual names an ESP32's USB-serial chip gets on macOS and Linux.
-detect_port() {
-  local p
-  for p in /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/cu.wchusbserial* /dev/ttyUSB* /dev/ttyACM*; do
-    if [ -e "$p" ]; then printf '%s' "$p"; return 0; fi
-  done
-  return 1
-}
-
 cmd_setup() {
   need arduino-cli "Install it with: brew install arduino-cli (see docs/SETUP.md)."
   # The ESP32 index is passed on each command rather than written into your
