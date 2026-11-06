@@ -116,8 +116,9 @@ test('a leftover Thing with no certificate and no Thing Group is deleted', async
 });
 
 // Provisioning adds a Thing to its group only after attaching its
-// certificate, so a Thing in a group with none may be a provisioned device's
-// whose certificate is being replaced, not a failed attempt's.
+// certificate, and takes a failed attempt out of its group again, so a Thing
+// in a group with no certificate may be a provisioned device's whose
+// certificate is being replaced.
 test('a leftover Thing in a Thing Group is kept, even with no certificate', async (t) => {
   captureConsole(t);
   const { handler, calls } = load(t, (command) => {

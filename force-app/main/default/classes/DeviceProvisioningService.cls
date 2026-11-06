@@ -81,8 +81,9 @@ public with sharing class DeviceProvisioningService {
      * keeps any other, since that may be an identity this record never got,
      * or another device's with the same serial number. A device that never
      * had a Wi-Fi Network never reached AWS, so it makes no callout. Either
-     * way, a Thing that a remaining Asset still uses, as its serial number or
-     * in its Thing ARN, is kept: the job checks before it calls AWS.
+     * way, a Thing that a remaining Asset's Thing ARN names is kept, and so is
+     * a leftover whose serial number a remaining Asset has: the job checks
+     * before it calls AWS.
      */
     public static void tearDownAwsResourcesFor(List<Asset> deletedAssetRecords) {
         Set<String> thingNamesToTearDown = new Set<String>();

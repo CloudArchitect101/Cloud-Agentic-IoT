@@ -54,6 +54,7 @@ const CHECKED_AGAINST = {
   ListThingPrincipals: ['thing'],
   ListThingGroupsForThing: ['thing'],
   AddThingToThingGroup: ['thing', 'thinggroup'],
+  RemoveThingFromThingGroup: ['thing', 'thinggroup'],
   AttachThingPrincipal: ['cert'],
   DetachThingPrincipal: ['cert'],
   AttachPolicy: ['cert'],         // and thinggroup, which these functions never target

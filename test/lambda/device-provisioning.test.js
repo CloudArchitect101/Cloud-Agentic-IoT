@@ -19,16 +19,18 @@ const ENV = {
 
 const IOT_COMMANDS = [
   'CreateThingCommand', 'ListThingPrincipalsCommand', 'CreateKeysAndCertificateCommand', 'AttachPolicyCommand',
-  'AttachThingPrincipalCommand', 'AddThingToThingGroupCommand', 'DescribeEndpointCommand',
+  'AttachThingPrincipalCommand', 'ListThingGroupsForThingCommand', 'AddThingToThingGroupCommand',
+  'RemoveThingFromThingGroupCommand', 'DescribeEndpointCommand',
   'ListAttachedPoliciesCommand', 'DetachPolicyCommand', 'DetachThingPrincipalCommand',
   'UpdateCertificateCommand', 'DeleteCertificateCommand',
 ];
 
 /**
  * A fake IoT control plane. `principals` is what each Thing already has
- * attached; `fail(command, input)` may throw to make one call fail.
+ * attached, `groups` the Thing Groups it is already in; `fail(command, input)`
+ * may throw to make one call fail.
  */
-function iotFor({ principals = {}, fail = () => {} } = {}) {
+function iotFor({ principals = {}, groups = {}, fail = () => {} } = {}) {
   let certificates = 0;
   return (command, input) => {
     fail(command, input);
@@ -37,6 +39,8 @@ function iotFor({ principals = {}, fail = () => {} } = {}) {
         return { thingArn: `arn:aws:iot:ca-central-1:111122223333:thing/${input.thingName}` };
       case 'ListThingPrincipalsCommand':
         return { principals: principals[input.thingName] || [] };
+      case 'ListThingGroupsForThingCommand':
+        return { thingGroups: (groups[input.thingName] || []).map((groupName) => ({ groupName })) };
       case 'CreateKeysAndCertificateCommand':
         certificates += 1;
         return {
@@ -56,10 +60,13 @@ function iotFor({ principals = {}, fail = () => {} } = {}) {
   };
 }
 
-function load(t, name, iotOptions) {
+function load(t, name, iotOptions, { failS3 = () => {} } = {}) {
   withEnv(t, ENV);
   const iot = fakeAwsSdk('IoTClient', IOT_COMMANDS, iotFor(iotOptions));
-  const s3 = fakeAwsSdk('S3Client', ['PutObjectCommand', 'GetObjectCommand']);
+  const s3 = fakeAwsSdk('S3Client', ['PutObjectCommand', 'GetObjectCommand'], (command) => {
+    failS3(command);
+    return {};
+  });
   const signed = [];
   const presigner = {
     getSignedUrl: async (client, command, options) => {
@@ -172,6 +179,65 @@ test('device-provisioning: a failure after the certificate was made removes that
   // Left active, a retry would add a second working credential for the device.
   assert.deepEqual(callsOf('UpdateCertificateCommand').map((c) => c.input), [{ certificateId: 'new1', newStatus: 'INACTIVE' }]);
   assert.deepEqual(callsOf('DeleteCertificateCommand').map((c) => c.input), [{ certificateId: 'new1', forceDelete: true }]);
+  // It never joined the group, so there is no membership to undo.
+  assert.equal(callsOf('RemoveThingFromThingGroupCommand').length, 0);
+});
+
+// A failed attempt must leave an empty Thing in no group: that is the only
+// kind of Thing device-teardown deletes when Salesforce deletes the device.
+test('device-provisioning: a failure after the group step takes the Thing out of its group again', async (t) => {
+  captureConsole(t);
+  const { handler, iot, callsOf } = load(t, 'device-provisioning', {}, {
+    failS3: (command) => {
+      if (command === 'PutObjectCommand') throw awsError('AccessDenied', 'Access Denied');
+    },
+  });
+
+  const res = await handler(apiRequest({ devices: devices(1) }));
+
+  assert.deepEqual(resultsOf(res), [{ thingName: 'pm-1', ok: false, retryable: false, error: 'Access Denied' }]);
+  assert.deepEqual(callsOf('RemoveThingFromThingGroupCommand').map((c) => c.input),
+    [{ thingName: 'pm-1', thingGroupName: 'fleet-patient-monitor' }]);
+  assert.deepEqual(callsOf('DeleteCertificateCommand').map((c) => c.input), [{ certificateId: 'new1', forceDelete: true }]);
+  // Undone in reverse: out of the group first, then the certificate.
+  const order = iot.map((c) => c.command);
+  assert.ok(order.indexOf('RemoveThingFromThingGroupCommand') < order.indexOf('DetachThingPrincipalCommand'), order.join(', '));
+});
+
+test('device-provisioning: a failure leaves a Thing in a group it was in before', async (t) => {
+  captureConsole(t);
+  // For example a provisioned device between its old certificate and its new one.
+  const { handler, callsOf } = load(t, 'device-provisioning', { groups: { 'pm-1': ['fleet-patient-monitor'] } }, {
+    failS3: (command) => {
+      if (command === 'PutObjectCommand') throw awsError('AccessDenied', 'Access Denied');
+    },
+  });
+
+  const [result] = resultsOf(await handler(apiRequest({ devices: devices(1) })));
+
+  assert.equal(result.ok, false);
+  assert.equal(callsOf('RemoveThingFromThingGroupCommand').length, 0);
+  assert.deepEqual(callsOf('DeleteCertificateCommand').map((c) => c.input), [{ certificateId: 'new1', forceDelete: true }]);
+});
+
+test('device-provisioning: a Thing that cannot leave its group still loses the certificate', async (t) => {
+  const logs = captureConsole(t);
+  const { handler, callsOf } = load(t, 'device-provisioning', {
+    fail: (command) => {
+      if (command === 'RemoveThingFromThingGroupCommand') throw awsError('ThrottlingException', 'Rate exceeded');
+    },
+  }, {
+    failS3: (command) => {
+      if (command === 'PutObjectCommand') throw awsError('AccessDenied', 'Access Denied');
+    },
+  });
+
+  const [result] = resultsOf(await handler(apiRequest({ devices: devices(1) })));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'Access Denied');
+  assert.deepEqual(callsOf('DeleteCertificateCommand').map((c) => c.input), [{ certificateId: 'new1', forceDelete: true }]);
+  assert.ok(logs.some((line) => line.includes('remove it by hand') && line.includes('pm-1')), logs.join('\n'));
 });
 
 test('device-provisioning: a Thing that already has a certificate is not given a second one', async (t) => {
@@ -182,8 +248,18 @@ test('device-provisioning: a Thing that already has a certificate is not given a
   assert.equal(result.retryable, false);
   assert.match(result.error, /already has a certificate.*Re-provision/);
   // Re-provision refuses a device with no Thing ARN, so the answer names it.
-  assert.match(result.error, /set its Thing ARN to arn:aws:iot:\S+:thing\/pm-1 /);
+  assert.match(result.error, /Thing ARN: arn:aws:iot:\S+:thing\/pm-1$/);
   assert.equal(callsOf('CreateKeysAndCertificateCommand').length, 0);
+});
+
+test('device-provisioning: the advice for a Thing that has a certificate fits in what Salesforce keeps', async (t) => {
+  captureConsole(t);
+  // Salesforce allows an 80-character serial number and keeps 255 characters of an error.
+  const thingName = 'x'.repeat(80);
+  const { handler } = load(t, 'device-provisioning', { principals: { [thingName]: [OLD_CERT_ARN] } });
+  const [result] = resultsOf(await handler(apiRequest({ devices: [{ thingName, ssid: 'clinic' }] })));
+  const kept = result.error.slice(0, 255);
+  assert.match(kept, /set its Thing ARN .* use Re-provision; if not, use another serial number\./, kept);
 });
 
 test('device-provisioning: one device in the request body itself still works', async (t) => {

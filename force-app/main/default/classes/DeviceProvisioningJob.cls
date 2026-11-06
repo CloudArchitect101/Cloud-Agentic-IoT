@@ -28,7 +28,8 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
     // Things. TEARDOWN_LEFTOVER is for deleted devices that never got a Thing
     // ARN: AWS deletes the Thing named after the serial number only while it
     // has no certificate and is in no Thing Group, and keeps any other. Both
-    // keep a Thing that a remaining Asset still uses, without a callout.
+    // keep, without a callout, a Thing a remaining Asset still uses (see
+    // ThingsInUse).
     public enum Action { PROVISION, REPROVISION, TEARDOWN, TEARDOWN_LEFTOVER }
 
     private static final Map<Action, String> PATH_BY_ACTION = new Map<Action, String>{
@@ -172,16 +173,22 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
     }
 
     /**
-     * The Thing names, in lower case, that a remaining Asset still uses: as
-     * its serial number, or in its Thing ARN. A deleted device's Thing may be
-     * another's too, for example a duplicate record with the same serial
-     * number, or a copy of the record with the Thing ARN copied. The deleted
-     * records are already gone when this runs, so only remaining ones match.
+     * The Thing names, in lower case, that a remaining Asset still uses.
      *
-     * Without sharing, since an Asset this user cannot see uses its Thing all
-     * the same. Asked in the job, not the trigger: on a large Asset table a
-     * trigger may not run a query like this. Case is ignored, which can only
-     * keep more Things, never delete more.
+     * An Asset whose Thing ARN names the Thing holds it, for example a copy
+     * of the deleted record with the Thing ARN copied. For a leftover, an
+     * Asset with that serial number counts too: nothing stops two records
+     * sharing one, and its own provisioning may be using that Thing. Not for
+     * a full teardown: that Thing still has the deleted device's certificate,
+     * and provisioning never hands a Thing with a certificate to another
+     * record, so keeping it would leave a retired device able to connect.
+     *
+     * Deleted records are in the Recycle Bin, which queries leave out, and a
+     * restored one counts again. Without sharing, since an Asset this user
+     * cannot see uses its Thing all the same. Asked in the job, not the
+     * trigger: on a large Asset table a trigger may not run a query like
+     * this. Case is ignored, which can only keep more Things, never delete
+     * more.
      *
      * SOQL documents a list bind for IN but not for LIKE, so each Thing ARN
      * pattern gets a bind of its own, THING_NAMES_PER_QUERY names to a query
@@ -190,24 +197,26 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
      * Assets really use are kept.
      */
     private without sharing class ThingsInUse {
-        public Set<String> among(List<String> thingNames) {
+        public Set<String> among(List<String> thingNames, Boolean bySerialNumberToo) {
             Set<String> inUse = new Set<String>();
             for (Integer first = 0; first < thingNames.size(); first += THING_NAMES_PER_QUERY) {
                 List<String> names = new List<String>();
-                List<String> arnMatches = new List<String>();
+                List<String> matches = new List<String>();
                 Map<String, Object> binds = new Map<String, Object>();
                 for (Integer i = first; i < Math.min(first + THING_NAMES_PER_QUERY, thingNames.size()); i++) {
                     names.add(thingNames[i]);
                     binds.put('arn' + i, '%:thing/' + thingNames[i]);
-                    arnMatches.add('Thing_ARN__c LIKE :arn' + i);
+                    matches.add('Thing_ARN__c LIKE :arn' + i);
                 }
-                binds.put('names', names);
+                if (bySerialNumberToo) {
+                    binds.put('names', names);
+                    matches.add('SerialNumber IN :names');
+                }
                 List<Asset> devices = Database.queryWithBinds(
-                    'SELECT SerialNumber, Thing_ARN__c FROM Asset WHERE SerialNumber IN :names OR '
-                        + String.join(arnMatches, ' OR '),
+                    'SELECT SerialNumber, Thing_ARN__c FROM Asset WHERE ' + String.join(matches, ' OR '),
                     binds, AccessLevel.SYSTEM_MODE);
                 for (Asset device : devices) {
-                    if (String.isNotBlank(device.SerialNumber)) {
+                    if (bySerialNumberToo && String.isNotBlank(device.SerialNumber)) {
                         inUse.add(device.SerialNumber.toLowerCase());
                     }
                     String provisionedAs = DeviceProvisioningService.thingNameIn(device.Thing_ARN__c);
@@ -265,12 +274,12 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
         }
 
         /**
-         * The Thing names no remaining Asset uses. One that another Asset
-         * uses is kept in AWS: tearing it down would take that device's
-         * identity. An empty Thing costs nothing, and provisioning reuses it.
+         * The Thing names no remaining Asset uses. The others are kept in
+         * AWS, since tearing one down would take the identity of the device
+         * that uses it, and they count as done.
          */
         List<String> withoutThingsStillInUse(List<String> thingNames) {
-            Set<String> inUse = new ThingsInUse().among(thingNames);
+            Set<String> inUse = new ThingsInUse().among(thingNames, kind == Action.TEARDOWN_LEFTOVER);
             List<String> free = new List<String>();
             for (String thingName : thingNames) {
                 if (!inUse.contains(thingName.toLowerCase())) {
@@ -279,7 +288,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
                 }
                 succeeded++;
                 System.debug(kind == Action.TEARDOWN ? LoggingLevel.WARN : LoggingLevel.INFO,
-                    'Kept in AWS: ' + thingName + ' is still the serial number or Thing ARN of another Asset.');
+                    'Kept in AWS: a remaining Asset still uses ' + thingName + '.');
             }
             return free;
         }

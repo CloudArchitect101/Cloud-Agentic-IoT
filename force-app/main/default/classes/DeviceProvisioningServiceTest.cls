@@ -154,6 +154,34 @@ private class DeviceProvisioningServiceTest {
     }
 
     @IsTest
+    static void deletingAProvisionedDeviceTearsDownEvenIfADuplicateRemains() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        Asset provisioned = newDevice('ESP32-D2');
+        Asset duplicate = newDevice('ESP32-D2');
+        TriggerHandler.bypass('AssetTriggerHandler');
+        insert new List<Asset>{ provisioned, duplicate };
+        update new List<Asset>{
+            new Asset(Id = provisioned.Id, Provisioning_Status__c = 'Provisioned',
+                      Thing_ARN__c = 'arn:aws:iot:us-east-2:111122223333:thing/ESP32-D2'),
+            new Asset(Id = duplicate.Id, Provisioning_Status__c = 'Failed')
+        };
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        Test.startTest();
+        delete provisioned;
+        Test.stopTest();
+
+        // The duplicate only shares the serial number. The Thing's
+        // certificate is the deleted device's, so it must still go, or the
+        // retired board could keep connecting.
+        Assert.areEqual(1, aws.bodies.size(), 'One teardown callout');
+        Assert.areEqual(new List<Object>{ 'ESP32-D2' }, (List<Object>) aws.bodies[0].get('thingNames'),
+            'A full teardown of the Thing the deleted device was provisioned as');
+    }
+
+    @IsTest
     static void deletingDevicesThatNeverFinishedProvisioningRemovesWhatTheyLeft() {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();

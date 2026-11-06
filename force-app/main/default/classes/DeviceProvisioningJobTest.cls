@@ -247,8 +247,8 @@ private class DeviceProvisioningJobTest {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        // Remaining devices: PM-0 by its serial number, and one provisioned
-        // as PM-1 whose serial number has changed since.
+        // Remaining devices: PM-0 by its serial number only, and one
+        // provisioned as PM-1 whose serial number has changed since.
         List<Asset> remaining = readyDevices(2, 'PM-');
         TriggerHandler.bypass('AssetTriggerHandler');
         update new Asset(Id = remaining[1].Id, SerialNumber = 'PM-1-NEW', Provisioning_Status__c = 'Provisioned',
@@ -259,16 +259,22 @@ private class DeviceProvisioningJobTest {
         DeviceProvisioningJob.Run leftovers = DeviceProvisioningJob.process(
             DeviceProvisioningJob.Action.TEARDOWN_LEFTOVER, new List<String>{ 'PM-0', 'pm-1', 'PM-2' });
         DeviceProvisioningJob.Run full = DeviceProvisioningJob.process(
-            DeviceProvisioningJob.Action.TEARDOWN, new List<String>{ 'PM-1' });
+            DeviceProvisioningJob.Action.TEARDOWN, new List<String>{ 'PM-1', 'PM-0' });
         Test.stopTest();
 
-        Assert.areEqual(1, aws.bodies.size(), 'One callout, for the leftover no one uses');
+        Assert.areEqual(2, aws.bodies.size(), 'One callout for each kind');
         List<Object> sent = (List<Object>) aws.bodies[0].get('leftoverThingNames');
-        Assert.areEqual(1, sent.size(), 'Only one name sent: ' + sent);
+        Assert.areEqual(1, sent.size(), 'Only one leftover sent: ' + sent);
         Assert.areEqual('PM-2', sent[0], 'PM-2, the one no remaining device uses; case does not matter');
         Assert.areEqual(3, leftovers.succeeded, 'Keeping the other two is a decision, not a failure');
         Assert.areEqual(0, leftovers.failed, 'Nothing failed');
-        Assert.areEqual(1, full.succeeded, 'A full teardown keeps a Thing in use too');
+
+        // A full teardown keeps only a Thing another Asset's Thing ARN names.
+        // PM-0's certificate is the deleted device's, whatever shares its
+        // serial number, so it still goes.
+        List<Object> tornDown = (List<Object>) aws.bodies[1].get('thingNames');
+        Assert.areEqual(new List<Object>{ 'PM-0' }, tornDown, 'Only PM-0 torn down: ' + tornDown);
+        Assert.areEqual(2, full.succeeded, 'PM-1 kept, PM-0 torn down');
         Assert.areEqual(0, full.failed, 'Nothing failed');
     }
 

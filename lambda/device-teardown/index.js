@@ -27,10 +27,11 @@ const TIME_TO_ANSWER_MS = 4000;
  * Thing named after their serial number. That Thing is deleted only while it
  * has no certificate and is in no Thing Group, which is what a failed attempt
  * leaves: provisioning adds a Thing to its group only after attaching its
- * certificate. Any other Thing of that name is kept and reported as kept. It
- * may be another device's with the same serial number, one whose certificate
- * is being replaced right now, or this device's own identity that Salesforce
- * never recorded. A function from before leftoverThingNames answers such a
+ * certificate, and takes both away again when a later step fails. Any other
+ * Thing of that name is kept and reported as kept. It may be another
+ * device's with the same serial number, one whose certificate is being
+ * replaced right now, this device's own identity that Salesforce never
+ * recorded, or one an older provisioning function left in its group. A function from before leftoverThingNames answers such a
  * request with a 400 instead of tearing those Things down in full.
  *
  * The blocker this removes: a Thing that keeps its certificate blocks its
@@ -111,8 +112,9 @@ async function tearDown(thingName, leftover) {
 /**
  * Why a leftover Thing must stay, or null when it is what a failed
  * provisioning leaves: no certificate, and no Thing Group. A Thing in a group
- * had its certificate attached at least once, so it may be another device's,
- * or a provisioned one between its old certificate and its new one.
+ * got that far with a certificate attached, and a failed attempt is taken out
+ * of its group again, so it may be another device's, or a provisioned one
+ * between its old certificate and its new one.
  */
 async function reasonToKeep(thingName, principals) {
   if (principals.length) {
