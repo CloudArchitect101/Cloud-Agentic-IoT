@@ -5,6 +5,8 @@
  * result per device, HTTP 207 when some of them failed, and the status a test
  * asks for (429, 500, 403...) when a test wants the whole request to fail.
  * POST /device-live gets what the device-live Lambda answers for one device.
+ * POST /aws-spend answers spendAnswer with spendStatus, or spendBody verbatim
+ * when a test sets it.
  */
 @IsTest
 public class DeviceApiMock implements HttpCalloutMock {
@@ -22,6 +24,21 @@ public class DeviceApiMock implements HttpCalloutMock {
      * well over a thousand characters. A test can make it longer still.
      */
     public Integer bundleUrlLength = 1500;
+    /** What POST /aws-spend answers: $3.42 spent of a $20 budget. */
+    public Map<String, Object> spendAnswer = new Map<String, Object>{
+        'month'    => '2026-11',
+        'currency' => 'USD',
+        'spent'    => new Map<String, Object>{
+            'amount' => 3.42, 'source' => 'budget', 'basis' => 'pre-credit-pre-tax',
+            'estimated' => null, 'asOf' => '2026-11-06T17:20:05.000Z', 'keptUntil' => null
+        },
+        'limit'    => new Map<String, Object>{
+            'amount' => 20, 'source' => 'budget', 'name' => 'cloud-agentic-iot-monthly', 'chosenBy' => 'name'
+        },
+        'notices'  => new List<Object>()
+    };
+    public Integer spendStatus = 200;
+    public String spendBody;
 
     public HttpResponse respond(HttpRequest request) {
         Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(request.getBody());
@@ -38,6 +55,11 @@ public class DeviceApiMock implements HttpCalloutMock {
         if (request.getEndpoint().endsWith('/device-live')) {
             response.setStatusCode(200);
             response.setBody(JSON.serialize(liveAnswer(body)));
+            return response;
+        }
+        if (request.getEndpoint().endsWith('/aws-spend')) {
+            response.setStatusCode(spendStatus);
+            response.setBody(spendBody != null ? spendBody : JSON.serialize(spendAnswer));
             return response;
         }
 

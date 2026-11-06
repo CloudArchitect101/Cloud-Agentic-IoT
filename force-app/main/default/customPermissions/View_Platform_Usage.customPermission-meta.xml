@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomPermission xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>See this month's AWS spend and the org's Salesforce limits on the Cloud Agentic IoT app's Home page. PlatformUsageController also requires View Setup and Configuration, so only admins see figures.</description>
+    <isLicensed>false</isLicensed>
+    <label>View Platform Usage</label>
+</CustomPermission>

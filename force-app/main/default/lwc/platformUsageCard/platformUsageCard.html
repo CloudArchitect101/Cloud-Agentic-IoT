@@ -1,0 +1,121 @@
+<template>
+    <lightning-card title="Usage and limits" icon-name="standard:dashboard">
+        <div class="slds-p-horizontal_medium">
+            <template lwc:if={allowed}>
+                <lightning-layout multiple-rows>
+                    <lightning-layout-item size="12" large-device-size="5" padding="around-small">
+                        <h2 class="slds-text-heading_small slds-m-bottom_x-small">AWS this month</h2>
+                        <template lwc:if={awsLoading}>
+                            <div class="loading slds-is-relative">
+                                <lightning-spinner size="small" alternative-text="Reading AWS spend"></lightning-spinner>
+                            </div>
+                        </template>
+                        <template lwc:elseif={awsError}>
+                            <p class="slds-text-color_error">{awsError}</p>
+                        </template>
+                        <template lwc:else>
+                            <template lwc:if={aws.error}>
+                                <p class="slds-text-color_error slds-m-bottom_x-small">{aws.error}</p>
+                            </template>
+                            <template lwc:if={aws.lastKnownText}>
+                                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">{aws.lastKnownText}</p>
+                            </template>
+                            <template lwc:if={aws.hasAnswer}>
+                                <p class="slds-text-body_small slds-text-color_weak">{aws.month}</p>
+                                <p><span class="big">{aws.spent}</span> {aws.limitText}</p>
+                                <template lwc:if={aws.bar}>
+                                    <div class="slds-m-vertical_x-small">
+                                        <div class="slds-grid slds-grid_align-spread slds-text-body_small">
+                                            <span class="slds-truncate slds-m-right_small" title={aws.bar.label}>{aws.bar.label}</span>
+                                            <span>{aws.bar.text}</span>
+                                        </div>
+                                        <div class="track" role="progressbar" aria-label={aws.bar.label}
+                                            aria-valuemin="0" aria-valuemax="100" aria-valuenow={aws.bar.ariaNow}>
+                                            <div class={aws.bar.fillClass} style={aws.bar.fillStyle}></div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <p class="slds-text-body_small">{aws.basisText}</p>
+                                <template lwc:if={aws.noLimit}>
+                                    <p class="slds-text-body_small slds-m-top_x-small">{aws.noLimit}</p>
+                                </template>
+                                <template for:each={aws.notices} for:item="notice">
+                                    <p key={notice} class="slds-text-body_small slds-m-top_x-small">{notice}</p>
+                                </template>
+                                <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">{aws.caption}</p>
+                            </template>
+                        </template>
+
+                        <template lwc:if={salesforce}>
+                            <h2 class="slds-text-heading_small slds-m-top_large slds-m-bottom_x-small">CPU and memory</h2>
+                            <p class="slds-text-body_small slds-m-bottom_x-small">{orgCpuNote}</p>
+                            <ul class="slds-list_dotted slds-text-body_small">
+                                <template for:each={salesforce.thisRequest} for:item="item">
+                                    <li key={item.key}>{item.text}</li>
+                                </template>
+                            </ul>
+                        </template>
+
+                        <h2 class="slds-text-heading_small slds-m-top_large slds-m-bottom_x-small">AI tokens and credits</h2>
+                        <template lwc:if={salesforce}>
+                            <template lwc:if={salesforce.hasEntitlements}>
+                                <template for:each={salesforce.entitlements} for:item="row">
+                                    <div key={row.key} class="slds-m-bottom_x-small">
+                                        <div class="slds-grid slds-grid_align-spread slds-text-body_small">
+                                            <span class="slds-truncate slds-m-right_small" title={row.label}>{row.label}</span>
+                                            <span>{row.text}</span>
+                                        </div>
+                                        <div class="track" role="progressbar" aria-label={row.label}
+                                            aria-valuemin="0" aria-valuemax="100" aria-valuenow={row.ariaNow}>
+                                            <div class={row.fillClass} style={row.fillStyle}></div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <p class="slds-text-body_small slds-text-color_weak">{entitlementsCaption}</p>
+                            </template>
+                            <template lwc:if={salesforce.entitlementsError}>
+                                <p class="slds-text-body_small slds-text-color_weak">Entitlements could not be read ({salesforce.entitlementsError}).</p>
+                            </template>
+                        </template>
+                        <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">{tokensNote}</p>
+                    </lightning-layout-item>
+
+                    <lightning-layout-item size="12" large-device-size="7" padding="around-small">
+                        <h2 class="slds-text-heading_small slds-m-bottom_x-small">Salesforce org limits</h2>
+                        <template lwc:if={salesforceLoading}>
+                            <div class="loading slds-is-relative">
+                                <lightning-spinner size="small" alternative-text="Reading Salesforce limits"></lightning-spinner>
+                            </div>
+                        </template>
+                        <template lwc:elseif={salesforceError}>
+                            <p class="slds-text-color_error">{salesforceError}</p>
+                        </template>
+                        <template lwc:else>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">{salesforce.caption}</p>
+                            <template for:each={salesforce.groups} for:item="group">
+                                <div key={group.key} class="slds-m-bottom_medium">
+                                    <h3 class="slds-text-title_caps slds-m-bottom_xx-small">{group.name}</h3>
+                                    <template for:each={group.rows} for:item="row">
+                                        <div key={row.key} class="slds-m-bottom_x-small">
+                                            <div class="slds-grid slds-grid_align-spread slds-text-body_small">
+                                                <span class="slds-truncate slds-m-right_small" title={row.label}>{row.label}</span>
+                                                <span>{row.text}</span>
+                                            </div>
+                                            <div class="track" role="progressbar" aria-label={row.label}
+                                                aria-valuemin="0" aria-valuemax="100" aria-valuenow={row.ariaNow}>
+                                                <div class={row.fillClass} style={row.fillStyle}></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </template>
+                    </lightning-layout-item>
+                </lightning-layout>
+            </template>
+            <template lwc:else>
+                <p>{notAllowed}</p>
+            </template>
+        </div>
+    </lightning-card>
+</template>

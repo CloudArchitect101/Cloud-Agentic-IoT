@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Read_At__c</fullName>
+    <label>Read At</label>
+    <description>When Salesforce read this figure from AWS.</description>
+    <required>false</required>
+    <type>DateTime</type>
+</CustomField>

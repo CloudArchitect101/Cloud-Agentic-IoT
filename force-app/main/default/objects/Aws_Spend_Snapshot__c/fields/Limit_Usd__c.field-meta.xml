@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Limit_Usd__c</fullName>
+    <label>Limit (USD)</label>
+    <description>The amount of the budget the spend was shown against; empty when no budget was found.</description>
+    <precision>16</precision>
+    <scale>2</scale>
+    <required>false</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

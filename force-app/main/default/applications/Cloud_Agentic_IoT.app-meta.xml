@@ -34,6 +34,18 @@
         <type>Flexipage</type>
         <pageOrSobjectType>Wi_Fi_Network__c</pageOrSobjectType>
     </actionOverrides>
+    <!-- The app's Home page: the usage card alone. It replaces Home in this
+         app only; other apps, and the org's own Home page, keep theirs.
+         Salesforce takes a Home page override for desktop (Large) only, so
+         the mobile app keeps its standard Home. -->
+    <actionOverrides>
+        <actionName>Tab</actionName>
+        <content>Cloud_Agentic_IoT_Home</content>
+        <formFactor>Large</formFactor>
+        <skipRecordTypeSelect>false</skipRecordTypeSelect>
+        <type>Flexipage</type>
+        <pageOrSobjectType>standard-home</pageOrSobjectType>
+    </actionOverrides>
     <brand>
         <headerColor>#0B5CAB</headerColor>
         <shouldOverrideOrgTheme>false</shouldOverrideOrgTheme>
