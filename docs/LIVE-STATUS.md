@@ -146,7 +146,10 @@ what is left of its 15 minutes, at most 450 readings, then stops.
 
 Presence costs a rule run, a few SQS requests and at most one Lambda call per
 connect or disconnect: a board that reconnects a few times a day costs well
-under a cent a month.
+under a cent a month. Its queue costs a little even when nothing happens:
+Lambda polls it while it is empty, a few hundred thousand requests a month,
+which SQS's free million requests a month usually covers. Beyond the free
+tier that is under 20 cents a month.
 
 None of this changes the stored readings, which cost what
 [COST-MODEL.md](COST-MODEL.md) says: about 8 cents a month per board on Prod
