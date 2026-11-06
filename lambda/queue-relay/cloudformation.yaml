@@ -145,6 +145,11 @@ Resources:
               # card subscribes to this topic itself, through LiveViewerRole.
               # No rule reads it, so nothing stores these readings.
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/live'
+              # Firmware 2.2.0 answers each command that carries a commandId
+              # here: done, failed or refused. The rule
+              # cloud_agentic_iot_device_command_ack (patient-vitals stack)
+              # reads it and records the answer on the Device Command.
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/ack'
           - Effect: Allow
             Action: iot:Subscribe
             Resource:

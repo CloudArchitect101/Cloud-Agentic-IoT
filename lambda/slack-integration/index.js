@@ -69,11 +69,18 @@ exports.handler = async (event) => {
   }
 
   if (command === '/dispense-medication') {
-    // Headless write-back: this creates a command record. A Salesforce
-    // Flow/Apex trigger on Device_Command__c publishes a Platform Event
-    // that the 00-iot-device-provisioning branch's ESP32 device is already
-    // listening for via AWS IoT Core — closing the loop from Slack all the
-    // way to the physical servo motor.
+    // Headless write-back: this creates a Pending Device Command, and
+    // Salesforce sends it on. DeviceCommandTrigger queues
+    // DeviceCommandSendJob, which posts it to the device API (POST
+    // /device-command, with the record's Id as its commandId); the
+    // device-command function publishes it on the board's
+    // device/<thing>/command, and the patient monitor turns its servo. The
+    // board's answer on device/<thing>/ack comes back through the
+    // device-command-ack function, which moves the record from Sent to
+    // Acked, or to Failed with why. The job runs as the integration user
+    // this function signs in as, so that user needs the External Credential
+    // principal permission set too (README, Stage 2 d). The reply below says
+    // the command was queued, not carried out: the record's Status says that.
     await conn.sobject('Device_Command__c').create({
       Device__c: deviceId,
       Command__c: 'DISPENSE_MEDICATION',
