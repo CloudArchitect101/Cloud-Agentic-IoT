@@ -3,6 +3,7 @@
  *
  * The one place Apex reads how it talks to the AWS device platform: the Named
  * Credential, timeouts, batch sizes, retry limits and the risk score bands,
+ * the Origin and queue of the Cases the Patient Care agent creates,
  * and how the room-temperature demo rule opens its Cases: their Origin, the
  * queue that owns them, and whether (and how often) one also requests a dose.
  * Whether the rule runs at all is decided in AWS (RoomTempAlert in
@@ -98,6 +99,11 @@ public with sharing class DevicePlatformSettings {
 
     public static String escalationCaseOrigin() {
         return required(get().Escalation_Case_Origin__c, 'Escalation_Case_Origin__c');
+    }
+
+    /** DeveloperName of the queue that owns the Cases the Patient Care agent creates. */
+    public static String escalationCaseQueue() {
+        return required(get().Escalation_Case_Queue__c, 'Escalation_Case_Queue__c');
     }
 
     /** Origin on room-temperature Cases; also how the rule recognises its own Cases. */

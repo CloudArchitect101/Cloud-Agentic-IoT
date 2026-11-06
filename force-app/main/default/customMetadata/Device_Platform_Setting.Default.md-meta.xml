@@ -51,6 +51,10 @@
         <value xsi:type="xsd:string">Agentforce</value>
     </values>
     <values>
+        <field>Escalation_Case_Queue__c</field>
+        <value xsi:type="xsd:string">Care_Team_Queue</value>
+    </values>
+    <values>
         <field>Sweep_Delay_Minutes__c</field>
         <value xsi:type="xsd:double">15</value>
     </values>

@@ -58,6 +58,10 @@ public with sharing class PatientCareAgentActions {
         // Device_Platform_Setting__mdt, so the Case Origin a support team
         // reports on is theirs to choose.
         String origin = DevicePlatformSettings.escalationCaseOrigin();
+        // The queue the care team works from, also a setting. A Case the
+        // running user owns never reaches the queue, so the queue indicator
+        // would never move for an escalation.
+        Id queueId = escalationQueueId(DevicePlatformSettings.escalationCaseQueue());
 
         for (Integer i = 0; i < requests.size(); i++) {
             EscalationRequest req = requests[i];
@@ -70,12 +74,16 @@ public with sharing class PatientCareAgentActions {
                 continue;
             }
 
-            toInsert.add(new Case(
+            Case escalation = new Case(
                 Subject     = 'Device escalation: ' + req.deviceId,
                 Description = req.reason,
                 Priority    = normalisePriority(req.severity),
                 Origin      = origin
-            ));
+            );
+            if (queueId != null) {
+                escalation.OwnerId = queueId;
+            }
+            toInsert.add(escalation);
             indexOfCase.add(i);
         }
 
@@ -105,18 +113,50 @@ public with sharing class PatientCareAgentActions {
         // sequence/DEFAULT) - the in-memory object doesn't have it, so it must
         // be queried back. Returning null here means the agent cheerfully
         // tells the user "your case number is null".
-        Map<Id, Case> byId = new Map<Id, Case>([
-            SELECT Id, CaseNumber FROM Case WHERE Id IN :insertedIds
-        ]);
+        Map<Id, Case> byId = new CaseNumbers().numbersFor(insertedIds);
         for (Integer j = 0; j < saves.size(); j++) {
             if (saves[j].isSuccess()) {
                 EscalationResult res = results[indexOfCase[j]];
-                res.caseNumber = byId.get(saves[j].getId()).CaseNumber;
-                res.message = 'Case ' + res.caseNumber + ' created.';
+                Case created = byId.get(saves[j].getId());
+                res.caseNumber = created == null ? null : created.CaseNumber;
+                res.message = 'Case ' + (res.caseNumber == null ? saves[j].getId() : res.caseNumber) + ' created'
+                    + (queueId == null ? '.' : ' for the care team queue.');
             }
         }
 
         return results;
+    }
+
+    /**
+     * The queue's Id, found the way RoomTemperatureCaseService finds its
+     * queue: by DeveloperName, and only if it lists Case as a supported
+     * object. Null when it is missing, and the Case keeps the running user
+     * as its owner, so an escalation is never lost to a setup mistake.
+     */
+    private static Id escalationQueueId(String queueName) {
+        for (QueueSobject row : [
+            SELECT QueueId FROM QueueSobject
+            WHERE SobjectType = 'Case' AND Queue.DeveloperName = :queueName
+            LIMIT 1
+        ]) {
+            return row.QueueId;
+        }
+        System.debug(LoggingLevel.ERROR, 'Queue ' + queueName
+            + ' is missing or does not accept Cases; agent Case left with the running user');
+        return null;
+    }
+
+    /**
+     * Reads back the CaseNumber of Cases this transaction has just inserted.
+     * Without sharing on purpose, and for that one thing only: once a queue
+     * owns the Case, a user whose org keeps Cases private may no longer see
+     * the Case they just created, and the agent would have no number to
+     * report. The Ids come from our own insert, never from the agent.
+     */
+    private without sharing class CaseNumbers {
+        Map<Id, Case> numbersFor(Set<Id> ids) {
+            return new Map<Id, Case>([SELECT Id, CaseNumber FROM Case WHERE Id IN :ids]);
+        }
     }
 
     private static String normalisePriority(String severity) {
