@@ -53,6 +53,10 @@
                 <behavior>Readonly</behavior>
                 <field>Temperature__c</field>
             </layoutItems>
+            <layoutItems>
+                <behavior>Readonly</behavior>
+                <field>Room_Temperature_Alert__c</field>
+            </layoutItems>
         </layoutColumns>
         <layoutColumns>
             <layoutItems>

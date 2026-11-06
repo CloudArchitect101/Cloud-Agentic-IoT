@@ -25,7 +25,11 @@ public class DeviceTestSettings {
             At_Risk_Score__c            = 40,
             Critical_Score__c           = 70,
             Max_Risk_Score__c           = 100,
-            Escalation_Case_Origin__c   = 'Agentforce'
+            Escalation_Case_Origin__c   = 'Agentforce',
+            Room_Temp_Case_Origin__c    = 'Room Temperature Rule',
+            Room_Temp_Case_Queue__c     = 'Care_Team_Queue',
+            Room_Temp_Dispense__c       = true,
+            Room_Temp_Dispense_Cooldown_Minutes__c = 60
         );
     }
 

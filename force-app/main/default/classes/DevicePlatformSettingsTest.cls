@@ -16,6 +16,44 @@ private class DevicePlatformSettingsTest {
         Assert.isTrue(DevicePlatformSettings.bundleTtlMinutes() >= 1, 'Bundle links must live for some time');
         Assert.isFalse(String.isBlank(DevicePlatformSettings.defaultThingGroup()), 'Default thing group');
         Assert.isTrue(deployed.At_Risk_Score__c < deployed.Critical_Score__c, 'AT_RISK comes before CRITICAL');
+
+        // The room-temperature rule's settings, as the Default record ships them.
+        Assert.areEqual('Room Temperature Rule', DevicePlatformSettings.roomTempCaseOrigin(), 'Room-temperature Case Origin');
+        Assert.areEqual('Care_Team_Queue', DevicePlatformSettings.roomTempCaseQueue(), 'Room-temperature Case queue');
+        Assert.isTrue(DevicePlatformSettings.roomTempDispense(), 'A new room-temperature Case requests a dose');
+        Assert.areEqual(60, DevicePlatformSettings.roomTempDispenseCooldownMinutes(), 'Room-temperature dose cooldown');
+    }
+
+    @IsTest
+    static void aBlankRoomTempOriginOrQueueIsRefused() {
+        Device_Platform_Setting__mdt settings = DeviceTestSettings.use();
+        settings.Room_Temp_Case_Origin__c = '';
+        try {
+            DevicePlatformSettings.roomTempCaseOrigin();
+            Assert.fail('A blank Origin would make every Case look like the rule\'s own');
+        } catch (DevicePlatformSettings.SettingException expected) {
+            Assert.isTrue(expected.getMessage().contains('Room_Temp_Case_Origin__c'), expected.getMessage());
+        }
+
+        settings.Room_Temp_Case_Queue__c = ' ';
+        try {
+            DevicePlatformSettings.roomTempCaseQueue();
+            Assert.fail('A blank queue name must not be accepted');
+        } catch (DevicePlatformSettings.SettingException expected) {
+            Assert.isTrue(expected.getMessage().contains('Room_Temp_Case_Queue__c'), expected.getMessage());
+        }
+    }
+
+    @IsTest
+    static void aZeroRoomTempCooldownIsRefused() {
+        Device_Platform_Setting__mdt settings = DeviceTestSettings.use();
+        settings.Room_Temp_Dispense_Cooldown_Minutes__c = 0;
+        try {
+            DevicePlatformSettings.roomTempDispenseCooldownMinutes();
+            Assert.fail('A zero cooldown would let every new Case dose again');
+        } catch (DevicePlatformSettings.SettingException expected) {
+            Assert.isTrue(expected.getMessage().contains('Room_Temp_Dispense_Cooldown_Minutes__c'), expected.getMessage());
+        }
     }
 
     @IsTest

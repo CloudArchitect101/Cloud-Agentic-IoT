@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Room_Temp_Case_Origin__c</fullName>
+    <label>Room Temp Case Origin</label>
+    <description>Case Origin that marks Cases opened by the room-temperature rule; also the dedupe marker and the commands' Requested By.</description>
+    <length>40</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

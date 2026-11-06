@@ -2,7 +2,11 @@
  * DevicePlatformSettings.cls
  *
  * The one place Apex reads how it talks to the AWS device platform: the Named
- * Credential, timeouts, batch sizes, retry limits and the risk score bands.
+ * Credential, timeouts, batch sizes, retry limits and the risk score bands,
+ * and how the room-temperature demo rule opens its Cases: their Origin, the
+ * queue that owns them, and whether (and how often) one also requests a dose.
+ * Whether the rule runs at all is decided in AWS (RoomTempAlert in
+ * config/<env>.json), not here.
  * Values live in the Device_Platform_Setting__mdt record named Default, so an
  * admin changes them in Setup (or in force-app/main/default/customMetadata)
  * without touching code.
@@ -94,6 +98,26 @@ public with sharing class DevicePlatformSettings {
 
     public static String escalationCaseOrigin() {
         return required(get().Escalation_Case_Origin__c, 'Escalation_Case_Origin__c');
+    }
+
+    /** Origin on room-temperature Cases; also how the rule recognises its own Cases. */
+    public static String roomTempCaseOrigin() {
+        return required(get().Room_Temp_Case_Origin__c, 'Room_Temp_Case_Origin__c');
+    }
+
+    /** DeveloperName of the queue that owns them. */
+    public static String roomTempCaseQueue() {
+        return required(get().Room_Temp_Case_Queue__c, 'Room_Temp_Case_Queue__c');
+    }
+
+    /** Whether each new room-temperature Case also requests one DISPENSE_MEDICATION command. */
+    public static Boolean roomTempDispense() {
+        return get().Room_Temp_Dispense__c == true;
+    }
+
+    /** No second room-temperature dose for a device within this many minutes. */
+    public static Integer roomTempDispenseCooldownMinutes() {
+        return atLeastOne(get().Room_Temp_Dispense_Cooldown_Minutes__c, 'Room_Temp_Dispense_Cooldown_Minutes__c');
     }
 
     private static Integer atLeastOne(Decimal value, String fieldName) {
