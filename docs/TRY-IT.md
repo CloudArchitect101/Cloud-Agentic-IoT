@@ -123,7 +123,8 @@ device's Account.
 
 Each direction has its own identity, made once.
 
-**AWS to Salesforce** (readings and alerts) signs in as the integration user:
+**AWS to Salesforce** (readings, alerts, whether a board is online, and the
+boards' answers to commands) signs in as the integration user:
 
 1. Create the `integration@…` user from
    [SETUP.md §2.2](SETUP.md#22-create-the-two-service-users), and the
@@ -145,12 +146,16 @@ aws ssm put-parameter --overwrite --type SecureString --name /cloud-agentic-iot/
 scripts/deploy-aws.sh Dev
 ```
 
-The deploy at the end is needed. Two functions sign in to Salesforce as the
-integration user: `cloud-agentic-iot-salesforce-sync` for readings and
-`cloud-agentic-iot-alert-dispatcher` for alerts. CloudFormation copies the
-username and consumer key from SSM into their settings only when it deploys, so
-until then they still hold `placeholder`. They read the private key from SSM
-each time they sign in, so it needs no deploy.
+The deploy at the end is needed. Four functions sign in to Salesforce as the
+integration user: `cloud-agentic-iot-salesforce-sync` for readings,
+`cloud-agentic-iot-alert-dispatcher` for alerts,
+`cloud-agentic-iot-device-presence` for the Asset's Connection fields and
+`cloud-agentic-iot-device-command-ack` for the boards' answers to Device
+Commands, and `cloud-agentic-iot-slack-integration` too once Slack is set up.
+CloudFormation copies the username and consumer key from SSM into their
+settings only when it deploys, so until then they still hold `placeholder`.
+They read the private key from SSM each time they sign in, so it needs no
+deploy.
 
 To check, this prints the integration username, not `placeholder`:
 
@@ -210,6 +215,12 @@ with the reason (a board that is offline is not sent anything). The command is
 sent as you, so you need the `AWS_IoT_Relay` principal access from
 [README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach).
 [DATA-MODEL.md](DATA-MODEL.md#device-command-lifecycle) explains each status.
+
+The card and Send Command both need a board provisioned from its Asset
+([README, chapter 13](../README.md#13--device-provisioning-automation)). An
+Asset made by hand, as in Stage 3, has no Thing ARN: its Connection stays *Not
+reported yet*, the card says it has no AWS IoT Thing, and a command fails as
+not provisioned.
 
 ## What happens near the limit
 

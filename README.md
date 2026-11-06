@@ -260,8 +260,11 @@ Do this once per device, before it first connects. Chapter 13 automates all of i
       "Resource": "arn:aws:iot:REGION:ACCOUNT_ID:client/${iot:ClientId}" },
     { "Effect": "Allow", "Action": "iot:Publish",
       "Resource": [
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/rules/cloud_agentic_iot_patient_vitals/device/${iot:Connection.Thing.ThingName}/telemetry",
         "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/telemetry",
         "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/status",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/live",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/ack",
         "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/${iot:Connection.Thing.ThingName}/jobs/*"
       ] },
     { "Effect": "Allow", "Action": "iot:Subscribe",
@@ -278,7 +281,7 @@ Do this once per device, before it first connects. Chapter 13 automates all of i
 }
 ```
 
-Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a policy variable resolved per connection, so **one policy serves every device and each is scoped to its own topics** — a device physically cannot subscribe to another's commands. The `status` topic is where the queue indicator reports back, and the `$aws/things/.../jobs/*` lines are OTA. They are not optional: the firmware asks for pending OTA jobs every time it connects, and IoT Core disconnects a client that publishes to a topic its policy doesn't allow, so without them the device reconnects in a loop.
+Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a policy variable resolved per connection, so **one policy serves every device and each is scoped to its own topics** — a device physically cannot subscribe to another's commands. From firmware 2.1.0 readings go to the `$aws/rules/cloud_agentic_iot_patient_vitals/...` topic, AWS IoT Basic Ingest, which hands them straight to the rule (older firmware publishes to `telemetry`). The `status` topic is where the queue indicator reports back; from firmware 2.2.0 the board sends live readings on `live` while someone has its card open, and answers commands on `ack`. The `$aws/things/.../jobs/*` lines are OTA. None of them is optional: IoT Core disconnects a client that publishes to a topic its policy doesn't allow. Without the jobs lines the device reconnects in a loop, since the firmware asks for pending OTA jobs every time it connects; without any other line it is dropped each time it publishes there. A device provisioned from Salesforce (chapter 13) gets the same topics from the stack's own `cloud-agentic-iot-device` policy, which also lets it connect only as the Thing its certificate is attached to.
 
 **3. Download and attach.** Download the certificate, the private key, and Amazon Root CA 1 into one folder. Attach the policy to the certificate.
 
@@ -325,12 +328,14 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 |---|---|---|
 | Device is publishing | S3 → the patient-vitals archive bucket, `readings/date=<today>/`. Readings go through Basic Ingest, straight to the rule, so the MQTT test client does not see them | A new `.ndjson.gz` object for each batch |
 | Device is online | The device's Asset in the Cloud Agentic IoT app ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) | Connection `Online`, and on the Live Status card a reading every 2 s (firmware 2.2.0) |
-| Device accepts commands | On the Asset, **Send Command** with `DISPENSE_MEDICATION`. By hand: publish `{ "operation": "DISPENSE_MEDICATION" }` to `device/<thing>/command` | The servo moves, and the Device Command goes `Sent`, then `Acked` within seconds. Its answer shows on `device/<thing>/ack` in the MQTT test client |
+| Device accepts commands | On the Asset, **Send Command** with `DISPENSE_MEDICATION`. By hand: publish `{ "operation": "DISPENSE_MEDICATION", "commandId": "by-hand-1" }` to `device/<thing>/command` | The servo moves. From the Asset, the Device Command goes `Sent`, then `Acked` within seconds. By hand, the board's answer shows on `device/<thing>/ack` in the MQTT test client; it answers only a command that carries a `commandId` |
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
 | The agent acts | Agent conversation preview | A Case with `Origin = Agentforce` |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
+
+The Asset's Connection field, its Live Status card and **Send Command** need a device provisioned from Salesforce (chapter 13), whose Asset carries its Thing ARN. On an Asset made by hand in Stage 3, Connection stays *Not reported yet*, the card says the device has no AWS IoT Thing, and a command fails as not provisioned. The by-hand publish works either way.
 
 ### Stage 5 — Promote to `Prod`
 
@@ -635,6 +640,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 300 Node tests cover 13 of the 16 Lambda functions, the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, and the firmware's timing and command logic compiled for the host; 54 Python tests run the board and OTA scripts against a simulated board and AWS. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (20 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 302 Node tests cover 14 of the 16 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, and the firmware's timing and command logic compiled for the host; 54 Python tests run the board and OTA scripts against a simulated board and AWS. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (20 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
 PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.

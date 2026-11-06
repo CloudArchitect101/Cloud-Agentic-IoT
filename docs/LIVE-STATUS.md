@@ -57,14 +57,14 @@ readings to the card only while someone is looking.
 
 **Connection fields: AWS IoT presence events.** AWS IoT publishes an event
 whenever a client connects or disconnects. One rule forwards the boards'
-events, a Lambda collects them for a few seconds, and one Salesforce call
-updates every Asset that changed:
+events to a queue, a Lambda takes them from it, and one Salesforce call
+updates every Asset in the batch that changed:
 
 ```
 Board connects or disconnects
   -> AWS IoT lifecycle event on $aws/events/presence/<connected|disconnected>/<thing>
   -> IoT rule cloud_agentic_iot_device_presence  (skips the cards' own live- connections)
-  -> SQS, batched for 5 s (Dev) or 10 s (Prod)
+  -> SQS: Dev hands each event on at once, Prod collects them for up to 10 s
   -> Lambda cloud-agentic-iot-device-presence
   -> Salesforce: DeviceConnectionService, one call per batch
   -> Asset: Connection, Connection Since, Last Disconnect Reason
@@ -112,8 +112,8 @@ firmware side is in [firmware/README.md, Live mode](../firmware/README.md#live-m
 | First live reading on screen | about 2 s after the card subscribes | | |
 | Stored readings | every 30 s, as before | 5 s to 24 h | `SET_TELEMETRY_INTERVAL` command |
 | Fallback when the live connection fails | 3 reconnects, 2 s apart, then the stored reading every 5 s | | `deviceLiveCard.js` |
-| Asset shows Online, or Offline after a clean disconnect | within 5 s (Dev) or 10 s (Prod), plus one Salesforce call | | `PresenceBatchWindowSeconds`, `patient-vitals` |
-| Asset shows Offline after power or Wi-Fi loss | about 23 s, plus the same window | | AWS IoT waits 1.5 times the board's 15 s MQTT keep-alive |
+| Asset shows Online, or Offline after a clean disconnect | Dev: a second or two, one Salesforce call per event. Prod: within 10 s, up to 20 s when the queue has been quiet | | `PresenceBatchWindowSeconds` and `PresenceBatchSize`, `patient-vitals` |
+| Asset shows Offline after power or Wi-Fi loss | 30 to 45 s, plus the time above | | AWS IoT closes a silent connection after 1.5 times its keep-alive, and treats the board's 15 s keep-alive as its 30 s minimum |
 
 **Why 2 seconds and not 1.** 2 s is the fastest the DHT11 gives a new value:
 the Adafruit DHT library the sketch uses hands back the previous value when it
@@ -144,9 +144,9 @@ board at the same time adds half again: the board publishes once, AWS IoT
 delivers to each card. When the last card closes, the board keeps sending for
 what is left of its 15 minutes, at most 450 readings, then stops.
 
-Presence costs a rule run, a few SQS requests and a share of one Lambda call
-per connect or disconnect: a board that reconnects a few times a day costs
-well under a cent a month.
+Presence costs a rule run, a few SQS requests and at most one Lambda call per
+connect or disconnect: a board that reconnects a few times a day costs well
+under a cent a month.
 
 None of this changes the stored readings, which cost what
 [COST-MODEL.md](COST-MODEL.md) says: about 8 cents a month per board on Prod
@@ -162,7 +162,7 @@ two thirds of that.
 | Live readings | **None.** No API call, no record, no Apex, no storage, no platform event | nothing |
 | Opening the card, and every 10 min while it stays visible | One Apex call (`DeviceLiveController.start`): one SOQL query, one callout, no DML | Per-transaction limits only (1 of 100 callouts). Callouts out of Salesforce do not count against the org's daily API requests |
 | Fallback, only while the live connection is down | One Apex call (`latest`) every 5 s, one callout | Same |
-| Connection fields | One REST call per batch of changes, up to 100 changes a batch: one SOQL query, one update | The daily API request allocation (15,000 a day in a Developer Edition). A board that reconnects a few times a day costs a few calls a day; none while boards stay connected |
+| Connection fields | One REST call per batch of changes, up to 100 changes a batch (10 in Dev, where most batches hold one): one SOQL query, one update | The daily API request allocation (15,000 a day in a Developer Edition). A board that reconnects a few times a day costs a few calls a day; none while boards stay connected |
 | Storage | Three fields on the Asset | No new records |
 
 In the browser, the card handles one small message every 2 seconds and
@@ -212,7 +212,7 @@ The pieces ship with the rest of the project; this is what to check.
 | *...has no device-live route yet* | The `queue-relay` stack is older than this feature | Deploy it |
 | *This device has no AWS IoT Thing yet* | The Asset was never provisioned | Provision it first |
 | Connection says *Not reported yet* | No connect or disconnect since presence was deployed, or Salesforce did not take the change | Restart the board: it reconnects and should show Online within seconds. Otherwise search `/aws/lambda/cloud-agentic-iot-device-presence` for `No Asset changed for a Thing` (the Asset's Thing ARN does not match, often another Region or account) and look at `cloud-agentic-iot-device-presence-dlq` |
-| Still Online right after unplugging the board | AWS IoT notices a silent board only when its keep-alive runs out | Wait about 30 seconds |
+| Still Online right after unplugging the board | AWS IoT notices a silent board only when its keep-alive runs out | Wait up to a minute: 30 to 45 s for AWS IoT, plus the presence queue |
 
 The presence Lambda logs one summary line per batch, `Connection changes sent
 to Salesforce`, with how many events it dropped and why, how many Assets
