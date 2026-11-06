@@ -161,11 +161,17 @@ public without sharing class DeviceConnectionService {
         }
         // System mode, in a class without sharing: the integration user's own
         // access must not decide which Assets learn that their board is online.
+        // Locked, because two device-presence calls can carry one board's
+        // disconnect and reconnect at once: the second waits for the first to
+        // save, then compares its change with what the first saved, so an
+        // older change never lands last. A lock it cannot get in time fails
+        // the call, and the Lambda sends the batch again.
         for (Asset device : [
             SELECT Id, Thing_ARN__c, Connection_Status__c, Connection_Since__c, Last_Disconnect_Reason__c
             FROM Asset
             WHERE Thing_ARN__c IN :thingArns
             WITH SYSTEM_MODE
+            FOR UPDATE
         ]) {
             if (!thingArns.contains(device.Thing_ARN__c)) {
                 continue;   // the same ARN in another case: another Thing

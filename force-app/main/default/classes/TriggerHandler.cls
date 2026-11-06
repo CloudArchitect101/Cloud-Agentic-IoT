@@ -70,7 +70,8 @@ public virtual class TriggerHandler {
             return;
         }
 
-        if (hasExceededRecursionLimit()) {
+        Boolean limited = limitsExecutions();
+        if (limited && hasExceededRecursionLimit()) {
             // Deliberately silent rather than thrown: recursion is usually a
             // cascade of legitimate updates settling down, and throwing would
             // roll back the user's save for what is a self-correcting condition.
@@ -81,7 +82,9 @@ public virtual class TriggerHandler {
         }
 
         this.currentTriggerOperation = Trigger.operationType;
-        recordThisExecution();
+        if (limited) {
+            recordThisExecution();
+        }
 
         switch on this.currentTriggerOperation {
             when BEFORE_INSERT  { this.handleBeforeInsert(); }
@@ -159,6 +162,20 @@ public virtual class TriggerHandler {
     }
 
     /* --------------------------------------------------------- recursion */
+
+    /*
+     * Whether the recursion ceiling applies to this handler. The ceiling
+     * counts every run in the transaction, and Salesforce runs a trigger once
+     * per 200 records of a save, so the third chunk of a large insert, or a
+     * third insert in one transaction, counts the same as a trigger
+     * re-entering itself. A handler whose hooks never write to its own
+     * object cannot re-enter itself, and may return false: the platform's
+     * own limit on trigger depth still stops any loop that other automation
+     * could build around it.
+     */
+    protected virtual Boolean limitsExecutions() {
+        return true;
+    }
 
     private Boolean hasExceededRecursionLimit() {
         Integer executionsSoFar = executionCountByHandlerName.get(handlerName);

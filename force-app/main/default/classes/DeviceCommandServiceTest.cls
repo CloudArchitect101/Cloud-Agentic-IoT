@@ -232,6 +232,53 @@ private class DeviceCommandServiceTest {
     }
 
     @IsTest
+    static void everySaveOfATransactionStartsItsSendJob() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        Device_Command__c first = command('PM-1', null);
+        Device_Command__c second = command('PM-2', null);
+        Device_Command__c third = command('PM-3', null);
+
+        Test.startTest();
+        // Three saves in one transaction, as a Flow that creates a command for
+        // each device in a loop makes: six trigger runs, one past
+        // TriggerHandler's ceiling, which this handler is exempt from.
+        insert first;
+        insert second;
+        insert third;
+        Integer jobs = Limits.getQueueableJobs();
+        Test.stopTest();
+
+        Assert.areEqual(3, jobs, 'One send job per save, the third included');
+        Assert.areEqual(3, aws.bodies.size(), 'One callout per command');
+        Assert.areEqual('Sent', saved(third.Id).Status__c, 'The third save is sent too');
+    }
+
+    @IsTest
+    static void everyChunkOfALargeSaveStartsItsSendJob() {
+        // Five callouts a job, so the three jobs together stay inside the 100
+        // callouts of one transaction, should the test run them under one set
+        // of limits. What each job does not reach goes to a next job.
+        DeviceTestSettings.use().Callouts_Per_Job__c = 5;
+        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
+        List<Device_Command__c> commands = new List<Device_Command__c>();
+        for (Integer i = 0; i < 401; i++) {
+            commands.add(command('PM-BULK-' + i, null));
+        }
+
+        Test.startTest();
+        // Salesforce runs the trigger once per 200 records of a save: three
+        // chunks here, six runs.
+        insert commands;
+        Integer jobs = Limits.getQueueableJobs();
+        Test.stopTest();
+
+        Assert.areEqual(3, jobs, 'One send job per chunk, the third included');
+        Assert.areEqual('Sent', saved(commands[400].Id).Status__c, 'The command in the third chunk is sent');
+    }
+
+    @IsTest
     static void aSlackCommandForABoardWithoutAnAssetIsStillSent() {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
