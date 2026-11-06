@@ -26,6 +26,8 @@ const ENV = {
   KEEP_READINGS_IN_DYNAMODB: 'true',
   READING_RETENTION_DAYS: '30',
   CONFIG_CACHE_SECONDS: '300',
+  ROOM_TEMP_ALERT: 'false',
+  ROOM_TEMP_ALERT_CELSIUS: '30',
 };
 
 // What the IoT rule puts on the telemetry queue: exactly what the patient
@@ -423,4 +425,163 @@ test('timestamps from the device are normalised to ISO 8601', async (t) => {
   await handler({ deviceId: 'pm-1', temperature: 23.4, timestamp: RECEIVED_AT / 1000 });
   await handler({ deviceId: 'pm-1', temperature: 23.4, timestamp: RECEIVED_ISO });
   assert.deepEqual(writtenKeys(), [`VITAL#${RECEIVED_ISO}`, `VITAL#${RECEIVED_ISO}`]);
+});
+
+// The room-temperature demo rule (ROOM_TEMP_ALERT). The patient monitor's
+// DHT11 measures room air, so 30 C on it is a warm room, scored STABLE by the
+// clinical bands; the rule flags it for Salesforce, which opens the Case.
+
+const ROOM_RULE_ON = { env: { ROOM_TEMP_ALERT: 'true' } };
+const ONE_MINUTE_EARLIER = '2025-10-27T15:59:00.000Z';
+const FIFTEEN_MINUTES_EARLIER = '2025-10-27T15:45:00.000Z';
+/** A STABLE device whose last reading was half a minute ago, hot or not. */
+const roomState = (RoomTempHot, LastSyncedAt = ONE_MINUTE_EARLIER) => ({
+  ...stateItem('pm-1', 'STABLE', HALF_A_MINUTE_EARLIER, LastSyncedAt), RoomTempHot,
+});
+const flagged = (syncs) => syncs.filter((sync) => sync.Room_Temperature_Alert__c === true);
+
+test('room rule: 29.9 C is below the line, so nothing is flagged', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, ROOM_RULE_ON);
+  await handler(queueBatch(dht11Message({ temperature: 29.9 })));
+  // The first reading of a new device is still synced, as a state change.
+  assert.equal(syncs().length, 1);
+  assert.ok(!('Room_Temperature_Alert__c' in syncs()[0]));
+  assert.equal(state().RoomTempHot, false);
+});
+
+test('room rule: 30.0 C counts (the threshold is inclusive) and marks the device hot', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, ROOM_RULE_ON);
+  await handler(queueBatch(dht11Message({ temperature: 30.0 })));
+  assert.equal(syncs().length, 1);
+  assert.equal(syncs()[0].Room_Temperature_Alert__c, true);
+  assert.equal(syncs()[0].Temperature__c, 30);
+  assert.equal(syncs()[0].Patient_State__c, 'STABLE');   // clinical bands unchanged
+  assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule: while hot, nothing more until the re-alert interval has passed', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, dynamo } = load(t, { ...ROOM_RULE_ON, items: [roomState(true, ONE_MINUTE_EARLIER)] });
+  await handler(queueBatch(dht11Message({ temperature: 31 })));
+  assert.equal(syncs().length, 0);
+  assert.equal(dynamo.count('UpdateCommand'), 0);        // nothing changed
+});
+
+test('room rule: while hot, reported again once the re-alert interval has passed', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(true, FIFTEEN_MINUTES_EARLIER)] });
+  await handler(queueBatch(dht11Message({ temperature: 31 })));
+  assert.equal(flagged(syncs()).length, 1);
+  assert.equal(syncs().length, 1);
+  assert.equal(state().LastSyncedAt, RECEIVED_ISO);
+  assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule: just below the line the episode goes on, silently (the 1 C margin)', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(true, FIFTEEN_MINUTES_EARLIER)] });
+  await handler(queueBatch(dht11Message({ temperature: 29 })));
+  assert.equal(syncs().length, 0);
+  assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule: more than 1 C below the line the episode ends, and that is saved', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(true)] });
+  await handler(queueBatch(dht11Message({ temperature: 28.9 })));
+  assert.equal(syncs().length, 0);
+  assert.equal(state().RoomTempHot, false);
+  assert.equal(state().UpdatedAt, RECEIVED_ISO);
+});
+
+test('room rule: crossing again after cooling is reported at once, interval or not', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(false, ONE_MINUTE_EARLIER)] });
+  await handler(queueBatch(dht11Message({ temperature: 30 })));
+  assert.equal(flagged(syncs()).length, 1);
+  assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule: a sensor wobbling around the line is one report, not four', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, {
+    ...ROOM_RULE_ON, items: [roomState(false, HALF_A_MINUTE_EARLIER)],
+  });
+  const at = (seconds) => RECEIVED_AT + seconds * 1000;
+  await handler(queueBatch(
+    dht11Message({ temperature: 30, receivedAt: at(0) }),
+    dht11Message({ temperature: 29.5, receivedAt: at(30) }),
+    dht11Message({ temperature: 30.1, receivedAt: at(60) }),
+    dht11Message({ temperature: 29.2, receivedAt: at(90) }),
+  ));
+  assert.equal(syncs().length, 1);
+  assert.equal(syncs()[0].Temperature__c, 30);
+  assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule: a reading without a temperature leaves the episode as it is', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(true)] });
+  await handler(queueBatch(dht11Message({ temperature: undefined, humidity: 40 })));
+  assert.equal(syncs().length, 0);
+  assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule: a hot reading synced for a clinical change carries the flag, in one sync', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(false)] });
+  await handler(queueBatch(criticalMessage()));            // 39.5 C, STABLE -> CRITICAL
+  assert.equal(syncs().length, 1);
+  assert.equal(syncs()[0].Patient_State__c, 'CRITICAL');
+  assert.equal(syncs()[0].Room_Temperature_Alert__c, true);
+  assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule off: a hot flag left in STATE is cleared, and nothing is flagged', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state, dynamo } = load(t, { items: [roomState(true, FIFTEEN_MINUTES_EARLIER)] });
+  await handler(queueBatch(dht11Message({ temperature: 35 })));
+  assert.equal(flagged(syncs()).length, 0);
+  assert.equal(syncs().length, 0);
+  assert.equal(dynamo.count('UpdateCommand'), 1);
+  assert.equal(state().RoomTempHot, false);
+});
+
+test('room rule off: the record has no flag key at all', async (t) => {
+  captureConsole(t);
+  const { handler, syncs } = load(t);
+  await handler(queueBatch(dht11Message({ temperature: 35 })));
+  const [record] = syncs();
+  assert.ok(!('Room_Temperature_Alert__c' in record));
+});
+
+test('room rule: STATE is saved with RoomTempHot as a boolean, never undefined', async (t) => {
+  captureConsole(t);
+  // The fake refuses an expression placeholder with no value, as DynamoDB does.
+  for (const env of [{}, ROOM_RULE_ON.env]) {
+    await t.test(`ROOM_TEMP_ALERT ${env.ROOM_TEMP_ALERT || 'false'}`, async (t2) => {
+      const { handler, state, dynamo } = load(t2, { env });
+      const result = await handler(queueBatch(dht11Message({ temperature: 30 })));
+      assert.deepEqual(result.batchItemFailures, []);
+      assert.equal(dynamo.count('UpdateCommand'), 1);
+      assert.equal(typeof state().RoomTempHot, 'boolean');
+      assert.equal(state().RoomTempHot, env.ROOM_TEMP_ALERT === 'true');
+    });
+  }
+});
+
+test('the fake DynamoDB refuses an update whose placeholder has no value', async (t) => {
+  const dynamo = fakeDynamoDb();
+  const client = dynamo.sdk.DynamoDBDocumentClient.from();
+  await assert.rejects(
+    client.send(new dynamo.sdk.UpdateCommand({
+      TableName: TABLE,
+      Key: { PK: 'PATIENT#pm-1', SK: 'STATE' },
+      UpdateExpression: 'SET RoomTempHot = :hot',
+      ExpressionAttributeValues: { ':hot': undefined },
+    })),
+    /attribute value: :hot/,
+  );
 });

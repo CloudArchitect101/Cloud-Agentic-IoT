@@ -1,11 +1,13 @@
 {
-  "description": "Sizing and behaviour of the Dev environment. scripts/deploy-aws.sh passes each stacks.<name> section to the CloudFormation stack of that name as parameter overrides; scripts/ota.sh reads ota. test/config/config.test.js fails the checks when a key here is not a parameter of its template. Salesforce's own settings live in Device_Platform_Setting__mdt and Vital_Sign_Threshold__mdt; the clinical bands for AWS are config/vital-thresholds.json. docs/SCALING.md explains each number.",
+  "description": "Sizing and behaviour of the Dev environment. scripts/deploy-aws.sh passes each stacks.<name> section to the CloudFormation stack of that name as parameter overrides; scripts/ota.sh reads ota. test/config/environments.test.js fails the checks when a key here is not a parameter of its template. Salesforce's own settings live in Device_Platform_Setting__mdt and Vital_Sign_Threshold__mdt; the clinical bands for AWS are config/vital-thresholds.json. docs/SCALING.md explains each number.",
   "stacks": {
     "patient-vitals": {
       "KeepReadingsInDynamoDB": "true",
       "ReadingRetentionDays": 30,
       "ArchiveRetentionDays": 90,
       "RealertIntervalMinutes": 15,
+      "RoomTempAlert": "false",
+      "RoomTempAlertCelsius": 30,
       "IngestBatchSize": 100,
       "IngestBatchWindowSeconds": 1,
       "IngestMaxConcurrency": 2,
