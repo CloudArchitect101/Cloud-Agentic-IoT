@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <masterLabel>Get Latest Device Readings</masterLabel>
+    <!--
+      Read by the planner to decide WHEN to call this, like the escalation
+      action's description. It is the action the topic's "answer only from
+      retrieved readings" instruction depends on.
+    -->
+    <description>Returns the latest vital-sign readings a patient monitoring device reported, newest first, and whether the device is connected. Use it whenever the user asks what a device is reporting, how a patient's readings look, whether a device is online, or before escalating a condition. Needs the device serial number.</description>
+    <invocationTarget>DeviceReadingsAgentAction</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <!-- Read-only, so no confirmation: asking "may I look?" before every
+         answer would only slow the care team down. -->
+    <isConfirmationRequired>false</isConfirmationRequired>
+</GenAiFunction>
