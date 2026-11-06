@@ -235,7 +235,7 @@ cmd_try() {
 # again on the next round. Fails if any board failed, refused or timed out.
 watch_job() {   # watch_job <job id> <number of boards> <sketch> <version>
   local job="$1" boards="$2" sketch="$3" version="$4" deadline seen="" rows thing status detail
-  local answered=0 bad=0 failing=no
+  local answered=0 bad=0 failing=no restarting=""
   deadline=$(( $(date +%s) + ${TRY_WATCH_MINUTES:-15} * 60 ))
   echo "Each board's answer appears below. Ctrl-C stops the watching; the job carries on."
   while :; do
@@ -254,6 +254,7 @@ watch_job() {   # watch_job <job id> <number of boards> <sketch> <version>
                      --query 'execution.statusDetails.detailsMap.detail' --output text 2> /dev/null || true)
           [ "$detail" != None ] || detail=""
           printf '  %-24s %-11s %s\n' "$thing" "$status" "$detail"
+          [ "$status $detail" != "SUCCEEDED rebooting" ] || restarting="$restarting $thing"
         fi
       done <<< "$rows"
       if [ "$answered" -ge "$boards" ]; then break; fi
@@ -268,9 +269,13 @@ watch_job() {   # watch_job <job id> <number of boards> <sketch> <version>
     sleep "${TRY_POLL_SECONDS:-10}"
   done
   [ "$bad" -eq 0 ] || die "$bad board(s) did not install $version. The detail beside each one says why."
-  # The board answers SUCCEEDED once the new build is written, just before it
-  # restarts into it, so the answer alone does not show the build started.
-  note "A board that answered SUCCEEDED has written $version and is restarting into it. Its serial console shows whether the new build started: aws: connected, $sketch v$version"
+  # From firmware 2.2.0 a board answers SUCCEEDED ("running <version>") only
+  # once the new build has started and reconnected, and FAILED when it came
+  # back on another build. Older builds answer SUCCEEDED ("rebooting") just
+  # before they restart, so for those the answer alone does not show that the
+  # new build started.
+  [ -z "$restarting" ] \
+    || note "Answered just before restarting, as firmware older than 2.2.0 does:$restarting. The serial console shows whether the new build started: aws: connected, $sketch v$version"
 }
 
 cmd_promote() {

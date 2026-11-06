@@ -161,7 +161,7 @@ IoT Job      →  the instruction       (job document: S3 URL + version)
 1. You upload `firmware-1.2.0.bin` to S3.
 2. You create an **IoT Job** targeting a **Thing** or a **Thing Group**, with a job document containing the firmware URL and version.
 3. AWS pushes a notification to every targeted device on `$aws/things/{thingName}/jobs/notify-next`.
-4. The device downloads, verifies, applies with `Update.h`, reboots, and reports `SUCCEEDED` or `FAILED` back on `$aws/things/{thingName}/jobs/{jobId}/update`.
+4. The device downloads, verifies and applies the build with `Update.h`, reports `IN_PROGRESS` (`rebooting`) and restarts. Back on the new build, it asks for its next job, gets the same one, and reports `SUCCEEDED` (`running <version>`) on `$aws/things/{thingName}/jobs/{jobId}/update`, or `FAILED` (`came back on <version>`) when the new build did not start. Firmware older than 2.2.0 reported `SUCCEEDED` just before restarting. [firmware/README.md](../firmware/README.md#what-a-board-reports-on-an-update-from-220) lists every status.
 
 **Targeting is group membership, not a device list in your code.** Put five devices in `canary-patient-monitor`, run the job against that group, watch, then run it against `fleet-patient-monitor`. That is the batching the migration runbook phase 4 describes, and it is what the Prod pipeline does: see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
@@ -169,7 +169,7 @@ IoT Job      →  the instruction       (job document: S3 URL + version)
 
 ### Practical gotcha
 
-`PubSubClient`'s default MQTT buffer is 256 bytes. AWS Jobs documents are larger, so the callback silently never fires. The firmware calls `client.setBufferSize(2048)` for this reason — it is the kind of failure that looks like "AWS isn't sending anything."
+`PubSubClient`'s default MQTT buffer is 256 bytes, and it drops a larger message without a word. A job message carries a pre-signed download link with a session token in it, about 1.9 KB, so the callback silently never fires. The firmware calls `client.setBufferSize(4096)` for this reason: it is the kind of failure that looks like "AWS isn't sending anything."
 
 ## Summary
 

@@ -416,6 +416,38 @@ class OtaTryTest(ScriptFixture):
                 self.assertIn(says, out)
                 self.assertRegex(out, r'Test55\s+SUCCEEDED')
 
+    def test_a_board_on_2_2_0_answers_once_it_runs_the_new_build_so_no_console_check_is_asked(self):
+        version = f'{self.base}-try.1'
+        self.state['executions'] = [
+            [('Test7', 'IN_PROGRESS'), ('Test55', 'IN_PROGRESS')],
+            [('Test7', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')],
+        ]
+        self.state['details'] = {'Test7 IN_PROGRESS': 'downloading', 'Test55 IN_PROGRESS': 'rebooting',
+                                 'Test7 SUCCEEDED': f'running {version}', 'Test55 SUCCEEDED': f'running {version}'}
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        self.assertRegex(out, rf'Test7\s+SUCCEEDED\s+running {re.escape(version)}')
+        self.assertRegex(out, rf'Test55\s+SUCCEEDED\s+running {re.escape(version)}')
+        self.assertNotIn('aws: connected', out)
+        self.assertNotIn('older than 2.2.0', out)
+
+    def test_names_only_the_boards_that_answered_before_restarting(self):
+        version = f'{self.base}-try.1'
+        self.state['executions'] = [[('Test7', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')]]
+        self.state['details'] = {'Test7 SUCCEEDED': f'running {version}', 'Test55 SUCCEEDED': 'rebooting'}
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        self.assertIn('as firmware older than 2.2.0 does: Test55.', out)
+        self.assertIn(f'aws: connected, patient-monitor v{version}', out)
+
+    def test_a_board_that_came_back_on_its_old_build_fails_the_try(self):
+        self.state['executions'] = [[('Test7', 'FAILED'), ('Test55', 'SUCCEEDED')]]
+        self.state['details'] = {'Test7 FAILED': 'came back on 2.1.0', 'Test55 SUCCEEDED': 'running 2.2.0-try.1'}
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r'Test7\s+FAILED\s+came back on 2\.1\.0')
+        self.assertIn('1 board(s) did not install', out)
+
     def test_says_which_board_did_not_install_it_and_why(self):
         self.state['executions'] = [[('Test7', 'FAILED'), ('Test55', 'SUCCEEDED')]]
         self.state['details'] = {'Test7 FAILED': 'http 403', 'Test55 SUCCEEDED': 'rebooting'}

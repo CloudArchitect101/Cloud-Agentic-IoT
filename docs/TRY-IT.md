@@ -185,13 +185,15 @@ creates one AWS IoT job for `fleet-<type>` at the pace and with the abort rule
 of a Dev release, and prints each board's answer as it comes. A board that is
 offline takes the job when it next connects, and `scripts/ota.sh status Dev`
 shows where each one stands. A new try cancels an earlier one that a board has
-not started, so a board that was offline installs only the newest. A board
-answers SUCCEEDED once the build is written, just before it restarts into it,
-so the serial console is where you see the new build start: first
-`OTA: complete, restarting` and, after the restart,
-`aws: connected, patient-monitor v<version>-try.<n>`: the board kept its Wi-Fi
-and certificate, which live in NVS, outside the part of the flash an update
-rewrites. A try costs one upload and one job execution per board, a fraction
+not started, so a board that was offline installs only the newest. A board on
+firmware 2.2.0 or later answers SUCCEEDED `running <version>` only once it has
+restarted into the new build and reconnected, and FAILED `came back on
+<version>` if the new build did not start. An older board answers SUCCEEDED
+`rebooting` just before it restarts, so for that first update to 2.2.0 the
+script points you to the serial console: first `OTA: complete, restarting`
+and, after the restart, `aws: connected, patient-monitor v<version>-try.<n>`.
+Either way the board keeps its Wi-Fi and certificate, which live in NVS,
+outside the part of the flash an update rewrites. A try costs one upload and one job execution per board, a fraction
 of a cent.
 
 To watch a board, open its Asset in the Cloud Agentic IoT app. The Live Status
