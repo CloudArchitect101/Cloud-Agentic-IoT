@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Bot xmlns="http://soap.sforce.com/2006/04/metadata">
+    <!--
+      The Patient Care Agent: an Agentforce employee agent (type InternalCopilot,
+      agentType AgentforceEmployeeAgent). Care team members talk to it inside
+      Lightning, and it acts as them, so what it may read and create is what
+      the Patient_Care_Agent permission set gives the person. An employee agent
+      has no agent user of its own, so there is no botUser.
+      Its one version, v1, is the one that names the planner.
+      logPrivateConversationData is false: conversations carry vital signs,
+      so they stay out of the conversation logs.
+    -->
+    <agentType>AgentforceEmployeeAgent</agentType>
+    <botMlDomain>
+        <label>Patient Care Agent</label>
+        <name>Patient_Care_Agent</name>
+    </botMlDomain>
+    <botSource>None</botSource>
+    <description>Helps care team members see what patient monitoring devices are reporting, and escalates conditions that need human attention to the care team queue.</description>
+    <label>Patient Care Agent</label>
+    <logPrivateConversationData>false</logPrivateConversationData>
+    <richContentEnabled>true</richContentEnabled>
+    <sessionTimeout>0</sessionTimeout>
+    <type>InternalCopilot</type>
+</Bot>
