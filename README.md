@@ -29,6 +29,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | [HOW-IT-CONNECTS.md](docs/HOW-IT-CONNECTS.md) | How the chapters form one system, the three shared integration seams, and the order to demo them in. |
 | [DATA-MODEL.md](docs/DATA-MODEL.md) | Why each object is standard or custom — the "why didn't you just use X" answers. |
 | [DEVICE-IDENTITY.md](docs/DEVICE-IDENTITY.md) | How WiFi credentials and AWS certificates get onto a device, why they survive every OTA update, and how a job finds the right device. |
+| [LIVE-STATUS.md](docs/LIVE-STATUS.md) | Whether a board is online, and its readings every 2 s while its card is open: how it works, the speeds, what it costs in AWS and in Salesforce limits, and what to check when the card waits. |
 | [CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md) | What is automated vs manual, and the conventions the pipelines enforce. |
 | [MIGRATION-RUNBOOK.md](docs/MIGRATION-RUNBOOK.md) | Phased cutover to a governed Dev/Prod estate, with a rollback per phase. |
 | [COST-MODEL.md](docs/COST-MODEL.md) | Real per-device, per-user and per-customer costs — and how to run the whole build on free tiers. |

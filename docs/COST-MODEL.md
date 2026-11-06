@@ -16,7 +16,7 @@ Bulk (AliExpress, 100+): roughly half. Dev/demo software cost is $0 — Develope
 
 ## 2. AWS — per device per month (USD, us-east-1/west-2)
 
-86,400 readings a month per device. Firmware 2.1.0 sends them through IoT Basic Ingest, and the pipeline handles them in batches of 1,000 (Prod settings), so most lines are now per batch rather than per reading. [SCALING.md](SCALING.md) has the same model for a million devices, with a simulation behind it.
+86,400 readings a month per device. From firmware 2.1.0, boards send them through IoT Basic Ingest, and the pipeline handles them in batches of 1,000 (Prod settings), so most lines are now per batch rather than per reading. [SCALING.md](SCALING.md) has the same model for a million devices, with a simulation behind it.
 
 | Line | Math | $/mo |
 |---|---|---|
@@ -28,6 +28,8 @@ Bulk (AliExpress, 100+): roughly half. Dev/demo software cost is $0 — Develope
 | Lambda (86 batch invocations × ~300 ms × 1 GB) | compute + requests | 0.0004 |
 | S3 archive (its share of 86 objects; ~4 MB a month gzipped) | requests + storage | 0.0005 |
 | **Per patient device** | | **≈ $0.077 (≈ $0.11 CAD)** |
+
+Watching a board live adds to this only while its card is open: a reading every 2 s from the board and one delivery per open card, about $0.0036 an hour for one card, so about 3 cents for a working day. Its connection status costs well under a cent a month. [LIVE-STATUS.md](LIVE-STATUS.md) has the breakdown.
 
 EventBridge is no longer on the per-reading path, and Prod keeps readings in S3 rather than writing each one to DynamoDB, which together were $0.19 of the old $0.35.
 

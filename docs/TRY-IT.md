@@ -194,6 +194,13 @@ and certificate, which live in NVS, outside the part of the flash an update
 rewrites. A try costs one upload and one job execution per board, a fraction
 of a cent.
 
+To watch a board, open its Asset in the Cloud Agentic IoT app. The Live Status
+card shows whether it is connected and, from firmware 2.2.0, a reading every 2
+seconds while the card is on screen, straight from AWS IoT to your browser.
+Readings never pass through Salesforce, and an hour of watching costs about a
+third of a cent in AWS. [LIVE-STATUS.md](LIVE-STATUS.md) has the speeds, the
+costs and what to check when the card waits for the board.
+
 ## What happens near the limit
 
 - As spending nears the limit, AWS denies Lambda invocations, Bedrock calls and
