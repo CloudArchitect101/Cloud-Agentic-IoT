@@ -11,6 +11,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadWithFakes, fakeAwsSdk, fakeSsm } = require('../helpers/fakes');
 
 const root = path.join(__dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -122,4 +123,79 @@ test('presence leaves out the browsers that watch live readings', () => {
   assert.match(rule[1], /WHERE NOT startswith\(clientId, 'live-'\)/);
   assert.match(liveLambda, /return `live-\$\{/);
   assert.match(presenceLambda, /clientId\.startsWith\('live-'\)/);
+});
+
+// Device commands (firmware 2.2.0). A command from Salesforce carries its
+// record's Id as commandId, and the board answers it on device/<thing>/ack;
+// the record shows Acked or Failed only once that answer reaches it. Nothing
+// at run time says the pieces drifted apart: an answer the device policy does
+// not allow disconnects the board, one no rule reads is lost, and a commandId
+// one side takes and another drops leaves its record Sent for good.
+const commands = read('firmware/libraries/CloudAgenticDevice/src/DeviceCommands.h');
+
+// The resources of the device policy's Publish statement, comments and all.
+function devicePublishList() {
+  const policy = relayTemplate.match(/\n  DevicePolicy:\n((?: {4,}.*\n|\s*\n)+)/);
+  assert.ok(policy, 'queue-relay template must declare DevicePolicy');
+  const publish = policy[1].match(/Action: iot:Publish\n +Resource:\n((?: {14,}.*\n)+)/);
+  assert.ok(publish, 'DevicePolicy must have a statement for iot:Publish');
+  return publish[1];
+}
+
+// What a Lambda exports as COMMAND_ID, the RegExp a commandId must match there.
+function commandIdRule(file) {
+  assert.ok(fs.existsSync(path.join(root, file)), `${file} does not exist`);
+  const exported = loadWithFakes(path.join(root, file), {
+    '@aws-sdk/client-iot-data-plane': fakeAwsSdk('IoTDataPlaneClient', ['PublishCommand']).sdk,
+    '@aws-sdk/client-ssm': fakeSsm().sdk,
+    jsonwebtoken: { sign: () => 'signed-assertion' },
+  });
+  assert.ok(exported.COMMAND_ID instanceof RegExp, `${file} must export COMMAND_ID, the RegExp a commandId must match`);
+  // Without g or y, test() keeps no state from one call to the next.
+  return new RegExp(exported.COMMAND_ID.source, exported.COMMAND_ID.flags.replace(/[gy]/g, ''));
+}
+
+test('answers go where the device policy lets each board publish, as itself only', () => {
+  const library = read('firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp');
+  assert.match(library, /publishTo\("device\/" \+ _thingName \+ "\/ack", answer\)/);
+  assert.ok(devicePublishList().includes('topic/device/${!iot:Connection.Thing.ThingName}/ack'),
+    'device policy must allow publishing to device/<own thing>/ack');
+});
+
+test('the answer rule reads every answer, and every field the board puts in one', () => {
+  const rule = vitalsTemplate.match(/RuleName: cloud_agentic_iot_device_command_ack\n[\s\S]*?Sql: "([^"]+)"/);
+  assert.ok(rule, 'patient-vitals template must declare the cloud_agentic_iot_device_command_ack rule');
+  const sql = rule[1];
+  assert.match(sql, /FROM 'device\/\+\/ack'$/);
+  assert.match(sql, /topic\(2\) AS thingName/);
+
+  // A field the board sends that the rule does not select never reaches
+  // Salesforce, and one the rule selects that the board never sends is
+  // always empty. Neither says so, so the two lists must be the same.
+  const selected = sql.match(/^SELECT (.+) FROM /)[1].split(',').map((field) => field.trim())
+    .filter((field) => /^\w+$/.test(field));
+  const library = read('firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp');
+  const sent = [...new Set([...library.matchAll(/answer\["(\w+)"\]/g)].map((match) => match[1]))];
+  assert.deepEqual(sent.sort(), selected.sort());
+  assert.deepEqual(selected.sort(), ['commandId', 'detail', 'operation', 'outcome']);
+});
+
+test('a commandId the board answers is one both command Lambdas take, and no other', () => {
+  const maxLength = Number(commands.match(/const size_t MAX_COMMAND_ID_LENGTH = (\d+);/)[1]);
+  const characters = commands.match(/const char COMMAND_ID_CHARACTERS\[\] =\s*"([^"]+)";/)[1];
+  for (const file of ['lambda/device-command/index.js', 'lambda/device-command-ack/index.js']) {
+    const rule = commandIdRule(file);
+    for (let code = 1; code < 0x180; code++) {
+      const character = String.fromCharCode(code);
+      assert.equal(rule.test(character), characters.includes(character),
+        `${file}: COMMAND_ID and DeviceCommands.h disagree on ${JSON.stringify(character)}`);
+    }
+    assert.ok(rule.test('a'.repeat(maxLength)), `${file}: COMMAND_ID must take ${maxLength} characters, as the board does`);
+    assert.ok(!rule.test('a'.repeat(maxLength + 1)), `${file}: COMMAND_ID must refuse ${maxLength + 1} characters, as the board does`);
+    assert.ok(!rule.test(''), `${file}: COMMAND_ID must refuse an empty commandId`);
+    assert.ok(!rule.test('a0Bbm00000AbCdEFGH/x') && !rule.test('a0Bbm00000AbCdEFGH\n'),
+      `${file}: COMMAND_ID must match the whole commandId, not part of it`);
+    // What Salesforce sends: a Device Command record's 18-character Id.
+    assert.ok(rule.test('a0Bbm00000AbCdEFGH'), `${file}: COMMAND_ID must take a Salesforce record Id`);
+  }
 });

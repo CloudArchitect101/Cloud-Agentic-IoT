@@ -36,14 +36,20 @@ CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY
 DHT dht(DHT_PIN, DHT11);
 Servo dispenser;
 
-void onCommand(JsonDocument& doc) {
+// True once the command is carried out, false for an operation this sketch
+// does not know: the library answers the command with that, done or refused.
+bool onCommand(JsonDocument& doc) {
   const char* op = doc["operation"] | doc["command"] | "";
-  if (strcmp(op, "DISPENSE_MEDICATION") == 0) {
-    Serial.println("dispensing");
-    dispenser.write(90);
-    delay(1000);
-    dispenser.write(0);
-  }
+  if (strcmp(op, "DISPENSE_MEDICATION") != 0) return false;
+  Serial.println("dispensing");
+  dispenser.write(90);
+  delay(1000);
+  dispenser.write(0);
+  // Done means the dose is out and the arm is home again, so a dose sent
+  // right behind this one starts from 0, not from halfway back. A hobby
+  // servo turns 90 degrees in well under half a second.
+  delay(500);
+  return true;
 }
 
 void setup() {

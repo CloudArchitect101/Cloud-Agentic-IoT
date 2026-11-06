@@ -23,6 +23,7 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include "DeviceTiming.h"
+#include "DeviceCommands.h"
 
 // Telemetry goes to AWS IoT Basic Ingest: straight into this rule, past the
 // message broker, so AWS does not charge for it as messaging. At a million
@@ -91,8 +92,14 @@ public:
    *  seconds since boot) to `doc` first. */
   bool publishLive(JsonDocument& doc);
 
-  /** Register a handler for commands on device/<thing>/command. */
-  void onCommand(void (*handler)(JsonDocument& doc));
+  /** Register a handler for the commands on device/<thing>/command that the
+   *  library does not handle itself (WIFI_UPDATE, SET_TELEMETRY_INTERVAL, LIVE
+   *  and RESTART are the library's). It returns true once it has carried the
+   *  command out, false when the operation is not one it knows. The library
+   *  answers from that: done, or refused. Read what you need from `doc`
+   *  before publishing anything: with ArduinoJson 6 its strings live in the
+   *  MQTT client's buffer, which a publish reuses. */
+  void onCommand(bool (*handler)(JsonDocument& doc));
 
   const String& thingName() const { return _thingName; }
   bool connected() { return _mqtt.connected(); }
@@ -120,7 +127,11 @@ private:
   Preferences _prefs;
   WiFiClientSecure _net;
   PubSubClient _mqtt;
-  void (*_commandHandler)(JsonDocument&) = nullptr;
+  bool (*_commandHandler)(JsonDocument&) = nullptr;
+
+  // The commands carried out lately, so that one arriving twice is answered
+  // again rather than carried out again. RAM only: see DeviceCommands.h.
+  cad::RecentCommands _recent;
 
   bool loadIdentity();
   void loadSettings();
@@ -129,13 +140,17 @@ private:
   bool connectAWS();
   void retryLater(const char* what);
   bool setTelemetryInterval(long seconds, const char* source);
-  void setLive(long seconds, long minutes);
-  void saveNetwork(const String& ssid, const String& pass);
+  bool setLive(long seconds, long minutes);
+  bool saveNetwork(const String& ssid, const String& pass);
   bool provisionFromSerial(bool hasIdentity);
   void checkSerialWifiUpdate();
 
   bool publishTo(const String& topic, const JsonDocument& doc);
   void handleMessage(char* topic, byte* payload, unsigned int len);
+  cad::CommandResult carryOut(JsonDocument& doc, const char* operation, char* detail, size_t size);
+  void finishCommand(const char* commandId, const char* operation, cad::CommandResult result,
+                     const char* detail);
+  void restart(const char* commandId);
   void handleJobDocument(byte* payload, unsigned int len);
   void handleConfigJob(const String& jobId, JsonObject jobDocument);
   void applyFirmware(const String& jobId, const String& url);

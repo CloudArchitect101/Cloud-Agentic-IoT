@@ -121,16 +121,17 @@ bool CloudAgenticDevice::telemetryDue() {
 // LIVE when the card opens and again every few minutes while it stays open,
 // and each one starts the window over. When the card closes the renewals stop
 // and the window runs out by itself.
-void CloudAgenticDevice::setLive(long seconds, long minutes) {
+bool CloudAgenticDevice::setLive(long seconds, long minutes) {
   if (!cad::validLive(seconds, minutes)) {
     Serial.printf("live: refused %ld s for %ld min, allowed %lu-%lu s for 1-%lu min, or 0 min to stop\n",
                   seconds, minutes, (unsigned long)cad::MIN_LIVE_SECONDS,
                   (unsigned long)cad::MAX_LIVE_SECONDS, (unsigned long)cad::MAX_LIVE_MINUTES);
-    return;
+    return false;
   }
   _live.start(millis(), (uint32_t)seconds, (uint32_t)minutes);
   if (minutes == 0) Serial.println("live: off");
   else Serial.printf("live: every %ld s for %ld min\n", seconds, minutes);
+  return true;
 }
 
 bool CloudAgenticDevice::liveDue() {
@@ -140,8 +141,9 @@ bool CloudAgenticDevice::liveDue() {
 
 /* ----------------------------------------------------------------- wifi */
 
-void CloudAgenticDevice::saveNetwork(const String& ssid, const String& pass) {
-  if (!ssid.length()) return;
+// False when there is no network name, so nothing was stored.
+bool CloudAgenticDevice::saveNetwork(const String& ssid, const String& pass) {
+  if (!ssid.length()) return false;
   _prefs.begin(NVS_WIFI, false);
   int count = _prefs.getInt("count", 0);
   int slot = -1;
@@ -156,6 +158,7 @@ void CloudAgenticDevice::saveNetwork(const String& ssid, const String& pass) {
   _prefs.putString(("p" + String(slot)).c_str(), pass);
   _prefs.end();
   Serial.printf("wifi: stored '%s' in slot %d\n", ssid.c_str(), slot);
+  return true;
 }
 
 bool CloudAgenticDevice::connectWiFi() {
@@ -273,8 +276,12 @@ void CloudAgenticDevice::applyFirmware(const String& jobId, const String& url) {
     Update.abort();
     return;
   }
-  // Report before rebooting: after ESP.restart() there is no chance to speak.
-  reportJobStatus(jobId, "SUCCEEDED", "rebooting");
+  // Not SUCCEEDED yet: the build is written, but only the build itself,
+  // started and connected, shows that it runs. After the restart the board
+  // asks for its next job, gets this one back, and handleJobDocument() answers
+  // from the version it came back on. Said before rebooting, because after
+  // ESP.restart() there is no chance to speak.
+  reportJobStatus(jobId, "IN_PROGRESS", "rebooting");
   _mqtt.loop();
   delay(500);
   Serial.println("OTA: complete, restarting");
@@ -298,6 +305,13 @@ void CloudAgenticDevice::handleJobDocument(byte* payload, unsigned int length) {
   String url    = execution["jobDocument"]["url"].as<String>();
   String ver    = execution["jobDocument"]["version"].as<String>();
   String sketch = execution["jobDocument"]["sketch"].as<String>();
+  // Where an earlier start of this job left off. A new job comes QUEUED. One
+  // this board has started comes back IN_PROGRESS, with the statusDetails it
+  // last reported: "rebooting" once it wrote the build and restarted into it.
+  // Read now, before anything is published: a publish reuses the buffer
+  // these strings may still live in.
+  bool started   = strcmp(execution["status"] | "", "IN_PROGRESS") == 0;
+  bool restarted = started && strcmp(execution["statusDetails"]["detail"] | "", "rebooting") == 0;
 
   // The safety check that matters most. Device types have different pins and
   // different logic; flashing a queue indicator with patient-monitor firmware
@@ -310,8 +324,23 @@ void CloudAgenticDevice::handleJobDocument(byte* payload, unsigned int length) {
     return;
   }
   if (ver == String(_version)) {
-    Serial.println("OTA: already on this version");
-    reportJobStatus(jobId, "SUCCEEDED", "already current");
+    if (started) {
+      // It installed this build and came back on it: the update worked.
+      Serial.printf("OTA: running %s\n", _version);
+      reportJobStatus(jobId, "SUCCEEDED", "running " + ver);
+    } else {
+      Serial.println("OTA: already on this version");
+      reportJobStatus(jobId, "SUCCEEDED", "already current");
+    }
+    return;
+  }
+  if (restarted) {
+    // It wrote that build and restarted into it, but this one is running: the
+    // new build did not start, and the bootloader went back to this one, or
+    // the build calls itself another version. Installing it again would only
+    // end here again, download after download, until the job timed out.
+    Serial.printf("OTA: %s did not start, still on %s\n", ver.c_str(), _version);
+    reportJobStatus(jobId, "FAILED", "came back on " + String(_version));
     return;
   }
   if (!url.length()) { reportJobStatus(jobId, "FAILED", "no url in job document"); return; }
@@ -335,12 +364,45 @@ void CloudAgenticDevice::handleConfigJob(const String& jobId, JsonObject jobDocu
 
 /* -------------------------------------------------------------- runtime */
 
+// A command on device/<thing>/command. One that carries a commandId (a Device
+// Command record's Id, from Salesforce) is answered on device/<thing>/ack, so
+// the record can show whether the board carried it out; one without is
+// carried out the same way and not answered.
 void CloudAgenticDevice::handleMessage(char* topic, byte* payload, unsigned int length) {
   if (String(topic).indexOf("/jobs/") >= 0) { handleJobDocument(payload, length); return; }
 
   StaticJsonDocument<512> doc;
   if (deserializeJson(doc, payload, length)) { Serial.println("command: malformed JSON"); return; }
 
+  // Copied before anything is carried out: the answer goes after, and with
+  // ArduinoJson 6 the document's strings live in the MQTT client's buffer,
+  // which every publish reuses (the queue indicator publishes from its
+  // handler). An invalid commandId is dropped and the command still carried
+  // out: the id is for the answer, not a permission.
+  char operation[cad::MAX_DETAIL_LENGTH + 1];
+  cad::copyText(operation, sizeof operation, doc["operation"] | "");
+  char commandId[cad::MAX_COMMAND_ID_LENGTH + 1] = "";
+  const char* id = doc["commandId"] | "";
+  if (cad::validCommandId(id)) cad::copyText(commandId, sizeof commandId, id);
+
+  // The same command a second time is answered again, not carried out again.
+  cad::CommandResult result = cad::CommandResult::Done;
+  if (_recent.find(commandId, result)) {
+    finishCommand(commandId, operation, result, "already carried out");
+    return;
+  }
+
+  if (strcmp(doc["operation"] | "", "RESTART") == 0) { restart(commandId); return; }
+
+  char detail[cad::MAX_DETAIL_LENGTH + 1] = "";
+  result = carryOut(doc, operation, detail, sizeof detail);
+  finishCommand(commandId, operation, result, detail);
+}
+
+// Carries out every command but RESTART, and says what it came to. `detail`
+// gets what the answer adds to the outcome, if anything.
+cad::CommandResult CloudAgenticDevice::carryOut(JsonDocument& doc, const char* operation,
+                                                char* detail, size_t size) {
   // Credentials are library business, not sketch business. Handling WIFI_UPDATE
   // here means every device type gets remote WiFi changes for free, and no
   // sketch has to know that WiFi exists. Storing is all that happens: the
@@ -348,25 +410,77 @@ void CloudAgenticDevice::handleMessage(char* topic, byte* payload, unsigned int 
   // it keeps that connection and only uses the new entry once the old one is
   // gone. That is why the push must be sent BEFORE the network changes.
   if (strcmp(doc["operation"] | "", "WIFI_UPDATE") == 0) {
-    saveNetwork(doc["ssid"] | "", doc["passphrase"] | "");
+    if (!saveNetwork(doc["ssid"] | "", doc["passphrase"] | "")) {
+      snprintf(detail, size, "ssid is required");
+      return cad::CommandResult::Failed;
+    }
     Serial.println("wifi: updated over MQTT - identity and certificate untouched");
-    return;
+    snprintf(detail, size, "stored");
+    return cad::CommandResult::Done;
   }
   // The same setting the fleet job carries, for one board or a list of them
   // (the device-command API).
   if (strcmp(doc["operation"] | "", "SET_TELEMETRY_INTERVAL") == 0) {
-    setTelemetryInterval(doc["seconds"] | 0L, "command");
-    return;
+    long seconds = doc["seconds"] | 0L;
+    if (!setTelemetryInterval(seconds, "command")) {
+      snprintf(detail, size, "seconds must be %lu-%lu",
+               (unsigned long)cad::MIN_TELEMETRY_SECONDS, (unsigned long)cad::MAX_TELEMETRY_SECONDS);
+      return cad::CommandResult::Failed;
+    }
+    snprintf(detail, size, "every %ld s", seconds);
+    return cad::CommandResult::Done;
   }
   // Live readings for a card that is open, sent by the device-live API. The
   // library keeps the schedule; the sketch only says what a reading is. A
   // missing minutes is refused, not taken as 0, which would end live mode.
   if (strcmp(doc["operation"] | "", "LIVE") == 0) {
-    setLive(doc["seconds"] | 0L, doc["minutes"] | -1L);
-    return;
+    long seconds = doc["seconds"] | 0L, minutes = doc["minutes"] | -1L;
+    if (!setLive(seconds, minutes)) {
+      snprintf(detail, size, "seconds must be %lu-%lu and minutes 1-%lu, or minutes 0 to stop",
+               (unsigned long)cad::MIN_LIVE_SECONDS, (unsigned long)cad::MAX_LIVE_SECONDS,
+               (unsigned long)cad::MAX_LIVE_MINUTES);
+      return cad::CommandResult::Failed;
+    }
+    if (minutes == 0) snprintf(detail, size, "off");
+    else snprintf(detail, size, "every %ld s for %ld min", seconds, minutes);
+    return cad::CommandResult::Done;
   }
 
-  if (_commandHandler) _commandHandler(doc);
+  if (_commandHandler && _commandHandler(doc)) return cad::CommandResult::Done;
+  if (*operation) snprintf(detail, size, "unknown operation %s", operation);   // cut to fit
+  else snprintf(detail, size, "no operation");
+  return cad::CommandResult::Refused;
+}
+
+// Says on the console what a command came to, and when it carried a
+// commandId, remembers it and answers on device/<thing>/ack: QoS 0, a plain
+// topic that rule cloud_agentic_iot_device_command_ack reads. The console
+// never shows the whole message: a WIFI_UPDATE carries a passphrase.
+void CloudAgenticDevice::finishCommand(const char* commandId, const char* operation,
+                                       cad::CommandResult result, const char* detail) {
+  Serial.printf("command: %s%s%s%s%s\n", operation, *operation ? " " : "", cad::resultName(result),
+                *detail ? " - " : "", detail);
+  if (!*commandId) return;
+  _recent.remember(commandId, result);
+  StaticJsonDocument<256> answer;
+  answer["commandId"] = commandId;
+  answer["operation"] = operation;
+  answer["outcome"]   = cad::resultName(result);
+  if (*detail) answer["detail"] = detail;
+  publishTo("device/" + _thingName + "/ack", answer);
+}
+
+// Answered first, because after ESP.restart() the board cannot say anything;
+// as in the OTA path, the client then gets half a second to send it. Remembered
+// first too: should the same RESTART arrive while it waits, that one is only
+// answered. Live mode ends with the restart; the reading interval is in NVS
+// and stays.
+void CloudAgenticDevice::restart(const char* commandId) {
+  finishCommand(commandId, "RESTART", cad::CommandResult::Done, "restarting");
+  _mqtt.loop();
+  delay(500);
+  Serial.println("command: restarting");
+  ESP.restart();
 }
 
 void CloudAgenticDevice::configureMqtt() {
@@ -376,7 +490,10 @@ void CloudAgenticDevice::configureMqtt() {
   _mqtt.setServer(_endpoint.c_str(), 8883);
   // Jobs documents exceed PubSubClient's 256-byte default and oversized
   // messages are dropped silently - it looks like AWS never sent anything.
-  _mqtt.setBufferSize(2048);
+  // An OTA job's message is about 1.9 KB: its pre-signed link carries the OTA
+  // role's session token. With 2048, a longer token or Thing name was enough
+  // to lose the job.
+  _mqtt.setBufferSize(4096);
   _mqtt.setCallback(trampoline);
 }
 
@@ -460,4 +577,4 @@ bool CloudAgenticDevice::publishLive(JsonDocument& doc) {
   return publishTo("device/" + _thingName + "/live", doc);
 }
 
-void CloudAgenticDevice::onCommand(void (*handler)(JsonDocument&)) { _commandHandler = handler; }
+void CloudAgenticDevice::onCommand(bool (*handler)(JsonDocument&)) { _commandHandler = handler; }
