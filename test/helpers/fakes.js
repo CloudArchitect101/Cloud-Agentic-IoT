@@ -89,13 +89,17 @@ function fakeAwsSdk(clientName, commandNames, respond = () => ({})) {
  * holding `items` and enforcing what the real service would reject: more than
  * 100 keys in a BatchGetItem or 25 items in a BatchWriteItem, the same key
  * twice in one request, and an UpdateItem whose ConditionExpression fails.
+ * GetItem and Query read the same items; a Query returns them in sort key
+ * order, reversed by ScanIndexForward false, and stops at Limit.
  *
  * options.unprocessed(commandName, entries) returns the keys or write
  * requests to leave unprocessed this time, as DynamoDB does when throttled.
  * options.beforeUpdate(table, input) runs before an update is applied, so a
- * test can change the item underneath it.
+ * test can change the item underneath it. options.fail(commandName, input)
+ * may throw, to fail that call as DynamoDB does when it refuses or is
+ * unreachable.
  */
-function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () => {} } = {}) {
+function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () => {}, fail = () => {} } = {}) {
   const keyOf = (item) => `${item.PK}|${item.SK}`;
   const table = new Map(items.map((item) => [keyOf(item), structuredClone(item)]));
   const calls = [];
@@ -104,7 +108,7 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
       from: () => ({ send: async (command) => respond(command.constructor.name, command.input) }),
     },
   };
-  for (const name of ['BatchGetCommand', 'BatchWriteCommand', 'UpdateCommand']) {
+  for (const name of ['BatchGetCommand', 'BatchWriteCommand', 'UpdateCommand', 'GetCommand', 'QueryCommand']) {
     sdk[name] = { [name]: class { constructor(input) { this.input = input; } } }[name];
   }
 
@@ -116,6 +120,7 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
 
   function respond(command, input) {
     calls.push({ command, input });
+    fail(command, input);
     if (command === 'BatchGetCommand') {
       const [[name, { Keys }]] = Object.entries(input.RequestItems);
       if (Keys.length > 100) throw awsError('ValidationException', 'Too many items requested for the BatchGetItem call');
@@ -152,6 +157,25 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
       table.set(keyOf(input.Key), next);
       return {};
     }
+    if (command === 'GetCommand') {
+      const item = table.get(keyOf(input.Key));
+      return item ? { Item: structuredClone(item) } : {};
+    }
+    if (command === 'QueryCommand') {
+      const { partition, prefix } = keyCondition(input.KeyConditionExpression, input.ExpressionAttributeValues || {});
+      const found = [...table.values()]
+        .filter((item) => item.PK === partition && (prefix === undefined || item.SK.startsWith(prefix)))
+        .sort((a, b) => (a.SK < b.SK ? -1 : Number(a.SK > b.SK)));
+      if (input.ScanIndexForward === false) found.reverse();
+      const page = found.slice(0, input.Limit ?? found.length);
+      const last = page.length < found.length ? page.at(-1) : null;
+      return {
+        Items: page.map((item) => structuredClone(item)),
+        Count: page.length,
+        ScannedCount: page.length,
+        ...(last ? { LastEvaluatedKey: { PK: last.PK, SK: last.SK } } : {}),
+      };
+    }
     throw new Error(`fakeDynamoDb does not implement ${command}`);
   }
 
@@ -161,6 +185,27 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
     calls,
     count: (command) => calls.filter((call) => call.command === command).length,
   };
+}
+
+/**
+ * The key conditions the handlers query with: the partition key equal to a
+ * placeholder, optionally AND begins_with(SK, placeholder). Anything else
+ * throws, as in conditionHolds below. Like DynamoDB, it refuses a
+ * placeholder with no value and a value no placeholder uses.
+ */
+function keyCondition(expression, values) {
+  const match = String(expression).match(/^PK\s*=\s*(:\w+)(?:\s+AND\s+begins_with\(\s*SK\s*,\s*(:\w+)\s*\))?$/);
+  if (!match) throw new Error(`fakeDynamoDb cannot evaluate the key condition "${expression}"`);
+  const used = match.slice(1).filter(Boolean);
+  const undefinedValue = used.find((placeholder) => !Object.hasOwn(values, placeholder));
+  if (undefinedValue) {
+    throw awsError('ValidationException', `An expression attribute value used in expression is not defined; attribute value: ${undefinedValue}`);
+  }
+  const unused = Object.keys(values).filter((placeholder) => !used.includes(placeholder));
+  if (unused.length) {
+    throw awsError('ValidationException', `Value provided in ExpressionAttributeValues unused in expressions: keys: {${unused.join(', ')}}`);
+  }
+  return { partition: values[match[1]], prefix: match[2] && values[match[2]] };
 }
 
 /**

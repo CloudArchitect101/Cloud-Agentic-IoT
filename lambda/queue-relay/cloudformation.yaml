@@ -2,8 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   The device API Salesforce calls through the AWS_IoT_Relay Named Credential
   (SigV4): queue depth, provisioning, re-provisioning, teardown and device
-  commands, each taking a batch of devices. Also the IoT policy every device
-  certificate gets, and the bucket its one-time credential bundle waits in.
+  commands, each taking a batch of devices, and the live view of one device.
+  Also the IoT policy every device certificate gets, and the bucket its
+  one-time credential bundle waits in.
 
 # Every number below comes from config/<env>.json ("queue-relay" section),
 # passed by scripts/deploy-aws.sh as parameter overrides.
@@ -74,6 +75,32 @@ Parameters:
       Salesforce holds. It is made by hand (README, Stage 2), because the
       deploy identities may not create users, and it may only assume
       SalesforceCallerRole.
+  # The live view (POST /device-live): how often a board sends a reading,
+  # and for how long, while someone has its card open in Salesforce.
+  LiveReadingSeconds:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 60
+    Description: >-
+      Seconds between live readings; the board accepts 1 to 60
+      (DeviceTiming.h). 2 is the patient monitor's fastest useful pace: its
+      DHT11 gives a new value at most every 2 seconds.
+  LiveMinutes:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    MaxValue: 30
+    Description: >-
+      How long a board stays in live mode after the card last asked; the
+      board accepts 1 to 30. The card asks again every 10 minutes while it is
+      open, so 10 or less leaves gaps in the stream.
+  PatientVitalsTableName:
+    Type: String
+    Default: patient-vitals
+    Description: >-
+      The patient-vitals stack's table (its PatientVitalsTableName), which
+      the live view reads the newest stored reading and patient state from.
 
 Conditions:
   ReserveProvisioningConcurrency: !Not [!Equals [!Ref ProvisioningMaxConcurrency, 0]]
@@ -113,6 +140,11 @@ Resources:
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/telemetry'
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/status'
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/jobs/*'
+              # Firmware 2.2.0 live mode: a reading every few seconds while
+              # someone has the board's card open in Salesforce. The browser
+              # card subscribes to this topic itself, through LiveViewerRole.
+              # No rule reads it, so nothing stores these readings.
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/live'
           - Effect: Allow
             Action: iot:Subscribe
             Resource:
@@ -353,6 +385,112 @@ Resources:
         Variables:
           IOT_PARALLEL_REQUESTS: !Ref IotParallelRequests
 
+  # The live view of one board. A role of its own, because it can do what no
+  # other function here may: hand a browser credentials, through
+  # LiveViewerRole. test/lambda/live-viewer-role.test.js checks it against
+  # the calls the function makes.
+  DeviceLiveRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StartLiveView
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # The LIVE command, on the board's own command topic.
+              - Effect: Allow
+                Action: iot:Publish
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/*/command'
+              # This cannot be scoped to a resource.
+              - Effect: Allow
+                Action: iot:DescribeEndpoint
+                Resource: '*'
+              # The newest stored reading and the patient's state, read only.
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PatientVitalsTableName}'
+
+  # What a browser watching a board may do: connect as a live-* client and
+  # receive boards' live topics, and nothing else. The function narrows each
+  # 15-minute session further, with a session policy, to one client id and
+  # one board. Only DeviceLiveRole may assume it.
+  # test/lambda/live-viewer-role.test.js pins all of this.
+  LiveViewerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by the device-live function only, to let a browser watch one board's live readings.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt DeviceLiveRole.Arn
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WatchLiveReadings
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: iot:Connect
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:client/live-*'
+              - Effect: Allow
+                Action: iot:Subscribe
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/device/*/live'
+              - Effect: Allow
+                Action: iot:Receive
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/*/live'
+
+  # A policy of its own rather than a statement in DeviceLiveRole:
+  # LiveViewerRole's trust names DeviceLiveRole, so DeviceLiveRole naming
+  # LiveViewerRole would make each role wait for the other.
+  DeviceLiveAssumesViewer:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AssumeLiveViewerRole
+      Roles:
+        - !Ref DeviceLiveRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource: !GetAtt LiveViewerRole.Arn
+
+  DeviceLiveFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-device-live
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref DeviceApiTimeoutSeconds
+      # The card waits on the first answer, and five SDK packages load
+      # faster with the CPU that comes with more memory.
+      MemorySize: 256
+      Role: !GetAtt DeviceLiveRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PatientVitalsTableName
+          LIVE_VIEWER_ROLE_ARN: !GetAtt LiveViewerRole.Arn
+          LIVE_READING_SECONDS: !Ref LiveReadingSeconds
+          LIVE_MINUTES: !Ref LiveMinutes
+
   # ------------------------------------------------------------------ API
 
   QueueRelayApi:
@@ -440,6 +578,21 @@ Resources:
       AuthorizationType: AWS_IAM
       Target: !Sub 'integrations/${CommandIntegration}'
 
+  LiveIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DeviceLiveFunction.Arn
+      PayloadFormatVersion: '2.0'
+  LiveRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /device-live'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${LiveIntegration}'
+
   QueueRelayStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -455,7 +608,7 @@ Resources:
   # The identity Salesforce signs with. Its external credential holds the
   # access key of SalesforceCallerUserName, a user made by hand that may only
   # assume this role through STS, and this role may only call this API. A
-  # leaked key reaches these five routes and nothing else, and every signed
+  # leaked key reaches these six routes and nothing else, and every signed
   # request uses credentials that expire within the hour.
   SalesforceCallerRole:
     Type: AWS::IAM::Role
@@ -518,6 +671,13 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref DeviceCommandFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  LivePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DeviceLiveFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
 
