@@ -88,7 +88,8 @@ function fakeAwsSdk(clientName, commandNames, respond = () => ({})) {
  * A fake DynamoDB table behind the document client (@aws-sdk/lib-dynamodb),
  * holding `items` and enforcing what the real service would reject: more than
  * 100 keys in a BatchGetItem or 25 items in a BatchWriteItem, the same key
- * twice in one request, and an UpdateItem whose ConditionExpression fails.
+ * twice in one request, an UpdateItem whose ConditionExpression fails, and
+ * an UpdateItem that uses a placeholder with no (or an undefined) value.
  * GetItem and Query read the same items; a Query returns them in sort key
  * order, reversed by ScanIndexForward false, and stops at Limit.
  *
@@ -146,6 +147,7 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
       beforeUpdate(table, input);
       const current = table.get(keyOf(input.Key));
       const values = input.ExpressionAttributeValues || {};
+      assertValuesDefined(values, input.UpdateExpression, input.ConditionExpression);
       if (input.ConditionExpression && !conditionHolds(input.ConditionExpression, current, values)) {
         throw awsError('ConditionalCheckFailedException', 'The conditional request failed');
       }
@@ -185,6 +187,19 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
     calls,
     count: (command) => calls.filter((call) => call.command === command).length,
   };
+}
+
+/**
+ * Like DynamoDB, refuses an update whose expressions use a placeholder with
+ * no value. An undefined value counts as missing: the document client's
+ * removeUndefinedValues drops it before the request is sent.
+ */
+function assertValuesDefined(values, ...expressions) {
+  const used = expressions.filter(Boolean).flatMap((expression) => String(expression).match(/:\w+/g) || []);
+  const missing = used.find((placeholder) => !Object.hasOwn(values, placeholder) || values[placeholder] === undefined);
+  if (missing) {
+    throw awsError('ValidationException', `An expression attribute value used in expression is not defined; attribute value: ${missing}`);
+  }
 }
 
 /**
