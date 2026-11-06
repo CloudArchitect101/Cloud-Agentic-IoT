@@ -138,9 +138,9 @@ Setup → **Users** → New User, twice:
 | Field | `integration@…` (runtime) | `deploy@…` (CI/CD) |
 |---|---|---|
 | User License | **Integration** | **Salesforce** |
-| Profile | Salesforce API Only System Integrations | Minimum Access – Salesforce |
+| Profile | Salesforce API Only System Integrations | System Administrator (why: §2.3) |
 | Username | `integration@iot-dev.<yourdomain>` | `deploy@iot-dev.<yourdomain>` |
-| Gets permissions from | The `Salesforce API Integration` permission set license, then the `Device_Integration` permission set (from the repo) | `Metadata_Deploy` permission set (created by hand — see §2.3) |
+| Gets permissions from | The `Salesforce API Integration` permission set license, then the `Device_Integration` permission set (from the repo) | Its profile, plus the `Metadata_Deploy` permission set from `scripts/` (§2.3) |
 
 Note: For the last name, you can use "Integration" / "Deploy" and reuse your original email address for that ORG.
 
@@ -173,25 +173,55 @@ That gives three phases, and only the first is manual:
 
 Phases 1 and 3 are one-time. From then on, every change ships through GitHub.
 
-**Phase 1 — grant `deploy@…` exactly two permissions.** 
-Setup → Permission Setsm→ New (call it `Metadata_Deploy`), then System Permissions:
+**Phase 1 — make `deploy@…` able to deploy.**
 
-| Permission | Why |
+> **The deploy user is a System Administrator, deliberately.** Apex tests run as
+> whoever deploys, and two of ours create a **Queue** as fixture data. Creating a
+> `Group` of `Type='Queue'` cannot be granted by permission: `ManageUsers` (which
+> drags twelve more permissions with it) does not unlock it, nor does a role, nor
+> Case access. The only route left is `ModifyAllData`, which demands thirty-three
+> more permissions: System Administrator rebuilt by hand. Verified directly: the
+> same Apex creating a queue succeeds as an admin and fails as a least-privilege
+> deploy user, in the same org, seconds apart.
+>
+> The narrower fix is to rework those tests to inject queues instead of inserting
+> setup objects (`CaseQueueMonitorService` already has a `testBindingOverride`
+> seam for it). Worth doing before this pipeline ever points at an org with real
+> data. Until then, the admin profile is what makes the pipeline work.
+
+The `Metadata_Deploy` permission set is source-controlled at
+[`scripts/Metadata_Deploy.permissionset-meta.xml`](../scripts/Metadata_Deploy.permissionset-meta.xml).
+It sits in `scripts/`, not `force-app/`, on purpose: the deploy user needs it
+*before* the pipeline can deploy anything, so it can't ship in the package the
+pipeline deploys. Apply it once per org, as the admin:
+
+```bash
+sf project deploy start \
+  --source-dir scripts/Metadata_Deploy.permissionset-meta.xml \
+  --target-org iot-dev
+
+sf org assign permset --name Metadata_Deploy \
+  --target-org iot-dev --on-behalf-of deploy@iot-dev.<yourdomain>
+```
+
+Which system permissions it needs is decided by what the package contains.
+`Modify Metadata Through Metadata API Functions` only opens the door; each
+metadata type still demands its own permission behind it:
+
+| Metadata type in this repo | System permission required |
 |---|---|
-| **API Enabled** | JWT login and the Metadata API both require it |
-| **Modify Metadata Through Metadata API Functions** | Deploy metadata *without* granting data access — this is the least-privilege option, and the reason the deploy user cannot read a single patient record |
+| any | **API Enabled** (JWT login) and **Modify Metadata Through Metadata API Functions** |
+| `ApexClass`, `ApexTrigger` | **Author Apex** |
+| `LightningComponentBundle` | **Author Apex** *and* **Customize Application**. Author Apex alone fails with `insufficient access rights on entity: LightningComponentResource` |
+| `CustomObject`, `CustomField`, `CustomMetadata`, `CustomApplication`, `CustomTab`, `FlexiPage`, `Layout`, `CompactLayout`, `QuickAction` | **Customize Application** |
+| `PermissionSet`, `CustomPermission` | **Manage Profiles and Permission Sets**, **Manage Custom Permissions** |
+| `GenAiFunction`, `GenAiPlannerBundle`, `GenAiPlugin` | An Agentforce permission set, not a checkbox: `CopilotSalesforceAdmin` ("Agentforce Default Admin"). `AgentPlatformBuilder` is narrower but not every org has it |
 
-Assign it to `deploy@…` user.
-
-> **If a deploy later fails with an insufficient-privileges error**, the cause
-> is almost always that a specific metadata type still demands **Modify All
-> Data**, which `Modify Metadata` deliberately does not cover. Salesforce's own
-> documentation lists the exceptions and they shift between releases. Prefer
-> adding `Modify All Data` only if you hit that wall — it is far broader, and
-> starting narrow means you find out precisely what the pipeline needs.
-
-
-
+> **This gap hides longest.** Everything an admin runs locally succeeds, because
+> a System Administrator holds all of these implicitly. Only a least-privilege
+> deploy user sees the failure, so it reads as a CI problem rather than a
+> permissions one. If you ever move the deploy user off System Administrator,
+> check its effective permissions (profile plus every permission set) first.
 
 ### 2.4 Two External Apps, not one
 
@@ -245,6 +275,21 @@ in through the app.
 
 Note: The app defines what mechanisms are technically open, but a user identity dictates who owns the data and which records they have the permission to modify.
 
+**The known-good configuration.** For comparison when a JWT login breaks, this is
+a deploy app that authenticates, with the secrets stripped:
+
+```xml
+<!-- ExtlClntAppGlobalOauthSettings -->
+<certificate>…</certificate>                      <!-- present = JWT bearer flow on -->
+<isNamedUserJwtEnabled>false</isNamedUserJwtEnabled>   <!-- MUST be false -->
+<isClientCredentialsFlowEnabled>false</isClientCredentialsFlowEnabled>
+
+<!-- ExtlClntAppOauthConfigurablePolicies -->
+<permittedUsersPolicyType>AdminApprovedPreAuthorized</permittedUsersPolicyType>
+<commaSeparatedPermissionSet>Metadata_Deploy</commaSeparatedPermissionSet>
+<ipRelaxationPolicyType>Bypass</ipRelaxationPolicyType>
+```
+
 
 ---
 
@@ -272,29 +317,44 @@ aws iam create-open-id-connect-provider \
   --client-id-list sts.amazonaws.com \
   --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 
-cat > trust-policy.json <<'EOF'
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": { "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com" },
-    "Action": "sts:AssumeRoleWithWebIdentity",
-    "Condition": {
-      "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike": { "token.actions.githubusercontent.com:sub": "repo:YOUR_GH_USERNAME/Cloud-Agentic-IoT:ref:refs/heads/Dev" }
-    }
-  }]
-}
-EOF
+# Fill in scripts/trust-policy.json: your account ID, GitHub owner, and the
+# two numeric IDs printed by:
+gh api repos/YOUR_GH_USERNAME/Cloud-Agentic-IoT --jq '"owner: \(.owner.id)  repo: \(.id)"'
 
 aws iam create-role --role-name github-actions-deploy \
-  --assume-role-policy-document file://trust-policy.json
+  --assume-role-policy-document file://scripts/trust-policy.json
 aws iam attach-role-policy --role-name github-actions-deploy \
   --policy-arn arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
 ```
 
-The `sub` condition pins the role to **this repo on this branch**. For Prod,
-create the same role in the Prod account with `refs/heads/Prod`.
+> **`environment:Dev`, not `ref:refs/heads/Dev`.** Every AWS workflow here declares
+> `environment: ${{ github.ref_name }}` so that Prod can carry a required-reviewer
+> rule. Once a job references an environment, GitHub puts the environment in the
+> OIDC subject claim instead of the branch, so a trust policy written against
+> `ref:refs/heads/Dev` matches nothing and every run fails with `Not authorized to
+> perform sts:AssumeRoleWithWebIdentity`. For Prod, create the same role in the
+> Prod account with `environment:Prod`.
+
+`scripts/trust-policy.json` lists two `sub` patterns because GitHub is moving to
+**immutable subject claims**, which add numeric owner and repository IDs that
+survive a rename (`repo:owner@98764954/repo@1317761754:environment:Dev`). Listing
+both works either way.
+
+Because the environment replaced the branch in the claim, pin the branch on the
+GitHub side: **Settings → Environments → Dev → Deployment branches**, limited to
+`Dev`. Without it, any branch that can reach the `Dev` environment can assume the
+role.
+
+If a run still fails, read the claim AWS actually received:
+
+```bash
+aws cloudtrail lookup-events --region <your region> \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
+  --max-results 3 --query 'Events[].CloudTrailEvent' --output text \
+  | python3 -c "import sys,json;[print(json.loads(c)['userIdentity'].get('principalId')) for c in sys.stdin.read().split(chr(9)) if c.strip()]"
+```
+
+That prints the exact `sub` string; the trust policy has to match it.
 
 Save the role ARN — it becomes the `AWS_ROLE_ARN` secret.
 

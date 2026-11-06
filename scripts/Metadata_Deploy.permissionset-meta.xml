@@ -6,11 +6,11 @@
   artefact: the deploy user needs it BEFORE the pipeline can deploy anything,
   so it cannot ship inside the package the pipeline deploys. Apply it by hand,
   once per org, as an administrator. The two commands (deploy, then assign) are
-  in docs/SETUP.md section 4.
+  in docs/SETUP.md section 2.3.
 
   Each permission below is here because a specific metadata type in force-app/
   demands it. Adding a new type may mean adding a permission; the full
-  type to permission table is in docs/SETUP.md section 4.
+  type to permission table is in docs/SETUP.md section 2.3.
 
   Deliberately absent: ModifyAllData, ViewAllData, ManageUsers.
 
@@ -34,7 +34,7 @@
   admin profile is doing the work, and that is the trade-off on record.
 -->
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>CI/CD deploy identity. Structure only, no record data access. See docs/SETUP.md section 4.</description>
+    <description>CI/CD deploy identity. Structure only, no record data access. See docs/SETUP.md section 2.3.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <label>Metadata_Deploy</label>
 
