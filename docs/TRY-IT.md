@@ -40,6 +40,16 @@ deploys from your laptop, and GitHub comes in only with the regular account.
    **Overview**, **Additional Info**.
 4. Sign up for a Developer Edition org, as in
    [SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin). It is free.
+5. In the org, Setup → **Einstein Setup** → **Turn on Einstein**.
+6. Then Setup → **Agentforce Agents** → turn on **Agentforce**. If it is not
+   there yet, wait a few minutes after step 5 and reload.
+
+Steps 5 and 6 accept Salesforce's terms for generative AI and Agentforce, so
+whether to turn them on is the org admin's decision, which here is you. Do
+both before the first Salesforce deploy, in section 4 below: the deploy creates
+the Patient Care Agent, and an org without Agentforce is expected to refuse
+it, which fails the whole deploy. Neither costs anything in a Developer
+Edition org.
 
 ## 2. Sign both CLIs in as `<name>`
 

@@ -128,6 +128,26 @@ In a real org, both should be Integration Users.
    ~5 MB data limit. Use an email alias you control, e.g. `you+iot-dev@…`.
 2. Setup → **Company Information** → confirm your license counts. You should
    see 2 Salesforce and 1 Integration User license available.
+3. Setup → **Einstein Setup** → **Turn on Einstein**. This turns on
+   generative AI for the org and accepts its terms, so it is the org admin's
+   decision, not something a deploy does for you.
+4. Setup → **Agentforce Agents** → turn on **Agentforce**. If the page or
+   the switch is missing, wait a few minutes after step 3 and reload. This
+   also accepts terms, and is the admin's decision too.
+
+Do 3 and 4 before the first deploy (§2.3, phase 2). The repo ships the
+Patient Care Agent (`bots/`) with its planner, topic and actions
+(`genAiPlannerBundles/`, `genAiPlugins/`, `genAiFunctions/`). Expect an org
+without Agentforce to refuse the agent, and one refused component fails
+the whole deploy. A Developer Edition org has no charge for either
+switch; agent conversations draw on its included Einstein allowance.
+
+Why by hand: the Metadata API documents
+`EinsteinGptSettings.enableEinsteinGptPlatform`, and Salesforce's Agentforce
+scratch org guide switches both on with it and
+`agentPlatformSettings.enableAgentPlatform`. Neither says that deploying
+them to an existing Developer Edition org turns the features on without
+accepting the terms in Setup, so the repo does not deploy them.
 
 Note: For additional security, activate MFA, for sandbox/prod environmenta this is must.
 
