@@ -184,7 +184,10 @@ stays as it is, uploads it to the firmware bucket under `firmware/<type>/try/`,
 creates one AWS IoT job for `fleet-<type>` at the pace and with the abort rule
 of a Dev release, and prints each board's answer as it comes. A board that is
 offline takes the job when it next connects, and `scripts/ota.sh status Dev`
-shows where each one stands. On the board's serial console you then see
+shows where each one stands. A new try cancels an earlier one that a board has
+not started, so a board that was offline installs only the newest. A board
+answers SUCCEEDED once the build is written, just before it restarts into it,
+so the serial console is where you see the new build start: first
 `OTA: complete, restarting` and, after the restart,
 `aws: connected, patient-monitor v<version>-try.<n>`: the board kept its Wi-Fi
 and certificate, which live in NVS, outside the part of the flash an update

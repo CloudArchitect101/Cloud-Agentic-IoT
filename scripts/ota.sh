@@ -63,9 +63,12 @@ known_sketch() {
   grep -qxF "$1" <<< "$(sketches)" || die "No sketch named '$1'. Sketches: $(sketches | tr '\n' ' ')"
 }
 
-# create_job <job id> <thing group> <sketch> <version> <S3 key> <first-ring|fleet> <environment>
+# create_job <job id> <thing group> <sketch> <version> <S3 key> <first-ring|fleet> <environment> [source]
+# The source in the job's description is the commit by default; a try passes
+# its own, which says whether the build had changes no commit holds.
 create_job() {
-  local job_id="$1" group="$2" sketch="$3" version="$4" key="$5" pace="$6" env="$7" doc
+  local job_id="$1" group="$2" sketch="$3" version="$4" key="$5" pace="$6" env="$7" source="${8:-}" doc
+  [ -n "$source" ] || source=$(git -C "$REPO_ROOT" rev-parse --short HEAD)
   doc=$(mktemp)
   # The ${aws:iot:s3-presigned-url:...} placeholder goes to AWS as written:
   # IoT swaps in a fresh signed link for each board when it fetches the job,
@@ -89,7 +92,7 @@ create_job() {
     --job-id "$job_id" \
     --targets "arn:aws:iot:$AWS_REGION:$AWS_ACCOUNT_ID:thinggroup/$group" \
     --document "file://$doc" \
-    --description "$sketch $version to $group ($env, $(git -C "$REPO_ROOT" rev-parse --short HEAD))" \
+    --description "$sketch $version to $group ($env, $source)" \
     --presigned-url-config "$presign" \
     --job-executions-rollout-config "$(ota_config "$env" ".ota.$ring.rollout")" \
     --timeout-config "$(ota_config "$env" ".ota.$ring.timeout")" \
@@ -155,18 +158,26 @@ cmd_release() {
 #     board skips only the version it already runs, so a board that ran a try
 #     still installs the release of the same number.
 # The job is the one a Dev release creates, sent to the same group (and the
-# groups inside it) at the same pace and with the same abort rule.
+# groups inside it) at the same pace and with the same abort rule. A new try
+# cancels the earlier tries of that type that boards have not started, so a
+# board that was offline installs only the newest when it connects.
 cmd_try() {
-  local env="$1" sketch="${2:-}" label group boards count base prefix n version key bin sha job_id
+  local env="$1" sketch="${2:-}" label group boards count base prefix n version key bin sha job_id olds old
   [ "$env" = Dev ] || die "A try goes to Dev boards only. Prod boards take firmware from the pipeline: release, then promote."
   [ -n "$sketch" ] || die "Usage: scripts/ota.sh try Dev <sketch>"
   known_sketch "$sketch"
   need jq "It builds the job document."
   aws_whoami
   # Read the label, never write it: labelling an account is the first deploy's
-  # job, and a try is not a deploy.
-  label=$(aws ssm get-parameter --name "$ENV_PARAM" --query Parameter.Value --output text 2> /dev/null) \
-    || die "AWS account $AWS_ACCOUNT_ID has no environment label. Deploy AWS to Dev first: that labels it and creates the bucket and groups a try uses."
+  # job, and a try is not a deploy. The label lives in one region, so a missing
+  # label can also mean the CLI is looking in another region.
+  if ! label=$(aws ssm get-parameter --name "$ENV_PARAM" --query Parameter.Value --output text 2>&1); then
+    case "$label" in
+      *ParameterNotFound*)
+        die "AWS account $AWS_ACCOUNT_ID has no environment label in $AWS_REGION. If Dev is deployed in another region, set AWS_REGION to that region; otherwise deploy AWS to Dev first: that labels the account and creates the bucket and groups a try uses." ;;
+      *) die "Could not read $ENV_PARAM in $AWS_REGION: $label" ;;
+    esac
+  fi
   [ "$label" = Dev ] || die "AWS account $AWS_ACCOUNT_ID is labelled $label, not Dev. Check AWS_PROFILE before going any further."
   resolve_ota_stack Dev
 
@@ -187,7 +198,9 @@ cmd_try() {
   version="$base-try.$n"
   key="$prefix$n.bin"
   sha=$(git -C "$REPO_ROOT" rev-parse --short HEAD)
-  git -C "$REPO_ROOT" diff --quiet HEAD -- firmware || sha="$sha+local-changes"
+  # Anything under firmware/ that the commit does not hold, a new file
+  # included, means the build is not that commit's firmware.
+  [ -z "$(git -C "$REPO_ROOT" status --porcelain -- firmware)" ] || sha="$sha+local-changes"
 
   "$REPO_ROOT/scripts/firmware.sh" build-as "$sketch" "$version"
   bin="$REPO_ROOT/build/firmware/$sketch/$sketch.ino.bin"
@@ -196,7 +209,20 @@ cmd_try() {
   step "Send $sketch $version to $group: $count board(s)"
   aws s3 cp "$bin" "s3://$BUCKET/$key" --sse AES256 --metadata "git-sha=$sha" --only-show-errors
   job_id="ota-try-$sketch-${version//./-}-$(date +%s)"
-  create_job "$job_id" "$group" "$sketch" "$version" "$key" first-ring Dev
+  create_job "$job_id" "$group" "$sketch" "$version" "$key" first-ring Dev "$sha"
+  # A board takes its jobs oldest first: left alone, an earlier try would go
+  # in before this one on every board that has not started it yet.
+  olds=$(aws iot list-jobs --status IN_PROGRESS --thing-group-name "$group" \
+           --query "jobs[?starts_with(jobId, 'ota-try-$sketch-')].jobId" --output text) \
+    || { warn "Could not list the earlier tries; any still waiting for a board stay queued (scripts/ota.sh status Dev)."; olds=""; }
+  for old in $olds; do
+    [ "$old" != "$job_id" ] || continue
+    if aws iot cancel-job --job-id "$old" --comment "Replaced by $job_id" > /dev/null; then
+      note "Cancelled the earlier try $old for every board that had not started it."
+    else
+      warn "Could not cancel the earlier try $old. A board that has not started it installs it first, then this one."
+    fi
+  done
   endstep
   note "Job $job_id sends $sketch $version ($sha) to $group: $(paste -s -d ' ' - <<< "$boards")"
   watch_job "$job_id" "$count" "$sketch" "$version"
@@ -205,30 +231,36 @@ cmd_try() {
 # Prints each board's answer as it comes, until every board has answered or
 # TRY_WATCH_MINUTES (15 by default) have passed. Ctrl-C stops the watching, not
 # the job: AWS IoT keeps it, and a board that is offline takes it when it next
-# connects. Fails if any board failed, refused or timed out.
+# connects. A poll that fails (the network, a sign-in that ran out) is tried
+# again on the next round. Fails if any board failed, refused or timed out.
 watch_job() {   # watch_job <job id> <number of boards> <sketch> <version>
-  local job="$1" boards="$2" sketch="$3" version="$4" deadline seen="" rows thing status detail answered bad
+  local job="$1" boards="$2" sketch="$3" version="$4" deadline seen="" rows thing status detail
+  local answered=0 bad=0 failing=no
   deadline=$(( $(date +%s) + ${TRY_WATCH_MINUTES:-15} * 60 ))
   echo "Each board's answer appears below. Ctrl-C stops the watching; the job carries on."
   while :; do
-    rows=$(aws iot list-job-executions-for-job --job-id "$job" --output json \
-             | jq -r '.executionSummaries[]? | "\(.thingArn | split("/") | last) \(.jobExecutionSummary.status)"')
-    answered=0 bad=0
-    while read -r thing status; do
-      [ -n "$thing" ] || continue
-      case "$status" in
-        SUCCEEDED) answered=$((answered + 1)) ;;
-        FAILED|REJECTED|TIMED_OUT|REMOVED|CANCELED) answered=$((answered + 1)); bad=$((bad + 1)) ;;
-      esac
-      if ! grep -qxF "$thing $status" <<< "$seen"; then
-        seen="$seen"$'\n'"$thing $status"
-        detail=$(aws iot describe-job-execution --job-id "$job" --thing-name "$thing" \
-                   --query 'execution.statusDetails.detailsMap.detail' --output text 2> /dev/null || true)
-        [ "$detail" != None ] || detail=""
-        printf '  %-24s %-11s %s\n' "$thing" "$status" "$detail"
-      fi
-    done <<< "$rows"
-    if [ "$answered" -ge "$boards" ]; then break; fi
+    if rows=$(aws iot list-job-executions-for-job --job-id "$job" --output json \
+                | jq -r '.executionSummaries[]? | "\(.thingArn | split("/") | last) \(.jobExecutionSummary.status)"'); then
+      failing=no answered=0 bad=0
+      while read -r thing status; do
+        [ -n "$thing" ] || continue
+        case "$status" in
+          SUCCEEDED) answered=$((answered + 1)) ;;
+          FAILED|REJECTED|TIMED_OUT|REMOVED|CANCELED) answered=$((answered + 1)); bad=$((bad + 1)) ;;
+        esac
+        if ! grep -qxF "$thing $status" <<< "$seen"; then
+          seen="$seen"$'\n'"$thing $status"
+          detail=$(aws iot describe-job-execution --job-id "$job" --thing-name "$thing" \
+                     --query 'execution.statusDetails.detailsMap.detail' --output text 2> /dev/null || true)
+          [ "$detail" != None ] || detail=""
+          printf '  %-24s %-11s %s\n' "$thing" "$status" "$detail"
+        fi
+      done <<< "$rows"
+      if [ "$answered" -ge "$boards" ]; then break; fi
+    elif [ "$failing" = no ]; then
+      failing=yes
+      warn "Could not read the job's progress just now; trying again. The job carries on either way."
+    fi
     if [ "$(date +%s)" -ge "$deadline" ]; then
       note "$((boards - answered)) board(s) have not answered yet. A board that is offline takes the job when it next connects; scripts/ota.sh status Dev shows where it stands."
       break
@@ -236,7 +268,9 @@ watch_job() {   # watch_job <job id> <number of boards> <sketch> <version>
     sleep "${TRY_POLL_SECONDS:-10}"
   done
   [ "$bad" -eq 0 ] || die "$bad board(s) did not install $version. The detail beside each one says why."
-  note "A board that answered SUCCEEDED has written $version and restarted. Its serial console then says: aws: connected, $sketch v$version"
+  # The board answers SUCCEEDED once the new build is written, just before it
+  # restarts into it, so the answer alone does not show the build started.
+  note "A board that answered SUCCEEDED has written $version and is restarting into it. Its serial console shows whether the new build started: aws: connected, $sketch v$version"
 }
 
 cmd_promote() {

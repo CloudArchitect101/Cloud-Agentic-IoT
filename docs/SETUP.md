@@ -34,6 +34,12 @@ brew install gh
 gh --version                               # Expected output: gh version 2.x.x
 ```
 
+### jq
+The deploy and OTA scripts read and build JSON with it. macOS 15 and later include it.
+```bash
+jq --version || brew install jq             # Expected output: jq-1.7 or newer
+```
+
 ### Arduino CLI (`arduino-cli`) — Firmware Compilations Only
 *Skip this section if you are not flashing physical edge devices.*
 ```bash

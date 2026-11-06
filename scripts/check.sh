@@ -68,13 +68,16 @@ check_scripts() {
   else
     skip shellcheck scripts "brew install shellcheck"
   fi
-  # The serial helper the board scripts share, against a simulated board.
-  if has python3; then
-    step "Board serial helper: tests against a simulated board"
+  # The serial helper the board scripts share, against a simulated board, and
+  # ota.sh try against a fake AWS CLI (it builds its job documents with jq).
+  if ! has python3; then
+    skip python3 scripts "it comes with the Xcode command line tools: xcode-select --install"
+  elif ! has jq; then
+    skip jq scripts "macOS 15 and later have it; otherwise brew install jq"
+  else
+    step "Script tests: the board serial helper and ota.sh try, against a simulated board and AWS"
     python3 -m unittest discover -s test/scripts
     endstep
-  else
-    skip python3 scripts "it comes with the Xcode command line tools: xcode-select --install"
   fi
 }
 

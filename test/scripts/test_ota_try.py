@@ -2,8 +2,10 @@
 Tests for `scripts/ota.sh try` and `scripts/firmware.sh build-as`, against a
 fake AWS CLI and a fake arduino-cli.
 
-Each test copies scripts/, firmware/ and config/ into a fresh git repository,
-so a build writes nothing into this checkout, and runs the real scripts there.
+Each test copies the files Git tracks (or would track) under scripts/,
+firmware/ and config/ into a fresh git repository, so a build writes nothing
+into this checkout and no ignored file (a key, a .secrets file) is ever copied,
+and runs the real scripts there.
 The fake `aws` answers from a JSON file the test writes and logs every call;
 a call the test did not prepare for fails the run. The fake `arduino-cli`
 "compiles" a sketch folder into a .bin that names the FIRMWARE_VERSION it was
@@ -81,6 +83,8 @@ FAKE_AWS = textwrap.dedent(r'''
         print(state['region'])
     elif call == 'ssm get-parameter':
         log(entry)
+        if state.get('label_error'):
+            fail(state['label_error'])
         if state.get('label') is None:
             fail('An error occurred (ParameterNotFound) when calling the GetParameter operation')
         print(state['label'])
@@ -93,9 +97,15 @@ FAKE_AWS = textwrap.dedent(r'''
         print(outputs.get(key, 'None'))
     elif call == 'iot list-things-in-thing-group':
         log(entry)
-        things = state['groups'].get(options['thing-group-name'])
-        if things is None:
+        if options['thing-group-name'] not in state['groups']:
             fail('An error occurred (ResourceNotFoundException): Thing group not found')
+        # Only --recursive reaches the boards of the groups inside this one.
+        groups, things = [options['thing-group-name']], []
+        while groups:
+            group = groups.pop(0)
+            things += state['groups'].get(group, [])
+            if options.get('recursive'):
+                groups += state.get('children', {}).get(group, [])
         print(json.dumps({'things': things}))
     elif call == 's3api list-objects-v2':
         log(entry)
@@ -110,9 +120,34 @@ FAKE_AWS = textwrap.dedent(r'''
         with open(options['document'][len('file://'):]) as f:
             entry['document'] = json.load(f)
         log(entry)
+        with open(os.path.join(state_dir, 'created.jsonl'), 'a') as f:
+            f.write(json.dumps({'jobId': options['job-id'], 'status': 'IN_PROGRESS',
+                                'group': options['targets'].rsplit('/', 1)[1]}) + '\n')
+        print(json.dumps({'jobId': options['job-id']}))
+    elif call == 'iot list-jobs':
+        log(entry)
+        if state.get('list_jobs_fails'):
+            fail('An error occurred (ThrottlingException) when calling the ListJobs operation: Rate exceeded')
+        jobs = list(state.get('jobs', []))
+        created = os.path.join(state_dir, 'created.jsonl')
+        if os.path.exists(created):
+            with open(created) as f:
+                jobs += [json.loads(line) for line in f]
+        prefix = re.search(r"starts_with\(jobId, '([^']*)'\)", options['query']).group(1)
+        print('\t'.join(j['jobId'] for j in jobs
+                        if j['status'] == options['status'] and j['group'] == options['thing-group-name']
+                        and j['jobId'].startswith(prefix)))
+    elif call == 'iot cancel-job':
+        log(entry)
+        if state.get('cancel_fails'):
+            fail('An error occurred (InvalidRequestException) when calling the CancelJob operation: '
+                 'The job is already in a terminal state')
         print(json.dumps({'jobId': options['job-id']}))
     elif call == 'iot list-job-executions-for-job':
         log(entry)
+        if next_count('polls') in state.get('failing_polls', []):
+            fail('An error occurred (ExpiredTokenException) when calling the ListJobExecutionsForJob '
+                 'operation: The security token included in the request is expired')
         polls = state['executions']
         snapshot = polls[min(next_count('executions'), len(polls) - 1)]
         print(json.dumps({'executionSummaries': [
@@ -158,13 +193,23 @@ class ScriptFixture(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp)
         self.repo = os.path.join(self.tmp, 'repo')
-        for part in ('scripts', 'firmware', 'config'):
-            shutil.copytree(os.path.join(REPO, part), os.path.join(self.repo, part),
-                            ignore=shutil.ignore_patterns('__pycache__'))
-        git = ['git', '-C', self.repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com']
+        # What Git tracks or would track: an ignored file (a key, a .secrets
+        # file, a build) never leaves this checkout.
+        listed = subprocess.run(['git', '-C', REPO, 'ls-files', '-z', '--cached', '--others', '--exclude-standard',
+                                 '--', 'scripts', 'firmware', 'config'],
+                                capture_output=True, check=True).stdout.decode().split('\0')
+        for name in filter(None, listed):
+            source = os.path.join(REPO, name)
+            if os.path.isfile(source):   # a tracked file deleted in this checkout is skipped
+                os.makedirs(os.path.dirname(os.path.join(self.repo, name)), exist_ok=True)
+                shutil.copy2(source, os.path.join(self.repo, name))
+        # The commit must not depend on how this machine's Git is set up: no
+        # signing prompt, no hooks.
+        git = ['git', '-C', self.repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+               '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null']
         subprocess.run(['git', 'init', '-q', self.repo], check=True)
         subprocess.run(git + ['add', '-A'], check=True)
-        subprocess.run(git + ['commit', '-q', '-m', 'snapshot'], check=True)
+        subprocess.run(git + ['commit', '-q', '--no-verify', '-m', 'snapshot'], check=True)
 
         self.bin = os.path.join(self.tmp, 'bin')
         self.state_dir = os.path.join(self.tmp, 'aws')
@@ -228,6 +273,27 @@ class ScriptFixture(unittest.TestCase):
         self.assertEqual(self.calls('s3 cp'), [])
         self.assertEqual(self.calls('iot create-job'), [])
 
+    def forget_calls(self):
+        """Starts the fake AWS afresh, for a second run in one test."""
+        for name in os.listdir(self.state_dir):
+            os.remove(os.path.join(self.state_dir, name))
+
+    def write(self, name, text, mode='w'):
+        with open(os.path.join(self.repo, name), mode) as f:
+            f.write(text)
+
+    def head(self):
+        return subprocess.run(['git', '-C', self.repo, 'rev-parse', '--short', 'HEAD'],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def source_sent(self):
+        """The source the upload and the job say the build came from."""
+        [upload] = self.calls('s3 cp')
+        [job] = self.calls('iot create-job')
+        source = upload['options']['metadata'][len('git-sha='):]
+        self.assertTrue(job['options']['description'].endswith(f'(Dev, {source})'), job['options']['description'])
+        return source
+
 
 class OtaTryTest(ScriptFixture):
 
@@ -263,7 +329,19 @@ class OtaTryTest(ScriptFixture):
         self.assertRegex(out, r'Test7\s+IN_PROGRESS\s+downloading')
         self.assertRegex(out, r'Test7\s+SUCCEEDED\s+rebooting')
         self.assertRegex(out, r'Test55\s+SUCCEEDED\s+rebooting')
+        self.assertNotIn('have not answered yet', out)
         self.assertIn(f'aws: connected, patient-monitor v{version}', out)
+
+    def test_reaches_the_boards_in_the_groups_inside_the_fleet_group(self):
+        self.state['groups'] = {'fleet-patient-monitor': ['Test7'], 'canary-patient-monitor': ['Test55']}
+        self.state['children'] = {'fleet-patient-monitor': ['canary-patient-monitor']}
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        [listing] = self.calls('iot list-things-in-thing-group')
+        self.assertIs(listing['options'].get('recursive'), True)
+        self.assertIn('2 board(s)', out)
+        self.assertIn('fleet-patient-monitor: Test7 Test55', out)
+        self.assertRegex(out, r'Test55\s+SUCCEEDED')
 
     def test_never_touches_what_a_release_reads_or_writes(self):
         code, out = self.try_('Dev', 'patient-monitor')
@@ -273,15 +351,70 @@ class OtaTryTest(ScriptFixture):
         for upload in self.calls('s3 cp'):
             self.assertIn('/try/', upload['positional'][3])
 
-    def test_numbers_each_try_after_the_ones_before(self):
-        self.state['objects'] += [f'firmware/patient-monitor/try/{self.base}-try.1.bin',
-                                  f'firmware/patient-monitor/try/{self.base}-try.2.bin',
+    def test_numbers_each_try_after_the_highest_before_it(self):
+        # 10 is the highest: a sort by text would put 2 last.
+        self.state['objects'] += [f'firmware/patient-monitor/try/{self.base}-try.2.bin',
+                                  f'firmware/patient-monitor/try/{self.base}-try.10.bin',
                                   f'firmware/patient-monitor/try/{self.base}-try.notes.bin',
-                                  'firmware/patient-monitor/try/0.9.0-try.7.bin']
+                                  'firmware/patient-monitor/try/0.9.0-try.70.bin']
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 0, out)
         [build] = self.compiles()
-        self.assertEqual(build['version'], f'{self.base}-try.3')
+        self.assertEqual(build['version'], f'{self.base}-try.11')
+
+    def test_names_the_commit_a_build_came_from(self):
+        self.write('notes.txt', 'a file outside firmware/ changes nothing the boards run\n')
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.source_sent(), self.head())
+
+    def test_marks_a_build_with_an_edit_no_commit_holds(self):
+        self.write('firmware/patient-monitor/patient-monitor.ino', '// a local tweak\n', mode='a')
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.source_sent(), f'{self.head()}+local-changes')
+
+    def test_marks_a_build_with_a_new_file_no_commit_holds(self):
+        self.write('firmware/patient-monitor/extra.h', '#pragma once\n')
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.source_sent(), f'{self.head()}+local-changes')
+
+    def test_cancels_the_earlier_tries_of_that_type_only(self):
+        earlier = 'ota-try-patient-monitor-2-1-0-try-1-1793900000'
+        self.state['jobs'] = [
+            {'jobId': earlier, 'status': 'IN_PROGRESS', 'group': 'fleet-patient-monitor'},
+            {'jobId': 'ota-try-patient-monitor-2-1-0-try-2-1793900100', 'status': 'COMPLETED',
+             'group': 'fleet-patient-monitor'},
+            {'jobId': 'interval-patient-monitor-60-1793900200', 'status': 'IN_PROGRESS',
+             'group': 'fleet-patient-monitor'},
+            {'jobId': 'ota-patient-monitor-2-1-0-1793900300', 'status': 'IN_PROGRESS',
+             'group': 'fleet-patient-monitor'},
+            {'jobId': 'ota-try-patient-monitor-x-1-0-0-try-1-1793900400', 'status': 'IN_PROGRESS',
+             'group': 'fleet-patient-monitor-x'},
+        ]
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        [job] = self.calls('iot create-job')
+        [cancel] = self.calls('iot cancel-job')
+        self.assertEqual(cancel['options']['job-id'], earlier)
+        self.assertEqual(cancel['options']['comment'], f"Replaced by {job['options']['job-id']}")
+        self.assertNotIn('force', cancel['options'], 'a board already installing it finishes')
+        self.assertIn(f'Cancelled the earlier try {earlier}', out)
+
+    def test_a_try_carries_on_when_earlier_tries_cannot_be_cancelled(self):
+        self.state['jobs'] = [{'jobId': 'ota-try-patient-monitor-2-1-0-try-1-1793900000', 'status': 'IN_PROGRESS',
+                               'group': 'fleet-patient-monitor'}]
+        before = dict(self.state)
+        for failure, says in (('cancel_fails', 'Could not cancel the earlier try'),
+                              ('list_jobs_fails', 'Could not list the earlier tries')):
+            with self.subTest(failure=failure):
+                self.forget_calls()
+                self.state = dict(before, **{failure: True})
+                code, out = self.try_('Dev', 'patient-monitor')
+                self.assertEqual(code, 0, out)
+                self.assertIn(says, out)
+                self.assertRegex(out, r'Test55\s+SUCCEEDED')
 
     def test_says_which_board_did_not_install_it_and_why(self):
         self.state['executions'] = [[('Test7', 'FAILED'), ('Test55', 'SUCCEEDED')]]
@@ -290,6 +423,24 @@ class OtaTryTest(ScriptFixture):
         self.assertEqual(code, 1, out)
         self.assertRegex(out, r'Test7\s+FAILED\s+http 403')
         self.assertIn('1 board(s) did not install', out)
+
+    def test_fails_when_a_board_refused_it_timed_out_or_lost_it(self):
+        for status in ('REJECTED', 'TIMED_OUT', 'CANCELED', 'REMOVED'):
+            with self.subTest(status=status):
+                self.forget_calls()
+                self.state['executions'] = [[('Test7', status), ('Test55', 'SUCCEEDED')]]
+                code, out = self.try_('Dev', 'patient-monitor')
+                self.assertEqual(code, 1, out)
+                self.assertRegex(out, rf'Test7\s+{status}')
+                self.assertIn('1 board(s) did not install', out)
+
+    def test_keeps_watching_when_a_poll_fails(self):
+        self.state['failing_polls'] = [0, 1]
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("Could not read the job's progress"), 1, out)
+        self.assertRegex(out, r'Test7\s+SUCCEEDED\s+rebooting')
+        self.assertRegex(out, r'Test55\s+SUCCEEDED\s+rebooting')
 
     def test_stops_watching_a_board_that_is_offline_and_says_so(self):
         self.state['executions'] = [[('Test7', 'SUCCEEDED'), ('Test55', 'QUEUED')]]
@@ -317,8 +468,19 @@ class OtaTryTest(ScriptFixture):
         self.state['label'] = None
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 1, out)
-        self.assertIn('no environment label', out)
+        self.assertIn(f'no environment label in {REGION}', out)
+        self.assertIn('set AWS_REGION', out)
         self.assertEqual(self.calls('ssm put-parameter'), [])
+        self.assert_sent_nothing()
+
+    def test_says_why_the_label_could_not_be_read(self):
+        self.state['label_error'] = ('An error occurred (AccessDeniedException) when calling the GetParameter '
+                                     'operation: not authorized to perform: ssm:GetParameter')
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 1, out)
+        self.assertIn(f'Could not read /cloud-agentic-iot/environment in {REGION}', out)
+        self.assertIn('AccessDeniedException', out)
+        self.assertNotIn('no environment label', out)
         self.assert_sent_nothing()
 
     def test_needs_the_ota_stack(self):
