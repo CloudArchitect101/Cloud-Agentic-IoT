@@ -6,7 +6,7 @@
       "ReadingRetentionDays": 30,
       "ArchiveRetentionDays": 90,
       "RealertIntervalMinutes": 15,
-      "RoomTempAlert": "false",
+      "RoomTempAlert": "true",
       "RoomTempAlertCelsius": 30,
       "IngestBatchSize": 100,
       "IngestBatchWindowSeconds": 1,
