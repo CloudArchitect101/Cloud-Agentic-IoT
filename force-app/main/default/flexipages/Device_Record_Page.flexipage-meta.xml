@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>A device: its AWS IoT identity, provisioning state and Wi-Fi network, with the Re-provision button in the header. Fields and related lists come from the object's page layout.</description>
+    <description>A device: its AWS IoT identity, provisioning state and Wi-Fi network, with the Re-provision button in the header and its live status at the top of the sidebar. Fields and related lists come from the object's page layout.</description>
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
@@ -38,6 +38,12 @@
         <type>Region</type>
     </flexiPageRegions>
     <flexiPageRegions>
+        <itemInstances>
+            <componentInstance>
+                <componentName>deviceLiveCard</componentName>
+                <identifier>deviceLiveCard</identifier>
+            </componentInstance>
+        </itemInstances>
         <itemInstances>
             <componentInstance>
                 <componentInstanceProperties>

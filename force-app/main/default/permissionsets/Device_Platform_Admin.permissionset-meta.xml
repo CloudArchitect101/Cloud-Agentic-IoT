@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <label>Device Platform Admin</label>
-    <description>The Cloud Agentic IoT app, its tabs, every device and telemetry field, and the Re-provision button. Admins need it too: fields deployed through the Metadata API give no profile any field access.</description>
+    <description>The Cloud Agentic IoT app, its tabs, every device and telemetry field, the Re-provision button and the live status card. Admins need it too: fields deployed through the Metadata API give no profile any field access.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <applicationVisibilities>
         <application>Cloud_Agentic_IoT</application>
         <visible>true</visible>
     </applicationVisibilities>
+    <classAccesses>
+        <apexClass>DeviceLiveController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
     <classAccesses>
         <apexClass>DeviceReprovisionController</apexClass>
         <enabled>true</enabled>
@@ -24,9 +28,27 @@
         <field>Asset.Certificate_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <!-- Connection_Since__c, Connection_Status__c and Last_Disconnect_Reason__c
+         are read-only: AWS IoT's connect and disconnect events set them, and a
+         hand-edited value would say a board is online when it is not. -->
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Asset.Connection_Since__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Asset.Connection_Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>Asset.Firmware_Version__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Asset.Last_Disconnect_Reason__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

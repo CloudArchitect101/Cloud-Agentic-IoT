@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CspTrustedSite xmlns="http://soap.sforce.com/2006/04/metadata">
+    <context>All</context>
+    <description>The device live card on an Asset (lwc/deviceLiveCard) connects here, over a secure WebSocket, to receive a board's live readings from AWS IoT in us-east-2 while the card is open.</description>
+    <endpointUrl>wss://*.iot.us-east-2.amazonaws.com</endpointUrl>
+    <isActive>true</isActive>
+    <isApplicableToConnectSrc>true</isApplicableToConnectSrc>
+    <isApplicableToFontSrc>false</isApplicableToFontSrc>
+    <isApplicableToFrameSrc>false</isApplicableToFrameSrc>
+    <isApplicableToImgSrc>false</isApplicableToImgSrc>
+    <isApplicableToMediaSrc>false</isApplicableToMediaSrc>
+    <isApplicableToStyleSrc>false</isApplicableToStyleSrc>
+</CspTrustedSite>

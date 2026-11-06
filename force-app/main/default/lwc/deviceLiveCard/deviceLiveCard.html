@@ -1,0 +1,55 @@
+<template>
+    <lightning-card title="Live Status" icon-name="standard:asset_object">
+        <div slot="actions">
+            <template lwc:if={badge}>
+                <lightning-badge label={badge}></lightning-badge>
+            </template>
+        </div>
+        <div class="slds-p-horizontal_medium">
+            <dl class="slds-list_horizontal slds-wrap">
+                <dt class="slds-item_label slds-text-color_weak slds-truncate">Connection</dt>
+                <dd class="slds-item_detail"><span class={connectionClass}>{connectionText}</span></dd>
+                <template lwc:if={disconnectReason}>
+                    <dt class="slds-item_label slds-text-color_weak slds-truncate">Last disconnect</dt>
+                    <dd class="slds-item_detail">{disconnectReason}</dd>
+                </template>
+                <template lwc:if={hasReading}>
+                    <template lwc:if={sensorError}>
+                        <dt class="slds-item_label slds-text-color_weak slds-truncate">Sensor</dt>
+                        <dd class="slds-item_detail slds-text-color_error">{sensorError}</dd>
+                    </template>
+                    <template lwc:else>
+                        <dt class="slds-item_label slds-text-color_weak slds-truncate">Temperature</dt>
+                        <dd class="slds-item_detail reading">{temperature}</dd>
+                        <dt class="slds-item_label slds-text-color_weak slds-truncate">Humidity</dt>
+                        <dd class="slds-item_detail reading">{humidity}</dd>
+                    </template>
+                    <template lwc:if={isLiveReading}>
+                        <dt class="slds-item_label slds-text-color_weak slds-truncate">Wi-Fi signal</dt>
+                        <dd class="slds-item_detail reading">{signal}</dd>
+                        <dt class="slds-item_label slds-text-color_weak slds-truncate">Firmware</dt>
+                        <dd class="slds-item_detail">{firmware}</dd>
+                        <dt class="slds-item_label slds-text-color_weak slds-truncate">Uptime</dt>
+                        <dd class="slds-item_detail reading">{uptime}</dd>
+                    </template>
+                </template>
+                <template lwc:if={hasPatient}>
+                    <dt class="slds-item_label slds-text-color_weak slds-truncate">Patient state</dt>
+                    <dd class="slds-item_detail">{patientText}</dd>
+                </template>
+            </dl>
+            <template lwc:if={hasReading}>
+                <p class="slds-text-body_small slds-text-color_weak slds-p-top_x-small reading">{updated}</p>
+            </template>
+            <template lwc:else>
+                <p class="slds-text-body_small slds-text-color_weak slds-p-top_x-small">No reading yet.</p>
+            </template>
+            <template lwc:if={notice}>
+                <p class={noticeClass} role="status">{notice}</p>
+            </template>
+            <template lwc:if={canRetry}>
+                <lightning-button variant="base" label="Try again" onclick={retry}></lightning-button>
+            </template>
+        </div>
+    </lightning-card>
+</template>

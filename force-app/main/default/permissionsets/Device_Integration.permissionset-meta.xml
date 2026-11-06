@@ -16,6 +16,10 @@
         <enabled>true</enabled>
     </classAccesses>
     <classAccesses>
+        <apexClass>DeviceConnectionService</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>DeviceProvisioningService</apexClass>
         <enabled>true</enabled>
     </classAccesses>
@@ -106,9 +110,27 @@
         <field>Asset.Certificate_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <!-- Connection_Since__c, Connection_Status__c and Last_Disconnect_Reason__c
+         come from AWS IoT's connect and disconnect events, which the
+         device-presence Lambda records through DeviceConnectionService. -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Connection_Since__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Connection_Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>Asset.Firmware_Version__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Last_Disconnect_Reason__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

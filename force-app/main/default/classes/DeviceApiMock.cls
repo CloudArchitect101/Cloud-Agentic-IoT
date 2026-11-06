@@ -4,6 +4,7 @@
  * Plays the AWS device API in tests. It answers the way the Lambdas do: one
  * result per device, HTTP 207 when some of them failed, and the status a test
  * asks for (429, 500, 403...) when a test wants the whole request to fail.
+ * POST /device-live gets what the device-live Lambda answers for one device.
  */
 @IsTest
 public class DeviceApiMock implements HttpCalloutMock {
@@ -32,6 +33,11 @@ public class DeviceApiMock implements HttpCalloutMock {
         if (statusCode != 200) {
             response.setStatusCode(statusCode);
             response.setBody('{"message":"mock answered ' + statusCode + '"}');
+            return response;
+        }
+        if (request.getEndpoint().endsWith('/device-live')) {
+            response.setStatusCode(200);
+            response.setBody(JSON.serialize(liveAnswer(body)));
             return response;
         }
 
@@ -65,6 +71,35 @@ public class DeviceApiMock implements HttpCalloutMock {
         response.setStatusCode(anyFailed ? 207 : 200);
         response.setBody(JSON.serialize(new Map<String, Object>{ 'results' => results, 'historyPreserved' => true }));
         return response;
+    }
+
+    /**
+     * The newest stored reading and the patient's state, and for mode start a
+     * live session too. The link only looks like a signed one.
+     */
+    private static Map<String, Object> liveAnswer(Map<String, Object> body) {
+        String thingName = (String) body.get('thingName');
+        Map<String, Object> answer = new Map<String, Object>{
+            'thingName' => thingName,
+            'latest'    => new Map<String, Object>{
+                'temperature' => 22.5, 'humidity' => 41, 'at' => '2026-11-06T05:29:30.000Z'
+            },
+            'state'     => new Map<String, Object>{
+                'patientState' => 'STABLE', 'riskScore' => 0.12, 'updatedAt' => '2026-11-06T05:00:00.000Z'
+            }
+        };
+        if ((String) body.get('mode') == 'start') {
+            answer.put('live', new Map<String, Object>{
+                'url'              => 'wss://example-ats.iot.us-east-2.amazonaws.com/mqtt?X-Amz-Signature=' + '0'.repeat(64),
+                'clientId'         => 'live-' + thingName + '-1a2b3c4d',
+                'topic'            => 'device/' + thingName + '/live',
+                'expiresAt'        => '2026-11-06T05:45:00.000Z',
+                'seconds'          => 2,
+                'minutes'          => 15,
+                'commandPublished' => true
+            });
+        }
+        return answer;
     }
 
     private String bundleUrl(String thingName) {
