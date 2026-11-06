@@ -235,6 +235,30 @@ Asset made by hand, as in Stage 3, has no Thing ARN: its Connection stays *Not
 reported yet*, the card says it has no AWS IoT Thing, and a command fails as
 not provisioned.
 
+## Talk to the agent
+
+The deploy created the **Patient Care Agent**, inactive: switching on an agent
+that can create clinical Cases is left to a person. Activate it, check it, and
+give yourself access:
+
+```bash
+sf agent activate --api-name Patient_Care_Agent --version 1
+sf data query --query "SELECT VersionNumber, Status FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent'"
+sf org assign permset --name Patient_Care_Agent
+```
+
+Or activate it in Setup → **Agentforce Agents** → **Patient Care Agent**. The
+query shows version 1 `Active`. `Patient_Care_Agent` opens the agent to you
+and gives its actions what they read and create; it is an employee agent, so
+it acts as you. Open it from the Lightning header, then:
+
+1. Ask what a device is reporting, by its serial number (Test8, say). It
+   answers from the device's latest readings and connection status.
+2. Ask it to escalate a reading. It says which device and reading, and asks
+   you to confirm.
+3. Confirm. It reports the Case number, and the Case (`Origin = Agentforce`)
+   is in Care_Team_Queue, so the indicator board moves.
+
 ## Warm the sensor, get a Case and a dose
 
 The room-temperature demo rule ([README, chapter 03](../README.md#room-temperature-demo-rule)):
@@ -276,9 +300,10 @@ sets it to `"true"`.
 - The integration user has the `AWS_IoT_Relay` principal access
   ([README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach)):
   the dose is a Device Command sent as the user who created it.
-- Optional: add `Room Temperature Rule` to the Case Origin picklist, so it
-  shows as a label. An unlisted value works while the picklist is not
-  restricted, which is the default.
+- `Room Temperature Rule` and `Agentforce` are Case Origin values: the
+  deploy adds them (`standardValueSets/CaseOrigin`). A value you added to
+  Case Origin by hand must be in that file too, or the deploy may take it
+  off the list.
 
 **Steps**
 
