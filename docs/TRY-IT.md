@@ -171,6 +171,26 @@ against the `<name>` project's IoT endpoint, and
 [DEVELOPMENT.md, "On your laptop"](DEVELOPMENT.md#1-on-your-laptop) covers
 flashing and watching one.
 
+The pipeline never deploys to `<name>`, so no release reaches its boards. To
+update them over the air, as every update after the first USB flash is meant to
+arrive, send your working copy to every board of a type:
+
+```bash
+scripts/ota.sh try Dev patient-monitor
+```
+
+It compiles the sketch as `<version>-try.<n>` from a copy, so your checkout
+stays as it is, uploads it to the firmware bucket under `firmware/<type>/try/`,
+creates one AWS IoT job for `fleet-<type>` at the pace and with the abort rule
+of a Dev release, and prints each board's answer as it comes. A board that is
+offline takes the job when it next connects, and `scripts/ota.sh status Dev`
+shows where each one stands. On the board's serial console you then see
+`OTA: complete, restarting` and, after the restart,
+`aws: connected, patient-monitor v<version>-try.<n>`: the board kept its Wi-Fi
+and certificate, which live in NVS, outside the part of the flash an update
+rewrites. A try costs one upload and one job execution per board, a fraction
+of a cent.
+
 ## What happens near the limit
 
 - As spending nears the limit, AWS denies Lambda invocations, Bedrock calls and
