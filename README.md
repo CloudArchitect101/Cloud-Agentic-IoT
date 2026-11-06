@@ -30,6 +30,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | [DATA-MODEL.md](docs/DATA-MODEL.md) | Why each object is standard or custom — the "why didn't you just use X" answers. |
 | [DEVICE-IDENTITY.md](docs/DEVICE-IDENTITY.md) | How WiFi credentials and AWS certificates get onto a device, why they survive every OTA update, and how a job finds the right device. |
 | [LIVE-STATUS.md](docs/LIVE-STATUS.md) | Whether a board is online, and its readings every 2 s while its card is open: how it works, the speeds, what it costs in AWS and in Salesforce limits, and what to check when the card waits. |
+| [SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md) | The app's Home page: this month's AWS spend against its limit and the Salesforce limits the org has used; where each number comes from, how fresh it is, what it costs, and what to check when one is missing. |
 | [CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md) | What is automated vs manual, and the conventions the pipelines enforce. |
 | [MIGRATION-RUNBOOK.md](docs/MIGRATION-RUNBOOK.md) | Phased cutover to a governed Dev/Prod estate, with a rollback per phase. |
 | [COST-MODEL.md](docs/COST-MODEL.md) | Real per-device, per-user and per-customer costs — and how to run the whole build on free tiers. |
@@ -91,7 +92,7 @@ Cloud-Agentic-IoT/
 │   ├── genAiPlannerBundles/           # The Agentforce agent's planner
 │   ├── genAiPlugins/ genAiFunctions/  # Its topic and registered actions
 │   ├── customMetadata/                # Device_Queue_Binding — config, not code
-│   └── lwc/                           # queueDepthIndicator
+│   └── lwc/                           # queueDepthIndicator, reprovisionDevice, deviceLiveCard, platformUsageCard
 ├── lambda/<function>/                 # Lambda source + CloudFormation per function
 ├── firmware/
 │   ├── libraries/CloudAgenticDevice/  # Shared runtime: NVS, provisioning, WiFi, MQTT, OTA
@@ -137,17 +138,23 @@ Three conventions the pipelines enforce, because each would otherwise fail at de
 - A sketch folder must contain a `.ino` named after the folder, or `arduino-cli` reports "main file missing from sketch".
 - A sketch must declare `#define FIRMWARE_VERSION`, and raise it to ship a change. A board installs only a version it is not already running.
 
-**Then give yourself the interface.** The Salesforce deploy adds a Lightning app, **Cloud Agentic IoT**, with tabs, record pages and page layouts for devices (Assets), patient vitals, device commands and Wi-Fi networks, and the Re-provision button on a device. The app and the device fields stay hidden until a person holds the `Device_Platform_Admin` permission set, System Administrators included: fields deployed through the Metadata API come with no field access for any profile. Assign it to each person who runs the devices, then open the app from the App Launcher:
+**Then give yourself the interface.** The Salesforce deploy adds a Lightning app, **Cloud Agentic IoT**, with tabs, record pages and page layouts for devices (Assets), patient vitals, device commands and Wi-Fi networks, and the Re-provision button on a device, and its Home page, which shows the month's AWS spend and the org's limits to admins. The app and the device fields stay hidden until a person holds the `Device_Platform_Admin` permission set, System Administrators included: fields deployed through the Metadata API come with no field access for any profile. Assign it to each person who runs the devices, then open the app from the App Launcher:
 
 ```bash
 sf org assign permset --name Device_Platform_Admin --target-org <your admin alias>
+```
+
+Admins who should see costs need Platform_Usage_Viewer too (and View Setup and Configuration, which System Administrator has); the AWS half also needs part d of Stage 2:
+
+```bash
+sf org assign permset --name Platform_Usage_Viewer --target-org <your admin alias>
 ```
 
 ### Stage 2 — Connect the seams CI cannot reach
 
 Everything below is manual for a structural reason, not an oversight: it stores a secret, lives in another vendor's console, or is a deliberate human checkpoint. Do it once, in this order — later steps consume outputs from earlier ones.
 
-**1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown, the Wi-Fi credential push, Device Commands and the live status card. The device API accepts only requests signed by an AWS identity, so it takes four parts.
+**1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown, the Wi-Fi credential push, Device Commands, the live status card and the Home page's AWS spend. The device API accepts only requests signed by an AWS identity, so it takes four parts.
 
 *a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in an [AWS project](docs/TRY-IT.md), root in a regular account. In your own terminal, with the `-Prod` stack in Prod and `CALLER` set to `SalesforceCallerUserName` from `config/<env>.json`:
 
@@ -170,7 +177,7 @@ The first `echo` must print the role's ARN before anything is created; an empty 
 
 *c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
 
-*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and to the integration user the Slack app signs in as: a Device Command is sent as the user who created it, and `/dispense-medication` creates one as that user. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
+*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and every admin who views the Home page's usage card, and to the integration user the Slack app signs in as: a Device Command is sent as the user who created it, and `/dispense-medication` creates one as that user. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
 
 ```bash
 sf apex run --target-org <your admin alias> <<'EOF'
@@ -328,6 +335,7 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 |---|---|---|
 | Device is publishing | S3 → the patient-vitals archive bucket, `readings/date=<today>/`. Readings go through Basic Ingest, straight to the rule, so the MQTT test client does not see them | A new `.ndjson.gz` object for each batch |
 | Device is online | The device's Asset in the Cloud Agentic IoT app ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) | Connection `Online`, and on the Live Status card a reading every 2 s (firmware 2.2.0) |
+| Costs and limits show | The app's Home tab | This month's AWS spend against its budget, and the org's limits by group, read when the page loads |
 | Device accepts commands | On the Asset, **Send Command** with `DISPENSE_MEDICATION`. By hand: publish `{ "operation": "DISPENSE_MEDICATION", "commandId": "by-hand-1" }` to `device/<thing>/command` | The servo moves. From the Asset, the Device Command goes `Sent`, then `Acked` within seconds. By hand, the board's answer shows on `device/<thing>/ack` in the MQTT test client; it answers only a command that carries a `commandId` |
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
@@ -640,6 +648,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 302 Node tests cover 14 of the 16 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, and the firmware's timing and command logic compiled for the host; 54 Python tests run the board and OTA scripts against a simulated board and AWS. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (20 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 342 Node tests cover 15 of the 17 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, and the firmware's timing and command logic compiled for the host; 54 Python tests run the board and OTA scripts against a simulated board and AWS. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (21 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
 PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.

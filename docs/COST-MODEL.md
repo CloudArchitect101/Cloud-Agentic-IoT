@@ -31,6 +31,8 @@ Bulk (AliExpress, 100+): roughly half. Dev/demo software cost is $0 — Develope
 
 Watching a board live adds to this only while its card is open: a reading every 2 s from the board and one delivery per open card, about $0.0036 an hour for one card, so about 3 cents for a working day. Its connection status costs well under a cent a month. [LIVE-STATUS.md](LIVE-STATUS.md) has the breakdown.
 
+The app's Home page reads this month's AWS spend each time it loads: one API Gateway request and one Lambda run, under a cent a month per account at 100 loads a day. The figures come from an AWS budget, which AWS lists no charge for reading. An account with no budget shows none, unless SpendCostExplorer is turned on: Cost Explorer at $0.01 a read, kept for a day, about $0.31 to $0.40 a month. [SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md).
+
 EventBridge is no longer on the per-reading path, and Prod keeps readings in S3 rather than writing each one to DynamoDB, which together were $0.19 of the old $0.35.
 
 Queue-indicator device (commands only): < $0.01/mo. **Per AWS account**: the account and Organizations are free; the only fixed baseline is CloudWatch logs/alarms, ~$1–5/account/mo at this scale. Bedrock Titan v2 embeddings are noise: 1,000 patients × ~500-token daily summary ≈ 15M tokens/mo ≈ **$0.30 total**.
@@ -75,7 +77,7 @@ Pilot note: 100 customers × 1 conversation ≈ 2,000 flex credits-equivalent �
 3. **Free-plan accounts auto-close at 6 months** (or when credits run out), with a 90-day recovery window. The sprint calendar finishes well inside that.
 4. Some services are excluded from the free plan; everything this repo uses (IoT Core, Lambda, DynamoDB, EventBridge, SQS, API Gateway, CloudWatch, Bedrock invocation) is available.
 
-**Want a hard cap while you learn?** A budget alert only tells you; it stops nothing. An AWS project on the paid plan takes a monthly spend limit from $20, and at the limit AWS pauses the project instead of billing more. Projects can't use GitHub OIDC, so deploy to one from your laptop and move to regular accounts when you want the pipelines: [TRY-IT.md](TRY-IT.md).
+**Want a hard cap while you learn?** A budget alert only tells you; it stops nothing. An AWS project on the paid plan takes a monthly spend limit from $20, and at the limit AWS pauses the project instead of billing more. Mirror it in a budget named cloud-agentic-iot-monthly and the app's Home page shows the month's spend against it. Projects can't use GitHub OIDC, so deploy to one from your laptop and move to regular accounts when you want the pipelines: [TRY-IT.md](TRY-IT.md).
 
 **MuleSoft (chapter 07):** the one thing with no free tier — Anypoint is a **30-day trial**. Build, record, and publish that chapter inside one window.
 
