@@ -203,6 +203,14 @@ Readings never pass through Salesforce, and an hour of watching costs about a
 third of a cent in AWS. [LIVE-STATUS.md](LIVE-STATUS.md) has the speeds, the
 costs and what to check when the card waits for the board.
 
+To send a board a command, open its Asset and choose **Send Command**, then
+`DISPENSE_MEDICATION` or `RESTART`. The Device Command shows `Sent` within
+seconds and, from firmware 2.2.0, `Acked` once the board answers, or `Failed`
+with the reason (a board that is offline is not sent anything). The command is
+sent as you, so you need the `AWS_IoT_Relay` principal access from
+[README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach).
+[DATA-MODEL.md](DATA-MODEL.md#device-command-lifecycle) explains each status.
+
 ## What happens near the limit
 
 - As spending nears the limit, AWS denies Lambda invocations, Bedrock calls and

@@ -147,7 +147,7 @@ sf org assign permset --name Device_Platform_Admin --target-org <your admin alia
 
 Everything below is manual for a structural reason, not an oversight: it stores a secret, lives in another vendor's console, or is a deliberate human checkpoint. Do it once, in this order — later steps consume outputs from earlier ones.
 
-**1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown and the Wi-Fi credential push. The device API accepts only requests signed by an AWS identity, so it takes four parts.
+**1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown, the Wi-Fi credential push, Device Commands and the live status card. The device API accepts only requests signed by an AWS identity, so it takes four parts.
 
 *a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in an [AWS project](docs/TRY-IT.md), root in a regular account. In your own terminal, with the `-Prod` stack in Prod and `CALLER` set to `SalesforceCallerUserName` from `config/<env>.json`:
 
@@ -170,7 +170,7 @@ The first `echo` must print the role's ARN before anything is created; an empty 
 
 *c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
 
-*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
+*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and to the integration user the Slack app signs in as: a Device Command is sent as the user who created it, and `/dispense-medication` creates one as that user. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
 
 ```bash
 sf apex run --target-org <your admin alias> <<'EOF'
@@ -324,7 +324,8 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | Check | Where | Expect |
 |---|---|---|
 | Device is publishing | S3 → the patient-vitals archive bucket, `readings/date=<today>/`. Readings go through Basic Ingest, straight to the rule, so the MQTT test client does not see them | A new `.ndjson.gz` object for each batch |
-| Device accepts commands | Publish `{ "operation": "DISPENSE_MEDICATION" }` to `device/<thing>/command` | The servo moves |
+| Device is online | The device's Asset in the Cloud Agentic IoT app ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) | Connection `Online`, and on the Live Status card a reading every 2 s (firmware 2.2.0) |
+| Device accepts commands | On the Asset, **Send Command** with `DISPENSE_MEDICATION`. By hand: publish `{ "operation": "DISPENSE_MEDICATION" }` to `device/<thing>/command` | The servo moves, and the Device Command goes `Sent`, then `Acked` within seconds. Its answer shows on `device/<thing>/ack` in the MQTT test client |
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
@@ -396,7 +397,7 @@ Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesf
 
 A Slack slash-command bot that reads and writes Salesforce data — `/patient-status <device-id>` and `/dispense-medication <device-id>` — without any Slack user ever logging into Salesforce. A dedicated integration user authenticates via the JWT Bearer Flow: the same pattern as the CI/CD pipeline, but as a runtime service call rather than a deploy-time one.
 
-**How it closes the loop:** `/dispense-medication` does not just update a record. It creates a `Device_Command__c` that a Flow/Apex trigger turns into the same Platform Event the ESP32 already listens for via IoT Core. A Slack message can, headlessly, move a physical servo.
+**How it closes the loop:** `/dispense-medication` does not just update a record. It creates a `Device_Command__c`, and an Apex trigger sends it through the device API to the board on `device/<thing>/command`. The board moves the servo and answers on `device/<thing>/ack`; that answer comes back through AWS IoT and marks the record `Acked`, or `Failed` with the board's reason. A Slack message can, headlessly, move a physical servo, and Salesforce knows whether it did. The same record can be created from the device's Asset with **Send Command**. Nothing on this path limits doses yet: `checkBusinessRules` (chapter 11) is not called from it, so anyone who may create a Device Command can dispense.
 
 **Key files:** `lambda/slack-integration/index.js` (verifies the Slack signature — HMAC, replay-protected), `salesforce-client.js` (headless JWT auth), `cloudformation.yaml`
 
@@ -634,6 +635,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 57 Node tests cover 10 of the Lambda functions, and every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 300 Node tests cover 13 of the 16 Lambda functions, the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, and the firmware's timing and command logic compiled for the host; 54 Python tests run the board and OTA scripts against a simulated board and AWS. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (20 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
 PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
