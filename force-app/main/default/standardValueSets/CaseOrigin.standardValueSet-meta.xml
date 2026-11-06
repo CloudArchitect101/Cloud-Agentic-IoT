@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<StandardValueSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <!--
+      Case Origin. A deploy replaces the org's whole list, so this keeps the
+      three values a new org ships with (Phone, Email, Web) and adds the two
+      this project sets: Agentforce (Escalation_Case_Origin__c, the Patient
+      Care agent's Cases) and Room Temperature Rule (Room_Temp_Case_Origin__c).
+      An org that added its own Origin values by hand must add them here too,
+      or the next deploy may take them off the list.
+    -->
+    <sorted>false</sorted>
+    <standardValue>
+        <fullName>Phone</fullName>
+        <default>false</default>
+        <label>Phone</label>
+    </standardValue>
+    <standardValue>
+        <fullName>Email</fullName>
+        <default>false</default>
+        <label>Email</label>
+    </standardValue>
+    <standardValue>
+        <fullName>Web</fullName>
+        <default>false</default>
+        <label>Web</label>
+    </standardValue>
+    <standardValue>
+        <fullName>Agentforce</fullName>
+        <default>false</default>
+        <label>Agentforce</label>
+    </standardValue>
+    <standardValue>
+        <fullName>Room Temperature Rule</fullName>
+        <default>false</default>
+        <label>Room Temperature Rule</label>
+    </standardValue>
+</StandardValueSet>
