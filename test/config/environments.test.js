@@ -25,6 +25,25 @@ for (const env of environments) {
     }
   });
 
+  test(`${env}: every SQS event source taking more than 10 messages a batch has a batching window`, () => {
+    // Lambda refuses a BatchSize over 10 on an SQS queue unless
+    // MaximumBatchingWindowInSeconds is at least 1, and says so only when the
+    // stack deploys. A setting the config leaves out takes the template default.
+    const template = fs.readFileSync(path.join(root, 'lambda', 'patient-vitals', 'cloudformation.yaml'), 'utf8');
+    const settings = (config.stacks || {})['patient-vitals'] || {};
+    const value = (name) => {
+      if (name in settings) return Number(settings[name]);
+      const declared = template.match(new RegExp(`^  ${name}:\\n(?:    .*\\n)*?    Default: (\\d+)`, 'm'));
+      assert.ok(declared, `lambda/patient-vitals/cloudformation.yaml declares no default for ${name}`);
+      return Number(declared[1]);
+    };
+    for (const kind of ['Ingest', 'Sync', 'Presence']) {
+      const size = value(`${kind}BatchSize`);
+      const window = value(`${kind}BatchWindowSeconds`);
+      assert.ok(size <= 10 || window >= 1, `${env}: ${kind}BatchSize ${size} needs ${kind}BatchWindowSeconds of at least 1, not ${window}`);
+    }
+  });
+
   test(`${env}: OTA settings are inside the limits AWS IoT Jobs accepts`, () => {
     const { ota } = config;
     const expires = ota.presignedUrlExpiresInSec;

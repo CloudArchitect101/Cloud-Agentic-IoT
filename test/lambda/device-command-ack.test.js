@@ -756,6 +756,7 @@ test('the rule passes on what the function reads, from every board\'s ack topic,
   for (const grant of [
     'sqs:SendMessage on !GetAtt CommandAckQueue.Arn',
     'logs:CreateLogStream on !GetAtt CommandAckRuleErrorLogGroup.Arn',
+    'logs:DescribeLogStreams on !GetAtt CommandAckRuleErrorLogGroup.Arn',
     'logs:PutLogEvents on !GetAtt CommandAckRuleErrorLogGroup.Arn',
   ]) {
     assert.ok(delivers.includes(grant), `IoTRuleRole does not allow ${grant}`);

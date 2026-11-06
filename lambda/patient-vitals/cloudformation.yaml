@@ -122,8 +122,9 @@ Parameters:
     MinValue: 0
     MaxValue: 300
     Description: >-
-      How long device-presence waits to fill a batch, so about how late an Asset shows a board's
-      change. Must be at least 1 when PresenceBatchSize is over 10 (an SQS event source rule).
+      How long device-presence waits to fill a batch. With any window above 0, Lambda may hold a lone
+      event up to 20 s on a quiet queue; 0 sends it at once. Must be at least 1 when PresenceBatchSize
+      is over 10 (an SQS event source rule).
 
   QueueMaxReceiveCount:
     Type: Number
@@ -346,9 +347,12 @@ Resources:
                   - !GetAtt TelemetryQueue.Arn
                   - !GetAtt PresenceQueue.Arn
                   - !GetAtt CommandAckQueue.Arn
+              # The three calls AWS IoT's CloudWatch Logs action is
+              # documented to need, so a rule's error reaches its log group.
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
+                  - logs:DescribeLogStreams
                   - logs:PutLogEvents
                 Resource:
                   - !GetAtt IoTRuleErrorLogGroup.Arn
@@ -538,10 +542,13 @@ Resources:
         maxReceiveCount: !Ref QueueMaxReceiveCount
 
   # Only the five fields device-presence reads, so a client's IP address and
-  # principal never reach the queue or the logs. A client ID starting live- is
-  # a browser watching a board's live readings, not a board. Lifecycle events
-  # can arrive out of order and twice; device-presence and
-  # DeviceConnectionService allow for both.
+  # principal never reach the queue or device-presence's logs. A delivery
+  # error is the exception: AWS IoT's error message carries the original
+  # event, IP address and certificate ID included, into
+  # PresenceRuleErrorLogGroup, kept for LogRetentionDays. A client ID
+  # starting live- is a browser watching a board's live readings, not a
+  # board. Lifecycle events can arrive out of order and twice; device-presence
+  # and DeviceConnectionService allow for both.
   DevicePresenceIoTRule:
     Type: AWS::IoT::TopicRule
     Properties:
