@@ -2,7 +2,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   Cloud-Agentic-IoT telemetry ingestion: IoT rule -> telemetry queue -> patient-vitals
   (scores, archives to S3, keeps per-device state in DynamoDB) -> sync queue ->
-  salesforce-sync (Patient_Vitals__c, 200 records per call). Sized by config/<env>.json.
+  salesforce-sync (Patient_Vitals__c, 200 records per call); and presence: AWS IoT
+  connect and disconnect events -> presence queue -> device-presence (the Asset's
+  connection fields, 200 boards per call). Sized by config/<env>.json.
 
 # Every number below comes from config/<env>.json: scripts/deploy-aws.sh
 # passes the "patient-vitals" section as parameter overrides, and a test fails
@@ -105,6 +107,21 @@ Parameters:
     MinValue: 2
     MaxValue: 1000
     Description: Parallel Salesforce writers. Each holds one API request open at a time.
+
+  PresenceBatchSize:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    MaxValue: 10000
+    Description: Connect and disconnect events per device-presence invocation. Salesforce gets one call per 200 boards in it.
+  PresenceBatchWindowSeconds:
+    Type: Number
+    Default: 5
+    MinValue: 0
+    MaxValue: 300
+    Description: >-
+      How long device-presence waits to fill a batch, so about how late an Asset shows a board's
+      change. Must be at least 1 when PresenceBatchSize is over 10 (an SQS event source rule).
 
   QueueMaxReceiveCount:
     Type: Number
@@ -312,6 +329,8 @@ Resources:
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
+      # Both rules deliver through this role: readings for patient-vitals, and
+      # connect and disconnect events for device-presence (DevicePresenceIoTRule).
       Policies:
         - PolicyName: DeliverReadings
           PolicyDocument:
@@ -319,12 +338,16 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: sqs:SendMessage
-                Resource: !GetAtt TelemetryQueue.Arn
+                Resource:
+                  - !GetAtt TelemetryQueue.Arn
+                  - !GetAtt PresenceQueue.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt IoTRuleErrorLogGroup.Arn
+                Resource:
+                  - !GetAtt IoTRuleErrorLogGroup.Arn
+                  - !GetAtt PresenceRuleErrorLogGroup.Arn
 
   # ------------------------------------------------------------------ ingest
 
@@ -480,10 +503,146 @@ Resources:
       ScalingConfig:
         MaximumConcurrency: !Ref SyncMaxConcurrency
 
+  # ------------------------------------------------------------------ presence
+
+  # Whether each board is connected now, on its Asset (Connection_Status__c,
+  # Connection_Since__c, Last_Disconnect_Reason__c). AWS IoT publishes an
+  # event on $aws/events/presence/connected/<client ID> or .../disconnected/
+  # whenever a client connects or disconnects: on by default, nothing to
+  # switch on, and nothing for a board to send. The events wait in a queue of
+  # their own, and device-presence gives Salesforce one call per batch, however
+  # many boards changed in it, so a fleet reconnecting at once backs up here
+  # instead of in the org.
+  PresenceDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-device-presence-dlq
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  PresenceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-device-presence
+      VisibilityTimeout: 360   # six times device-presence's 60 s timeout
+      MessageRetentionPeriod: !Ref QueueRetentionSeconds
+      SqsManagedSseEnabled: true
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt PresenceDeadLetterQueue.Arn
+        maxReceiveCount: !Ref QueueMaxReceiveCount
+
+  # Only the five fields device-presence reads, so a client's IP address and
+  # principal never reach the queue or the logs. A client ID starting live- is
+  # a browser watching a board's live readings, not a board. Lifecycle events
+  # can arrive out of order and twice; device-presence and
+  # DeviceConnectionService allow for both.
+  DevicePresenceIoTRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: cloud_agentic_iot_device_presence
+      TopicRulePayload:
+        Sql: "SELECT clientId, eventType, timestamp, disconnectReason, versionNumber FROM '$aws/events/presence/+/+' WHERE NOT startswith(clientId, 'live-')"
+        AwsIotSqlVersion: '2016-03-23'
+        RuleDisabled: false
+        Actions:
+          - Sqs:
+              QueueUrl: !Ref PresenceQueue
+              RoleArn: !GetAtt IoTRuleRole.Arn
+              UseBase64: false
+        # As for readings: an event the rule cannot deliver is logged, not lost.
+        ErrorAction:
+          CloudwatchLogs:
+            LogGroupName: !Ref PresenceRuleErrorLogGroup
+            RoleArn: !GetAtt IoTRuleRole.Arn
+
+  PresenceRuleErrorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /cloud-agentic-iot/iot-rule-errors/device-presence
+      RetentionInDays: !Ref LogRetentionDays
+
+  DevicePresenceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: Presence
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:ChangeMessageVisibility
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt PresenceQueue.Arn
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SalesforceJwtKeyParameterName}'
+              # As for salesforce-sync: SSM decrypts the key with KMS on the
+              # function's behalf, and only on SSM's behalf.
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
+
+  DevicePresenceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-device-presence
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async () => {
+            throw new Error('Placeholder - the deploy pipeline replaces this with the real bundle');
+          };
+      Role: !GetAtt DevicePresenceRole.Arn
+      # The presence queue's visibility timeout (360 s) is six times this.
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          SALESFORCE_CLIENT_ID: !Ref SfConsumerKeyParam
+          SALESFORCE_USERNAME: !Ref SfUsernameParam
+          SALESFORCE_LOGIN_URL: !Ref SfLoginUrlParam
+          SALESFORCE_JWT_KEY_PARAMETER: !Ref SalesforceJwtKeyParameterName
+          SALESFORCE_API_VERSION: !Ref SalesforceApiVersion
+          SALESFORCE_TOKEN_CACHE_MINUTES: !Ref SalesforceTokenCacheMinutes
+          CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds
+          # A board connects with its Thing name as its client ID, and its
+          # Asset holds the ARN of that Thing: this, then the name.
+          THING_ARN_PREFIX: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thing/'
+          # The invocable Apex class that sets the Asset's connection fields.
+          DEVICE_CONNECTION_ACTION: DeviceConnectionService
+
+  PresenceEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt PresenceQueue.Arn
+      FunctionName: !Ref DevicePresenceFunction
+      BatchSize: !Ref PresenceBatchSize
+      MaximumBatchingWindowInSeconds: !Ref PresenceBatchWindowSeconds
+      FunctionResponseTypes: [ReportBatchItemFailures]
+      # The fewest Lambda allows for a queue, and each invocation makes one
+      # call at a time: the org never has more than two of these open at once.
+      ScalingConfig:
+        MaximumConcurrency: 2
+
   # ------------------------------------------------------------------ alarms
 
-  # A message in a dead-letter queue is a reading or a sync that failed every
-  # retry. Someone should look at each one.
+  # A message in a dead-letter queue is a reading, a sync or a connection
+  # change that failed every retry. Someone should look at each one.
   TelemetryDeadLetterAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -512,6 +671,24 @@ Resources:
       Dimensions:
         - Name: QueueName
           Value: !GetAtt SyncDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmTopic, [!Ref AlarmTopicArn], !Ref AWS::NoValue]
+
+  PresenceDeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloud-agentic-iot-device-presence-dead-letters
+      AlarmDescription: Salesforce did not take connection changes on any retry, so some Assets may show the wrong Connection. Inspect cloud-agentic-iot-device-presence-dlq and the device-presence logs.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt PresenceDeadLetterQueue.QueueName
       Statistic: Maximum
       Period: 300
       EvaluationPeriods: 1
@@ -553,6 +730,8 @@ Outputs:
     Value: !Ref TelemetryQueue
   SyncQueueUrl:
     Value: !Ref SyncQueue
+  PresenceQueueUrl:
+    Value: !Ref PresenceQueue
   ArchiveBucketName:
     Description: Every reading, for Athena or Data Cloud
     Value: !Ref ArchiveBucket
