@@ -286,7 +286,10 @@ Resources:
 
   # The Home page's usage card shows this month's spend against this budget
   # (lambda/queue-relay, SpendLimitBudgetName). No service filter, so it
-  # counts everything the account spends. A budget without actions is free.
+  # counts everything the account spends, and before credits, refunds and tax,
+  # as a spend limit counts (lambda/aws-spend reads that as "pre-credit-pre-tax").
+  # The same budget as docs/SPEND-AND-LIMITS.md's create-budget command, which
+  # writes that exclusion as a FilterExpression. A budget without actions is free.
   MonthlyBudget:
     Type: AWS::Budgets::Budget
     Condition: HasBudget
@@ -298,6 +301,10 @@ Resources:
         BudgetLimit:
           Amount: !Ref MonthlyBudgetUsd
           Unit: USD
+        CostTypes:
+          IncludeCredit: false
+          IncludeRefund: false
+          IncludeTax: false
       NotificationsWithSubscribers: !If
         - HasBudgetEmail
         - - Notification:

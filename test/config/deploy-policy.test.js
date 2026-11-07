@@ -198,8 +198,10 @@ test('the budget is the one the Home page reads', () => {
   assert.match(block, new RegExp(`BudgetName: ${name}\n`));
   assert.match(block, /BudgetType: COST\n/);
   assert.match(block, /TimeUnit: MONTHLY\n/);
-  // The card wants every service counted.
+  // The card wants every service counted, before credits, refunds and tax
+  // (basisOf in lambda/aws-spend/index.js).
   assert.doesNotMatch(block, /CostFilters|FilterExpression/);
+  for (const type of ['Credit', 'Refund', 'Tax']) assert.match(block, new RegExp(`Include${type}: false\n`));
 });
 
 test('deploy-aws.sh never deploys the bootstrap template', () => {
