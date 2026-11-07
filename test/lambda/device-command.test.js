@@ -10,8 +10,8 @@ const HANDLER = path.join(__dirname, '../../lambda/device-command/index.js');
 function load(t, respond) {
   withEnv(t, { IOT_PARALLEL_REQUESTS: '8' });
   const iot = fakeAwsSdk('IoTDataPlaneClient', ['PublishCommand'], respond);
-  const { handler, COMMAND_ID } = loadWithFakes(HANDLER, { '@aws-sdk/client-iot-data-plane': iot.sdk });
-  return { handler, calls: iot.calls, COMMAND_ID };
+  const { handler, COMMAND_ID, CASE_ALERT } = loadWithFakes(HANDLER, { '@aws-sdk/client-iot-data-plane': iot.sdk });
+  return { handler, calls: iot.calls, COMMAND_ID, CASE_ALERT };
 }
 
 // What WiFiCredentialPushJob sends: every device on one network, one request.
@@ -165,4 +165,42 @@ test('COMMAND_ID is exported, for the check that the board and both functions ag
   assert.ok(COMMAND_ID instanceof RegExp);
   assert.equal(COMMAND_ID.source, '^[A-Za-z0-9_-]{1,40}$');
   assert.equal(COMMAND_ID.flags, '');
+});
+
+/* ------------------------------------------------------------- CASE_ALERT */
+
+// What DeviceCommandSendJob sends when a device's first Case in the care team
+// queue opens (active true) or its last one leaves (active false).
+const caseAlert = (fields = {}) => recordCommand({ operation: 'CASE_ALERT', ...fields });
+
+test('a CASE_ALERT reaches the board with its on or off', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t);
+
+  for (const active of [true, false]) {
+    const res = await handler(caseAlert({ active }));
+    assert.equal(res.statusCode, 200, String(active));
+    assert.deepEqual(JSON.parse(res.body), { published: true, thingName: 'pm-1', operation: 'CASE_ALERT' });
+  }
+  assert.deepEqual(calls.map((c) => c.input.topic), ['device/pm-1/command', 'device/pm-1/command']);
+  assert.deepEqual(JSON.parse(calls[0].input.payload.toString()), { operation: 'CASE_ALERT', active: true, commandId: RECORD_ID });
+  assert.deepEqual(JSON.parse(calls[1].input.payload.toString()), { operation: 'CASE_ALERT', active: false, commandId: RECORD_ID });
+});
+
+test('a CASE_ALERT without a true or false active is refused before anything is published', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t);
+  for (const active of [undefined, null, 'true', 1, 0, [], {}]) {
+    const res = await handler(caseAlert({ active }));
+    assert.equal(res.statusCode, 400, JSON.stringify(active));
+    assert.equal(JSON.parse(res.body).error, 'CASE_ALERT needs active, true to turn the motor on or false to turn it off.');
+  }
+  assert.equal(calls.length, 0);
+  // Other commands do not need it.
+  assert.equal((await handler(recordCommand())).statusCode, 200);
+});
+
+test('CASE_ALERT is exported, for the check that Salesforce, this function and the board agree', (t) => {
+  const { CASE_ALERT } = load(t);
+  assert.equal(CASE_ALERT, 'CASE_ALERT');
 });

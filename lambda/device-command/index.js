@@ -17,6 +17,14 @@ const iot = new IoTDataPlaneClient({});
 const COMMAND_ID = /^[A-Za-z0-9_-]{1,40}$/;
 exports.COMMAND_ID = COMMAND_ID;
 
+// Turns a patient monitor's motor on or off: { operation: 'CASE_ALERT',
+// active: true | false }. Salesforce sends it when a device's first Case in
+// the care team queue opens and when its last one leaves (CaseAlertService).
+// firmware/patient-monitor holds the same names, and
+// test/firmware/contract.test.js checks that they agree.
+const CASE_ALERT = 'CASE_ALERT';
+exports.CASE_ALERT = CASE_ALERT;
+
 /**
  * Publishes one command to each device's own command topic.
  *
@@ -31,6 +39,9 @@ exports.COMMAND_ID = COMMAND_ID;
  * device only ({ thingName, operation, commandId }), since its answer is
  * recorded on the one command that id names. The commandId travels to the
  * board with the other fields.
+ *
+ * A CASE_ALERT must carry active, true or false: the one setting the board
+ * needs to turn its motor on or off.
  *
  * Per-device topic rather than a broadcast: the IoT policy scopes each device
  * to device/${iot:Connection.Thing.ThingName}/command, so a device cannot
@@ -71,6 +82,12 @@ exports.handler = async (event) => {
         error: `A command with a commandId goes to one device: send thingName, or thingNames with one entry (this request names ${names.length}).`,
       });
     }
+  }
+
+  if (operation === CASE_ALERT && typeof fields.active !== 'boolean') {
+    // A board takes a missing or misspelt active as neither on nor off and
+    // refuses the command, so the motor would stay as it was.
+    return respond(400, { error: 'CASE_ALERT needs active, true to turn the motor on or false to turn it off.' });
   }
 
   const payload = Buffer.from(JSON.stringify({ operation, ...fields }));
