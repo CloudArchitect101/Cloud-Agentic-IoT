@@ -62,8 +62,9 @@ jobs:
         with:
           node-version: '22'
 
+      # Every part needs AWS, Salesforce too: its deploy checks that the org is
+      # the one paired with this environment's account, and records the commit.
       - name: AWS credentials (OIDC, no stored keys)
-        if: env.PART != 'salesforce'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}

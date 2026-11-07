@@ -7,7 +7,13 @@
 #
 # The pipeline runs this same script on every merge into Dev or Prod, so
 # running it yourself first is how you find out what the merge will do. From a
-# laptop it deploys Dev only; Prod is refused (see lib/common.sh).
+# laptop it deploys Dev only; Prod is refused (see lib/common.sh). It also
+# refuses uncommitted changes under lambda/, infra/, config/ and scripts/
+# (ALLOW_DIRTY=yes overrides), and records the commit it shipped in SSM,
+# /cloud-agentic-iot/deployed-commit/aws.
+#
+# scripts/seed-ssm.sh runs first: the stacks read the Salesforce settings it
+# writes.
 
 set -euo pipefail
 # shellcheck source=lib/common.sh
@@ -21,6 +27,7 @@ need npm "It installs each function's dependencies."
 need node "It reads config/$ENV.json."
 cd "$REPO_ROOT"
 
+require_committed
 aws_whoami
 assert_aws_environment "$ENV"
 
@@ -142,4 +149,5 @@ while IFS= read -r src; do
   endstep
 done < <(find lambda -name index.js -not -path "*/node_modules/*" | sort)
 
-note "AWS $ENV is deployed: $deployed stack(s), $packaged function(s) running the code in this commit."
+record_deployed_commit aws
+note "AWS $ENV is deployed: $deployed stack(s), $packaged function(s) running the code in $(deployed_commit)."
