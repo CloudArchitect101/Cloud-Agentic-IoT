@@ -5,9 +5,42 @@ Run it once for **Dev**. **Prod is the identical sequence** against a second
 Salesforce org and a second AWS account — the only differences are called out
 in [Doing it again for Prod](#doing-it-again-for-prod) at the end.
 
-Nothing here can be scripted safely: it involves billing identity, license
-allocation, and credentials that must never pass through an automated agent.
-About 90 minutes for the first run.
+What is code is a script you run (`scripts/bootstrap-aws.sh`,
+`scripts/seed-ssm.sh`, `scripts/setup-github-secrets.sh`) or the pipeline
+itself. What is left is billing identity, license allocation, terms only an
+admin may accept, and credentials that must never pass through an automated
+agent. About 90 minutes for the first run.
+
+### What stays manual, in order
+
+Everything else is the pipeline's job. These are the steps a person does, once
+per environment, in the order they come up below:
+
+1. Sign up the Salesforce Developer Edition org, verify the email, set the
+   password and register MFA (§2.1, step 1).
+2. Check the licences, and that Setup shows both **Einstein Setup** and
+   **Agentforce Agents**; turn both on (§2.1, steps 2 to 4).
+3. Create the two service users (§2.2).
+4. Deploy and assign `Metadata_Deploy` to the deploy user (§2.3, phase 1).
+5. Make the two key pairs and the two External Client Apps (§2.4).
+6. Create the AWS account, and `iot-operator` with
+   `scripts/aws-project-policy.json` (§3.1).
+7. Run `scripts/bootstrap-aws.sh` as `iot-operator` (§3.2).
+8. Sign your laptop in to the org and the account (§4).
+9. Run `scripts/setup-github-secrets.sh`, typing the secrets yourself (§5).
+10. Start the first Deploy run, then attach `Device_Integration` to the
+    Integration app and seed its real values (§6.3).
+11. Give the integration user its permission set licence and permission set,
+    confirm the alarm email, activate the agent and assign the permission sets
+    (§6.4).
+12. Make the IAM user Salesforce signs its calls with and type its access key
+    into Salesforce (README, Stage 2, step 1). IAM Roles Anywhere could
+    remove that key later.
+
+Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
+named and external credentials, the `AWS_IoT_Relay_Callers` assignments,
+`Care_Team_Queue` and the `Device_Queue_Binding` record's board name. They
+depend on values from each org, and become per-org metadata next.
 
 ---
 
@@ -93,7 +126,7 @@ device telemetry all day, and vice versa.
 | 2 | `deploy@…` | Salesforce | CI/CD only: push metadata, run tests | No data-object permissions |
 | 3 | `integration@…` | Salesforce | Runtime only: AWS ↔ Salesforce data traffic | No metadata permissions |
 | 4 | `iot-operator` | AWS | Human console/CLI work | Cannot create users or touch billing |
-| 5 | `github-actions-deploy` | AWS | CI/CD only, assumed via OIDC — **no access keys exist** | Scoped to this repo + branch |
+| 5 | `github-actions-deploy` | AWS | CI/CD only, assumed via OIDC — **no access keys exist** | Scoped to this repo's GitHub Environment, which only its branch may use |
 
 Plus Lambda **execution roles**, created per-function by CloudFormation, each
 scoped to exactly what that function touches (the OTA relay may publish to one
@@ -168,8 +201,11 @@ Both profiles are minimal on purpose: **all** capability arrives via permission
 sets. That is what makes "what can this user actually do?" answerable by
 reading two permission sets rather than auditing a profile.
 
-Note: You can skipp ### 2.3 - 2.4 and authorize user in you VS CODE:
-sf org login web --set-default --alias iot-dev 
+Sign your CLI in as the admin now; §2.3 uses it:
+
+```bash
+sf org login web --alias iot-dev-admin
+```
 
 
 ### 2.3 The bootstrap order — read this before clicking anything
@@ -218,10 +254,10 @@ pipeline deploys. Apply it once per org, as the admin:
 ```bash
 sf project deploy start \
   --source-dir scripts/Metadata_Deploy.permissionset-meta.xml \
-  --target-org iot-dev
+  --target-org iot-dev-admin
 
 sf org assign permset --name Metadata_Deploy \
-  --target-org iot-dev --on-behalf-of deploy@iot-dev.<yourdomain>
+  --target-org iot-dev-admin --on-behalf-of deploy@iot-dev.<yourdomain>
 ```
 
 Which system permissions it needs is decided by what the package contains.
@@ -318,66 +354,82 @@ a deploy app that authenticates, with the secrets stripped:
 
 > **Just trying it out?** [TRY-IT.md](TRY-IT.md) runs it on your own AWS project with a spend limit and a Developer Edition org, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
 
-### 3.1 Root: three actions, then never again
+### 3.1 Root: create the account and `iot-operator`, then never again
 
-Sign in as root, then:
-IAM → Users → Create `iot-operator`, console access on, MFA on.
-Create and assign policy from `scripts/aws-project-policy.json`
+The pipeline accounts are regular AWS accounts in `ca-central-1`. As root:
 
-One more root step comes later: the IAM user Salesforce signs its calls with, in the README's Stage 2, step 1. `iot-operator` can't make it, because that policy denies creating users and access keys.
+1. Create the account. Turn on MFA for root.
+2. IAM → Policies → Create policy, JSON, paste
+   [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json),
+   name it `cloud-agentic-iot-operator`.
+3. IAM → Users → Create `iot-operator`, console access on, MFA on, with that
+   policy attached. Create its access key for the CLI (§4).
 
-Note: the AWS Free plan is only for new AWS customers. If you have, or ever had, an AWS account, this one starts on the paid plan, so create an AWS Budget with an email alert (Billing and Cost Management → Budgets) before you deploy anything. Name it cloud-agentic-iot-monthly and make it a monthly cost budget with no service filter ([SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md#give-the-account-a-budget)): the app's Home page shows this month's spend against it.
+One more root step comes later: the IAM user Salesforce signs its calls with,
+in the README's Stage 2, step 1. `iot-operator` can't make it, because its
+policy denies creating users and access keys.
 
-### 3.2 GitHub Actions deploy role — OIDC, no keys
+### 3.2 The deploy role and the budget: `scripts/bootstrap-aws.sh`
 
-Run as `iot-operator`, once per account:
+One stack per account, `cloud-agentic-iot-bootstrap-<env>`, from
+[`infra/bootstrap/github-deploy.yaml`](../infra/bootstrap/github-deploy.yaml).
+It holds the GitHub OIDC provider, the `github-actions-deploy` role, its
+`cloud-agentic-iot-deploy` policy, and the `cloud-agentic-iot-monthly` budget
+the app's Home page shows spend against. As `iot-operator` (its CLI profile
+is set up in §4, AWS: do that first), from the repository root, with `gh`
+signed in (`gh auth login`):
+
+1. ```bash
+   export AWS_PROFILE=iot-dev
+   BUDGET_USD=20 BUDGET_EMAIL='<your email>' scripts/bootstrap-aws.sh Dev
+   ```
+
+   It checks the account's label first (on a fresh account it writes `Dev`),
+   reads this repository's exact name and numeric IDs from `gh`, deploys the
+   stack, and offers to store the role's ARN as the Dev environment's
+   `AWS_ROLE_ARN` secret. Answer `y`, or let §5's script read it later.
+2. Confirm the budget alert email AWS sends, if any arrives.
+3. If the account already has a `token.actions.githubusercontent.com`
+   provider, the script stops and prints the line to rerun with
+   (`EXISTING_OIDC_PROVIDER_ARN=…`). If you made `cloud-agentic-iot-monthly`
+   by hand earlier, delete it first, or run without `BUDGET_USD`.
+
+Running it again is safe and keeps what you leave unset.
+
+What the stack does, so a failed run can be read:
+
+- **The role trusts `environment:Dev`, not `ref:refs/heads/Dev`.** Every
+  deploy job declares `environment: ${{ github.ref_name }}` so that Prod can
+  carry a required reviewer. Once a job references an environment, GitHub puts
+  the environment in the OIDC subject claim instead of the branch, so a trust
+  policy written against `ref:refs/heads/Dev` matches nothing and every run
+  fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+- **Two subject forms.** GitHub is moving to immutable subject claims, which
+  add the numeric owner and repository IDs that survive a rename
+  (`repo:owner@98764954/repo@1317761754:environment:Dev`). The role trusts both.
+- **The branch is pinned on the GitHub side**, by §5's script: only `Dev` may
+  deploy to the `Dev` environment. Without it, any branch that can reach the
+  environment could assume the role.
+- **The policy is what the scripts and the stacks need**: the project's
+  services, CloudFormation on `cloud-agentic-iot-*` stacks, SSM under
+  `/cloud-agentic-iot/`, roles named `cloud-agentic-iot-*` passed only to
+  Lambda and AWS IoT, and the alarm topic. It denies users, billing, the OIDC
+  provider and the bootstrap stack itself. `test/config/deploy-policy.test.js`
+  fails the checks when a script starts calling something it does not allow.
+  Before turning on `AUTO_DEPLOY`, prove it once: as `iot-operator` (whose
+  policy covers the role's), run `scripts/seed-ssm.sh Dev` and
+  `scripts/deploy-aws.sh Dev`; an AccessDenied there names the missing action.
+
+If a run still fails to sign in, read the claim AWS actually received:
 
 ```bash
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
-
-# Fill in scripts/trust-policy.json: your account ID, GitHub owner, and the
-# two numeric IDs printed by:
-gh api repos/YOUR_GH_USERNAME/Cloud-Agentic-IoT --jq '"owner: \(.owner.id)  repo: \(.id)"'
-
-aws iam create-role --role-name github-actions-deploy \
-  --assume-role-policy-document file://scripts/trust-policy.json
-aws iam attach-role-policy --role-name github-actions-deploy \
-  --policy-arn arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
-```
-
-> **`environment:Dev`, not `ref:refs/heads/Dev`.** Every AWS workflow here declares
-> `environment: ${{ github.ref_name }}` so that Prod can carry a required-reviewer
-> rule. Once a job references an environment, GitHub puts the environment in the
-> OIDC subject claim instead of the branch, so a trust policy written against
-> `ref:refs/heads/Dev` matches nothing and every run fails with `Not authorized to
-> perform sts:AssumeRoleWithWebIdentity`. For Prod, create the same role in the
-> Prod account with `environment:Prod`.
-
-`scripts/trust-policy.json` lists two `sub` patterns because GitHub is moving to
-**immutable subject claims**, which add numeric owner and repository IDs that
-survive a rename (`repo:owner@98764954/repo@1317761754:environment:Dev`). Listing
-both works either way.
-
-Because the environment replaced the branch in the claim, pin the branch on the
-GitHub side: **Settings → Environments → Dev → Deployment branches**, limited to
-`Dev`. Without it, any branch that can reach the `Dev` environment can assume the
-role.
-
-If a run still fails, read the claim AWS actually received:
-
-```bash
-aws cloudtrail lookup-events --region <your region> \
+aws cloudtrail lookup-events --region ca-central-1 \
   --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
   --max-results 3 --query 'Events[].CloudTrailEvent' --output text \
   | python3 -c "import sys,json;[print(json.loads(c)['userIdentity'].get('principalId')) for c in sys.stdin.read().split(chr(9)) if c.strip()]"
 ```
 
-That prints the exact `sub` string; the trust policy has to match it.
-
-Save the role ARN — it becomes the `AWS_ROLE_ARN` secret.
+That prints the exact `sub` string; the role's trust has to match it.
 
 ---
 
@@ -385,30 +437,38 @@ Save the role ARN — it becomes the `AWS_ROLE_ARN` secret.
 
 ### Salesforce
 
+Three aliases per org, one per identity, so no login replaces another:
+
+| Alias | Identity | Used for |
+|---|---|---|
+| `iot-dev-admin` | the signup admin | Setup work, assigning permission sets, activating the agent |
+| `iot-dev-deploy` | `deploy@…` | `scripts/deploy-salesforce.sh` (§6.2) |
+| `iot-dev-integration` | `integration@…` | only checking what the Lambdas can see |
+
 ```bash
-sf org login web --alias iot-dev
-sf config set target-org iot-dev        # admin: Setup work
+sf org login web --alias iot-dev-admin           # if §2.2 did not already
 ```
 
-Once the Connected App exists, add the least-privilege identity and make it
+Once the Integration app exists, add the least-privilege identity and make it
 the default for day-to-day work:
 
 ```bash
 sf org login jwt --client-id <INTEGRATION_CONSUMER_KEY> \
   --jwt-key-file server-integration.key \
   --username integration@iot-dev.<yourdomain> \
-  --instance-url https://login.salesforce.com --alias iot-dev
-sf config set target-org iot-dev
-sf org display --target-org iot-dev           # confirm: integration@, not admin
+  --instance-url https://login.salesforce.com --alias iot-dev-integration
+sf config set target-org iot-dev-integration
+sf org display --target-org iot-dev-integration   # confirm: integration@, not admin
 ```
 
 The `salesforce-dx` MCP server follows the default org, so this also makes
-tooling operate least-privilege.
+tooling operate least-privilege. The test org of [TRY-IT.md](TRY-IT.md) keeps
+its one alias, `test-cloudarchitect101` (`<name>`), for the admin.
 
 ### AWS
 
 ```bash
-aws configure --profile iot-dev     # iot-operator access key, region us-east-1
+aws configure --profile iot-dev     # iot-operator access key, region ca-central-1
 aws sts get-caller-identity --profile iot-dev   # must show user/iot-operator
 ```
 
@@ -457,9 +517,12 @@ the switch that lets a push deploy.
 
 ### 5.2 Environments
 
-Settings → **Environments** → create `Dev` and `Prod`. On **Prod**, add a
-**required reviewer** (yourself) — that click is the only thing between a merge
-and a production deployment.
+`scripts/setup-github-secrets.sh` (§5.3) creates each environment and its
+rules: only the branch of the same name may deploy to it, and **Prod** has you
+as its **required reviewer** — the only thing between a merge and a production
+deployment. A required reviewer on a private repository needs a paid GitHub
+plan; the script says so when GitHub refuses, and you set it in Settings →
+Environments.
 
 ### 5.3 Secrets and variables, per environment
 
@@ -468,8 +531,9 @@ credential in one.
 
 | Name | Type | Value | Used by |
 |---|---|---|---|
-| `AWS_ROLE_ARN` | Secret | Role ARN from §3.2 | AWS deploys, OTA |
-| `AWS_REGION` | Variable | `us-east-1` | all AWS jobs |
+| `AWS_ROLE_ARN` | Secret | `DeployRoleArn` of the bootstrap stack (§3.2) | every part: AWS deploys, the Salesforce org pairing, OTA |
+| `AWS_REGION` | Variable | `ca-central-1` | all AWS jobs |
+| `ALARM_EMAIL` | Variable | Optional: who the CloudWatch alarms email | the alarms stack |
 | `SF_CONSUMER_KEY` | Secret | **Deploy** Connected App consumer key | Salesforce deploy |
 | `SF_JWT_KEY` | Secret | `base64 -i server-deploy.key` | Salesforce deploy |
 | `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` | Salesforce deploy |
@@ -480,8 +544,14 @@ credential in one.
 | `SLACK_SIGNING_SECRET` | Secret | Optional, from the Slack app | the Slack stack, skipped without it |
 
 The pipeline deploys as the **deploy** app and user. The integration values are
-only copied into SSM, where the Lambdas read them at runtime; the patient-vitals
-and streaming stacks will not deploy until they are there. OTA needs nothing:
+only copied into SSM by `scripts/seed-ssm.sh`, where the Lambdas read them; one
+not set yet is written as `placeholder`, so a first run still deploys (§6.3).
+
+`AWS_REGION` must be a Region with a
+`force-app/main/default/cspTrustedSites/AWS_IoT_WebSocket_<region>` file
+(`ca-central-1` and `us-east-2` ship). The Live Status card connects to AWS IoT
+from the browser, and Salesforce blocks any Region not listed: add one before
+using a new Region. The script warns when it is missing. OTA needs nothing:
 the firmware bucket and the role AWS IoT signs download links with come from
 the `ota` stack.
 
@@ -489,13 +559,25 @@ One more value is a **repository** variable rather than an environment one,
 because it decides whether a push deploys at all: `AUTO_DEPLOY`, set to `Dev`
 and later `Dev Prod`.
 
-Enter values yourself — via the GitHub UI, from your own terminal so they
-never appear in any transcript, or with `./scripts/setup-github-secrets.sh`,
-which asks for each value and hides what you type:
+Enter the values yourself, in your own terminal, so they never appear in any
+transcript:
+
+1. ```bash
+   export AWS_PROFILE=iot-dev       # so it can read the role ARN from the bootstrap stack
+   ./scripts/setup-github-secrets.sh
+   ```
+2. Choose `Dev`. It sets the environment's rules, then asks for each value in
+   the table, hiding secrets, and reads the two key files and base64-encodes
+   them itself (`scripts/server-deploy.key`, `scripts/server-integration.key`).
+   No Integration app yet? Press Enter at its three prompts; §6.3 comes back
+   to them.
+3. Answer `n` to `AUTO_DEPLOY` until the first manual run is green (§6.3).
+
+One value by hand, if you need to change it later:
 
 ```bash
 gh secret set AWS_ROLE_ARN --env Dev
-base64 -i server-deploy.key | gh secret set SF_JWT_KEY --env Dev
+base64 < scripts/server-deploy.key | gh secret set SF_JWT_KEY --env Dev
 ```
 
 ---
@@ -506,7 +588,8 @@ base64 -i server-deploy.key | gh secret set SF_JWT_KEY --env Dev
 
 ```bash
 aws sts get-caller-identity --profile iot-dev   # expect user/iot-operator, never root
-sf org display --target-org iot-dev             # expect integration@..., never the admin
+sf org display --target-org iot-dev-admin       # expect the signup admin
+sf org display --target-org iot-dev-integration # expect integration@..., never the admin
 ```
 
 ### 6.2 The deploy user can actually deploy — check before pushing
@@ -528,20 +611,44 @@ sf project deploy start --dry-run --target-org iot-dev-deploy
 If that succeeds, the pipeline will too — it runs the same command with the
 same identity. If it fails on privileges, revisit §2.3.
 
+`scripts/deploy-salesforce.sh Dev --dry-run` runs the same check-only deploy
+with every local Apex test, and checks that `iot-dev-deploy` is the org paired
+with the AWS account `AWS_PROFILE` points at (nothing is paired yet on a first
+run, which it says).
+
 ### 6.3 The real first deployment, via GitHub
 
-Actions tab → **Deploy** → *Run workflow* → branch `Dev`. Or switch pushes on
-and push:
+A brand-new environment can't have everything at once: the Integration app's
+policy needs `Device_Integration`, which only the first Salesforce deploy
+creates. The seed step writes `placeholder` for any integration value with no
+secret yet, so the first run deploys AWS, then Salesforce, in one go.
 
-```bash
-gh variable set AUTO_DEPLOY --body "Dev"
-git push origin Dev
-```
+1. Have both External Client Apps saved (§2.4, steps 1 and 2). The Integration
+   app's consumer key exists as soon as it is saved, before its policy lists a
+   permission set, so §5.3 can already store all six `SF_*` secrets. If it
+   doesn't exist yet, leave its three empty.
+2. Actions → **Deploy** → *Run workflow* → branch `Dev` → part `everything`.
+   It runs the checks, seeds SSM, deploys every stack and the Lambda code,
+   validates and deploys `force-app/` with every local Apex test, pairs the org
+   with the account (`/cloud-agentic-iot/salesforce/org-id`), and records the
+   commit (`/cloud-agentic-iot/deployed-commit/aws` and `/salesforce`).
+3. Once it is green, finish §2.4 step 3 for the Integration app: add
+   `Device_Integration` to its policy.
+4. If step 1 left the integration secrets empty, store them now (rerun
+   `./scripts/setup-github-secrets.sh`, or `gh secret set` the three), then run
+   Deploy again with part `aws`, so the functions sign in with the real values.
+5. Switch pushes on:
 
-Watch the run. A green run means every secret in §5.3 is correct, and it is
-what creates the `Device_Integration` permission set in the org.
+   ```bash
+   gh variable set AUTO_DEPLOY --body "Dev"
+   ```
+
+A green run means every secret in §5.3 is correct.
 
 ### 6.4 Then finish the bootstrap
+
+If you set `ALARM_EMAIL`, AWS emailed that address after the first deploy:
+click **Confirm subscription**, or no alarm reaches you.
 
 The permission set license comes first: the Integration user license alone
 doesn't allow `Device_Integration`'s object permissions, such as Create on
@@ -606,8 +713,9 @@ That is the end of setup. Everything after this ships through GitHub.
 | Step | Change for Prod |
 |---|---|
 | Salesforce org | A second Developer org (or a real EE org). Same two service users, same two Connected Apps, fresh keypairs — never reuse Dev's keys. |
-| AWS account | A second standalone account. Same `iot-operator` and OIDC role, but the trust policy `sub` ends `environment:Prod`: the deploy job declares `environment:`, so that is the claim GitHub sends. |
-| GitHub | Same secret names in the **Prod** environment, different values. Add the required reviewer. |
+| AWS account | A second standalone account in `ca-central-1`. Same `iot-operator`; run `scripts/bootstrap-aws.sh Prod` from your laptop (the pipeline cannot create the role it signs in with), which makes a role that trusts `environment:Prod`. |
+| GitHub | `./scripts/setup-github-secrets.sh`, choosing `Prod`: same secret names, different values, and you as the required reviewer. |
+| Salesforce aliases | `iot-prod-admin`, `iot-prod-deploy`, `iot-prod-integration`. |
 | AWS Organizations | Only after the free-credit phase — see `MIGRATION-RUNBOOK.md` phase 1. |
 
 Reusing a Dev certificate or role ARN in Prod silently collapses the two
