@@ -97,6 +97,10 @@ jobs:
 
       - name: AWS - stacks and Lambda code
         if: env.PART == 'everything' || env.PART == 'aws'
+        env:
+          # Who the alarms email (infra/alarms). A variable, not config, so no
+          # address is written into the repository. Unset keeps what is there.
+          ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
         run: scripts/deploy-aws.sh "$ENVIRONMENT"
 
       - name: Salesforce - install the CLI

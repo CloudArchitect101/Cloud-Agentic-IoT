@@ -70,10 +70,25 @@ done
 # sized by the stacks.<directory> section of config/<env>.json: batch sizes,
 # concurrency, retention, timeouts. Nothing environment-specific is written in
 # a template; its defaults are for a first Dev deploy.
+#
+# Two values come from the environment rather than the repository, so they are
+# passed to whichever template declares them: AlarmEmail, from ALARM_EMAIL (an
+# address does not belong in a public repo), and AlarmTopicArn, the topic of
+# the alarms stack, which sorts first and so is deployed before the rest.
+ALARM_TOPIC_ARN=""
+declares() { grep -q "^  $2:[[:space:]]*\$" "$1"; }   # declares <template> <parameter>
 deploy_stack() {
   local t="$1" name overrides line
   name=$(basename "$(dirname "$t")")
   overrides=$(node scripts/lib/stack-parameters.js "$ENV" "$t") || die "config/$ENV.json does not fit $t (above)."
+  if [ -n "${ALARM_EMAIL:-}" ] && declares "$t" AlarmEmail; then
+    overrides="${overrides:+$overrides
+}AlarmEmail=$ALARM_EMAIL"
+  fi
+  if [ -n "$ALARM_TOPIC_ARN" ] && declares "$t" AlarmTopicArn; then
+    overrides="${overrides:+$overrides
+}AlarmTopicArn=$ALARM_TOPIC_ARN"
+  fi
   local args=()
   if [ -n "$overrides" ]; then
     args=(--parameter-overrides)
@@ -87,6 +102,10 @@ deploy_stack() {
     --no-fail-on-empty-changeset \
     ${args[@]+"${args[@]}"}
   endstep
+  if [ "$name" = alarms ]; then
+    ALARM_TOPIC_ARN=$(stack_output "$(stack_name alarms "$ENV")" AlarmTopicArn)
+    [ "$ALARM_TOPIC_ARN" != "None" ] || ALARM_TOPIC_ARN=""
+  fi
 }
 
 # Slack is left out here: it is the one stack that needs a third-party app to
@@ -120,6 +139,19 @@ fi
 # several functions whose infrastructure is not written yet. If a template
 # declares a function and the source directory does not match its name, that
 # still fails loudly.
+# Lambda makes each function's log group, /aws/lambda/<name>, on its first
+# run, and keeps it forever. Making it here first, or finding it, and setting
+# its retention from config/<env>.json bounds what the logs cost.
+retention=$(node -p "require('./config/$ENV.json').lambdaLogRetentionDays") \
+  || die "config/$ENV.json has no lambdaLogRetentionDays."
+keep_logs() {   # keep_logs <function>
+  local group="/aws/lambda/$1" out
+  out=$(aws logs create-log-group --log-group-name "$group" 2>&1) \
+    || [[ "$out" == *ResourceAlreadyExistsException* ]] \
+    || die "Could not create $group: $out"
+  aws logs put-retention-policy --log-group-name "$group" --retention-in-days "$retention"
+}
+
 declared=$(grep -rh "FunctionName: $PROJECT" --include=cloudformation.yaml . \
              | sed 's/.*FunctionName: //' | tr -d '\r' | sort -u)
 
@@ -145,6 +177,8 @@ while IFS= read -r src; do
   aws lambda update-function-code --function-name "$fn" \
     --zip-file "fileb://$zipfile" --publish > /dev/null
   rm -f "$zipfile"
+  keep_logs "$fn"
+  echo "  logs kept $retention days"
   packaged=$((packaged + 1))
   endstep
 done < <(find lambda -name index.js -not -path "*/node_modules/*" | sort)

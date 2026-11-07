@@ -49,7 +49,14 @@ Parameters:
     Default: 3600
     MinValue: 60
     MaxValue: 86400
+  # scripts/deploy-aws.sh passes the alarms stack's topic (infra/alarms).
+  AlarmTopicArn:
+    Type: String
+    Default: ''
+    Description: SNS topic for the alarm below. Empty, it shows in CloudWatch only.
 
+Conditions:
+  HasAlarmTopic: !Not [!Equals [!Ref AlarmTopicArn, '']]
 
 Resources:
   # EventBridge Bus for patient vitals events
@@ -229,6 +236,26 @@ Resources:
             Condition:
               ArnEquals:
                 aws:SourceArn: !GetAtt TelemetryToAlertRule.Arn
+
+  # An alert that failed every retry lands here, and nobody in Salesforce
+  # hears of it. This says so.
+  AlertDeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloud-agentic-iot-alert-dead-letters
+      AlarmDescription: Alerts failed every retry and never reached Salesforce. Inspect patient-vitals-alert-dlq and the alert-dispatcher logs.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt AlertDLQ.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmTopic, [!Ref AlarmTopicArn], !Ref AWS::NoValue]
 
 Outputs:
   PatientVitalsEventBusArn:

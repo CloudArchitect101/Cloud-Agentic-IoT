@@ -1,5 +1,6 @@
 {
   "description": "Sizing and behaviour of the Prod environment, set for a fleet of up to 1,000,000 devices sending every 30 seconds (about 33,000 readings a second). See config/Dev.json for how this file is used, and docs/SCALING.md for where each number comes from and which AWS quotas must be raised before the fleet reaches it.",
+  "lambdaLogRetentionDays": 30,
   "stacks": {
     "patient-vitals": {
       "KeepReadingsInDynamoDB": "false",

@@ -44,6 +44,13 @@ for (const env of environments) {
     }
   });
 
+  test(`${env}: Lambda logs are kept for a number of days CloudWatch Logs accepts`, () => {
+    // scripts/deploy-aws.sh passes it to put-retention-policy, which takes
+    // only these values, and says so only once a function has been updated.
+    const accepted = [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653];
+    assert.ok(accepted.includes(config.lambdaLogRetentionDays), `${env}: lambdaLogRetentionDays ${config.lambdaLogRetentionDays}`);
+  });
+
   test(`${env}: OTA settings are inside the limits AWS IoT Jobs accepts`, () => {
     const { ota } = config;
     const expires = ota.presignedUrlExpiresInSec;
