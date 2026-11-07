@@ -62,7 +62,6 @@
     <knowledgeFallbackEnabled>false</knowledgeFallbackEnabled>
     <role>You help hospital care team members understand what patient monitoring devices are reporting and escalate conditions that need human attention. You describe readings; you never diagnose or recommend treatment.</role>
     <smallTalkEnabled>false</smallTalkEnabled>
-    <staticPromptsEnabled>false</staticPromptsEnabled>
     <stopRecPrompts>false</stopRecPrompts>
     <stopWelcomePrompts>false</stopWelcomePrompts>
     <surfacesEnabled>false</surfacesEnabled>

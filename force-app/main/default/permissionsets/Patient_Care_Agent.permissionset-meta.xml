@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <label>Patient Care Agent</label>
-    <description>For care team members who use the Patient Care Agent: the agent itself, its two actions (read a device's latest readings, escalate to the care team queue), and the device, reading and Case access those actions run with. The agent is an employee agent, so it acts as the person talking to it.</description>
+    <description>For care team members who use the Patient Care Agent: the agent, its two actions (read a device's latest readings, escalate to the care team queue) and the device, reading and Case access they need. The agent acts as the person using it.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <!-- Which employee agent assigned users may open (PermissionSet
          agentAccesses, API 63.0 and later). The Bot ships in
