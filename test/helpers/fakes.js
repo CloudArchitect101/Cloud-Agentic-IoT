@@ -91,7 +91,11 @@ function fakeAwsSdk(clientName, commandNames, respond = () => ({})) {
  * twice in one request, an UpdateItem whose ConditionExpression fails, and
  * an UpdateItem that uses a placeholder with no (or an undefined) value.
  * GetItem and Query read the same items; a Query returns them in sort key
- * order, reversed by ScanIndexForward false, and stops at Limit.
+ * order, reversed by ScanIndexForward false, and stops at Limit. A Scan
+ * takes only "SK = :placeholder" as its FilterExpression, keeps only the
+ * ProjectionExpression's attributes, and returns options.scanPageSize items
+ * read per page (filtered after reading, as DynamoDB does), with a
+ * LastEvaluatedKey while more remain.
  *
  * options.unprocessed(commandName, entries) returns the keys or write
  * requests to leave unprocessed this time, as DynamoDB does when throttled.
@@ -100,7 +104,9 @@ function fakeAwsSdk(clientName, commandNames, respond = () => ({})) {
  * may throw, to fail that call as DynamoDB does when it refuses or is
  * unreachable.
  */
-function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () => {}, fail = () => {} } = {}) {
+function fakeDynamoDb(items = [], {
+  unprocessed = () => [], beforeUpdate = () => {}, fail = () => {}, scanPageSize = Infinity,
+} = {}) {
   const keyOf = (item) => `${item.PK}|${item.SK}`;
   const table = new Map(items.map((item) => [keyOf(item), structuredClone(item)]));
   const calls = [];
@@ -109,7 +115,7 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
       from: () => ({ send: async (command) => respond(command.constructor.name, command.input) }),
     },
   };
-  for (const name of ['BatchGetCommand', 'BatchWriteCommand', 'UpdateCommand', 'GetCommand', 'QueryCommand']) {
+  for (const name of ['BatchGetCommand', 'BatchWriteCommand', 'UpdateCommand', 'GetCommand', 'QueryCommand', 'ScanCommand']) {
     sdk[name] = { [name]: class { constructor(input) { this.input = input; } } }[name];
   }
 
@@ -175,6 +181,30 @@ function fakeDynamoDb(items = [], { unprocessed = () => [], beforeUpdate = () =>
         Items: page.map((item) => structuredClone(item)),
         Count: page.length,
         ScannedCount: page.length,
+        ...(last ? { LastEvaluatedKey: { PK: last.PK, SK: last.SK } } : {}),
+      };
+    }
+    if (command === 'ScanCommand') {
+      const ordered = [...table.values()].sort((a, b) => keyOf(a).localeCompare(keyOf(b)));
+      const from = input.ExclusiveStartKey ? ordered.findIndex((item) => keyOf(item) === keyOf(input.ExclusiveStartKey)) + 1 : 0;
+      const read = ordered.slice(from, from + scanPageSize);
+      let found = read;
+      if (input.FilterExpression !== undefined) {
+        const match = String(input.FilterExpression).match(/^SK\s*=\s*(:\w+)$/);
+        if (!match) throw new Error(`fakeDynamoDb cannot evaluate the filter "${input.FilterExpression}"`);
+        const values = input.ExpressionAttributeValues || {};
+        if (!Object.hasOwn(values, match[1])) {
+          throw awsError('ValidationException', `An expression attribute value used in expression is not defined; attribute value: ${match[1]}`);
+        }
+        found = read.filter((item) => item.SK === values[match[1]]);
+      }
+      const keep = input.ProjectionExpression ? input.ProjectionExpression.split(',').map((name) => name.trim()) : null;
+      const project = (item) => (keep ? Object.fromEntries(keep.filter((name) => name in item).map((name) => [name, item[name]])) : item);
+      const last = from + read.length < ordered.length ? read.at(-1) : null;
+      return {
+        Items: found.map((item) => structuredClone(project(item))),
+        Count: found.length,
+        ScannedCount: read.length,
         ...(last ? { LastEvaluatedKey: { PK: last.PK, SK: last.SK } } : {}),
       };
     }
