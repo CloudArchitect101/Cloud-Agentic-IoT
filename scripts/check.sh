@@ -45,8 +45,11 @@ check_templates() {
   step "CloudFormation: lint every template"
   # Errors fail the check. Warnings, such as a runtime nearing its end of
   # support, are printed but do not.
-  find . -name cloudformation.yaml -not -path '*/node_modules/*' -print0 \
-    | xargs -0 cfn-lint --non-zero-exit-code error --
+  # The bootstrap template is named otherwise so that deploys never pick it
+  # up (infra/bootstrap), but it is linted all the same.
+  { find . -name cloudformation.yaml -not -path '*/node_modules/*' -print0
+    find infra/bootstrap -name '*.yaml' -print0
+  } | xargs -0 cfn-lint --non-zero-exit-code error --
 
   # Every sketch needs its two groups in the ota stack, or its releases have
   # nowhere to go. A new sketch without them fails here, not on a board.
