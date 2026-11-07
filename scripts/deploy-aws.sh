@@ -57,7 +57,7 @@ missing=""
 for p in $(grep -h "Default: /$PROJECT/" $templates /dev/null | grep -v /slack/ | sed 's/.*Default: //' | tr -d '\r' | sort -u); do
   aws ssm get-parameter --name "$p" > /dev/null 2>&1 || missing="$missing $p"
 done
-[ -z "$missing" ] || die "Missing from SSM in this account:$missing. The pipeline's seed step writes them from the $ENV environment's secrets (docs/SETUP.md, 'Secrets and variables'), so run Deploy once from GitHub, or put them by hand."
+[ -z "$missing" ] || die "Missing from SSM in this account:$missing. Run scripts/seed-ssm.sh $ENV first: the pipeline runs it from the $ENV environment's secrets, and on a laptop it asks for the values (a value you do not have yet is written as a placeholder)."
 
 # deploy_stack <template> - deploys it as cloud-agentic-iot-<its directory>-<env>,
 # sized by the stacks.<directory> section of config/<env>.json: batch sizes,
