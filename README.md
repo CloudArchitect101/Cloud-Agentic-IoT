@@ -388,13 +388,13 @@ The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and sto
 
 **Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`
 
-The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with only `Firmware_Version__c` and `Last_Telemetry_At__c`.
+The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`).
 
 ### 02 · Real-time Streams to Agents
 
 Patient vitals streaming in real time through **EventBridge** and **Platform Events** to trigger autonomous agent action within seconds.
 
-Telemetry hits IoT Core → an EventBridge rule fans out to Lambda and SQS → the alert dispatcher evaluates vitals against clinical thresholds → creates `Patient_Vitals__c` → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it.
+The design: telemetry hits IoT Core → an EventBridge rule routes it to the alert dispatcher → the dispatcher evaluates vitals against clinical thresholds → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it. What runs today: readings reach Salesforce through the patient-vitals stack (IoT rule → SQS → `salesforce-sync`, which upserts `Patient_Vitals__c`). The streaming stack deploys, but no IoT rule feeds its bus yet and nothing subscribes to `Patient_Vital_Alert__e`.
 
 **Key files:** `objects/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls` (+ test), `lambda/streaming/`
 
@@ -523,7 +523,7 @@ This chunker splits on paragraph boundaries first, falls back to sentence bounda
 
 **Key files:** `lambda/knowledge-indexer/index.js`
 
-**To see it work:** POST an article as `{ "id": "...", "title": "...", "content": "..." }` and persist the returned vectors to your store — Data Cloud vector index, OpenSearch, or pgvector. The Bedrock invoke permission for `amazon.titan-embed-text-v2:0` is in the template.
+**To see it work:** POST an article as `{ "id": "...", "title": "...", "content": "..." }` and persist the returned vectors to your store — Data Cloud vector index, OpenSearch, or pgvector. It has no CloudFormation template yet, so no environment deploys it: the function, its `bedrock:InvokeModel` permission on `amazon.titan-embed-text-v2:0`, an invoke path and a vector store are still to be written.
 
 ### 09 · Event-Driven Architecture (Saga Pattern)
 
@@ -546,7 +546,7 @@ Three decisions make it work:
 
 **Key files:** `lambda/ota-saga/index.js`
 
-**To see it work:** publish an OTA request onto the queue and watch CloudWatch for the step trace. Kill the device mid-update to see compensation run. The template sets the DLQ and a visibility timeout longer than a device ack realistically takes.
+**To see it work:** publish an OTA request onto the queue and watch CloudWatch for the step trace. Kill the device mid-update to see compensation run. It has no CloudFormation template yet and its step bodies are still simulated (`index.js`), so no environment deploys it. When it is built, it needs a queue with a DLQ and a visibility timeout longer than a device ack realistically takes.
 
 ### 10 · Einstein Trust Layer — PII Masking & Audit
 
