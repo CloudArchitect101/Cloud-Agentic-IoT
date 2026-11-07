@@ -65,6 +65,57 @@ Parameters:
     Default: 365
     MinValue: 1
     Description: How long the S3 archive keeps readings. Set it from your records retention policy.
+
+  # Data Cloud (docs/DATA-CLOUD.md). Its Amazon S3 connector reads CSV or
+  # Parquet from one flat folder, not the archive's gzipped NDJSON in day and
+  # hour folders, so with DataCloudExport on, each batch is also written as one
+  # CSV file under datacloud/room-readings/. Data Cloud reads that folder in
+  # one of two ways, and each is off until its parameters are set:
+  #   - a role (DataCloudOidcProviderArn and DataCloudExternalId), for a
+  #     regular account: Data Cloud signs in through the org's own identity
+  #     provider and assumes DataCloudReaderRole. No key exists anywhere.
+  #   - a user (DataCloudReaderUserName), for an AWS project with a spend
+  #     limit, which cannot hold an identity provider: an IAM user made by
+  #     hand, whose access key exists only in Data Cloud. This template never
+  #     creates a user or a key; it only lets that user read datacloud/.
+  # Either reads datacloud/ and nothing else: not readings/, and no writes.
+  # The three names come from the environment, not config/<env>.json
+  # (scripts/deploy-aws.sh: DATA_CLOUD_OIDC_PROVIDER_ARN,
+  # DATA_CLOUD_EXTERNAL_ID, DATA_CLOUD_READER_USER), and a later deploy that
+  # leaves them unset keeps what the stack has.
+  DataCloudExport:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      'true' also writes each batch of readings as one CSV file under
+      datacloud/room-readings/, the folder a Data Cloud Amazon S3 data stream reads.
+  DataCloudExportRetentionDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: >-
+      How long the CSV files stay. They are only Data Cloud's pickup folder:
+      what a data stream ingested stays in Data Cloud, and the archive keeps every reading.
+  DataCloudOidcProviderArn:
+    Type: String
+    Default: ''
+    AllowedPattern: '^(arn:aws[a-z-]*:iam::[0-9]{12}:oidc-provider/[^/]+/services/connectors)?$'
+    Description: >-
+      The IAM identity provider for the org's My Domain, https://<My Domain>/services/connectors,
+      made once by hand (docs/DATA-CLOUD.md). With DataCloudExternalId, creates DataCloudReaderRole.
+  DataCloudExternalId:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[A-Za-z0-9:_.-]*$'
+    Description: The External ID Data Cloud shows for the Amazon S3 connection. The role trusts that connection only.
+  DataCloudReaderUserName:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[A-Za-z0-9+=,.@_-]*$'
+    Description: >-
+      The IAM user, made by hand before this is set, whose access key Data Cloud holds.
+      The bucket policy lets it read datacloud/ only. For an AWS project, which cannot use the role.
   RealertIntervalMinutes:
     Type: Number
     Default: 15
@@ -185,6 +236,11 @@ Parameters:
 
 Conditions:
   HasAlarmTopic: !Not [!Equals [!Ref AlarmTopicArn, '']]
+  DataCloudExportOn: !Equals [!Ref DataCloudExport, 'true']
+  HasDataCloudRole: !And
+    - !Not [!Equals [!Ref DataCloudOidcProviderArn, '']]
+    - !Not [!Equals [!Ref DataCloudExternalId, '']]
+  HasDataCloudReaderUser: !Not [!Equals [!Ref DataCloudReaderUserName, '']]
 
 Resources:
   # ------------------------------------------------------------------ storage
@@ -216,8 +272,9 @@ Resources:
         PointInTimeRecoveryEnabled: true
 
   # Every reading, gzipped NDJSON, one object per batch, partitioned
-  # readings/date=YYYY-MM-DD/hour=HH/ for Athena or Data Cloud. Kept when the
-  # stack is deleted: it is clinical history.
+  # readings/date=YYYY-MM-DD/hour=HH/ for Athena. With DataCloudExport, the
+  # same readings as CSV under datacloud/room-readings/, for Data Cloud. Kept
+  # when the stack is deleted: it is clinical history.
   ArchiveBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -242,6 +299,10 @@ Resources:
             Status: Enabled
             Prefix: readings/
             ExpirationInDays: !Ref ArchiveRetentionDays
+          - Id: expire-data-cloud-copy
+            Status: Enabled
+            Prefix: datacloud/
+            ExpirationInDays: !Ref DataCloudExportRetentionDays
 
   ArchiveBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -260,6 +321,85 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
+          # The Data Cloud reader user (DataCloudReaderUserName): list and
+          # read datacloud/, nothing else. In the same account a bucket policy
+          # alone is enough, so the user needs no policy of its own.
+          - !If
+            - HasDataCloudReaderUser
+            - Sid: DataCloudReaderFindsTheBucket
+              Effect: Allow
+              Principal:
+                AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${DataCloudReaderUserName}'
+              Action: s3:GetBucketLocation
+              Resource: !GetAtt ArchiveBucket.Arn
+            - !Ref AWS::NoValue
+          - !If
+            - HasDataCloudReaderUser
+            - Sid: DataCloudReaderListsItsFolder
+              Effect: Allow
+              Principal:
+                AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${DataCloudReaderUserName}'
+              Action: s3:ListBucket
+              Resource: !GetAtt ArchiveBucket.Arn
+              Condition:
+                StringLike:
+                  s3:prefix: 'datacloud/*'
+            - !Ref AWS::NoValue
+          - !If
+            - HasDataCloudReaderUser
+            - Sid: DataCloudReaderReadsItsFolder
+              Effect: Allow
+              Principal:
+                AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${DataCloudReaderUserName}'
+              Action: s3:GetObject
+              Resource: !Sub '${ArchiveBucket.Arn}/datacloud/*'
+            - !Ref AWS::NoValue
+
+  # What Data Cloud assumes to read datacloud/, in a regular account
+  # (docs/DATA-CLOUD.md). Data Cloud signs in with a token from the org's own
+  # identity provider, https://<My Domain>/services/connectors, whose audience
+  # IAM checks against the provider's client ID list; the role then admits
+  # only the one connection whose External ID is DataCloudExternalId. The
+  # condition key holds the provider's host, which a YAML key cannot take from
+  # a parameter, so the trust policy is written as JSON text.
+  DataCloudReaderRole:
+    Type: AWS::IAM::Role
+    Condition: HasDataCloudRole
+    Properties:
+      RoleName: cloud-agentic-iot-data-cloud-reader
+      Description: Data Cloud's Amazon S3 connection reads datacloud/ in the readings archive as this role. No access keys.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument: !Sub
+        - |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": { "Federated": "${DataCloudOidcProviderArn}" },
+                "Action": "sts:AssumeRoleWithWebIdentity",
+                "Condition": { "StringEquals": { "${Issuer}:sub": "${DataCloudExternalId}" } }
+              }
+            ]
+          }
+        - Issuer: !Select [1, !Split [':oidc-provider/', !Ref DataCloudOidcProviderArn]]
+      Policies:
+        - PolicyName: ReadDataCloudFolder
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:GetBucketLocation
+                Resource: !GetAtt ArchiveBucket.Arn
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt ArchiveBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: 'datacloud/*'
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${ArchiveBucket.Arn}/datacloud/*'
 
   # ------------------------------------------------------------------ queues
 
@@ -413,7 +553,9 @@ Resources:
                 Resource: !GetAtt SyncQueue.Arn
               - Effect: Allow
                 Action: s3:PutObject
-                Resource: !Sub '${ArchiveBucket.Arn}/readings/*'
+                Resource:
+                  - !Sub '${ArchiveBucket.Arn}/readings/*'
+                  - !Sub '${ArchiveBucket.Arn}/datacloud/room-readings/*'
               - Effect: Allow
                 Action: ssm:GetParameter
                 Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ThresholdsParameterName}'
@@ -438,6 +580,8 @@ Resources:
           DYNAMODB_TABLE: !Ref PatientVitalsTable
           SYNC_QUEUE_URL: !Ref SyncQueue
           ARCHIVE_BUCKET: !Ref ArchiveBucket
+          # Empty: no Data Cloud copy. A flat folder, as a data stream reads.
+          DATA_CLOUD_EXPORT_PREFIX: !If [DataCloudExportOn, 'datacloud/room-readings/', '']
           THRESHOLDS_PARAMETER: !Ref ThresholdsParameterName
           REALERT_INTERVAL_MINUTES: !Ref RealertIntervalMinutes
           ROOM_TEMP_ALERT: !Ref RoomTempAlert
@@ -922,5 +1066,12 @@ Outputs:
   CommandAckQueueUrl:
     Value: !Ref CommandAckQueue
   ArchiveBucketName:
-    Description: Every reading, for Athena or Data Cloud
+    Description: Every reading, for Athena, and the bucket a Data Cloud Amazon S3 connection names
     Value: !Ref ArchiveBucket
+  DataCloudFolder:
+    Description: The folder of CSV files a Data Cloud data stream imports, when DataCloudExport is on
+    Value: !If [DataCloudExportOn, 'datacloud/room-readings/', 'off: set DataCloudExport to true']
+  DataCloudReaderRoleArn:
+    Condition: HasDataCloudRole
+    Description: The IAM Role Name (an ARN) for the Data Cloud Amazon S3 connection
+    Value: !GetAtt DataCloudReaderRole.Arn

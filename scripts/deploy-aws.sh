@@ -71,20 +71,30 @@ done
 # concurrency, retention, timeouts. Nothing environment-specific is written in
 # a template; its defaults are for a first Dev deploy.
 #
-# Two values come from the environment rather than the repository, so they are
-# passed to whichever template declares them: AlarmEmail, from ALARM_EMAIL (an
-# address does not belong in a public repo), and AlarmTopicArn, the topic of
-# the alarms stack, which sorts first and so is deployed before the rest.
+# Some values come from the environment rather than the repository, so they
+# are passed to whichever template declares them: AlarmTopicArn, the topic of
+# the alarms stack, which sorts first and so is deployed before the rest, and
+# the names in FROM_ENVIRONMENT below. Each of those names something outside
+# the repository: an address that does not belong in a public repo, or what
+# Data Cloud reads the readings archive as (docs/DATA-CLOUD.md), which is made
+# by hand per account and per org. One left unset is not passed, and
+# CloudFormation keeps the value the stack already has.
+FROM_ENVIRONMENT="ALARM_EMAIL=AlarmEmail
+DATA_CLOUD_OIDC_PROVIDER_ARN=DataCloudOidcProviderArn
+DATA_CLOUD_EXTERNAL_ID=DataCloudExternalId
+DATA_CLOUD_READER_USER=DataCloudReaderUserName"
 ALARM_TOPIC_ARN=""
 declares() { grep -q "^  $2:[[:space:]]*\$" "$1"; }   # declares <template> <parameter>
 deploy_stack() {
-  local t="$1" name overrides line
+  local t="$1" name overrides line variable parameter
   name=$(basename "$(dirname "$t")")
   overrides=$(node scripts/lib/stack-parameters.js "$ENV" "$t") || die "config/$ENV.json does not fit $t (above)."
-  if [ -n "${ALARM_EMAIL:-}" ] && declares "$t" AlarmEmail; then
-    overrides="${overrides:+$overrides
-}AlarmEmail=$ALARM_EMAIL"
-  fi
+  while IFS='=' read -r variable parameter; do
+    if [ -n "${!variable:-}" ] && declares "$t" "$parameter"; then
+      overrides="${overrides:+$overrides
+}$parameter=${!variable}"
+    fi
+  done <<< "$FROM_ENVIRONMENT"
   if [ -n "$ALARM_TOPIC_ARN" ] && declares "$t" AlarmTopicArn; then
     overrides="${overrides:+$overrides
 }AlarmTopicArn=$ALARM_TOPIC_ARN"
