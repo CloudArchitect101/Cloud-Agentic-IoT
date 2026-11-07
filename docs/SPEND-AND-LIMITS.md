@@ -165,9 +165,11 @@ sf org assign permset --name Platform_Usage_Viewer --target-org <admin alias>
 
 ### Give the account a budget
 
-Once per AWS account. In an AWS project, a project owner runs this in the
-project's CloudShell (the `iot-operator` profile has no `budgets:*`). In Dev
-and Prod, root runs it in CloudShell.
+Once per AWS account. In Dev and Prod, `scripts/bootstrap-aws.sh` creates it
+with `BUDGET_USD` and `BUDGET_EMAIL` ([SETUP.md §3.2](SETUP.md#32-the-deploy-role-and-the-budget-scriptsbootstrap-awssh)),
+counting the same way as the command below. In an AWS project, a project
+owner runs the command below in the project's CloudShell, or tries
+`GITHUB_OIDC=no scripts/bootstrap-aws.sh Dev` ([TRY-IT.md](TRY-IT.md#see-what-it-costs)).
 
 ```bash
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)

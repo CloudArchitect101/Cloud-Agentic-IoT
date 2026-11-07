@@ -153,11 +153,11 @@ These are one-time GitHub settings, which the pipeline cannot make for itself:
 1. **Branches.** Rename `main` to `Dev` and keep it as the default branch
    (Settings, Branches). GitHub redirects old links and moves open pull requests
    to the new name. Create `Prod` from `Dev` once the first Dev deploy is green.
-2. **Environments** `Dev` and `Prod` (Settings, Environments), each with its own
-   secrets and variables, listed in SETUP.md under "Secrets and variables, per
-   environment". On `Prod`, add yourself as a required reviewer. On each one,
-   limit deployment branches to the branch of the same name, so only `Prod`
-   can use Prod's secrets.
+2. **Environments** `Dev` and `Prod`, each with its own secrets and variables,
+   listed in SETUP.md under "Secrets and variables, per environment".
+   `scripts/setup-github-secrets.sh` creates each one, limits its deployment
+   branches to the branch of the same name, so only `Prod` can use Prod's
+   secrets, and makes you Prod's required reviewer.
 3. **Branch rules** for `Dev` and `Prod`: require a pull request, and require
    the Checks jobs to pass (Lambda tests, CloudFormation templates, Shell
    scripts, Salesforce metadata, Firmware).
@@ -172,10 +172,20 @@ These are one-time GitHub settings, which the pipeline cannot make for itself:
    Until then, run Deploy by hand from the Actions tab, choosing the branch.
    A manual run can also deploy one part alone: aws, salesforce or firmware.
 
-The first AWS deploy into a new account has to come from the pipeline, or have
-its SSM parameters put by hand, because the stacks read the Salesforce settings
-that the pipeline's seed step writes. `scripts/deploy-aws.sh` names any that
-are missing before it deploys anything.
+The stacks read Salesforce settings from SSM, which `scripts/seed-ssm.sh`
+writes: the pipeline runs it before every AWS deploy, and on a laptop you run
+it yourself once. On a brand-new environment it writes `placeholder` for the
+integration values that do not exist yet, so the first run deploys AWS and
+then Salesforce. `scripts/deploy-aws.sh` names any parameter that is missing
+before it deploys anything.
+
+Two guards on laptop deploys: `scripts/deploy-aws.sh` and
+`scripts/deploy-salesforce.sh` refuse uncommitted changes (`ALLOW_DIRTY=yes`
+overrides, and the recorded commit then ends in `-dirty`), and the Salesforce
+deploy stops when the org is not the one paired with the AWS account
+(`/cloud-agentic-iot/salesforce/org-id`). Both record the commit they shipped
+under `/cloud-agentic-iot/deployed-commit/`, so a laptop-deployed test account
+and the pipeline's Dev can be compared by SHA.
 
 ## What stays manual, and why
 
