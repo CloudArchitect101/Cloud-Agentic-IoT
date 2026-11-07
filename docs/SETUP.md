@@ -36,6 +36,10 @@ per environment, in the order they come up below:
 12. Make the IAM user Salesforce signs its calls with and type its access key
     into Salesforce (README, Stage 2, step 1). IAM Roles Anywhere could
     remove that key later.
+13. On the `AWS_IoT_Relay` external credential, set **Additional Status Codes
+    for Token Refresh** to `403` (README, Stage 2, part b). API Gateway
+    answers an expired STS session with 403, and without this every call
+    fails from an hour after the first one.
 
 Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
 named and external credentials, the `AWS_IoT_Relay_Callers` assignments,
