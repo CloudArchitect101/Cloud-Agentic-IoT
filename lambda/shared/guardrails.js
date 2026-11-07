@@ -101,7 +101,9 @@ function safeName(name) {
 
 /** The failures of one setting against its rule, as [code, message] pairs. */
 function checkField(field, value, rule) {
-  if (value === undefined) {
+  // Apex sends a blank text field as null: an open Wi-Fi network's
+  // Passphrase__c arrives as passphrase: null, which the board reads as none.
+  if (value === undefined || (value === null && !rule.required)) {
     return rule.required ? [['missing_field', MESSAGES.missing_field(field)]] : [];
   }
   const typeOk = rule.type === 'integer' ? Number.isInteger(value) : typeof value === rule.type;

@@ -89,6 +89,9 @@ test('what Salesforce sends is allowed', () => {
   assert.equal(checkCommand({ operation: 'WIFI_UPDATE', fields: { ssid: 'ward-3', passphrase: 'x'.repeat(63) }, deviceCount: 200 }).allowed, true);
   assert.equal(checkCommand({ operation: 'WIFI_UPDATE', fields: { ssid: 'ward-3', passphrase: '' } }).allowed, true);
   assert.equal(checkCommand({ operation: 'WIFI_UPDATE', fields: { ssid: 'ward-3' } }).allowed, true);
+  // Apex sends a blank Passphrase__c as null.
+  assert.equal(checkCommand({ operation: 'WIFI_UPDATE', fields: { ssid: 'ward-3', passphrase: null } }).allowed, true);
+  assert.deepEqual(checkCommand({ operation: 'WIFI_UPDATE', fields: { ssid: null } }).failures, ['wrong_type:ssid']);
   assert.deepEqual(checkCommand({ operation: 'LIVE', fields: { seconds: 2, minutes: 0 } }), { allowed: true, failures: [], message: 'Allowed.' });
 });
 
