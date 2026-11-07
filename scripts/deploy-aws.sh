@@ -146,7 +146,10 @@ fi
 # this step the stacks deploy green while running placeholder code.
 #
 # Only functions a template declares are packaged: the repo holds source for
-# several functions whose infrastructure is not written yet. If a template
+# several functions whose infrastructure is not written yet. A new template
+# needs no change here: lambda/guardrails and lambda/mcp-server are deployed
+# and packaged because their templates declare cloud-agentic-iot-guardrails
+# and cloud-agentic-iot-mcp-server. If a template
 # declares a function and the source directory does not match its name, that
 # still fails loudly.
 # Lambda makes each function's log group, /aws/lambda/<name>, on its first
@@ -192,6 +195,15 @@ while IFS= read -r src; do
   packaged=$((packaged + 1))
   endstep
 done < <(find lambda -name index.js -not -path "*/node_modules/*" | sort)
+
+# The MCP server's address and the role a client signs its requests as
+# (docs/GUARDRAILS-AND-MCP.md). Printed rather than stored: neither is a
+# secret, and the stack's outputs are where they live.
+mcp_stack=$(stack_name mcp-server "$ENV")
+mcp_endpoint=$(stack_output "$mcp_stack" McpServerEndpoint)
+if [ -n "$mcp_endpoint" ] && [ "$mcp_endpoint" != "None" ]; then
+  note "MCP server: $mcp_endpoint - SigV4 for the lambda service, as $(stack_output "$mcp_stack" McpClientRoleArn). docs/GUARDRAILS-AND-MCP.md says how to connect a client."
+fi
 
 record_deployed_commit aws
 note "AWS $ENV is deployed: $deployed stack(s), $packaged function(s) running the code in $(deployed_commit)."

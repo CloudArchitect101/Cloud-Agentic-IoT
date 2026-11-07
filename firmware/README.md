@@ -94,6 +94,8 @@ Commands arrive on `device/<thing>/command`: from the device-command API (Device
 | `QUEUE_DEPTH` | queue-indicator | Runs or parks the indicator servo | done |
 | anything else | | Nothing | refused `unknown operation <operation>`, or `no operation` when it names none |
 
+The device-command API checks a command against this table before it publishes it ([`lambda/shared/guardrails.js`](../lambda/shared/guardrails.js)): an operation not listed, a setting the operation does not take, or a value outside the range the board accepts is refused there with a 400, so it never reaches the board. `QUEUE_DEPTH` is not among those it sends; the queue-depth API publishes it itself.
+
 **The answer.** A command that carries a `commandId` (1 to 40 of `A-Z a-z 0-9 _ -`; Salesforce sends the Device Command record's Id) is answered on `device/<thing>/ack`, a plain MQTT topic at QoS 0, so the MQTT test client shows answers:
 
 ```json

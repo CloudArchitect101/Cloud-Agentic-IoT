@@ -5,6 +5,7 @@ const {
   BadRequest, parseBody, respond, batchResponse, mapLimit, isTransient, isThingName,
 } = require('@cloud-agentic-iot/shared/api');
 const { numberEnv } = require('@cloud-agentic-iot/shared/env');
+const { checkCommand } = require('@cloud-agentic-iot/shared/guardrails');
 
 const iot = new IoTDataPlaneClient({});
 
@@ -42,6 +43,14 @@ exports.CASE_ALERT = CASE_ALERT;
  *
  * A CASE_ALERT must carry active, true or false: the one setting the board
  * needs to turn its motor on or off.
+ *
+ * Then the guardrails (lambda/shared/guardrails.js) decide whether the
+ * command may go at all: an operation a board takes, only the settings that
+ * operation has, each inside the range the board accepts, and no more rooms
+ * than the operation allows. Every caller passes here - Salesforce through
+ * API Gateway, the MCP server by invoking this function - so no path to a
+ * board skips them. A refusal is a 400 that names what was wrong and never
+ * repeats a value.
  *
  * Per-device topic rather than a broadcast: the IoT policy scopes each device
  * to device/${iot:Connection.Thing.ThingName}/command, so a device cannot
@@ -90,11 +99,19 @@ exports.handler = async (event) => {
     return respond(400, { error: 'CASE_ALERT needs active, true to turn the motor on or false to turn it off.' });
   }
 
-  const payload = Buffer.from(JSON.stringify({ operation, ...fields }));
   // What the logs may say about the command: never the payload, since a
   // WIFI_UPDATE carries a passphrase. The commandId is the record's Id, and
   // lets a person find a command's publish in the logs.
   const about = commandId === undefined ? { operation } : { operation, commandId };
+
+  const guardrail = checkCommand({ operation, fields, deviceCount: names.length });
+  if (!guardrail.allowed) {
+    // The failure codes name fields, never their values.
+    console.warn('command refused by guardrails', { ...about, devices: names.length, failures: guardrail.failures });
+    return respond(400, { error: guardrail.message, failures: guardrail.failures });
+  }
+
+  const payload = Buffer.from(JSON.stringify({ operation, ...fields }));
   const results = await mapLimit(names, numberEnv('IOT_PARALLEL_REQUESTS'), async (name) => {
     try {
       await iot.send(new PublishCommand({ topic: `device/${name}/command`, qos: 1, payload }));

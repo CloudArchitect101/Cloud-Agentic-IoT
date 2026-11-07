@@ -16,7 +16,7 @@ function load(t, respond) {
 
 // What WiFiCredentialPushJob sends: every device on one network, one request.
 const wifiUpdate = (thingNames) => ({
-  body: JSON.stringify({ thingNames, operation: 'WIFI_UPDATE', ssid: 'clinic', passphrase: 'hunter2' }),
+  body: JSON.stringify({ thingNames, operation: 'WIFI_UPDATE', ssid: 'clinic', passphrase: 'hunter2!' }),
 });
 
 test("publishes the command to each device's own topic, and never logs the passphrase", async (t) => {
@@ -30,7 +30,7 @@ test("publishes the command to each device's own topic, and never logs the passp
   assert.equal(calls.length, 200);
   assert.deepEqual(calls.slice(0, 2).map((c) => c.input.topic), ['device/pm-0/command', 'device/pm-1/command']);
   assert.ok(calls.every((c) => c.input.qos === 1));
-  assert.deepEqual(JSON.parse(calls[0].input.payload.toString()), { operation: 'WIFI_UPDATE', ssid: 'clinic', passphrase: 'hunter2' });
+  assert.deepEqual(JSON.parse(calls[0].input.payload.toString()), { operation: 'WIFI_UPDATE', ssid: 'clinic', passphrase: 'hunter2!' });
   assert.equal(JSON.parse(res.body).results.length, 200);
   assert.ok(!logs.some((line) => line.includes('hunter2')));
   assert.ok(!res.body.includes('hunter2'));
@@ -63,10 +63,10 @@ test('a device IoT Core did not take is reported, retryable when it was throttle
 test('the one-device shape keeps its one-device answers', async (t) => {
   captureConsole(t);
   const ok = load(t);
-  assert.equal((await ok.handler({ thingName: 'pm-1', operation: 'REBOOT' })).statusCode, 200);
+  assert.equal((await ok.handler({ thingName: 'pm-1', operation: 'RESTART' })).statusCode, 200);
   assert.equal((await ok.handler({ thingName: 'pm-1' })).statusCode, 400);
   const refused = load(t, () => { throw awsError('ForbiddenException'); });
-  assert.equal((await refused.handler({ thingName: 'pm-1', operation: 'REBOOT' })).statusCode, 502);
+  assert.equal((await refused.handler({ thingName: 'pm-1', operation: 'RESTART' })).statusCode, 502);
 });
 
 /* -------------------------------------------------------------- commandId */
@@ -145,7 +145,7 @@ test('the commandId is logged with the publish, and the payload never is', async
     if (input.topic === 'device/pm-2/command') throw awsError('ForbiddenException', 'Not allowed');
     return {};
   });
-  const wifi = (thingName) => recordCommand({ thingName, operation: 'WIFI_UPDATE', ssid: 'clinic', passphrase: 'hunter2' });
+  const wifi = (thingName) => recordCommand({ thingName, operation: 'WIFI_UPDATE', ssid: 'clinic', passphrase: 'hunter2!' });
 
   assert.equal((await handler(wifi('pm-1'))).statusCode, 200);
   assert.equal((await handler(wifi('pm-2'))).statusCode, 502);
@@ -203,4 +203,71 @@ test('a CASE_ALERT without a true or false active is refused before anything is 
 test('CASE_ALERT is exported, for the check that Salesforce, this function and the board agree', (t) => {
   const { CASE_ALERT } = load(t);
   assert.equal(CASE_ALERT, 'CASE_ALERT');
+});
+
+/* ------------------------------------------------------------- guardrails */
+
+// lambda/shared/guardrails.js runs on every request, after the checks above
+// and before anything is published. test/lambda/guardrails.test.js covers its
+// rules one by one; these check that device-command enforces them.
+
+test('a command no board takes is refused before anything is published', async (t) => {
+  const logs = captureConsole(t);
+  const { handler, calls } = load(t);
+  for (const operation of ['REBOOT', 'QUEUE_DEPTH', 'dispense_medication', 'OTA']) {
+    const res = await handler({ thingName: 'pm-1', operation });
+    assert.equal(res.statusCode, 400, operation);
+    const body = JSON.parse(res.body);
+    assert.deepEqual(body.failures, ['unknown_operation'], operation);
+    assert.match(body.error, /^Refused by the guardrails: /);
+  }
+  assert.equal(calls.length, 0);
+  assert.ok(logs.some((line) => line.startsWith('command refused by guardrails ')));
+});
+
+test('a setting out of the range the board accepts is refused, and the value is never repeated', async (t) => {
+  const logs = captureConsole(t);
+  const { handler, calls } = load(t);
+  const cases = [
+    [{ operation: 'SET_TELEMETRY_INTERVAL', seconds: 4 }, 'out_of_range:seconds'],
+    [{ operation: 'SET_TELEMETRY_INTERVAL', seconds: 86401 }, 'out_of_range:seconds'],
+    [{ operation: 'SET_TELEMETRY_INTERVAL', seconds: '60' }, 'wrong_type:seconds'],
+    [{ operation: 'SET_TELEMETRY_INTERVAL' }, 'missing_field:seconds'],
+    [{ operation: 'LIVE', seconds: 2, minutes: 31 }, 'out_of_range:minutes'],
+    [{ operation: 'WIFI_UPDATE', ssid: 'clinic', passphrase: 'short77' }, 'wrong_length:passphrase'],
+    [{ operation: 'WIFI_UPDATE', ssid: 'x'.repeat(33), passphrase: 'long-enough' }, 'wrong_length:ssid'],
+  ];
+  for (const [fields, failure] of cases) {
+    const res = await handler({ body: JSON.stringify({ thingNames: ['pm-1'], ...fields }) });
+    assert.equal(res.statusCode, 400, JSON.stringify(fields));
+    assert.deepEqual(JSON.parse(res.body).failures, [failure], JSON.stringify(fields));
+    assert.ok(!res.body.includes('short77'));
+  }
+  assert.equal(calls.length, 0);
+  assert.ok(!logs.some((line) => line.includes('short77')), logs.join('\n'));
+});
+
+test('a field the command does not take is refused: the board would read "command" as the operation', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t);
+  const res = await handler(recordCommand({ operation: 'CASE_ALERT', active: true, command: 'DISPENSE_MEDICATION' }));
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(JSON.parse(res.body).failures, ['unexpected_field:command']);
+  assert.equal(calls.length, 0);
+});
+
+test('a dose goes to one room per request, and no request names more rooms than Salesforce sends', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = load(t);
+  const dose = await handler({ body: JSON.stringify({ thingNames: ['pm-1', 'pm-2'], operation: 'DISPENSE_MEDICATION' }) });
+  assert.equal(dose.statusCode, 400);
+  assert.deepEqual(JSON.parse(dose.body).failures, ['too_many_devices']);
+
+  const many = await handler(wifiUpdate(Array.from({ length: 201 }, (_, i) => `pm-${i}`)));
+  assert.equal(many.statusCode, 400);
+  assert.deepEqual(JSON.parse(many.body).failures, ['too_many_devices']);
+  assert.equal(calls.length, 0);
+
+  // What Salesforce does send still goes: one dose, one Device Command.
+  assert.equal((await handler(recordCommand())).statusCode, 200);
 });

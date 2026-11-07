@@ -43,6 +43,12 @@
       "SpendCacheHours": 24,
       "SpendCostExplorer": "false"
     },
+    "mcp-server": {
+      "RoomTempAlertCelsius": 30,
+      "OfflineAfterMinutes": 5,
+      "MaxRoomsScanned": 2000,
+      "McpTimeoutSeconds": 20
+    },
     "streaming": {
       "SalesforceApiVersion": "64.0",
       "SalesforceTokenCacheMinutes": 30,

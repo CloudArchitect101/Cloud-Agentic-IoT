@@ -40,11 +40,14 @@ per environment, in the order they come up below:
     for Token Refresh** to `403` (README, Stage 2, part b). API Gateway
     answers an expired STS session with 403, and without this every call
     fails from an hour after the first one.
-14. Optional, for Data Cloud: make what Data Cloud signs in to AWS with. In
+14. Optional: connect an MCP client to the Smart Ward MCP server (§6.5). The
+    deploy creates the server, its IAM-authenticated URL and its client role;
+    only your client's configuration is by hand.
+15. Optional, for Data Cloud: make what Data Cloud signs in to AWS with. In
     an AWS project, the IAM user and its access key, typed into Data Cloud
     only; in a regular account, the IAM identity provider for the org's My
     Domain (§7, step 3).
-15. Optional, for Data Cloud: create the Amazon S3 connection, the room
+16. Optional, for Data Cloud: create the Amazon S3 connection, the room
     readings data stream and its mapping to the `Room_Reading` data model
     object (§7, steps 2 and 4 to 6). The calculated insights are a script
     (§7, step 7).
@@ -718,6 +721,27 @@ switched on by a person, not by a deploy.
    ```
 
 That is the end of setup. Everything after this ships through GitHub.
+
+### 6.5 Optional: the guardrails and the MCP server
+
+Nothing to set up for either to work. Every deploy ships both stacks:
+`cloud-agentic-iot-guardrails-<env>` and `cloud-agentic-iot-mcp-server-<env>`.
+The guardrails then run inside device-command on every command, Salesforce's
+included. Check them once after the first deploy:
+
+```bash
+aws lambda invoke --function-name cloud-agentic-iot-guardrails --cli-binary-format raw-in-base64-out \
+  --payload '{"phase":"command","operation":"REBOOT"}' /dev/stdout
+```
+
+Expect `"allowed":false` with `unknown_operation`.
+
+The MCP server answers only SigV4-signed requests. `scripts/deploy-aws.sh`
+ends by printing its endpoint and the `McpClientRole` ARN. To use it from an
+MCP client (Claude Code, Claude Desktop, any client that runs a local stdio
+server), follow [GUARDRAILS-AND-MCP.md, Connect an MCP
+client](GUARDRAILS-AND-MCP.md#connect-an-mcp-client). Salesforce needs nothing:
+the Patient Care Agent keeps its Apex actions.
 
 ---
 

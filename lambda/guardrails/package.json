@@ -1,1 +1,9 @@
-{ "name": "guardrails", "version": "1.0.0", "main": "index.js" }
+{
+  "name": "guardrails",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "@cloud-agentic-iot/shared": "file:../shared"
+  }
+}

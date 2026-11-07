@@ -83,5 +83,6 @@ Those additional fields are only filled by the tests and the load simulation (`t
 - **PII Masking**: Patient data masked before LLM processing
 - **Field-Level Security**: Agents run in designated user context
 - **Audit Trail**: All agent actions logged to Agent_Audit_Log__c
-- **Guardrails**: Prompt injection detection, business rule enforcement
+- **Guardrails**: Every command to a room checked in device-command before it is published (allowed commands, settings and ranges, one room per dose); prompt injection detection, output checks and PII masking for the MCP server's answers ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md))
+- **MCP server**: Room status and commands for agents outside Salesforce, behind a Lambda function URL that takes only SigV4-signed requests
 - **HIPAA Compliance**: Data encryption, access controls, audit logging

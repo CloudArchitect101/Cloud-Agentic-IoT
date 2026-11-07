@@ -83,3 +83,20 @@ test("Prod's canary ring stops on a smaller share of failed boards than Dev's", 
   const strictest = (abort) => Math.min(...abort.criteriaList.filter((rule) => rule.failureType === 'FAILED').map((rule) => rule.thresholdPercentage));
   assert.ok(strictest(prod.abort) <= strictest(dev.abort), 'Prod canary must abort on a smaller share of failures than Dev');
 });
+
+// The MCP server's list_rooms_out_of_range lists a room at or above the same
+// threshold that makes patient-vitals flag a reading for Salesforce. Two
+// numbers for one rule would have the agent and the care team disagree on
+// which rooms are too warm.
+test('the MCP server and patient-vitals use one room-temperature threshold', () => {
+  const declared = (stack) => {
+    const template = fs.readFileSync(path.join(root, 'lambda', stack, 'cloudformation.yaml'), 'utf8');
+    return Number(template.match(/^ {2}RoomTempAlertCelsius:\n(?: {4}.*\n)*? {4}Default: (\d+(?:\.\d+)?)/m)[1]);
+  };
+  assert.equal(declared('mcp-server'), declared('patient-vitals'));
+  for (const env of environments) {
+    const { stacks } = loadConfig(env);
+    const value = (stack) => Number((stacks[stack] || {}).RoomTempAlertCelsius ?? declared(stack));
+    assert.equal(value('mcp-server'), value('patient-vitals'), env);
+  }
+});
