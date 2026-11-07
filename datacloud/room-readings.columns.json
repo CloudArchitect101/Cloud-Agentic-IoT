@@ -1,0 +1,29 @@
+{
+  "description": "The columns of the CSV files patient-vitals writes under datacloud/room-readings/ (DATA_CLOUD_EXPORT_PREFIX), in file order, with the Data Cloud type to give each when creating the data stream and the field of the Room_Reading data model object each maps to. test/lambda/patient-vitals.test.js fails the checks when the Lambda's columns and these differ. docs/DATA-CLOUD.md explains each step.",
+  "file": {
+    "folder": "datacloud/room-readings/",
+    "fileNamePattern": "room-readings-*.csv",
+    "fileType": "CSV",
+    "delimiter": ",",
+    "header": true
+  },
+  "dataStream": {
+    "dataLakeObject": "Room_Readings",
+    "category": "Engagement",
+    "primaryKey": "reading_id",
+    "eventTimeField": "reading_ts",
+    "refreshMode": "Upsert"
+  },
+  "dataModelObject": "Room_Reading",
+  "columns": [
+    { "name": "reading_id", "type": "Text", "dmoField": "reading_id__c", "primaryKey": true, "about": "deviceId-timestamp: the same id as Patient_Vitals__c.Device_Reading_Id__c, so a reading in both places has one id" },
+    { "name": "device_id", "type": "Text", "dmoField": "device_id__c", "about": "The AWS IoT Thing name of the board, from the topic it published on" },
+    { "name": "serial_number", "type": "Text", "dmoField": "serial_number__c", "about": "The Thing name again: it is the device Asset's SerialNumber, the field that joins a reading to its Asset" },
+    { "name": "reading_ts", "type": "DateTime", "dmoField": "reading_ts__c", "about": "When the reading was taken, ISO 8601 in UTC; the board's own time when it sends one, otherwise when AWS IoT received it" },
+    { "name": "received_ts", "type": "DateTime", "dmoField": "received_ts__c", "about": "When AWS IoT received it, ISO 8601 in UTC" },
+    { "name": "temperature_c", "type": "Number", "dmoField": "temperature_c__c", "about": "Room temperature in C from the DHT11; empty when the sensor did not read" },
+    { "name": "humidity_pct", "type": "Number", "dmoField": "humidity_pct__c", "about": "Relative humidity in percent from the DHT11; empty when the sensor did not read" },
+    { "name": "room", "type": "Text", "dmoField": "room__c", "about": "A room or location label, when the board sends one (room or location in its message); empty today" },
+    { "name": "source_system", "type": "Text", "dmoField": "source_system__c", "about": "AWS_IoT" }
+  ]
+}

@@ -8,6 +8,9 @@
  *
  *   device/+/telemetry --IoT rule--> telemetry queue (SQS) --batches--> this function
  *       -> S3 archive        every reading, one object per batch
+ *       -> S3 Data Cloud copy the same readings as flat CSV rows, one file
+ *                            per batch, when DATA_CLOUD_EXPORT_PREFIX is set
+ *                            (docs/DATA-CLOUD.md)
  *       -> DynamoDB          one STATE item per device (and every reading, if
  *                            KEEP_READINGS_IN_DYNAMODB is true)
  *       -> sync queue (SQS)  state changes, due re-alerts and (demo rule)
@@ -74,6 +77,17 @@ const PARALLEL_REQUESTS = 8;
 // floats and a warming or cooling sensor wanders around the line; without
 // the margin each wobble would count as a new crossing and a new report.
 const ROOM_TEMP_REARM_MARGIN_C = 1;
+// The Data Cloud copy's columns, in file order. Data Cloud's Amazon S3
+// connector reads CSV or Parquet, not NDJSON, so the archive alone cannot
+// feed a data stream. datacloud/room-readings.columns.json lists the same
+// columns with their Data Cloud types, and a test keeps the two in step.
+const ROOM_READING_COLUMNS = [
+  'reading_id', 'device_id', 'serial_number', 'reading_ts', 'received_ts',
+  'temperature_c', 'humidity_pct', 'room', 'source_system',
+];
+// A room or location label a board may send. Kept short and on one line: a
+// line break inside a value is a shape Data Cloud's CSV reader refuses.
+const ROOM_LABEL_MAX = 64;
 
 exports.handler = async (event) => {
   if (Array.isArray(event && event.Records)) {
@@ -98,6 +112,8 @@ function settings() {
     retentionSeconds: keepReadings ? numberEnv('READING_RETENTION_DAYS') * 86_400 : null,
     roomTempAlert,
     roomTempCelsius: roomTempAlert ? numberEnv('ROOM_TEMP_ALERT_CELSIUS') : null,
+    // Empty or unset: no Data Cloud copy, and the archive is all there is.
+    dataCloudPrefix: process.env.DATA_CLOUD_EXPORT_PREFIX || '',
   };
 }
 
@@ -170,7 +186,7 @@ async function ingest(readings, config) {
 
   // Throws: the archive is the one complete record of every reading, so a
   // batch it cannot take is retried whole rather than half kept.
-  await archive(readings, config.archiveBucket);
+  await archive(readings, config);
 
   const byDevice = groupByDevice(readings);
   const states = await loadStates([...byDevice.keys()], config.table);
@@ -292,22 +308,83 @@ function failDevices(plans, predicate) {
   }
 }
 
-/** Every reading in the batch as one gzipped NDJSON object: the full-fidelity history. */
-async function archive(readings, bucket) {
+/**
+ * Every reading in the batch as one gzipped NDJSON object: the full-fidelity
+ * history. With DATA_CLOUD_EXPORT_PREFIX set, the same readings also go out as
+ * one CSV file under that prefix, for Data Cloud. Both must land, or the batch
+ * is retried: a reading missing from either would be missing for good.
+ */
+async function archive(readings, { archiveBucket, dataCloudPrefix }) {
   const first = readings[0].vitals.receivedAt || readings[0].vitals.timestamp;
   const day = first.slice(0, 10);
   const hour = first.slice(11, 13);
   const body = gzipSync(readings.map((r) => JSON.stringify(r.vitals)).join('\n') + '\n');
-  await s3.send(new PutObjectCommand({
-    Bucket: bucket,
-    // Partitioned by day and hour for Athena or Data Cloud. At-least-once: a
-    // retried batch writes a second object, so readers dedupe on
-    // (deviceId, timestamp), the same key DynamoDB and Salesforce use.
+  const writes = [s3.send(new PutObjectCommand({
+    Bucket: archiveBucket,
+    // Partitioned by day and hour for Athena. At-least-once: a retried batch
+    // writes a second object, so readers dedupe on (deviceId, timestamp),
+    // the same key DynamoDB and Salesforce use.
     Key: `readings/date=${day}/hour=${hour}/${readings[0].id}-${readings.length}.ndjson.gz`,
     Body: body,
     ContentType: 'application/x-ndjson',
     ContentEncoding: 'gzip',
-  }));
+  }))];
+  if (dataCloudPrefix) {
+    writes.push(s3.send(new PutObjectCommand({
+      Bucket: archiveBucket,
+      // One flat folder: a Data Cloud data stream ignores files in
+      // subfolders, so the day and hour go in the name instead. No colons:
+      // Data Cloud refuses them in file names.
+      Key: `${dataCloudPrefix}room-readings-${day}-${hour}-${readings[0].id}-${readings.length}.csv`,
+      Body: roomReadingsCsv(readings.map((r) => r.vitals)),
+      ContentType: 'text/csv; charset=utf-8',
+    })));
+  }
+  await Promise.all(writes);
+}
+
+/**
+ * The Data Cloud copy: a header, then one flat row per reading, deduplicated
+ * on reading_id, the key the data stream upserts on. reading_id is the
+ * Salesforce Device_Reading_Id__c, deviceId-timestamp, so a reading in both
+ * places has one id. serial_number is the Thing name too: it is the Asset's
+ * SerialNumber, which is how a row finds its device's Asset in Data Cloud.
+ */
+function roomReadingsCsv(vitalsList) {
+  const seen = new Set();
+  const lines = [ROOM_READING_COLUMNS.join(',')];
+  for (const vitals of vitalsList) {
+    const row = roomReadingRow(vitals);
+    if (seen.has(row.reading_id)) continue;
+    seen.add(row.reading_id);
+    lines.push(ROOM_READING_COLUMNS.map((column) => csvValue(row[column])).join(','));
+  }
+  return lines.join('\n') + '\n';
+}
+
+function roomReadingRow(vitals) {
+  return {
+    reading_id: `${vitals.deviceId}-${vitals.timestamp}`,
+    device_id: vitals.deviceId,
+    serial_number: vitals.deviceId,
+    reading_ts: vitals.timestamp,
+    received_ts: vitals.receivedAt,
+    temperature_c: vitals.temperature,
+    humidity_pct: vitals.humidity,
+    room: vitals.room,
+    source_system: vitals.sourceSystem,
+  };
+}
+
+/**
+ * Text in double quotes, which also helps Data Cloud detect the delimiter;
+ * numbers bare; a missing value as nothing at all, so it loads as null
+ * rather than as an empty string or a zero.
+ */
+function csvValue(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '';
+  return `"${String(value).replace(/[\r\n]+/g, ' ').replace(/"/g, '""')}"`;
 }
 
 /** STATE items for these devices, by device id. Throws if DynamoDB cannot answer at all. */
@@ -487,11 +564,25 @@ function parseVitals(rawPayload) {
         || new Date().toISOString(),
       receivedAt: toIsoTimestamp(data.receivedAt),
       sourceSystem: 'AWS_IoT',
+      // Only when the board sent one, so the archive of a board that sends
+      // none (the patient monitor today) is exactly what it was.
+      ...roomLabel(data.room, data.location),
     };
   } catch (error) {
     console.error('Failed to parse vitals:', error.message);
     return null;
   }
+}
+
+/** { room } from the first non-empty label given, on one line and at most ROOM_LABEL_MAX long; {} without one. */
+function roomLabel(...values) {
+  for (const value of values) {
+    if (typeof value !== 'string' && typeof value !== 'number') continue;
+    // Control characters (line breaks among them) become spaces.
+    const text = String(value).replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, ROOM_LABEL_MAX).trim();
+    if (text) return { room: text };
+  }
+  return {};
 }
 
 /**
@@ -551,4 +642,6 @@ function createResponse(statusCode, body) {
 }
 
 // Exposed for direct unit tests; nothing imports it today.
-exports._internal = { parseVitals, planDevice, toSalesforceRecord };
+exports._internal = {
+  parseVitals, planDevice, toSalesforceRecord, roomReadingsCsv, ROOM_READING_COLUMNS,
+};
