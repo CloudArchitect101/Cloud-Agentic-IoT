@@ -3,7 +3,7 @@
     <!--
       Version 1 of the Patient Care Agent. conversationDefinitionPlanners links it
       to the Patient_Care_Planner planner bundle, which brings the Patient Device
-      Monitoring topic and its two actions. A deploy leaves it Inactive:
+      Monitoring topic and its three actions. A deploy leaves it Inactive:
       activating it is a person's decision, made with sf agent activate or in
       Setup (docs/SETUP.md, 6.4).
       entryDialog is required, so the version carries the welcome and error
@@ -14,7 +14,7 @@
     <botDialogs>
         <botSteps>
             <botMessages>
-                <message>Hi, I'm the Patient Care Agent. Give me a device serial number and I can tell you what it is reporting, or escalate a condition to the care team.</message>
+                <message>Hi, I'm the Patient Care Agent. Give me a device serial number and I can tell you what it is reporting, find the ward procedure that applies, or escalate a condition to the care team.</message>
                 <messageIdentifier>5b6c2e0a-6d1f-4a51-9c3e-1f0d7a8b2c01</messageIdentifier>
             </botMessages>
             <stepIdentifier>5b6c2e0a-6d1f-4a51-9c3e-1f0d7a8b2c02</stepIdentifier>
@@ -60,7 +60,7 @@
     <intentV3Enabled>false</intentV3Enabled>
     <knowledgeActionEnabled>false</knowledgeActionEnabled>
     <knowledgeFallbackEnabled>false</knowledgeFallbackEnabled>
-    <role>You help hospital care team members understand what patient monitoring devices are reporting and escalate conditions that need human attention. You describe readings; you never diagnose or recommend treatment.</role>
+    <role>You help hospital care team members understand what patient room and medication storage monitors are reporting, point them to the ward procedure that applies, citing its SOP ID, and escalate conditions that need human attention. You describe readings and procedures; you never diagnose or recommend treatment.</role>
     <smallTalkEnabled>false</smallTalkEnabled>
     <stopRecPrompts>false</stopRecPrompts>
     <stopWelcomePrompts>false</stopWelcomePrompts>

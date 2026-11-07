@@ -36,3 +36,42 @@ test('every permission set description fits in 255 characters', () => {
     assert.ok(length <= 255, `${path.relative(root, file)}: description is ${length} characters, the maximum is 255`);
   }
 });
+
+// The agent's metadata refers to itself by name in four places: the topic
+// names its actions, each action names an Apex class, and the permission set
+// opens those classes to the people who talk to the agent. A broken name
+// fails the deploy, or worse, deploys an action nobody may run.
+test('every action the agent\'s topics name exists, invokes a class that exists, and Patient_Care_Agent opens it', () => {
+  const plugins = filesUnder(path.join(metadata, 'genAiPlugins'), '.genAiPlugin-meta.xml');
+  const permissionSet = fs.readFileSync(path.join(metadata, 'permissionsets/Patient_Care_Agent.permissionset-meta.xml'), 'utf8');
+  const opened = new Set([...permissionSet.matchAll(/<apexClass>(\w+)<\/apexClass>/g)].map(([, name]) => name));
+  const named = plugins.flatMap((file) => [...fs.readFileSync(file, 'utf8').matchAll(/<functionName>(\w+)<\/functionName>/g)].map(([, n]) => n));
+  assert.ok(named.includes('Find_Procedure'), 'the topic has no Find Procedure action');
+  for (const name of named) {
+    const file = path.join(metadata, 'genAiFunctions', name, `${name}.genAiFunction-meta.xml`);
+    assert.ok(fs.existsSync(file), `${name} is named by a topic but has no ${path.relative(root, file)}`);
+    const target = fs.readFileSync(file, 'utf8').match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1];
+    const apex = path.join(metadata, 'classes', `${target}.cls`);
+    assert.ok(fs.existsSync(apex), `${name} invokes ${target}, which has no class`);
+    assert.match(fs.readFileSync(apex, 'utf8'), /@InvocableMethod/, `${target} has no @InvocableMethod`);
+    assert.ok(opened.has(target), `Patient_Care_Agent does not open ${target}, so ${name} fails for the people using the agent`);
+  }
+});
+
+test('the topic tells the agent to cite the procedure it used, by SOP ID and version', () => {
+  const topic = fs.readFileSync(path.join(metadata, 'genAiPlugins/Patient_Device_Monitoring.genAiPlugin-meta.xml'), 'utf8');
+  const cite = topic.match(/<developerName>instruction_cite_procedures<\/developerName>[\s\S]*?<description>([\s\S]*?)<\/description>/);
+  assert.ok(cite, 'no instruction_cite_procedures');
+  assert.match(cite[1], /Find Procedure/);
+  assert.match(cite[1], /SOP ID and version/);
+  assert.match(cite[1], /no ward procedure covers it/);
+});
+
+// The Metadata API at 64.0 refuses a BotVersion that carries
+// staticPromptsEnabled ("Element ... invalid at this location"), and the
+// whole deploy fails with it.
+test('the agent\'s BotVersion carries no element API 64.0 refuses', () => {
+  for (const file of filesUnder(path.join(metadata, 'bots'), '.botVersion-meta.xml')) {
+    assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /<staticPromptsEnabled>/, path.relative(root, file));
+  }
+});

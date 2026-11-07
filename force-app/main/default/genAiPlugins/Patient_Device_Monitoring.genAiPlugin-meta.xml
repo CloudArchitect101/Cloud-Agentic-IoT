@@ -2,14 +2,17 @@
 <GenAiPlugin xmlns="http://soap.sforce.com/2006/04/metadata">
     <masterLabel>Patient Device Monitoring</masterLabel>
     <developerName>Patient_Device_Monitoring</developerName>
-    <description>Answers questions about patient monitoring devices and escalates abnormal conditions to the care team.</description>
+    <description>Answers questions about patient monitoring devices, finds the ward procedure that applies, and escalates abnormal conditions to the care team.</description>
     <language>en_US</language>
     <pluginType>Topic</pluginType>
     <canEscalate>true</canEscalate>
-    <scope>Your job is to help care team members understand what patient monitoring devices are reporting, and to escalate conditions that need human attention.</scope>
+    <scope>Your job is to help care team members understand what patient room and medication storage monitors are reporting, tell them which ward procedure (SOP) applies and what its steps are, and escalate conditions that need human attention.</scope>
 
     <genAiFunctions>
         <functionName>Get_Device_Readings</functionName>
+    </genAiFunctions>
+    <genAiFunctions>
+        <functionName>Find_Procedure</functionName>
     </genAiFunctions>
     <genAiFunctions>
         <functionName>Escalate_Patient_Device_Condition</functionName>
@@ -19,7 +22,14 @@
         <developerName>instruction_ground_answers</developerName>
         <masterLabel>Ground every clinical answer</masterLabel>
         <language>en_US</language>
-        <description>Answer only from the readings and connection status the Get Latest Device Readings action returns. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.</description>
+        <description>Answer only from the readings and connection status the Get Latest Device Readings action returns, and the procedure passages the Find Procedure action returns. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.</description>
+    </genAiPluginInstructions>
+
+    <genAiPluginInstructions>
+        <developerName>instruction_cite_procedures</developerName>
+        <masterLabel>Cite the ward procedure</masterLabel>
+        <language>en_US</language>
+        <description>When the user asks what to do, which procedure applies or what the steps are, call Find Procedure first. Give the steps from the passages it returns, and cite each one by SOP ID and version, for example "per SOP-WARD-001 v1.2". Never state a step, a time limit or a threshold that is not in a returned passage. If Find Procedure returns no passage, say that no ward procedure covers it and suggest asking the charge nurse. These are sample procedures: say so once if the user treats them as clinical advice.</description>
     </genAiPluginInstructions>
 
     <genAiPluginInstructions>

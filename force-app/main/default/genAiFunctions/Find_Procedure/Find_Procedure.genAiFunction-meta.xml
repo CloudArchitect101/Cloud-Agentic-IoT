@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <masterLabel>Find Procedure</masterLabel>
+    <!--
+      Read by the planner to decide WHEN to call this, like the other two
+      actions' descriptions. The topic's "cite the procedure" instruction
+      depends on it: the passages come back with the SOP ID and version the
+      agent quotes.
+    -->
+    <description>Finds the ward standard operating procedure (SOP) passages that answer a question, each with its SOP ID, version and title to cite. Use it whenever the user asks what to do, which procedure applies, what the steps are, or names an SOP ID, and before advising on a reading that is out of range. Do not use it to read a device's readings.</description>
+    <invocationTarget>ProcedureSearchAgentAction</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <!-- Read-only, so no confirmation, as with the readings action. -->
+    <isConfirmationRequired>false</isConfirmationRequired>
+</GenAiFunction>
