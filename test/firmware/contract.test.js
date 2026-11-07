@@ -199,3 +199,39 @@ test('a commandId the board answers is one both command Lambdas take, and no oth
     assert.ok(rule.test('a0Bbm00000AbCdEFGH'), `${file}: COMMAND_ID must take a Salesforce record Id`);
   }
 });
+
+// The case alert (firmware 2.3.0). Salesforce names the command and its on or
+// off, the device-command Lambda checks them, and the patient monitor acts on
+// them. A name one side spells differently is refused by the board, and the
+// motor stays as it was without a word on the Case.
+test('CASE_ALERT and its active are the same in Salesforce, the device-command Lambda and the patient monitor', () => {
+  const sketch = read('firmware/patient-monitor/patient-monitor.ino');
+  const service = read('force-app/main/default/classes/CaseAlertService.cls');
+  const sendJob = read('force-app/main/default/classes/DeviceCommandSendJob.cls');
+  const picklist = read('force-app/main/default/objects/Device_Command__c/fields/Command__c.field-meta.xml');
+  const { CASE_ALERT } = loadWithFakes(path.join(root, 'lambda/device-command/index.js'), {
+    '@aws-sdk/client-iot-data-plane': fakeAwsSdk('IoTDataPlaneClient', ['PublishCommand']).sdk,
+  });
+
+  assert.equal(CASE_ALERT, 'CASE_ALERT');
+  assert.match(service, new RegExp(`CASE_ALERT_COMMAND = '${CASE_ALERT}';`));
+  assert.ok(picklist.includes(`<fullName>${CASE_ALERT}</fullName>`), 'Device_Command__c.Command__c must offer CASE_ALERT');
+  assert.match(sketch, new RegExp(`strcmp\\(op, "${CASE_ALERT}"\\) == 0`));
+
+  // The on or off travels as active, a JSON true or false.
+  assert.match(sendJob, /body\.put\('active', command\.Case_Alert_On__c == true\)/);
+  assert.match(read('lambda/device-command/index.js'), /typeof fields\.active !== 'boolean'/);
+  assert.match(sketch, /doc\["active"\]\.is<bool>\(\)/);
+  assert.match(sketch, /doc\["active"\]\.as<bool>\(\)/);
+});
+
+test('the patient monitor keeps the case alert in a namespace of its own', () => {
+  const sketch = read('firmware/patient-monitor/patient-monitor.ino');
+  const library = read('firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp');
+  const ours = sketch.match(/#define NVS_CASE_ALERT "([^"]+)"/)[1];
+  const theirs = [...library.matchAll(/#define NVS_\w+ +"([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(theirs.length >= 3, 'the library names its NVS namespaces');
+  assert.ok(!theirs.includes(ours), `${ours} is one of the library's namespaces`);
+  // NVS namespace names are at most 15 characters.
+  assert.ok(ours.length <= 15, ours);
+});
