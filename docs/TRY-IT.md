@@ -99,10 +99,14 @@ every stack and the real Lambda code, and `scripts/deploy-salesforce.sh Dev`
 deploys everything in `force-app/` and runs every local Apex test.
 
 ```bash
-scripts/check.sh
-scripts/deploy-aws.sh Dev
-scripts/deploy-salesforce.sh Dev
+scripts/check.sh && scripts/deploy-aws.sh Dev && scripts/deploy-salesforce.sh Dev
 ```
+
+Run them as one line joined by `&&`, so the first failure stops the rest.
+Pasted as separate lines, zsh and bash run every line even after one fails,
+so one environment can end up ahead of the other. Later deploys that add a
+field AWS writes go Salesforce first; see
+[Warm the sensor, get a Case and a dose](#warm-the-sensor-get-a-case-and-a-dose).
 
 Both refuse uncommitted changes under `lambda/`, `infra/`, `force-app/`,
 `config/` and `scripts/`, because a laptop deploy would otherwise ship what no
