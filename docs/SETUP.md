@@ -917,6 +917,9 @@ each step. Almost all of it is the deploy's job:
    `indexed: 7 SOP(s), 24 passage(s)`. If it names Bedrock, check in the
    Bedrock console that the model is available in that Region
    ([SOP-GROUNDING.md, If a step fails](SOP-GROUNDING.md#if-a-step-fails)).
+   A new account may not be authorized for Bedrock yet (`Operation not
+   allowed`, `authorizationStatus` `NOT_AUTHORIZED`): that takes a free
+   Support case under Account and billing, and no IAM change fixes it.
 2. **Who may ask.** The action calls AWS as the person talking to the
    agent, through the `AWS_IoT_Relay` Named Credential, so each care team
    member needs `AWS_IoT_Relay_Callers` (README, Stage 2 part d) besides

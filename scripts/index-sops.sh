@@ -52,6 +52,13 @@ aws lambda invoke --function-name "$fn" --cli-binary-format raw-in-base64-out \
   || die "Could not invoke $fn. Run scripts/deploy-aws.sh $ENV first: it creates the function."
 if grep -q '"FunctionError"' "$work/status.json"; then
   cat "$work/answer.json" >&2; echo >&2
+  # "Operation not allowed" with every IAM right in place is an account-level
+  # hold: AWS has not yet authorized the account for Bedrock. Say so plainly.
+  auth=$(aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text-v2:0 \
+    --query authorizationStatus --output text 2>/dev/null || true)
+  if [ "$auth" = "NOT_AUTHORIZED" ]; then
+    die "$fn failed: AWS has not authorized this account for Amazon Bedrock in $AWS_REGION (authorizationStatus NOT_AUTHORIZED). IAM can't fix this. Open a free Support case under Account and billing, Account, asking to enable Bedrock for Titan Text Embeddings V2, then run scripts/index-sops.sh $ENV again (docs/SOP-GROUNDING.md, If a step fails)."
+  fi
   die "$fn failed (above). If it names Bedrock, check that Titan Text Embeddings V2 is available to this account in $AWS_REGION."
 fi
 answer=$(cat "$work/answer.json")
