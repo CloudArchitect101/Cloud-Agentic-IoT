@@ -7,6 +7,7 @@
             <sorted>false</sorted>
             <value><fullName>DISPENSE_MEDICATION</fullName><default>false</default><label>DISPENSE_MEDICATION</label></value>
             <value><fullName>RESTART</fullName><default>false</default><label>RESTART</label></value>
+            <value><fullName>CASE_ALERT</fullName><default>false</default><label>CASE_ALERT</label></value>
         </valueSetDefinition>
     </valueSet>
     <type>Picklist</type>

@@ -114,6 +114,12 @@
         <field>Patient_Vitals__c.Timestamp__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <!-- Case_Alert_Active__c is set by CaseAlertService, which runs in the integration user's transaction when a room-temperature Case opens. -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Case_Alert_Active__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>Asset.Certificate_Id__c</field>
@@ -194,6 +200,11 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>Device_Command__c.Asset__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Case_Alert_On__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

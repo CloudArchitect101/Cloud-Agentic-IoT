@@ -58,6 +58,10 @@
                 <behavior>Readonly</behavior>
                 <field>Last_Disconnect_Reason__c</field>
             </layoutItems>
+            <layoutItems>
+                <behavior>Readonly</behavior>
+                <field>Case_Alert_Active__c</field>
+            </layoutItems>
         </layoutColumns>
         <style>TwoColumnsTopToBottom</style>
     </layoutSections>

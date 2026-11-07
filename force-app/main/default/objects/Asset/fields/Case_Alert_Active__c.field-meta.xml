@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Case_Alert_Active__c</fullName>
+    <label>Case Alert</label>
+    <description>The motor state last sent to the board with CASE_ALERT: checked while the device has an open Case owned by the care team queue, so its motor turns. Set by CaseAlertService; editing it by hand sends nothing.</description>
+    <defaultValue>false</defaultValue>
+    <type>Checkbox</type>
+</CustomField>
