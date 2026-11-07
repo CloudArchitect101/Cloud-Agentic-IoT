@@ -19,7 +19,10 @@ Salesforce changes, and the Patient Care Agent keeps using its Apex actions.
 
 Nothing the agent does calls AWS directly. Its actions are Apex
 (`PatientCareAgentActions.escalate` creates a Case; `DeviceReadingsAgentAction`
-reads stored readings). What reaches a room goes through one door:
+reads stored readings; `ProcedureSearchAgentAction` asks `POST /find-procedure`
+for ward SOP passages, which reads only the SOP index and masks what it returns
+with this page's `maskPii`, [SOP-GROUNDING.md](SOP-GROUNDING.md)). What reaches
+a room goes through one door:
 
 ```
 Patient Care Agent ─ escalate ─> Case ─> CaseAlertService ─┐
