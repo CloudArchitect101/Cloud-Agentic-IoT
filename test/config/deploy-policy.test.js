@@ -23,6 +23,7 @@ const PIPELINE_SCRIPTS = [
   'scripts/lib/common.sh',
   'scripts/seed-ssm.sh',
   'scripts/deploy-aws.sh',
+  'scripts/index-sops.sh',
   'scripts/deploy-salesforce.sh',
   'scripts/ota.sh',
 ];
@@ -33,6 +34,7 @@ const ACTION_OF = {
   's3api head-object': 's3:GetObject',
   's3api list-objects-v2': 's3:ListBucket',
   'lambda wait': 'lambda:GetFunctionConfiguration',
+  'lambda invoke': 'lambda:InvokeFunction',
   'cloudformation deploy': 'cloudformation:CreateChangeSet',
   'iot list-job-executions-for-job': 'iot:ListJobExecutionsForJob',
 };
