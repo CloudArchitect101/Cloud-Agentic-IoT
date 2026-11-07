@@ -233,6 +233,19 @@
         <readable>true</readable>
     </fieldPermissions>
     <objectPermissions>
+        <!-- Calling AWS through the AWS_IoT_Relay named credential also needs
+             Read here, besides principal access (AWS_IoT_Relay_Callers):
+             without it, a dose or a case alert this user's save sends fails
+             with "no read permissions on the User External Credential object". -->
+        <object>UserExternalCredential</object>
+        <allowCreate>false</allowCreate>
+        <allowRead>true</allowRead>
+        <allowEdit>false</allowEdit>
+        <allowDelete>false</allowDelete>
+        <viewAllRecords>false</viewAllRecords>
+        <modifyAllRecords>false</modifyAllRecords>
+    </objectPermissions>
+    <objectPermissions>
         <object>Patient_Vitals__c</object>
         <allowCreate>true</allowCreate>
         <allowRead>true</allowRead>
