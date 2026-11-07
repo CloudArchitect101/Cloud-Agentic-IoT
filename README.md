@@ -30,6 +30,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | [DATA-MODEL.md](docs/DATA-MODEL.md) | Why each object is standard or custom — the "why didn't you just use X" answers. |
 | [DEVICE-IDENTITY.md](docs/DEVICE-IDENTITY.md) | How WiFi credentials and AWS certificates get onto a device, why they survive every OTA update, and how a job finds the right device. |
 | [LIVE-STATUS.md](docs/LIVE-STATUS.md) | Whether a board is online, and its readings every 2 s while its card is open: how it works, the speeds, what it costs in AWS and in Salesforce limits, and what to check when the card waits. |
+| [GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md) | The rules every command to a room passes, where they run and why there; the Smart Ward MCP server's tools, its IAM authentication, and how to connect an MCP client. |
 | [SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md) | The app's Home page: this month's AWS spend against its limit and the Salesforce limits the org has used; where each number comes from, how fresh it is, what it costs, and what to check when one is missing. |
 | [CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md) | What is automated vs manual, and the conventions the pipelines enforce. |
 | [MIGRATION-RUNBOOK.md](docs/MIGRATION-RUNBOOK.md) | Phased cutover to a governed Dev/Prod estate, with a rollback per phase. |
@@ -484,7 +485,7 @@ The read action works as the user: `with sharing` and `WITH USER_MODE`, so the a
 
 ### 06 · Multi-Agent Orchestration (MCP + Agent2Agent)
 
-An MCP server exposing patient-device capabilities as tools any MCP-speaking agent can discover at runtime, plus the A2A pattern for one agent delegating to a specialist.
+The Smart Ward MCP server: each patient room's monitor as tools any MCP-speaking agent can discover at runtime (`get_room_status`, `list_rooms_out_of_range`, `send_device_command`), plus the A2A pattern for one agent delegating to a specialist.
 
 **Why MCP instead of a REST API the agent calls:** an agent talking to a bespoke REST API needs the endpoint, the shape, and the "when to use it" baked into its prompt. Change the API and you re-prompt the agent. With MCP the agent calls `tools/list` at runtime and discovers what exists, including the JSON Schema for each argument. **The contract is the schema, not the prompt.** Adding a capability is a server-side change — no agent redeployment, no prompt edit.
 
@@ -493,11 +494,13 @@ Two consequences that show up immediately:
 - **A tool `description` is prompt engineering.** The model reads it to decide when the tool applies. A vague description produces an agent that calls the wrong tool with total confidence.
 - **Tool failures are returned as tool output, not transport errors.** An agent can reason about "the device is offline" and tell the user something useful. It cannot reason about an HTTP 500.
 
-**Verified:** all four protocol paths exercised locally — `initialize` handshake, tool discovery, a successful call, a call with a missing required argument (returns `isError` with a usable message rather than throwing), and an unknown tool (returns JSON-RPC `-32602`).
+**What it may touch.** The reads come from the patient-vitals table; `send_device_command` invokes the same device-command function Salesforce's Device Commands reach, so the guardrails (chapter 11) apply to it, and the server's own role has no way to publish to a board around them. The function URL takes only SigV4-signed requests (`AWS_IAM`), so there is no unauthenticated way in.
 
-**Key files:** `lambda/mcp-server/index.js` — JSON-RPC 2.0 handler implementing `initialize`, `tools/list`, `tools/call`
+**Verified:** `test/lambda/mcp-server.test.js` runs the protocol (`initialize` version negotiation, `tools/list`, notifications, a batch refused), every tool against a fake table, `send_device_command` through the real device-command handler over a fake AWS IoT, refusals before anything is invoked, PII masking of answers, and the template's IAM.
 
-**To see it work:** ask the agent something requiring device data. It will discover the tool and call it without being told the endpoint.
+**Key files:** `lambda/mcp-server/index.js`, `lambda/mcp-server/cloudformation.yaml`, [docs/GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md)
+
+**To see it work:** connect an MCP client ([GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md#connect-an-mcp-client)) and ask which rooms are out of range. The in-org Patient Care Agent keeps using its Apex actions; Agentforce's own MCP client takes no SigV4, which that page covers.
 
 ### 07 · Cross-Cloud Integrations (iPaaS / MuleSoft)
 
@@ -582,9 +585,9 @@ So detection is a **tripwire, not a wall** — it routes to a human and creates 
 
 **Verified:** all three phases exercised locally — benign input passes; a combined override+extraction attempt raises two distinct signals and routes to `REVIEW`; clean output passes; an SSN in output is blocked; both business-rule failures fire independently while a compliant request is permitted.
 
-**Key files:** `lambda/guardrails/index.js` — `checkInput`, `checkOutput`, `checkBusinessRules`
+**Key files:** `lambda/shared/guardrails.js` — `checkCommand`, `maskPii`, `checkInput`, `checkOutput`, `checkBusinessRules`; `lambda/guardrails/` deploys them as a function of their own
 
-**Where it is wired:** called before the prompt (`phase: input`), after the completion (`phase: output`), and before any side-effecting action (`phase: action`) — a code integration point, not a deploy step.
+**Where it is wired:** in front of every command that reaches a room. device-command runs `checkCommand` on each request before it publishes: allowed commands only, only their own settings, inside the ranges the boards accept, one room per dose. Salesforce's Device Commands, the Wi-Fi push and the MCP server all pass it. The MCP server also masks PII in and checks every answer. Why a shared module rather than a hop in front of the API: [docs/GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md).
 
 ### 12 · Capstone — The Complete System
 
@@ -685,6 +688,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 376 Node tests cover 15 of the 17 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, and the firmware's timing and command logic compiled for the host; 80 Python tests run the board, OTA, setup and deploy scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (22 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 407 Node tests cover 16 of the 17 Lambda functions (all but slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, and the firmware's timing and command logic compiled for the host; 81 Python tests run the board, OTA, setup and deploy scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (22 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
-PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
+The guardrails (chapter 11) now check every command on its way to a room, and the MCP server (chapter 06) deploys behind an IAM-authenticated URL; neither has run against a real account yet. PII masking (chapter 10) is not yet called on the Patient Care Agent's prompts. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
