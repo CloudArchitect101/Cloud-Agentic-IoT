@@ -42,8 +42,10 @@ per environment, in the order they come up below:
     fails from an hour after the first one.
 
 Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
-named and external credentials, the `AWS_IoT_Relay_Callers` assignments,
-`Care_Team_Queue` and the `Device_Queue_Binding` record's board name. They
+named and external credentials, the `AWS_IoT_Relay_Callers` permission set
+and its assignments to people (the deploy assigns it to the integration user
+once it exists), queue members, and the `Device_Queue_Binding` record's board
+name. `Care_Team_Queue` itself ships as metadata. They
 depend on values from each org, and become per-org metadata next.
 
 ---
