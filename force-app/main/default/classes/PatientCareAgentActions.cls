@@ -119,7 +119,9 @@ public with sharing class PatientCareAgentActions {
                 EscalationResult res = results[indexOfCase[j]];
                 Case created = byId.get(saves[j].getId());
                 res.caseNumber = created == null ? null : created.CaseNumber;
-                res.message = 'Case ' + (res.caseNumber == null ? saves[j].getId() : res.caseNumber) + ' created'
+                // String.valueOf first: a ternary takes its first branch's type, so
+                // an Id there would turn the CaseNumber into an Id and throw.
+                res.message = 'Case ' + (res.caseNumber == null ? String.valueOf(saves[j].getId()) : res.caseNumber) + ' created'
                     + (queueId == null ? '.' : ' for the care team queue.');
             }
         }
