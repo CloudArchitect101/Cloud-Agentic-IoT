@@ -11,10 +11,10 @@ private class PlatformUsageControllerTest {
         Id profileId = profileName == null
             ? UserInfo.getProfileId()
             : [SELECT Id FROM Profile WHERE Name = :profileName].Id;
-        return newUser(profileId, viewer);
+        return newUserWithProfile(profileId, viewer);
     }
 
-    private static User newUser(Id profileId, Boolean viewer) {
+    private static User newUserWithProfile(Id profileId, Boolean viewer) {
         // Usernames are unique across every org, so each carries the org's Id
         // and a random part, in case tests run side by side.
         String who = 'usage-' + (viewer ? 'viewer' : 'outsider') + '-'
@@ -252,7 +252,7 @@ private class PlatformUsageControllerTest {
         DeviceApiMock api = useApi();
         // Not 'Standard User': in some orgs, Developer Edition among them, that
         // profile has View Setup and Configuration.
-        User standard = newUser([
+        User standard = newUserWithProfile([
             SELECT Id FROM Profile
             WHERE PermissionsViewSetup = false AND UserLicense.Name = 'Salesforce'
             ORDER BY Name LIMIT 1
