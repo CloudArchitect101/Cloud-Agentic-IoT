@@ -199,7 +199,14 @@ done < <(find lambda -name index.js -not -path "*/node_modules/*" | sort)
 # The ward procedures the Patient Care Agent cites: embedded into the index
 # its Find Procedure action searches, from the knowledge/sops this commit
 # holds. Unchanged SOPs are not embedded again (docs/SOP-GROUNDING.md).
-AWS_ENVIRONMENT_CHECKED="$ENV" scripts/index-sops.sh "$ENV"
+# SKIP_SOP_INDEX=yes leaves the index as it is, for an account Bedrock
+# has not authorized yet: everything else deploys, and Find Procedure
+# answers that no procedure is indexed until scripts/index-sops.sh runs.
+if [ "${SKIP_SOP_INDEX:-}" = "yes" ]; then
+  note "SKIP_SOP_INDEX=yes: the ward procedures were not indexed. Run scripts/index-sops.sh $ENV once Bedrock works in this account."
+else
+  AWS_ENVIRONMENT_CHECKED="$ENV" scripts/index-sops.sh "$ENV"
+fi
 
 # The MCP server's address and the role a client signs its requests as
 # (docs/GUARDRAILS-AND-MCP.md). Printed rather than stored: neither is a

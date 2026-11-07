@@ -11,6 +11,8 @@ itself. What is left is billing identity, license allocation, terms only an
 admin may accept, and credentials that must never pass through an automated
 agent. About 90 minutes for the first run.
 
+When a step fails, [TROUBLESHOOTING.md](TROUBLESHOOTING.md) lists every problem hit so far, with its root cause and fix.
+
 ### What stays manual, in order
 
 Everything else is the pipeline's job. These are the steps a person does, once
@@ -920,6 +922,8 @@ each step. Almost all of it is the deploy's job:
    A new account may not be authorized for Bedrock yet (`Operation not
    allowed`, `authorizationStatus` `NOT_AUTHORIZED`): that takes a free
    Support case under Account and billing, and no IAM change fixes it.
+   Until then, `SKIP_SOP_INDEX=yes scripts/deploy-aws.sh Dev` deploys
+   everything else.
 2. **Who may ask.** The action calls AWS as the person talking to the
    agent, through the `AWS_IoT_Relay` Named Credential, so each care team
    member needs `AWS_IoT_Relay_Callers` (README, Stage 2 part d) besides
