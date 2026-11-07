@@ -1,6 +1,12 @@
 #!/bin/bash
-# Interactively sets up GitHub secrets and variables for an environment using the GitHub CLI.
-# This avoids copy-pasting secrets into the GitHub web UI.
+# Interactively sets up a GitHub Environment (Dev or Prod) with the GitHub CLI:
+# its branch rule (and, for Prod, you as required reviewer), every secret and
+# variable .github/workflows/deploy.yml reads, and AUTO_DEPLOY. Secrets are
+# typed hidden or read from key files, never pasted into a browser or a chat.
+#
+# Run it from the repository root, after scripts/bootstrap-aws.sh, with
+# AWS_PROFILE set to that environment's account so it can read the deploy
+# role's ARN from the bootstrap stack.
 
 set -euo pipefail
 
@@ -18,17 +24,17 @@ function ask() {
     prompt="$1"
     default="${2:-}"
     if [[ -n "$default" ]]; then
-        read -p "  $prompt [$default]: " REPLY
+        read -rp "  $prompt [$default]: " REPLY
         REPLY=${REPLY:-$default}
     else
-        read -p "  $prompt: " REPLY
+        read -rp "  $prompt: " REPLY
     fi
 }
 
 function ask_secret() {
     local prompt
     prompt="$1"
-    read -sp "  $prompt: " REPLY
+    read -rsp "  $prompt: " REPLY
     echo
 }
 
@@ -74,13 +80,29 @@ echo "Checking for GitHub Environment '$ENV'..."
 # The {owner}/{repo} placeholders are automatically resolved by `gh api`.
 if ! gh api "repos/{owner}/{repo}/environments/$ENV" --silent &> /dev/null; then
     echo "Environment '$ENV' not found. Creating it..."
-    gh api "repos/{owner}/{repo}/environments/$ENV" -X PUT --silent
-    echo "✓ Environment '$ENV' created."
-    if [[ "$ENV" == "Prod" ]]; then
-        echo "🔔 IMPORTANT: The 'Prod' environment has been created. You should now configure a 'required reviewer' protection rule for it in your repository settings (Settings -> Environments -> Prod)."
-    fi
 else
-    echo "✓ Environment '$ENV' already exists."
+    echo "✓ Environment '$ENV' already exists. Updating its rules..."
+fi
+# Only the branch of the same name may deploy to the environment: the AWS role
+# trusts the environment, not the branch (infra/bootstrap/github-deploy.yaml),
+# so this is what keeps another branch from assuming it. Prod also waits for
+# your approval on every run.
+env_args=(-X PUT --silent
+    -F "deployment_branch_policy[protected_branches]=false"
+    -F "deployment_branch_policy[custom_branch_policies]=true")
+if [[ "$ENV" == "Prod" ]]; then
+    env_args+=(-F "reviewers[][type]=User" -F "reviewers[][id]=$(gh api user --jq .id)")
+fi
+if gh api "repos/{owner}/{repo}/environments/$ENV" "${env_args[@]}"; then
+    echo "✓ '$ENV' deploys only from the branches its policy names."
+    if [[ "$ENV" == "Prod" ]]; then echo "✓ You are Prod's required reviewer."; fi
+else
+    echo "Warning: could not set the environment's rules. A required reviewer on a private repository needs a paid GitHub plan; set them in Settings -> Environments -> $ENV."
+fi
+if ! gh api "repos/{owner}/{repo}/environments/$ENV/deployment-branch-policies" --jq '.branch_policies[].name' 2> /dev/null | grep -qx "$ENV"; then
+    gh api "repos/{owner}/{repo}/environments/$ENV/deployment-branch-policies" -X POST -f "name=$ENV" -f type=branch --silent \
+        && echo "✓ Only the '$ENV' branch may deploy to '$ENV'." \
+        || echo "Warning: could not add the '$ENV' branch policy. Add it in Settings -> Environments -> $ENV -> Deployment branches."
 fi
 echo
 echo "Setting up for environment: $ENV"
@@ -90,51 +112,84 @@ echo "---"
 # 4. Set secrets
 echo "Setting secrets..."
 
-ask_secret "Enter SF_CONSUMER_KEY (from Salesforce Deploy App):"
-if [[ -n "$REPLY" ]]; then
-    echo "$REPLY" | gh secret set SF_CONSUMER_KEY --env "$ENV"
-    echo "✓ Secret 'SF_CONSUMER_KEY' set."
-else
-    echo "Skipped SF_CONSUMER_KEY."
-fi
+# set_secret <name> <value>: from stdin, so the value is never an argument.
+function set_secret() {
+    if [[ -n "$2" ]]; then
+        printf '%s' "$2" | gh secret set "$1" --env "$ENV"
+        echo "✓ Secret '$1' set."
+    else
+        echo "Skipped $1."
+    fi
+}
 
-ask "Enter SF_USERNAME (e.g., deploy@iot-dev.example.com):" ""
-if [[ -n "$REPLY" ]]; then
-    echo "$REPLY" | gh secret set SF_USERNAME --env "$ENV"
-    echo "✓ Secret 'SF_USERNAME' set."
-else
-    echo "Skipped SF_USERNAME."
-fi
+# set_key_secret <name> <prompt> <default file>: a private key, base64-encoded
+# as the workflow expects, straight from the file to gh.
+function set_key_secret() {
+    ask "$2" "$3"
+    if [[ -f "$REPLY" ]]; then
+        base64 < "$REPLY" | gh secret set "$1" --env "$ENV"
+        echo "✓ Secret '$1' set from '$REPLY' (base64 encoded)."
+    else
+        echo "Warning: File '$REPLY' not found. Skipped $1."
+    fi
+}
 
-ask "Enter path to your Salesforce JWT private key file:" "server-deploy.key"
-KEY_FILE=$REPLY
-if [[ -f "$KEY_FILE" ]]; then
-    # The deploy workflow expects the key to be base64 encoded.
-    base64 -i "$KEY_FILE" | gh secret set SF_JWT_KEY --env "$ENV"
-    echo "✓ Secret 'SF_JWT_KEY' set from '$KEY_FILE' (base64 encoded)."
-else
-    echo "Warning: File '$KEY_FILE' not found. Skipped SF_JWT_KEY."
-fi
+echo "The deploy user (the pipeline signs in to Salesforce as it):"
+ask_secret "Enter SF_CONSUMER_KEY (from the Cloud Agentic IoT Deploy app)"
+set_secret SF_CONSUMER_KEY "$REPLY"
+ask "Enter SF_USERNAME (e.g., deploy@iot-dev.example.com)" ""
+set_secret SF_USERNAME "$REPLY"
+set_key_secret SF_JWT_KEY "Enter path to the deploy user's JWT private key file" "scripts/server-deploy.key"
 
-ask "Enter AWS_ROLE_ARN (for OIDC):" ""
-if [[ -n "$REPLY" ]]; then
-    echo "$REPLY" | gh secret set AWS_ROLE_ARN --env "$ENV"
-    echo "✓ Secret 'AWS_ROLE_ARN' set."
-else
-    echo "Skipped AWS_ROLE_ARN."
+echo
+echo "The integration user (scripts/seed-ssm.sh copies these into SSM for the Lambdas)."
+echo "  No Integration app yet? Skip them: the first run writes placeholders, and"
+echo "  you run this again once the app exists (docs/SETUP.md, section 6.3)."
+ask_secret "Enter SF_INTEGRATION_CONSUMER_KEY (from the Cloud Agentic IoT Integration app)"
+set_secret SF_INTEGRATION_CONSUMER_KEY "$REPLY"
+ask "Enter SF_INTEGRATION_USERNAME (e.g., integration@iot-dev.example.com)" ""
+set_secret SF_INTEGRATION_USERNAME "$REPLY"
+set_key_secret SF_INTEGRATION_JWT_KEY "Enter path to the integration user's JWT private key file" "scripts/server-integration.key"
+
+ask_secret "Enter SLACK_SIGNING_SECRET (optional; Enter skips, and the Slack stack is skipped)"
+set_secret SLACK_SIGNING_SECRET "$REPLY"
+
+# The bootstrap stack (scripts/bootstrap-aws.sh) made the role; read its ARN
+# rather than copy it, when this shell can see that account.
+role_default=""
+if command -v aws &> /dev/null; then
+    role_default=$(aws cloudformation describe-stacks --stack-name "cloud-agentic-iot-bootstrap-$ENV" \
+        --query "Stacks[0].Outputs[?OutputKey=='DeployRoleArn'].OutputValue" --output text 2> /dev/null || true)
+    if [[ "$role_default" == "None" ]]; then role_default=""; fi
 fi
+ask "Enter AWS_ROLE_ARN (the bootstrap stack's DeployRoleArn)" "$role_default"
+set_secret AWS_ROLE_ARN "$REPLY"
 
 echo "---"
 
 # 5. Set variables
 echo "Now setting variables (values will be visible)."
 
-ask "Enter AWS_REGION:" "us-east-1"
+# The Live Status card connects to AWS IoT over a WebSocket, and Salesforce
+# allows only the Regions force-app lists as CSP trusted sites.
+ask "Enter AWS_REGION:" "ca-central-1"
 if [[ -n "$REPLY" ]]; then
+    csp="force-app/main/default/cspTrustedSites/AWS_IoT_WebSocket_${REPLY//-/_}.cspTrustedSite-meta.xml"
+    if [[ ! -f "$(dirname "$0")/../$csp" ]]; then
+        echo "Warning: $csp does not exist, so the Live Status card would be blocked in $REPLY. Add it before deploying."
+    fi
     gh variable set AWS_REGION --body "$REPLY" --env "$ENV"
     echo "✓ Variable 'AWS_REGION' set."
 else
     echo "Skipped AWS_REGION."
+fi
+
+ask "Enter ALARM_EMAIL (who the CloudWatch alarms email; Enter skips)" ""
+if [[ -n "$REPLY" ]]; then
+    gh variable set ALARM_EMAIL --body "$REPLY" --env "$ENV"
+    echo "✓ Variable 'ALARM_EMAIL' set. Confirm the subscription in the email AWS sends after the first deploy."
+else
+    echo "Skipped ALARM_EMAIL."
 fi
 
 # The deploy workflow passes this straight to `sf org login jwt --instance-url`.
@@ -151,7 +206,21 @@ else
     echo "Skipped SF_LOGIN_URL."
 fi
 
+# AUTO_DEPLOY is a repository variable: it decides whether a push to a branch
+# deploys at all (.github/workflows/deploy.yml).
+current=$(gh variable get AUTO_DEPLOY 2> /dev/null || true)
+echo
+echo "AUTO_DEPLOY is '${current:-not set}'. Pushes to a branch deploy only when it names the branch."
+read -rp "  Let pushes to '$ENV' deploy (adds it to AUTO_DEPLOY)? [y/N] " answer
+if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
+    case " $current " in
+        *" $ENV "*) echo "✓ AUTO_DEPLOY already names $ENV." ;;
+        *) gh variable set AUTO_DEPLOY --body "${current:+$current }$ENV"
+           echo "✓ AUTO_DEPLOY is now '${current:+$current }$ENV'." ;;
+    esac
+fi
+
 echo
 echo "---"
 echo "✅ Setup complete for environment '$ENV'."
-echo "You can add more secrets/variables to this script as needed."
+echo "Next: Actions -> Deploy -> Run workflow on '$ENV' (docs/SETUP.md, section 6.3)."
