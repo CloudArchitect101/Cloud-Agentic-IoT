@@ -32,6 +32,12 @@ connect and disconnect events:
 They change only when the board connects or disconnects, so they work whether
 or not anyone has the card open, and a list view or report can filter on them.
 
+A fourth, **Case Alert**, is checked while the device has an open Case in
+Care_Team_Queue, and the patient monitor's servo then sweeps without stopping
+(firmware 2.3.0). When a board comes online, Salesforce sends it that state
+again as a `CASE_ALERT` Device Command, since a change sent while it was away
+never reached it ([README, chapter 03](../README.md#room-temperature-demo-rule)).
+
 **On the card**, while it is on screen:
 
 - **Connection**, from the fields above, in green or red.
@@ -165,7 +171,7 @@ two thirds of that.
 | Live readings | **None.** No API call, no record, no Apex, no storage, no platform event | nothing |
 | Opening the card, and every 10 min while it stays visible | One Apex call (`DeviceLiveController.start`): one SOQL query, one callout, no DML | Per-transaction limits only (1 of 100 callouts). Callouts out of Salesforce do not count against the org's daily API requests |
 | Fallback, only while the live connection is down | One Apex call (`latest`) every 5 s, one callout | Same |
-| Connection fields | One REST call per batch of changes, up to 100 changes a batch (10 in Dev, where most batches hold one): one SOQL query, one update | The daily API request allocation (15,000 a day in a Developer Edition). A board that reconnects a few times a day costs a few calls a day; none while boards stay connected |
+| Connection fields | One REST call per batch of changes, up to 100 changes a batch (10 in Dev, where most batches hold one): one SOQL query, one update. A batch with boards coming online whose case alert is on, or was turned off while they were away, adds up to one query, one insert of `CASE_ALERT` Device Commands and one send job | The daily API request allocation (15,000 a day in a Developer Edition). A board that reconnects a few times a day costs a few calls a day; none while boards stay connected |
 | Storage | Three fields on the Asset | No new records |
 
 In the browser, the card handles one small message every 2 seconds and
