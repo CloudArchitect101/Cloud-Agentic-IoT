@@ -28,6 +28,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | [ARCHITECTURE-OVERVIEW.md](docs/ARCHITECTURE-OVERVIEW.md) | The whole system in one diagram, and what each component is for. |
 | [HOW-IT-CONNECTS.md](docs/HOW-IT-CONNECTS.md) | How the chapters form one system, the three shared integration seams, and the order to demo them in. |
 | [DATA-MODEL.md](docs/DATA-MODEL.md) | Why each object is standard or custom — the "why didn't you just use X" answers. |
+| [DATA-CLOUD.md](docs/DATA-CLOUD.md) | Room readings into Data Cloud: the CSV copy of the S3 archive, how Data Cloud reads it (a role, or a key in an AWS project), the data stream and data model object, the two calculated insights, what is code and what is by hand, and how to check each step. |
 | [DEVICE-IDENTITY.md](docs/DEVICE-IDENTITY.md) | How WiFi credentials and AWS certificates get onto a device, why they survive every OTA update, and how a job finds the right device. |
 | [LIVE-STATUS.md](docs/LIVE-STATUS.md) | Whether a board is online, and its readings every 2 s while its card is open: how it works, the speeds, what it costs in AWS and in Salesforce limits, and what to check when the card waits. |
 | [SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md) | The app's Home page: this month's AWS spend against its limit and the Salesforce limits the org has used; where each number comes from, how fresh it is, what it costs, and what to check when one is missing. |
@@ -52,6 +53,7 @@ graph TB
         F[Bedrock: Embeddings]
         G[SQS: Alerts]
         H[AWS IoT Jobs + S3: OTA Firmware]
+        S[S3: readings archive + Data Cloud CSV]
     end
 
     subgraph "Salesforce — Dev / Prod orgs"
@@ -69,7 +71,8 @@ graph TB
     C -- state changes + room-temp reports --> K
     C --> D
     D --> G
-    D -- Sync --> J
+    C -- every reading --> S
+    S -- CSV, Amazon S3 connector --> J
     J -- Chunk & Embed --> F
     C -- Upsert device status --> I
     G --> L
@@ -99,6 +102,7 @@ Cloud-Agentic-IoT/
 │   ├── libraries/CloudAgenticDevice/  # Shared runtime: NVS, provisioning, WiFi, MQTT, OTA
 │   ├── patient-monitor/               # DHT11 vitals + medication servo
 │   └── queue-indicator/               # Servo driven by Case queue depth
+├── datacloud/                         # Data Cloud: the room readings' columns, the calculated insights' SQL
 ├── mulesoft/                          # The iPaaS alternative to the ingestion Lambda (a design sketch)
 ├── docs/                              # see the Documentation table above
 ├── scripts/                           # Device setup, provisioning, chapter scaffolding
@@ -211,7 +215,16 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 **3. Slack app.** Create it at api.slack.com, add the `/patient-status` and `/dispense-medication` slash commands, and set each one's Request URL to the `SlackCommandsUrl` output of the Slack stack. Copy the Signing Secret into step 2's parameter.
 
-**4. Data Cloud ingestion.** Configure ingestion for the External Objects that carry patient vitals. Point-and-click only — there is no metadata API coverage for it.
+**4. Data Cloud ingestion.** Optional. Every room reading reaches Data Cloud through the S3 archive: with `DataCloudExport` on (Dev), `patient-vitals` also writes each batch as CSV under `datacloud/room-readings/`, and the `patient-vitals` stack lets Data Cloud list and read that folder and nothing else. What stays by hand is in [SETUP.md §7](docs/SETUP.md#7-data-cloud-room-readings-for-the-ward), in order:
+
+1. Turn the CSV copy on with the AWS deploy (step 1).
+2. Start the Amazon S3 connection in Data Cloud on the archive bucket, Parent Directory `datacloud/room-readings/` (step 2).
+3. Make what Data Cloud signs in with (step 3): in an AWS project, an IAM user whose access key you type into the connection and nowhere else (`DATA_CLOUD_READER_USER`); in a regular account, the IAM identity provider for the org's My Domain, then the stack's `cloud-agentic-iot-data-cloud-reader` role (`DATA_CLOUD_OIDC_PROVIDER_ARN`, `DATA_CLOUD_EXTERNAL_ID`), with no key at all.
+4. Test and save the connection (step 4).
+5. Create the data stream into the `Room_Readings` data lake object (step 5) and map it to the `Room_Reading` data model object (step 6).
+6. Create the two calculated insights, minutes out of the 30.0 C range per device per day and devices with no reading for 10 minutes, with `scripts/data-cloud-insights.sh` (step 7).
+
+[`docs/DATA-CLOUD.md`](docs/DATA-CLOUD.md) explains the path and how to check each step.
 
 **5. Case queue + its binding.** The deploy creates `Care_Team_Queue`, a Case queue (`force-app/main/default/queues/`); add its members in Setup → Queues. Put your indicator's IoT Thing name into `force-app/main/default/customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml`, then push — the binding is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so a queue of another name means changing those two values.
 
@@ -245,7 +258,8 @@ Two pieces are written and tested but **not yet wired** into the agent's action 
 | Named Credentials in Salesforce | Store secrets; created in Setup, not in metadata |
 | The Salesforce caller's IAM user and access key | The deploy identities may not create users or keys, and the key should exist only in Salesforce |
 | Slack app creation + signing secret | Lives in Slack's console |
-| Data Cloud ingestion config | Point-and-click configuration, no metadata API coverage |
+| Data Cloud connection, data stream and mapping | The connection holds a credential or a per-connection External ID, and Data Cloud metadata moves between orgs as a data kit retrieved from an org that has it, not as files written by hand ([DATA-CLOUD.md](docs/DATA-CLOUD.md#why-the-data-cloud-side-is-not-in-force-app)) |
+| The IAM user and key, or the identity provider, Data Cloud reads S3 with | The deploy identities may not create users, keys or identity providers |
 | Turning on Einstein and Agentforce | Accepting their terms is the org admin's decision. The settings that switch them on are documented for scratch orgs, not for deploying to an existing org |
 | Activating the Agentforce agent | A deliberate human checkpoint, not a deploy step |
 
@@ -385,9 +399,9 @@ A real, physical system you can walk end-to-end, not a mockup. Secure authentica
 
 Patient IoT data flowing from edge devices through **Data Cloud** into a RAG pipeline that lets agents retrieve patient context autonomously.
 
-The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and stores in DynamoDB → syncs to Salesforce via REST → Data Cloud ingests via External Objects → auto-chunks the time series → Bedrock embeds each chunk → agents retrieve by semantic search.
+The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and stores in DynamoDB and the S3 archive → syncs the readings someone acts on to Salesforce via REST → Data Cloud ingests every room reading from the archive's CSV copy into the `Room_Reading` data model object, with two calculated insights per device ([DATA-CLOUD.md](docs/DATA-CLOUD.md)) → auto-chunks the time series → Bedrock embeds each chunk → agents retrieve by semantic search. The ingestion and the insights are built; the chunking, embedding and retrieval are not yet.
 
-**Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`
+**Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`, `datacloud/`
 
 The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`).
 
@@ -685,6 +699,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 376 Node tests cover 15 of the 17 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, and the firmware's timing and command logic compiled for the host; 80 Python tests run the board, OTA, setup and deploy scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (22 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 400 Node tests cover 15 of the 17 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, Data Cloud's read access and its insights' SQL, and the firmware's timing and command logic compiled for the host; 87 Python tests run the board, OTA, setup, deploy and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (22 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)); and every room reading can reach Data Cloud, with two calculated insights per device ([DATA-CLOUD.md](docs/DATA-CLOUD.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
 PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.

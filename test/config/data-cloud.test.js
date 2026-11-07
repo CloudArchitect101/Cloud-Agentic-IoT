@@ -158,3 +158,22 @@ test('the names Data Cloud reads as stay out of config/<env>.json, which is publ
     assert.ok(deploy.includes(pair), `scripts/deploy-aws.sh must pass ${pair}`);
   }
 });
+
+test('the docs give Data Cloud the folder, the file names and the parameters the code uses', () => {
+  const guide = source('docs/DATA-CLOUD.md');
+  const setup = source('docs/SETUP.md');
+  for (const [name, text] of [['docs/DATA-CLOUD.md', guide], ['docs/SETUP.md', setup]]) {
+    assert.ok(text.includes(FOLDER), `${name} must name ${FOLDER}`);
+    assert.ok(text.includes(spec.file.fileNamePattern), `${name} must name ${spec.file.fileNamePattern}`);
+  }
+  for (const variable of ['DATA_CLOUD_OIDC_PROVIDER_ARN', 'DATA_CLOUD_EXTERNAL_ID', 'DATA_CLOUD_READER_USER']) {
+    assert.ok(setup.includes(variable), `docs/SETUP.md must say how to set ${variable}`);
+  }
+  // Every link to the setup section lands on its heading.
+  assert.match(setup, /^## 7\. Data Cloud: room readings for the ward$/m);
+  for (const file of ['README.md', 'docs/DATA-CLOUD.md', 'docs/TRY-IT.md']) {
+    assert.ok(source(file).includes('SETUP.md#7-data-cloud-room-readings-for-the-ward'), `${file} links to SETUP.md §7`);
+  }
+  // Each column of the file is in the guide's table.
+  for (const column of spec.columns) assert.ok(guide.includes(`| \`${column.name}\` |`), `docs/DATA-CLOUD.md: ${column.name}`);
+});
