@@ -215,11 +215,21 @@ private class CaseAlertServiceTest {
         undelete theCase;
         Test.stopTest();
 
+        // The rule counts the restored Case only while the queue still owns
+        // it, and Salesforce may hand an undeleted Case to whoever restored
+        // it. So the expected state follows the owner the Case came back with.
+        Case restored = [SELECT OwnerId, IsClosed FROM Case WHERE Id = :theCase.Id];
+        Boolean inQueue = restored.OwnerId == queueId(QUEUE) && !restored.IsClosed;
+
         List<Device_Command__c> alerts = alerts();
-        Assert.areEqual(3, alerts.size(), 'On, off, on');
         Assert.isFalse(alerts[1].Case_Alert_On__c, 'Off when deleted');
-        Assert.isTrue(alerts[2].Case_Alert_On__c, 'On when restored');
-        Assert.isTrue(alertShown(pm1.Id), 'Shown on');
+        if (inQueue) {
+            Assert.areEqual(3, alerts.size(), 'On, off, on: ' + alerts);
+            Assert.isTrue(alerts[2].Case_Alert_On__c, 'On when restored to the queue');
+        } else {
+            Assert.areEqual(2, alerts.size(), 'On, off, and nothing for a Case restored to a person: ' + alerts);
+        }
+        Assert.areEqual(inQueue, alertShown(pm1.Id), 'Shown on only when restored to the queue');
     }
 
     @IsTest
