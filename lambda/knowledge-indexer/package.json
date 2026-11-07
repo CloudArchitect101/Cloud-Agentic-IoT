@@ -1,6 +1,12 @@
 {
   "name": "knowledge-indexer",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Embeds the ward's SOPs (knowledge/sops) and writes the index procedure-search reads",
   "main": "index.js",
-  "dependencies": { "@aws-sdk/client-bedrock-runtime": "^3.665.0" }
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.665.0",
+    "@aws-sdk/client-s3": "^3.665.0",
+    "@cloud-agentic-iot/shared": "file:../shared"
+  }
 }

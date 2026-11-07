@@ -44,6 +44,12 @@
       "SpendCacheHours": 24,
       "SpendCostExplorer": "false"
     },
+    "knowledge-indexer": {
+      "SearchTimeoutSeconds": 15,
+      "IndexCacheSeconds": 300,
+      "MinScore": 0.25,
+      "IndexVersionsKeptDays": 30
+    },
     "mcp-server": {
       "RoomTempAlertCelsius": 30,
       "OfflineAfterMinutes": 5,

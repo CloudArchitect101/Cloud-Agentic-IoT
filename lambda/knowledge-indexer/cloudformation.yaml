@@ -1,0 +1,202 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  The ward's standard operating procedures as a search index: the bucket the
+  index lives in, the knowledge-indexer that embeds knowledge/sops with
+  Titan Text Embeddings V2 and writes it (scripts/index-sops.sh runs it on
+  every deploy), and procedure-search, which the device API's
+  POST /find-procedure (queue-relay stack) calls for the Patient Care
+  Agent's Find Procedure action. Nothing here runs while nobody asks: no
+  vector database, no cluster. See docs/SOP-GROUNDING.md.
+
+# Values below come from config/<env>.json ("knowledge-indexer").
+Parameters:
+  SearchTimeoutSeconds:
+    Type: Number
+    Default: 15
+    MinValue: 5
+    MaxValue: 29
+    Description: >-
+      Below the device API's DeviceApiTimeoutSeconds (20) and Salesforce's
+      Callout_Timeout_Seconds__c (25): a cold start, one S3 read and one
+      Bedrock call.
+  IndexCacheSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 0
+    MaxValue: 3600
+    Description: >-
+      How long a warm procedure-search keeps the index it read. A new index
+      reaches every function within this long of a deploy.
+  MinScore:
+    Type: Number
+    Default: 0.25
+    MinValue: 0
+    MaxValue: 1
+    Description: >-
+      The least cosine similarity a passage needs to be returned. Below it a
+      question gets no passages, and the agent says no procedure covers it.
+  IndexVersionsKeptDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 365
+    Description: >-
+      How long the bucket keeps an index after a deploy replaces it, so a
+      bad index can be put back with one copy.
+
+Resources:
+  # One object, sops/index.json, replaced whole by each index run. Versioned
+  # so the previous index can be restored; older versions expire.
+  IndexBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-replaced-indexes
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: !Ref IndexVersionsKeptDays
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+
+  IndexBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref IndexBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: TlsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt IndexBucket.Arn
+              - !Sub '${IndexBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # Embeds and writes; reads the index first to skip an unchanged run.
+  # test/lambda/procedure-search.test.js pins this role against the calls
+  # the function makes.
+  KnowledgeIndexerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EmbedAndWriteTheIndex
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${IndexBucket.Arn}/sops/index.json'
+              # Without it, S3 answers a missing index with 403, not NoSuchKey.
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt IndexBucket.Arn
+
+  KnowledgeIndexerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-knowledge-indexer
+      Runtime: nodejs22.x
+      Handler: index.handler
+      # A few dozen embeddings, one after another.
+      Timeout: 120
+      MemorySize: 256
+      Role: !GetAtt KnowledgeIndexerRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            ok: false,
+            problems: ['Placeholder - the deploy pipeline replaces this with the real bundle']
+          });
+      Environment:
+        Variables:
+          INDEX_BUCKET: !Ref IndexBucket
+          INDEX_KEY: sops/index.json
+
+  # Reads the index and embeds a question. No write anywhere.
+  ProcedureSearchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EmbedTheQuestionReadTheIndex
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: bedrock:InvokeModel
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0'
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${IndexBucket.Arn}/sops/index.json'
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt IndexBucket.Arn
+
+  ProcedureSearchFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-procedure-search
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref SearchTimeoutSeconds
+      MemorySize: 256
+      Role: !GetAtt ProcedureSearchRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          INDEX_BUCKET: !Ref IndexBucket
+          INDEX_KEY: sops/index.json
+          CACHE_SECONDS: !Ref IndexCacheSeconds
+          MIN_SCORE: !Ref MinScore
+
+Outputs:
+  IndexBucketName:
+    Description: Holds sops/index.json, the procedure index.
+    Value: !Ref IndexBucket
+  ProcedureSearchFunctionArn:
+    Description: Behind the device API's POST /find-procedure (queue-relay stack).
+    Value: !GetAtt ProcedureSearchFunction.Arn
