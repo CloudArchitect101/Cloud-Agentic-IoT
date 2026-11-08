@@ -179,6 +179,11 @@ public with sharing class DeviceReadingsAgentAction {
         res.latestTemperature = newest.Temperature__c;
         res.latestPatientState = newest.Patient_State__c;
         res.latestRiskScore = newest.Risk_Score__c;
+        // Nothing writes Asset.Last_Telemetry_At__c yet, so fall back to the
+        // newest reading: a null here made the device look silent.
+        if (res.lastTelemetryAt == null) {
+            res.lastTelemetryAt = newest.Timestamp__c;
+        }
 
         List<String> lines = new List<String>();
         for (Patient_Vitals__c reading : latest) {

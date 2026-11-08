@@ -107,6 +107,22 @@ private class DeviceReadingsAgentActionTest {
     }
 
     @IsTest
+    static void lastTelemetryFallsBackToTheNewestReading() {
+        Asset d = device('Test8');
+        d.Last_Telemetry_At__c = null;
+        TriggerHandler.bypass('AssetTriggerHandler');
+        update d;
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+        insert new List<Patient_Vitals__c>{ reading('Test8', 1, 70), reading('Test8', 4, 72) };
+
+        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+
+        Assert.isTrue(res.success, res.message);
+        Assert.areEqual(Datetime.newInstanceGmt(2026, 11, 6, 12, 4, 0), res.lastTelemetryAt,
+            'With no Last Telemetry At on the Asset, the newest reading\'s time');
+    }
+
+    @IsTest
     static void returnsTheLatestReadingsNewestFirstWithTheConnection() {
         device('Test8');
         List<Patient_Vitals__c> rows = new List<Patient_Vitals__c>();
