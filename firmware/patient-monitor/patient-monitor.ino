@@ -3,9 +3,10 @@
  * @brief The firmware of every board: patient monitors and ward indicators.
  *
  * Reads a DHT11 and drives a servo: a medication dispenser that swings out a
- * dose (DISPENSE_MEDICATION); sweeps back and forth without stopping while a
- * Case for this device waits in the care team queue (CASE_ALERT, sent by
- * Salesforce's CaseAlertService); and, on a ward's internal board such as a
+ * dose (DISPENSE_MEDICATION); sweeps back and forth without stopping while its
+ * own DHT11 reads 30 C or more, and stops once a reading is below 30 C, decided
+ * on the board from every reading, with no Case involved; and, on a ward's
+ * internal board such as a
  * nurse-station indicator, turns while any Case waits in the queue, faster as
  * it fills (QUEUE_DEPTH, sent by CaseQueueMonitorService). Which of these a
  * board is told depends on its Asset's record type in Salesforce, not on its
@@ -25,14 +26,14 @@
 #include <DHT.h>
 #include <ESP32Servo.h>
 #include <Preferences.h>
-#include "CaseAlertSweep.h"
+#include "ServoSweep.h"
 #include "ServoDemand.h"
 #include "SensorPresence.h"
 
 // Raise this to ship a change. The pipeline publishes each version once and a
 // board installs only a version it is not already running, so a change under
 // the same number never reaches a board; the pull request checks fail it.
-#define FIRMWARE_VERSION "2.4.0"
+#define FIRMWARE_VERSION "2.5.0"
 
 // Seconds between readings until the fleet sets its own. The fleet's value
 // (scripts/ota.sh interval, or SET_TELEMETRY_INTERVAL through the device
@@ -49,7 +50,7 @@ CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY
 #define DHT_PIN   4
 #define SERVO_PIN 5
 // Uncomment for a continuous-rotation servo (FS90R / SG90-360): it spins
-// while a Case waits instead of sweeping. A standard SG90 is positional
+// while the room is hot instead of sweeping. A standard SG90 is positional
 // (0-180) and physically cannot spin.
 // #define CONTINUOUS_ROTATION_SERVO
 
@@ -57,14 +58,20 @@ DHT dht(DHT_PIN, DHT11);
 Servo dispenser;
 pm::SensorPresence sensor;
 
-// The case alert, kept in NVS so the motor goes on turning after a restart
-// or an update while the Case still waits. The library's namespaces are
-// identity, wifi and config; this one is the sketch's own. The queue's depth
-// is not kept: Salesforce sends it again every time the board connects.
+// Up to 2.4.0 the board kept a Case alert here. 2.5.0 follows the room
+// temperature instead, so it clears what an older version left, once, at
+// start: a stale "on" must not keep the motor turning. The library's
+// namespaces are identity, wifi and config; this one was the sketch's own.
+// Nothing else is kept: the room is read again within seconds, and
+// Salesforce sends the queue's depth every time the board connects.
 #define NVS_CASE_ALERT "caseAlert"
-Preferences caseAlertStore;
 pm::ServoDemand demand;
-pm::CaseAlertSweep sweep;
+
+// How often the board reads its DHT11 for the motor, between the readings it
+// stores. The DHT11 answers at most once a second.
+#define ROOM_CHECK_MS 5000
+uint32_t lastRoomCheck = 0;
+pm::ServoSweep sweep;
 
 // Where the servo rests: arm home on a positional servo, standing still on a
 // continuous one.
@@ -76,15 +83,18 @@ void park() {
 #endif
 }
 
-bool storedCaseAlert() {
-  caseAlertStore.begin(NVS_CASE_ALERT, false);   // read-write creates the namespace, so no "not found" log
-  bool active = caseAlertStore.getBool("active", false);
-  caseAlertStore.end();
-  return active;
+void clearOldCaseAlert() {
+  Preferences old;
+  old.begin(NVS_CASE_ALERT, false);   // read-write creates the namespace, so no "not found" log
+  if (old.isKey("active")) {
+    old.clear();
+    Serial.println("case alert: retired in 2.5.0, the motor follows the room temperature");
+  }
+  old.end();
 }
 
-// Sets the servo going, faster or slower, or stops it, for what the case
-// alert and the queue ask now.
+// Sets the servo going, faster or slower, or stops it, for what the room
+// and the queue ask now.
 void applyDemand() {
   uint32_t now = millis();
   if (demand.active()) {
@@ -100,21 +110,14 @@ void applyDemand() {
 #endif
 }
 
-// Turns the case alert on or off. `save` is false when the state came from
-// NVS: written only when it changes, since flash wears with every write.
-void setCaseAlert(bool active, bool save) {
-  if (!demand.setCaseAlert(active)) {
-    Serial.printf("case alert: already %s\n", active ? "on" : "off");
-    return;
-  }
-  if (save) {
-    caseAlertStore.begin(NVS_CASE_ALERT, false);
-    caseAlertStore.putBool("active", active);
-    caseAlertStore.end();
-  }
+// A good reading of this board's DHT11: the motor turns from 30 C and stops
+// below it. Said only when it changes.
+void roomReading(float celsius) {
+  bool hot = pm::roomIsHot(celsius);
+  if (!demand.setRoomHot(hot)) return;
   applyDemand();
-  Serial.printf("case alert: %s\n", active ? "on, motor turning"
-                : demand.active() ? "off, motor turning for the queue" : "off, motor stopped");
+  Serial.printf("room %.1fC: %s\n", celsius, hot ? "30 C or more, motor turning"
+                : demand.active() ? "below 30 C, motor turning for the queue" : "below 30 C, motor stopped");
 }
 
 // QUEUE_DEPTH: how many Cases wait in the queue this board follows, and how
@@ -127,7 +130,7 @@ void setQueue(JsonDocument& doc) {
   if (changed) applyDemand();
   Serial.printf("queue: %d case(s), intensity %d%% -> %s\n", demand.openCases(), demand.queueIntensity(),
                 demand.queueIntensity() > 0 ? "motor turning"
-                : demand.active() ? "motor turning for the case alert" : "motor stopped");
+                : demand.active() ? "motor turning for the room" : "motor stopped");
 
   StaticJsonDocument<200> status;
   status["deviceId"]      = device.thingName();
@@ -173,14 +176,9 @@ bool onCommand(JsonDocument& doc) {
     return true;
   }
   if (strcmp(op, "CASE_ALERT") == 0) {
-    // active is true or false; anything else is refused, and the motor stays
-    // as it was. A repeat (Salesforce sends the state again when the board
-    // reconnects) changes nothing and is still done.
-    if (!doc["active"].is<bool>()) {
-      Serial.println("case alert: refused, active must be true or false");
-      return false;
-    }
-    setCaseAlert(doc["active"].as<bool>(), true);
+    // Retired in 2.5.0: the motor follows the room, not the Cases. Answered
+    // as done, so an org that still sends it sees no failed command.
+    Serial.println("case alert: ignored, the motor follows the room temperature");
     return true;
   }
   if (strcmp(op, "QUEUE_DEPTH") == 0) {
@@ -216,10 +214,7 @@ void setup() {
   dht.begin();
   dispenser.attach(SERVO_PIN);
   park();
-  // A Case that was waiting before a restart or an update still is, as far
-  // as this board knows, so the motor turns again before it reconnects.
-  // Salesforce sends the state again once it is online.
-  if (storedCaseAlert()) setCaseAlert(true, false);
+  clearOldCaseAlert();
 
   device.onCommand(onCommand);
   if (!device.begin()) return;   // provisioning mode; begin() reboots on success
@@ -233,7 +228,10 @@ void loop() {
   // keeps both). Ask both on every pass; either can fall due alone.
   bool store = device.telemetryDue();
   bool live  = device.liveDue();
-  if (!store && !live) return;
+  // And a third, for the motor alone: the room every few seconds, so it
+  // starts and stops within seconds of 30 C, not at the next stored reading.
+  bool room = !sensor.missing() && millis() - lastRoomCheck >= ROOM_CHECK_MS;
+  if (!store && !live && !room) return;
 
   // One read serves both. Live mode's default of 2 s is as fast as it helps to
   // go: asked again sooner, the DHT library returns the reading it already has.
@@ -245,7 +243,12 @@ void loop() {
     h = dht.readHumidity();
     t = dht.readTemperature();
     ok = !isnan(h) && !isnan(t);
+    lastRoomCheck = millis();
+    // A failed read changes nothing: the motor keeps doing what the last
+    // good reading said.
+    if (ok) roomReading(t);
   }
+  if (!store && !live) return;
 
   StaticJsonDocument<256> doc;   // room for what publishLive() adds
   doc["deviceId"] = device.thingName();
@@ -257,6 +260,11 @@ void loop() {
   if (store) {
     // Said on stored readings only: every 2 s it would bury the console.
     reportSensor(ok);
+    // A sensor that stopped answering cannot say the room is still hot.
+    if (sensor.missing() && demand.setRoomHot(false)) {
+      applyDemand();
+      Serial.println("room: no sensor, motor stopped for the room");
+    }
     if (ok) {
       device.publishTelemetry(doc);
       Serial.printf("telemetry: %.1fC %.0f%%\n", t, h);

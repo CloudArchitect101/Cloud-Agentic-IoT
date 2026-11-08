@@ -3,7 +3,7 @@
 // needed: the headers are plain C++ on purpose.
 //
 // ServoDemand is why the one firmware every board runs turns its servo: a
-// patient device's own Case (CASE_ALERT), the whole queue on an internal
+// patient board's own room at 30 C or more, the whole queue on an internal
 // board (QUEUE_DEPTH), or both. SensorPresence keeps a board without a DHT11
 // quiet.
 
@@ -26,15 +26,23 @@ static void still_until_asked() {
   CHECK(demand.continuousWrite() == pm::CONTINUOUS_STOP);
 }
 
-static void a_case_alert_alone_sweeps_as_before() {
+static void a_hot_room_alone_sweeps() {
   ServoDemand demand;
-  CHECK(demand.setCaseAlert(true));
-  CHECK(!demand.setCaseAlert(true));   // a repeat
+  CHECK(demand.setRoomHot(true));
+  CHECK(!demand.setRoomHot(true));   // a repeat
   CHECK(demand.active());
   CHECK(demand.sweepPeriodMs() == pm::SWEEP_PERIOD_MS);
-  CHECK(demand.continuousWrite() == pm::CONTINUOUS_CASE_ALERT);
-  CHECK(demand.setCaseAlert(false));
+  CHECK(demand.continuousWrite() == pm::CONTINUOUS_ROOM_HOT);
+  CHECK(demand.setRoomHot(false));
   CHECK(!demand.active());
+}
+
+static void hot_means_30_or_more() {
+  CHECK(pm::roomIsHot(30.0f));
+  CHECK(pm::roomIsHot(31.0f));
+  CHECK(!pm::roomIsHot(29.9f));
+  CHECK(!pm::roomIsHot(29.0f));
+  CHECK(!pm::roomIsHot(-5.0f));
 }
 
 static void the_queue_alone_turns_faster_as_it_fills() {
@@ -74,18 +82,18 @@ static void out_of_range_is_kept_in_range() {
 
 static void either_turns_it_and_the_faster_wins() {
   ServoDemand demand;
-  demand.setCaseAlert(true);
-  demand.setQueue(20, 1);   // slower than the case alert
+  demand.setRoomHot(true);
+  demand.setQueue(20, 1);   // slower than the room
   CHECK(demand.sweepPeriodMs() == pm::SWEEP_PERIOD_MS);
-  CHECK(demand.continuousWrite() == pm::CONTINUOUS_CASE_ALERT);
+  CHECK(demand.continuousWrite() == pm::CONTINUOUS_ROOM_HOT);
   demand.setQueue(100, 9);   // faster
   CHECK(demand.sweepPeriodMs() == 1080);
   CHECK(demand.continuousWrite() == 180);
-  demand.setQueue(0, 0);   // the queue empties: the case alert still turns it
+  demand.setQueue(0, 0);   // the queue empties: the hot room still turns it
   CHECK(demand.active());
   CHECK(demand.sweepPeriodMs() == pm::SWEEP_PERIOD_MS);
   demand.setQueue(40, 2);
-  demand.setCaseAlert(false);   // the Case is closed: the queue still turns it
+  demand.setRoomHot(false);   // the room cools: the queue still turns it
   CHECK(demand.active());
   CHECK(demand.sweepPeriodMs() == pm::queueSweepPeriodMs(40));
 }
@@ -117,7 +125,8 @@ static void a_sensor_that_stops_is_reported_then_quiet() {
 
 int main() {
   still_until_asked();
-  a_case_alert_alone_sweeps_as_before();
+  a_hot_room_alone_sweeps();
+  hot_means_30_or_more();
   the_queue_alone_turns_faster_as_it_fills();
   out_of_range_is_kept_in_range();
   either_turns_it_and_the_faster_wins();

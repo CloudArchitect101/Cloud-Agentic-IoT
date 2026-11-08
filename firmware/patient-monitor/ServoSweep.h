@@ -1,9 +1,9 @@
 #pragma once
 /**
- * CaseAlertSweep - where the patient monitor's servo should be while it
+ * ServoSweep - where the patient monitor's servo should be while it
  * turns: a sweep from 0 to 180 degrees and back, over and over. One full
- * sweep takes SWEEP_PERIOD_MS while a Case waits for the care team
- * (CASE_ALERT); the queue's depth (QUEUE_DEPTH, ServoDemand.h) can make it
+ * sweep takes SWEEP_PERIOD_MS while a patient board's room is at 30 C or
+ * more (ServoDemand.h); the queue's depth (QUEUE_DEPTH, ServoDemand.h) can make it
  * faster or slower with setPeriod, and the arm carries on from where it is.
  *
  * The angle comes from the clock, not from counting steps, so a pass of
@@ -23,9 +23,9 @@ namespace pm {
 const uint32_t SWEEP_PERIOD_MS = 2000;
 const int SWEEP_MAX_ANGLE = 180;
 
-class CaseAlertSweep {
+class ServoSweep {
  public:
-  CaseAlertSweep() : _active(false), _start(0), _period(SWEEP_PERIOD_MS), _written(-1) {}
+  ServoSweep() : _active(false), _start(0), _period(SWEEP_PERIOD_MS), _written(-1) {}
 
   bool active() const { return _active; }
   uint32_t period() const { return _period; }
@@ -43,7 +43,7 @@ class CaseAlertSweep {
   }
 
   /** Turns the sweep on or off at `now`. False when it already was: a
-   *  repeated CASE_ALERT on leaves a sweep that is running alone. */
+   *  repeated "on" leaves a sweep that is running alone. */
   bool set(bool on, uint32_t now) {
     if (on == _active) return false;
     _active = on;

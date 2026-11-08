@@ -5,8 +5,12 @@
  * Every board runs this one firmware, and Salesforce decides what it is
  * told (DeviceRoles in Salesforce):
  *
- *   - CASE_ALERT: a patient device's own Case waits in the care team queue.
- *     The positional servo sweeps once every SWEEP_PERIOD_MS (2 s).
+ *   - The room: a patient board's own DHT11 reads ROOM_HOT_C (30 C) or more.
+ *     The board decides this itself, from every reading, with no Case and
+ *     no cloud round trip, so it works while offline too. The positional
+ *     servo sweeps once every SWEEP_PERIOD_MS (2 s) until a reading is
+ *     below 30 C again. (Until 2.5.0 this came from the device's Cases,
+ *     CASE_ALERT; the board now acknowledges that command and ignores it.)
  *   - QUEUE_DEPTH: an internal board (a nurse-station indicator) follows the
  *     whole queue. intensity 0-100 comes from the number of open Cases; 0
  *     stops it. The faster the queue fills, the faster the sweep, from about
@@ -17,19 +21,25 @@
  * stops only when neither does. A continuous-rotation servo spins instead,
  * at the larger of the two speeds.
  *
- * Plain C++ like CaseAlertSweep.h, so test/firmware compiles and checks it on
+ * Plain C++ like ServoSweep.h, so test/firmware compiles and checks it on
  * any machine with a C++ compiler.
  */
 
 #include <stdint.h>
-#include "CaseAlertSweep.h"
+#include "ServoSweep.h"
 
 namespace pm {
 
 // A continuous-rotation servo stands still at 90 and turns faster the
 // further the value is from it.
 const int CONTINUOUS_STOP = 90;
-const int CONTINUOUS_CASE_ALERT = 135;   // about half speed
+const int CONTINUOUS_ROOM_HOT = 135;   // about half speed
+
+// The room is hot at this temperature or more, and calm again below it.
+const float ROOM_HOT_C = 30.0f;
+
+/** Whether a reading in degrees C is hot: at ROOM_HOT_C or more. */
+inline bool roomIsHot(float celsius) { return celsius >= ROOM_HOT_C; }
 
 /** An intensity from a QUEUE_DEPTH message, kept to 0-100. */
 inline int clampIntensity(long value) {
@@ -50,16 +60,16 @@ inline uint32_t queueSweepPeriodMs(int intensity) {
 
 class ServoDemand {
  public:
-  ServoDemand() : _caseAlert(false), _queueIntensity(0), _openCases(0) {}
+  ServoDemand() : _roomHot(false), _queueIntensity(0), _openCases(0) {}
 
-  bool caseAlert() const { return _caseAlert; }
+  bool roomHot() const { return _roomHot; }
   int queueIntensity() const { return _queueIntensity; }
   int openCases() const { return _openCases; }
 
   /** False when it already was: nothing to change. */
-  bool setCaseAlert(bool on) {
-    if (on == _caseAlert) return false;
-    _caseAlert = on;
+  bool setRoomHot(bool on) {
+    if (on == _roomHot) return false;
+    _roomHot = on;
     return true;
   }
 
@@ -74,12 +84,12 @@ class ServoDemand {
   }
 
   /** Whether the servo should turn at all. */
-  bool active() const { return _caseAlert || _queueIntensity > 0; }
+  bool active() const { return _roomHot || _queueIntensity > 0; }
 
   /** One full sweep, at the faster of what is asked; 0 when nothing is. */
   uint32_t sweepPeriodMs() const {
     uint32_t period = 0;
-    if (_caseAlert) period = SWEEP_PERIOD_MS;
+    if (_roomHot) period = SWEEP_PERIOD_MS;
     uint32_t queue = queueSweepPeriodMs(_queueIntensity);
     if (queue && (!period || queue < period)) period = queue;
     return period;
@@ -88,14 +98,14 @@ class ServoDemand {
   /** What to write to a continuous-rotation servo: 90 stands still. */
   int continuousWrite() const {
     int speed = 0;
-    if (_caseAlert) speed = CONTINUOUS_CASE_ALERT - CONTINUOUS_STOP;
+    if (_roomHot) speed = CONTINUOUS_ROOM_HOT - CONTINUOUS_STOP;
     int queue = _queueIntensity * 90 / 100;
     if (queue > speed) speed = queue;
     return CONTINUOUS_STOP + speed;
   }
 
  private:
-  bool _caseAlert;
+  bool _roomHot;
   int _queueIntensity;
   int _openCases;
 };

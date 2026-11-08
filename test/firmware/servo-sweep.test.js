@@ -1,7 +1,7 @@
 'use strict';
 
-// Compiles and runs case_alert_sweep_test.cpp: the patient monitor's sweep
-// while a Case waits for the care team (CASE_ALERT): 0 to 180 degrees and
+// Compiles and runs servo_sweep_test.cpp: the patient monitor's sweep
+// while its room is hot or its queue has Cases: 0 to 180 degrees and
 // back, from the clock, a repeat that changes nothing, a dose that starts it
 // again from 0, and millis() wrapping. The header it tests is plain C++, so
 // any host compiler will do; without one (a bare laptop) the test is skipped,
@@ -14,7 +14,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const source = path.join(__dirname, 'case_alert_sweep_test.cpp');
+const source = path.join(__dirname, 'servo_sweep_test.cpp');
 
 function compiler() {
   for (const name of [process.env.CXX, 'c++', 'g++', 'clang++'].filter(Boolean)) {
@@ -31,7 +31,7 @@ test('firmware case alert: the sweep, a repeat, a dose, millis() wrap', (t) => {
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'case-alert-sweep-'));
   try {
-    const binary = path.join(dir, 'case_alert_sweep_test');
+    const binary = path.join(dir, 'servo_sweep_test');
     const build = spawnSync(cxx, ['-std=c++11', '-O2', '-Wall', '-Wextra', '-Werror', '-o', binary, source], { encoding: 'utf8' });
     assert.strictEqual(build.status, 0, `compile failed:\n${build.stderr}`);
 

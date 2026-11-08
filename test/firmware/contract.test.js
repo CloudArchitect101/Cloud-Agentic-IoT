@@ -216,16 +216,27 @@ test('CASE_ALERT and its active are the same in Salesforce, the device-command L
   assert.equal(CASE_ALERT, 'CASE_ALERT');
   assert.match(service, new RegExp(`CASE_ALERT_COMMAND = '${CASE_ALERT}';`));
   assert.ok(picklist.includes(`<fullName>${CASE_ALERT}</fullName>`), 'Device_Command__c.Command__c must offer CASE_ALERT');
-  assert.match(sketch, new RegExp(`strcmp\\(op, "${CASE_ALERT}"\\) == 0`));
+  // Since 2.5.0 the board acknowledges CASE_ALERT and ignores it: its motor
+  // follows its own room. An org that still sends it sees Acked, not Failed.
+  const caseAlert = sketch.match(/strcmp\(op, "CASE_ALERT"\) == 0\) \{([\s\S]*?)\n  \}/);
+  assert.ok(caseAlert, 'the patient monitor still answers CASE_ALERT');
+  assert.match(caseAlert[1], /return true;/);
 
   // The on or off travels as active, a JSON true or false.
   assert.match(sendJob, /body\.put\('active', command\.Case_Alert_On__c == true\)/);
   assert.match(read('lambda/device-command/index.js'), /typeof fields\.active !== 'boolean'/);
-  assert.match(sketch, /doc\["active"\]\.is<bool>\(\)/);
-  assert.match(sketch, /doc\["active"\]\.as<bool>\(\)/);
 });
 
-test('the patient monitor keeps the case alert in a namespace of its own', () => {
+test('the patient monitor turns its motor from its own room at 30 C, not from Cases', () => {
+  const sketch = read('firmware/patient-monitor/patient-monitor.ino');
+  const demand = read('firmware/patient-monitor/ServoDemand.h');
+  assert.match(demand, /const float ROOM_HOT_C = 30\.0f;/);
+  assert.match(demand, /return celsius >= ROOM_HOT_C;/);
+  assert.match(sketch, /if \(ok\) roomReading\(t\);/);
+  assert.doesNotMatch(sketch, /setCaseAlert/);
+});
+
+test('the namespace the patient monitor clears of an old case alert is its own', () => {
   const sketch = read('firmware/patient-monitor/patient-monitor.ino');
   const library = read('firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp');
   const ours = sketch.match(/#define NVS_CASE_ALERT "([^"]+)"/)[1];
