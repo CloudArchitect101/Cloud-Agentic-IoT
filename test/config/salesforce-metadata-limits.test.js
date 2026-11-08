@@ -104,6 +104,30 @@ test('the topic tells the agent to report a named device\'s readings even when F
   assert.match(cite[1], /offer to escalate/);
 });
 
+// An agent action deployed without input/schema.json and output/schema.json
+// deploys green, but the org drops it: the agent's topic showed "Actions 0"
+// and the retrieve said "an input or output schema is missing". Each schema
+// must also list exactly the Apex action's @InvocableVariable fields.
+test('every agent action ships input and output schemas that match its Apex', () => {
+  const dir = path.join(metadata, 'genAiFunctions');
+  for (const name of fs.readdirSync(dir)) {
+    const meta = fs.readFileSync(path.join(dir, name, `${name}.genAiFunction-meta.xml`), 'utf8');
+    const target = meta.match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1];
+    const apex = fs.readFileSync(path.join(metadata, 'classes', `${target}.cls`), 'utf8');
+    const classes = [...apex.matchAll(/public class (\w+)\s*\{([\s\S]*?)\n    \}/g)]
+      .map(([, cls, body]) => ({ cls, fields: [...body.matchAll(/@InvocableVariable(?:\([\s\S]*?\))?\s*public\s+\w+\s+(\w+);/g)].map((m) => m[1]) }))
+      .filter((c) => c.fields.length);
+    assert.equal(classes.length, 2, `${target}: expected one request and one result class`);
+    for (const [side, cls] of [['input', classes[0]], ['output', classes[1]]]) {
+      const file = path.join(dir, name, side, 'schema.json');
+      assert.ok(fs.existsSync(file), `${name} has no ${side}/schema.json, so the org drops the action`);
+      const schema = JSON.parse(fs.readFileSync(file, 'utf8'));
+      assert.equal(schema['lightning:type'], 'lightning__objectType', `${name} ${side}`);
+      assert.deepEqual(Object.keys(schema.properties).sort(), [...cls.fields].sort(), `${name} ${side} schema vs ${cls.cls}`);
+    }
+  }
+});
+
 // The Metadata API at 64.0 refuses a BotVersion that carries
 // staticPromptsEnabled ("Element ... invalid at this location"), and the
 // whole deploy fails with it.
