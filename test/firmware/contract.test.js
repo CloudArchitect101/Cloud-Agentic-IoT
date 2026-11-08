@@ -200,31 +200,24 @@ test('a commandId the board answers is one both command Lambdas take, and no oth
   }
 });
 
-// The case alert (firmware 2.3.0). Salesforce names the command and its on or
-// off, the device-command Lambda checks them, and the patient monitor acts on
-// them. A name one side spells differently is refused by the board, and the
-// motor stays as it was without a word on the Case.
-test('CASE_ALERT and its active are the same in Salesforce, the device-command Lambda and the patient monitor', () => {
+// The case alert (firmware 2.3.0 to 2.4.0) is retired: Salesforce no longer
+// sends it, and since 2.5.0 the board answers it as done and ignores it, so
+// a command still sent through the device API is Acked, not Failed.
+test('CASE_ALERT is retired in Salesforce and acknowledged by the patient monitor', () => {
   const sketch = read('firmware/patient-monitor/patient-monitor.ino');
-  const service = read('force-app/main/default/classes/CaseAlertService.cls');
   const sendJob = read('force-app/main/default/classes/DeviceCommandSendJob.cls');
   const picklist = read('force-app/main/default/objects/Device_Command__c/fields/Command__c.field-meta.xml');
-  const { CASE_ALERT } = loadWithFakes(path.join(root, 'lambda/device-command/index.js'), {
-    '@aws-sdk/client-iot-data-plane': fakeAwsSdk('IoTDataPlaneClient', ['PublishCommand']).sdk,
-  });
+  const destructive = read('manifest/destructiveChangesPost.xml');
 
-  assert.equal(CASE_ALERT, 'CASE_ALERT');
-  assert.match(service, new RegExp(`CASE_ALERT_COMMAND = '${CASE_ALERT}';`));
-  assert.ok(picklist.includes(`<fullName>${CASE_ALERT}</fullName>`), 'Device_Command__c.Command__c must offer CASE_ALERT');
-  // Since 2.5.0 the board acknowledges CASE_ALERT and ignores it: its motor
-  // follows its own room. An org that still sends it sees Acked, not Failed.
+  assert.ok(!fs.existsSync(path.join(root, 'force-app/main/default/classes/CaseAlertService.cls')));
+  assert.match(destructive, /<members>CaseAlertService<\/members>/);
+  assert.match(destructive, /<members>CaseAlertServiceTest<\/members>/);
+  assert.match(picklist, /<fullName>CASE_ALERT<\/fullName><default>false<\/default><isActive>false<\/isActive>/);
+  assert.doesNotMatch(sendJob, /Case_Alert_On__c|CASE_ALERT/);
+
   const caseAlert = sketch.match(/strcmp\(op, "CASE_ALERT"\) == 0\) \{([\s\S]*?)\n  \}/);
   assert.ok(caseAlert, 'the patient monitor still answers CASE_ALERT');
   assert.match(caseAlert[1], /return true;/);
-
-  // The on or off travels as active, a JSON true or false.
-  assert.match(sendJob, /body\.put\('active', command\.Case_Alert_On__c == true\)/);
-  assert.match(read('lambda/device-command/index.js'), /typeof fields\.active !== 'boolean'/);
 });
 
 test('the patient monitor turns its motor from its own room at 30 C, not from Cases', () => {

@@ -25,7 +25,7 @@ with this page's `maskPii`, [SOP-GROUNDING.md](SOP-GROUNDING.md)). What reaches
 a room goes through one door:
 
 ```
-Patient Care Agent ─ escalate ─> Case ─> CaseAlertService ─┐
+Room temperature rule (a dose) ────────────────────────────┐
 Slack /dispense-medication, a person, a Flow ──────────────┼─> Device_Command__c (Pending)
                                                            │      └─> DeviceCommandSendJob
 Wi-Fi Network record ─> WiFiCredentialPushJob ─────────────┘             │

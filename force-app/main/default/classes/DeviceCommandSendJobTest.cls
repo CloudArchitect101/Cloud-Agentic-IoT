@@ -90,26 +90,17 @@ private class DeviceCommandSendJobTest {
     }
 
     @IsTest
-    static void aCaseAlertCarriesWhetherTheMotorTurnsAndOtherCommandsDoNot() {
+    static void aCommandCarriesOnlyItsNameAndId() {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
         Asset board = device('PM-1', 'Provisioned', 'Online');
-        Device_Command__c dose = pendingFor(board);
-        Device_Command__c off = new Device_Command__c(
-            Device__c = 'PM-1', Asset__c = board.Id, Command__c = 'CASE_ALERT', Case_Alert_On__c = false,
-            Status__c = 'Pending', Requested_By__c = 'Send Job Test'
-        );
-        TriggerHandler.bypass('DeviceCommandTriggerHandler');
-        insert off;
-        TriggerHandler.clearBypass('DeviceCommandTriggerHandler');
 
-        run(new List<Device_Command__c>{ dose, off });
+        run(new List<Device_Command__c>{ pendingFor(board) });
 
-        Assert.areEqual(2, aws.bodies.size(), 'Two calls');
-        Assert.isFalse(aws.bodies[0].containsKey('active'), 'A dose has no on or off');
-        Assert.areEqual('CASE_ALERT', aws.bodies[1].get('operation'), 'The case alert');
-        Assert.areEqual(false, aws.bodies[1].get('active'), 'Off, sent as false rather than left out');
+        Assert.areEqual(1, aws.bodies.size(), 'One call');
+        Assert.areEqual(new Set<String>{ 'thingName', 'operation', 'commandId' }, aws.bodies[0].keySet(),
+            'No retired active field');
     }
 
     @IsTest

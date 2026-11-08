@@ -2,7 +2,7 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Case_Alert_Active__c</fullName>
     <label>Case Alert</label>
-    <description>The motor state last sent to the board with CASE_ALERT: checked while the device has an open Case owned by the care team queue, so its motor turns. Set by CaseAlertService; editing it by hand sends nothing.</description>
+    <description>Retired with firmware 2.5.0: a patient board's motor now follows its own room temperature. Kept until it is deleted; nothing reads or sets it.</description>
     <defaultValue>false</defaultValue>
     <type>Checkbox</type>
 </CustomField>

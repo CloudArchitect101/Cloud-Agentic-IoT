@@ -67,18 +67,28 @@ fi
 # Check-only first: every component compiles and every local Apex test passes,
 # and nothing in the org changes. On Prod a bad deploy fails here, before it
 # touches anything.
+# By manifest, so the deploy can also remove what left force-app/
+# (manifest/destructiveChangesPost.xml). A component the org never had only
+# warns, hence --ignore-warnings.
+manifest_dir=$(mktemp -d)
+sf project generate manifest --source-dir force-app --output-dir "$manifest_dir" --name package >/dev/null
+deploy_args=(--manifest "$manifest_dir/package.xml" --post-destructive-changes manifest/destructiveChangesPost.xml
+  --ignore-warnings --test-level RunLocalTests --target-org "$org" --wait 30)
+
 step "Validate: check-only deploy, running every local Apex test"
-sf project deploy start --dry-run --test-level RunLocalTests --target-org "$org" --wait 30
+sf project deploy start --dry-run "${deploy_args[@]}"
 endstep
 
 if [ "$DRY_RUN" = true ]; then
+  rm -rf "$manifest_dir"
   note "Dry run: $org validated, nothing changed."
   exit 0
 fi
 
 step "Deploy to $org"
-sf project deploy start --test-level RunLocalTests --target-org "$org" --wait 30
+sf project deploy start "${deploy_args[@]}"
 endstep
+rm -rf "$manifest_dir"
 if [ "$paired" = true ]; then record_deployed_commit salesforce; fi
 
 # The integration user writes the readings, so the triggers they fire (a

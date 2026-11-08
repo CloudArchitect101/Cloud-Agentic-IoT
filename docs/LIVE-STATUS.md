@@ -32,11 +32,9 @@ connect and disconnect events:
 They change only when the board connects or disconnects, so they work whether
 or not anyone has the card open, and a list view or report can filter on them.
 
-A fourth, **Case Alert**, is checked while the device has an open Case in
-Care_Team_Queue, and the patient monitor's servo then sweeps without stopping
-(firmware 2.3.0). When a board comes online, Salesforce sends it that state
-again as a `CASE_ALERT` Device Command, since a change sent while it was away
-never reached it ([README, chapter 03](../README.md#room-temperature-demo-rule)).
+(A fourth, Case Alert, is retired: since firmware 2.5.0 a patient board's
+servo follows its own room temperature, not Cases. See
+[README, chapter 03](../README.md#room-temperature-demo-rule).)
 
 **On the card**, while it is on screen:
 

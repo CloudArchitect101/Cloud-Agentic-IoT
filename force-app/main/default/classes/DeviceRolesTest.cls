@@ -83,13 +83,9 @@ private class DeviceRolesTest {
         return sent;
     }
 
-    private static List<Device_Command__c> alerts() {
-        return [SELECT Device__c, Case_Alert_On__c FROM Device_Command__c
-                WHERE Command__c = 'CASE_ALERT' ORDER BY CreatedDate, Id];
-    }
-
-    private static Boolean alertShown(Id assetId) {
-        return [SELECT Case_Alert_Active__c FROM Asset WHERE Id = :assetId].Case_Alert_Active__c;
+    /** Since firmware 2.5.0 no board is sent a case alert. */
+    private static Integer alerts() {
+        return [SELECT COUNT() FROM Device_Command__c WHERE Command__c = 'CASE_ALERT'];
     }
 
     @IsTest
@@ -147,9 +143,7 @@ private class DeviceRolesTest {
         Assert.areEqual(1, sent[0].get('openCaseCount'), 'Its count');
         Assert.areEqual('ACTIVE', sent[0].get('motorState'), 'Running');
 
-        List<Device_Command__c> alerts = alerts();
-        Assert.areEqual(1, alerts.size(), 'The patient device keeps its own Case alert');
-        Assert.areEqual('PM-1', alerts[0].Device__c, 'On the Case\'s device');
+        Assert.areEqual(0, alerts(), 'The patient device is sent nothing: its motor follows its room');
     }
 
     @IsTest
@@ -208,33 +202,29 @@ private class DeviceRolesTest {
     }
 
     @IsTest
-    static void anInternalBoardGetsNoCaseAlertForItsOwnCases() {
+    static void noBoardGetsACaseAlertForItsOwnCases() {
         settings();
         Asset in1 = board('IN-1', true, 'Online');
+        Asset pm1 = board('PM-1', false, 'Online');
 
         Test.startTest();
-        insert waiting(in1.Id);
+        insert new List<Case>{ waiting(in1.Id), waiting(pm1.Id) };
         Test.stopTest();
 
-        Assert.areEqual(0, alerts().size(), 'No CASE_ALERT for an internal board');
-        Assert.isFalse(alertShown(in1.Id), 'Case Alert stays off');
+        Assert.areEqual(0, alerts(), 'No CASE_ALERT: a patient board follows its own room');
     }
 
     @IsTest
-    static void becomingInternalStopsTheCaseAlertAndFollowsTheQueue() {
+    static void becomingInternalFollowsTheQueue() {
         DeviceApiMock aws = settings();
         Asset pm1 = board('PM-1', false, 'Online');
         insert waiting(pm1.Id);
-        Assert.isTrue(alertShown(pm1.Id), 'Its own Case turned its alert on');
 
         Test.startTest();
         update new Asset(Id = pm1.Id, RecordTypeId = DeviceRoles.internalRecordTypeId());
         Test.stopTest();
 
-        List<Device_Command__c> alerts = alerts();
-        Assert.areEqual(2, alerts.size(), 'On, then off');
-        Assert.isFalse(alerts[1].Case_Alert_On__c, 'Off once it is internal');
-        Assert.isFalse(alertShown(pm1.Id), 'Case Alert unchecked');
+        Assert.areEqual(0, alerts(), 'No CASE_ALERT either way');
 
         List<Map<String, Object>> sent = queueDepthSent(aws);
         Assert.areEqual(1, sent.size(), 'Sent the queue at once');
@@ -244,7 +234,7 @@ private class DeviceRolesTest {
     }
 
     @IsTest
-    static void becomingAPatientDeviceStopsTheQueueMotorAndCountsItsCases() {
+    static void becomingAPatientDeviceStopsTheQueueMotor() {
         DeviceApiMock aws = settings();
         Asset in1 = board('IN-1', true, 'Online');
         insert waiting(in1.Id);
@@ -256,10 +246,7 @@ private class DeviceRolesTest {
         List<Map<String, Object>> sent = queueDepthSent(aws);
         Assert.areEqual(1, sent.size(), 'One QUEUE_DEPTH');
         Assert.areEqual(0, sent[0].get('intensity'), 'Its queue motor stops');
-        List<Device_Command__c> alerts = alerts();
-        Assert.areEqual(1, alerts.size(), 'Its own Case now turns its alert on');
-        Assert.isTrue(alerts[0].Case_Alert_On__c, 'On');
-        Assert.isTrue(alertShown(in1.Id), 'Case Alert checked');
+        Assert.areEqual(0, alerts(), 'And no case alert: its motor follows its room');
     }
 
     @IsTest

@@ -262,156 +262,30 @@ private class DeviceConnectionServiceTest {
         TriggerHandler.clearBypass('AssetTriggerHandler');
     }
 
-    /* ------------------------------------------- case alert on reconnect */
+    /* ------------------------------------- no case alert on reconnect */
 
-    // CreatedDate is the real clock in a test, so these use it too.
-    private static Datetime wholeSecondsNow() {
-        return Datetime.newInstance(System.now().getTime() / 1000 * 1000);
+    // Since firmware 2.5.0 a patient board's motor follows its own room, so a
+    // board coming online is sent no CASE_ALERT, whatever its retired Case
+    // Alert field still shows.
+    private static Integer alerts() {
+        return [SELECT COUNT() FROM Device_Command__c WHERE Command__c = 'CASE_ALERT'];
     }
 
-    private static void alertShown(Asset device, Boolean active) {
-        TriggerHandler.bypass('AssetTriggerHandler');
-        update new Asset(Id = device.Id, Case_Alert_Active__c = active);
-        TriggerHandler.clearBypass('AssetTriggerHandler');
-    }
-
-    /** A CASE_ALERT sent earlier, saved without starting a job. */
-    private static Device_Command__c alertSent(String thingName, Boolean active, Datetime createdAt) {
-        Device_Command__c command = new Device_Command__c(Device__c = thingName, Command__c = 'CASE_ALERT',
-            Case_Alert_On__c = active, Status__c = 'Failed', Requested_By__c = 'Presence Test');
-        TriggerHandler.bypass('DeviceCommandTriggerHandler');
-        insert command;
-        TriggerHandler.clearBypass('DeviceCommandTriggerHandler');
-        if (createdAt != null) {
-            Test.setCreatedDate(command.Id, createdAt);
-        }
-        return command;
-    }
-
-    private static List<Device_Command__c> alerts() {
-        return [SELECT Device__c, Case_Alert_On__c, Requested_By__c FROM Device_Command__c
-                WHERE Command__c = 'CASE_ALERT' ORDER BY CreatedDate, Id];
-    }
-
-    private static DeviceApiMock mockAws() {
+    @IsTest
+    static void aBoardComingOnlineIsSentNoCaseAlert() {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        return aws;
-    }
-
-    @IsTest
-    static void aBoardWhoseCaseAlertIsOnIsToldAgainWhenItComesOnline() {
-        DeviceApiMock aws = mockAws();
         Asset device = device('PM-1');
-        alertShown(device, true);
-        showing(device, 'Offline', wholeSecondsNow().addMinutes(-10), 'CONNECTION_LOST');
-
-        record(new List<DeviceConnectionService.Change>{ event('PM-1', 'Online', wholeSecondsNow(), null) });
-
-        List<Device_Command__c> alerts = alerts();
-        Assert.areEqual(1, alerts.size(), 'One CASE_ALERT');
-        Assert.areEqual('PM-1', alerts[0].Device__c, 'To the board that came online');
-        Assert.isTrue(alerts[0].Case_Alert_On__c, 'On');
-        Assert.areEqual(1, aws.bodies.size(), 'Sent, now that the board is online');
-        Assert.areEqual(true, aws.bodies[0].get('active'), 'On');
-    }
-
-    @IsTest
-    static void aBoardTurnedOffWhileItWasAwayIsToldOffAgain() {
-        mockAws();
-        Asset device = device('PM-1');
-        showing(device, 'Offline', wholeSecondsNow().addMinutes(-10), 'CONNECTION_LOST');
-        alertSent('PM-1', false, wholeSecondsNow().addMinutes(-5));
-
-        record(new List<DeviceConnectionService.Change>{ event('PM-1', 'Online', wholeSecondsNow(), null) });
-
-        List<Device_Command__c> alerts = alerts();
-        Assert.areEqual(2, alerts.size(), 'The one it missed, and one more');
-        Assert.isFalse(alerts[1].Case_Alert_On__c, 'Off');
-    }
-
-    @IsTest
-    static void aCaseAlertSentJustBeforeTheDisconnectCountsAsMissed() {
-        mockAws();
-        Asset device = device('PM-1');
-        Datetime offlineSince = wholeSecondsNow().addMinutes(-10);
-        showing(device, 'Offline', offlineSince, 'CONNECTION_LOST');
-        alertSent('PM-1', false, offlineSince.addMinutes(-1));
-
-        record(new List<DeviceConnectionService.Change>{ event('PM-1', 'Online', wholeSecondsNow(), null) });
-
-        Assert.areEqual(2, alerts().size(), 'Told off again: the board may already have been gone');
-    }
-
-    @IsTest
-    static void aCaseAlertTheBoardHadBeforeItWentAwayIsNotSentAgain() {
-        mockAws();
-        Asset device = device('PM-1');
-        Datetime offlineSince = wholeSecondsNow().addMinutes(-10);
-        showing(device, 'Offline', offlineSince, 'CONNECTION_LOST');
-        alertSent('PM-1', false, offlineSince.addMinutes(-30));
-
-        record(new List<DeviceConnectionService.Change>{ event('PM-1', 'Online', wholeSecondsNow(), null) });
-
-        Assert.areEqual(1, alerts().size(), 'Nothing new: it was online when it was told');
-    }
-
-    @IsTest
-    static void aBoardWithNoCaseAlertIsSentNothing() {
-        DeviceApiMock aws = mockAws();
-        Asset device = device('PM-1');
-        showing(device, 'Offline', wholeSecondsNow().addMinutes(-10), 'CONNECTION_LOST');
-
-        record(new List<DeviceConnectionService.Change>{ event('PM-1', 'Online', wholeSecondsNow(), null) });
-
-        Assert.areEqual(0, alerts().size(), 'No CASE_ALERT');
-        Assert.areEqual(0, aws.bodies.size(), 'No callout');
-    }
-
-    @IsTest
-    static void aBoardThatGoesOfflineIsSentNothing() {
-        mockAws();
-        Asset device = device('PM-1');
-        alertShown(device, true);
-        showing(device, 'Online', wholeSecondsNow().addMinutes(-10), null);
-
-        record(new List<DeviceConnectionService.Change>{ event('PM-1', 'Offline', wholeSecondsNow(), 'CONNECTION_LOST') });
-
-        Assert.areEqual(0, alerts().size(), 'Nothing would reach it');
-    }
-
-    @IsTest
-    static void twoHundredBoardsWithTheirCaseAlertOnAreToldInOneInsert() {
-        mockAws();
-        List<String> thingNames = new List<String>();
-        for (Integer i = 0; i < 200; i++) {
-            thingNames.add('BULK-' + i);
-        }
-        List<Asset> boards = devices(thingNames);
-        for (Asset board : boards) {
-            board.Case_Alert_Active__c = true;
-        }
         TriggerHandler.bypass('AssetTriggerHandler');
-        update boards;
+        update new Asset(Id = device.Id, Case_Alert_Active__c = true);
         TriggerHandler.clearBypass('AssetTriggerHandler');
-        List<DeviceConnectionService.Change> changes = new List<DeviceConnectionService.Change>();
-        for (String thingName : thingNames) {
-            changes.add(event(thingName, 'Online', wholeSecondsNow(), null));
-        }
-        // Measures only this service; the send path has its own bulk test.
-        TriggerHandler.bypass('DeviceCommandTriggerHandler');
+        Datetime now = Datetime.newInstance(System.now().getTime() / 1000 * 1000);
+        showing(device, 'Offline', now.addMinutes(-10), 'CONNECTION_LOST');
 
-        Test.startTest();
-        Integer queriesBefore = Limits.getQueries();
-        Integer dmlBefore = Limits.getDmlStatements();
-        DeviceConnectionService.record(changes);
-        Integer queries = Limits.getQueries() - queriesBefore;
-        Integer dml = Limits.getDmlStatements() - dmlBefore;
-        Test.stopTest();
+        record(new List<DeviceConnectionService.Change>{ event('PM-1', 'Online', now, null) });
 
-        Assert.areEqual(1, queries, 'Still one query: the Assets carry their case alert');
-        Assert.areEqual(2, dml, 'The update, and one insert of every CASE_ALERT');
-        Assert.areEqual(200, alerts().size(), 'One per board');
+        Assert.areEqual(0, alerts(), 'No CASE_ALERT');
+        Assert.areEqual(0, aws.bodies.size(), 'No callout');
     }
 }

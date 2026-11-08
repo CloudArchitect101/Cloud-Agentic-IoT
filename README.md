@@ -106,7 +106,7 @@ Cloud-Agentic-IoT/
 ├── lambda/<function>/                 # Lambda source + CloudFormation per function
 ├── firmware/
 │   ├── libraries/CloudAgenticDevice/  # Shared runtime: NVS, provisioning, WiFi, MQTT, OTA
-│   ├── patient-monitor/               # Every board: DHT11 readings, dispenser, case alert, queue indicator
+│   ├── patient-monitor/               # Every board: DHT11 readings, dispenser, 30 C room alarm, queue indicator
 │   └── queue-indicator/               # Retired: kept for a board already flashed with it
 ├── datacloud/                         # Data Cloud: the room readings' columns, the calculated insights' SQL
 ├── knowledge/sops/                    # The ward's sample SOPs the agent finds and cites (indexed on every AWS deploy)
@@ -376,8 +376,8 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
 | The agent acts | The agent's panel in Lightning, as a holder of `Patient_Care_Agent`: ask for a device's latest readings, then escalate | The readings, then a Case with `Origin = Agentforce` in Care_Team_Queue |
-| Room-temp Case | Warm the DHT11 above 30 C (with `RoomTempAlert` on, [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose)) | A Case with Origin `Room Temperature Rule` in Care_Team_Queue, one `DISPENSE_MEDICATION` Device Command, and a `CASE_ALERT` on |
-| Case alert | Open a Case on a provisioned patient monitor's Asset and give it to Care_Team_Queue (firmware 2.3.0) | The servo sweeps back and forth without stopping, the Asset's Case Alert is checked, and a `CASE_ALERT` Device Command goes `Acked`. Close the Case, or take it yourself, and it stops |
+| Room-temp Case | Warm the DHT11 above 30 C (with `RoomTempAlert` on, [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose)) | A Case with Origin `Room Temperature Rule` in Care_Team_Queue, one `DISPENSE_MEDICATION` Device Command, and the board sweeping until a reading is below 30 C |
+| Room alarm | Warm the DHT11 to 30 C on a patient monitor (firmware 2.5.0) | The board's servo sweeps back and forth within about 5 s, decided on the board with no Case, and stops at the first reading below 30 C |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
 
 The Asset's Connection field, its Live Status card and **Send Command** need a device provisioned from Salesforce (chapter 13), whose Asset carries its Thing ARN. On an Asset made by hand in Stage 3, Connection stays *Not reported yet*, the card says the device has no AWS IoT Thing, and a command fails as not provisioned. The by-hand publish works either way.
@@ -458,10 +458,10 @@ A demo rule, not a clinical one: warm the patient monitor's DHT11 to 30 C and a 
 - **Dose cooldown.** One dose per new Case, and at most one per device every `Room_Temp_Dispense_Cooldown_Minutes__c` (60). A Case closed and reopened inside that hour gets no second dose, and its Description says so.
 - **Switches.** `RoomTempAlert` in `config/<env>.json` decides whether AWS sends flagged readings at all: on in Dev, off in Prod. `Room_Temp_Dispense__c` on the Default `Device_Platform_Setting__mdt` record turns dosing off while keeping the Cases; change it in the repo, because a Setup edit is overwritten by the next deploy.
 - **Emergency stop.** Add `PatientVitalsTriggerHandler` to `Integration_Control__c` Bypass Handlers at org level. Instant, no deploy.
-- **Case alert.** Any Case does this, not only the rule's: while a patient device has at least one open Case owned by Care_Team_Queue (`Room_Temp_Case_Queue__c` and `Escalation_Case_Queue__c`), its patient monitor's servo sweeps 0 to 180° and back every 2 seconds. `CaseAlertService` sends `CASE_ALERT` on with the first such Case and off when the last one is closed, deleted, given to a person or moved to another Asset; the Asset's Case Alert field holds the state last sent, so nothing is sent in between. A dose still swings, then the sweep goes on. The board keeps the state in NVS across restarts and updates, and when it reconnects Salesforce sends the state again. A failure is logged and never stops the Case from saving. Firmware 2.3.0 and later. To stop all of it at once, add `CaseTriggerHandler` to Bypass Handlers (that also stops the queue indicator).
-- **Deploy order.** Salesforce first (the `CASE_ALERT` value and the fields), then AWS (the device-command Lambda checks `active`), then the board: `scripts/ota.sh try Dev patient-monitor`.
+- **Room alarm on the board.** Since firmware 2.5.0 a patient monitor sweeps its servo while its own DHT11 reads 30 C or more, and stops at the first reading below 30 C. The board decides from a reading every 5 s, with no Case, Salesforce or network, so it reacts in seconds and works offline. Cases still drive the ward boards (Internal Device, `QUEUE_DEPTH`). The earlier case alert (`CASE_ALERT`, firmware 2.3.0 to 2.4.0, `CaseAlertService`) is retired: the deploy removes the class (`manifest/destructiveChangesPost.xml`), and a board on 2.5.0 answers an old `CASE_ALERT` as done and ignores it.
+- **Deploy order.** Salesforce first (the fields and the rule), then AWS, then the board: `scripts/ota.sh try Dev patient-monitor`.
 
-**Key files:** `lambda/patient-vitals/index.js` (`planDevice`), `triggers/PatientVitalsTrigger.trigger`, `classes/RoomTemperatureCaseService.cls`, `classes/CaseAlertService.cls`, `firmware/patient-monitor/`, `customMetadata/Device_Platform_Setting.Default.md-meta.xml`
+**Key files:** `lambda/patient-vitals/index.js` (`planDevice`), `triggers/PatientVitalsTrigger.trigger`, `classes/RoomTemperatureCaseService.cls`, `firmware/patient-monitor/`, `customMetadata/Device_Platform_Setting.Default.md-meta.xml`
 
 ### 04 · Headless Slack Integration
 

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  What deploy-salesforce.sh removes from the org after each deploy: metadata
+  taken out of force-app/. A deploy only adds and changes, so without this a
+  class deleted from the repo would stay in the org, and its tests would go
+  on running there. An org that never had a component only warns, which the
+  deploy ignores (a fresh org, a recorded rebuild).
+
+  CaseAlertService: retired with firmware 2.5.0. A patient board's motor
+  follows its own room temperature, so no Case turns it on or off.
+-->
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>CaseAlertService</members>
+        <members>CaseAlertServiceTest</members>
+        <name>ApexClass</name>
+    </types>
+    <version>65.0</version>
+</Package>

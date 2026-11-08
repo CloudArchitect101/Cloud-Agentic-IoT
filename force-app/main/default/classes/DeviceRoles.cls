@@ -6,23 +6,22 @@
  *
  *   Patient_Device   A patient's board, on the patient's Account. Its room
  *                    readings feed the 30 C room rule, which opens a Case and
- *                    requests a dose, and its servo turns while that device
- *                    has an open Case in the care team queue (CaseAlertService,
- *                    CASE_ALERT). An Asset with no record type, which is every
+ *                    requests a dose. Its servo follows its own room (30 C or
+ *                    more, decided on the board, firmware 2.5.0), not Cases.
+ *                    An Asset with no record type, which is every
  *                    Asset made before the record types existed, is one too.
  *   Internal_Device  A board of the ward itself, such as a nurse-station
  *                    indicator. Its servo turns while ANY open Case is owned
  *                    by the Internal Device Queue (Care_Team_Queue as shipped),
  *                    whichever device the Case is on, or none, and stops when
  *                    the queue is empty (CaseQueueMonitorService, QUEUE_DEPTH).
- *                    It gets no CASE_ALERT, no room-rule Case and no dose.
+ *                    It gets no room-rule Case and no dose.
  *                    Salesforce wants an Account or a Contact on every Asset,
  *                    so it sits on the ward's own Account, never a patient's.
  *
  * Changing an Asset's record type changes the role at once (rolesChanged):
- * a board that becomes internal stops its Case alert and takes the queue's
- * depth, and one that becomes a patient device stops following the queue and
- * takes its own Cases' alert.
+ * a board that becomes internal takes the queue's depth, and one that becomes
+ * a patient device stops following the queue.
  *
  * Without sharing: the queue relay runs as the Automated Process user, which
  * may see no Asset, and every internal board must still follow the queue.
@@ -101,10 +100,9 @@ public without sharing class DeviceRoles {
     }
 
     /**
-     * Asset after update. A device whose role changed is told at once: its
-     * Case alert is counted again (off for a board that became internal), and
-     * it is sent the queue's depth (internal) or a stop (patient device).
-     * Never throws; both services log what fails.
+     * Asset after update. A device whose role changed is told at once: it is
+     * sent the queue's depth (internal) or a stop (patient device). Never
+     * throws; the service logs what fails.
      */
     public static void rolesChanged(List<Asset> devices, Map<Id, Asset> before) {
         if (devices == null || before == null) {
@@ -120,7 +118,6 @@ public without sharing class DeviceRoles {
         if (changed.isEmpty()) {
             return;
         }
-        CaseAlertService.refresh(new Map<Id, Asset>(changed).keySet());
         CaseQueueMonitorService.sendQueueStateTo(changed);
     }
 }

@@ -242,9 +242,7 @@ third of a cent in AWS. [LIVE-STATUS.md](LIVE-STATUS.md) has the speeds, the
 costs and what to check when the card waits for the board.
 
 To send a board a command, open its Asset and choose **Send Command**, then
-`DISPENSE_MEDICATION`, `RESTART`, or `CASE_ALERT` with Case Alert On checked
-or not (firmware 2.3.0: the servo sweeps or stops; the next change to the
-device's Cases sets it back to what they say). The Device Command shows `Sent` within
+`DISPENSE_MEDICATION` or `RESTART`. The Device Command shows `Sent` within
 seconds and, from firmware 2.2.0, `Acked` once the board answers, or `Failed`
 with the reason (a board that is offline is not sent anything). The command is
 sent as you, so you need the `AWS_IoT_Relay` principal access from
@@ -285,11 +283,13 @@ it acts as you. Open it from the Lightning header, then:
 
 The room-temperature demo rule ([README, chapter 03](../README.md#room-temperature-demo-rule)):
 when the patient monitor's DHT11 reads 30 C or more, Salesforce opens a Case
-for the device in Care_Team_Queue, the queue indicator moves, and the
-dispenser's servo turns out a dose, then sweeps back and forth until the Case
-is closed or someone takes it (the case alert, firmware 2.3.0). It is a demo rule, not a clinical alert: the sensor
-measures room air. It is on in Dev (`RoomTempAlert` in `config/Dev.json`) and
-off in Prod.
+for the device in Care_Team_Queue, the ward board moves, and the dispenser's
+servo turns out a dose. Separately, the board itself sweeps its servo back and
+forth while its own reading is 30 C or more, and stops at the first reading
+below 30 C (firmware 2.5.0; no Case involved, so closing the Case does not
+stop it, cooling the room does). It is a demo rule, not a clinical alert: the
+sensor measures room air. It is on in Dev (`RoomTempAlert` in
+`config/Dev.json`) and off in Prod.
 
 **Deploy Salesforce first, then AWS.** A flagged record that reaches an org
 without the `Room_Temperature_Alert__c` field, or without its field access, is
@@ -302,13 +302,8 @@ scripts/check.sh
 scripts/deploy-salesforce.sh Dev     # the field, the trigger, the settings; runs every local Apex test
 # verify in the org: the list below, and Device_Integration has Room Temperature Alert
 scripts/deploy-aws.sh Dev            # patient-vitals with RoomTempAlert "true" from config/Dev.json
-scripts/ota.sh try Dev patient-monitor   # firmware 2.3.0, for the case alert
+scripts/ota.sh try Dev patient-monitor   # firmware 2.5.0, for the room alarm sweep
 ```
-
-The case alert needs the same order: Salesforce (the `CASE_ALERT` command and
-the Case Alert fields), then AWS (the device-command Lambda checks the on or
-off), then the board. Older firmware refuses `CASE_ALERT`, and its Device
-Command shows Failed.
 
 The pipeline deploys AWS before Salesforce (`.github/workflows/deploy.yml`),
 so through CI ship it in two pushes: first with `"RoomTempAlert": "false"` in
@@ -322,12 +317,10 @@ sets it to `"true"`.
   only a WARN in the debug log.
 - Care_Team_Queue lists Case as a supported object (Setup → Queues). If not,
   the Case lands with the integration user, an ERROR is logged, and the
-  indicator does not count it.
-- Your indicator board's Asset has the Internal Device record type, and the
+  ward board does not count it.
+- Your ward board's Asset has the Internal Device record type, and the
   board runs patient-monitor 2.4.0 or later. Any such board follows
-  Care_Team_Queue; `Device_Queue_Binding.Care_Team_Queue` names no board (it
-  used to name `ESP32-Patient-Monitor-01`, a board that never existed, so no
-  indicator moved).
+  Care_Team_Queue.
 - The integration user has the `AWS_IoT_Relay` principal access
   ([README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach)):
   the dose is a Device Command sent as the user who created it.
@@ -339,30 +332,26 @@ sets it to `"true"`.
 **Steps**
 
 1. Cup your hand around the DHT11, or breathe on it, until it reads 30 C (its
-   maximum is 50 C). Allow 1 to 3 readings, about 30 s each.
-2. A Case appears in Care_Team_Queue, the indicator board moves, and the
-   servo turns out a dose, then sweeps back and forth without stopping. The
-   Asset's Case Alert is checked.
+   maximum is 50 C). Within about 5 s the board's servo starts sweeping
+   (console: `room 30.0C: 30 C or more, motor turning`).
+2. Within 1 to 3 stored readings (about 30 s each) a Case appears in
+   Care_Team_Queue, the ward board moves, and the servo turns out a dose,
+   then goes on sweeping.
 3. Keep it warm: no new Case. AWS reports the device again every re-alert
    interval (15 minutes in Dev), and Salesforce sees the open Case and stops.
-4. Close the Case while it is still warm: the servo stops within seconds.
-   Within 15 minutes a new Case appears and the sweep starts again. No dose
-   this time: the 60-minute cooldown is running, and the Case Description
-   says so.
-5. Let it cool below 29 C, then warm it again while a Case is open: no new
-   Case.
-6. Change the open Case's owner to yourself: the servo stops, since the Case
-   no longer waits in the queue. Give it back to Care_Team_Queue and it
-   sweeps again.
-7. Unplug the board while a Case waits, plug it back in: it sweeps again as
-   soon as it starts (the state is in its flash), and Salesforce sends
-   `CASE_ALERT` on again once it is online.
-8. If the servo did not turn, look for a `DISPENSE_MEDICATION` Device Command
-   for Test8. If there is none, send it from the Asset with **Send Command**:
-   a failed dose is not retried. If it does not sweep, look for the newest
-   `CASE_ALERT`: Failed with `unknown operation` means the board runs
-   firmware older than 2.3.0; a failure to call AWS means the user who saved
-   the Case lacks the `AWS_IoT_Relay` principal access.
+4. Let it cool below 30 C: the sweep stops within about 5 s. The Case stays
+   open, and the ward board keeps moving until someone closes or takes it.
+5. Close the Case: the ward board stops (if it was the queue's last Case).
+   Warm the sensor again: the sweep starts again at once; a new Case follows
+   once a reading went below 29 C in between, with no dose while the
+   60-minute cooldown runs (the Case Description says so).
+6. Unplug the board while it is warm, plug it back in: it sweeps again as
+   soon as its first reading after the start is 30 C or more.
+7. If the servo did not turn out a dose, look for a `DISPENSE_MEDICATION`
+   Device Command for Test8. If there is none, send it from the Asset with
+   **Send Command**: a failed dose is not retried. If it does not sweep while
+   warm, check the console: a board older than 2.5.0 follows Cases, not the
+   room (`scripts/ota.sh try Dev patient-monitor`).
 
 **For a live talk**, step 4 waits up to `RealertIntervalMinutes`. To shorten
 it, deploy Dev with `"RealertIntervalMinutes": 2` for the session and set it
@@ -380,13 +369,6 @@ FROM Case WHERE Origin = 'Room Temperature Rule' ORDER BY CreatedDate DESC
 SELECT Name, Device__c, Status__c, Status_Detail__c, CreatedDate
 FROM Device_Command__c WHERE Requested_By__c = 'Room Temperature Rule' ORDER BY CreatedDate DESC
 ```
-
-```sql
-SELECT Name, Device__c, Case_Alert_On__c, Status__c, Status_Detail__c, Requested_By__c, CreatedDate
-FROM Device_Command__c WHERE Command__c = 'CASE_ALERT' ORDER BY CreatedDate DESC
-```
-
-The case alert is sent as whoever saved the Case, so Requested By names them.
 
 A flagged reading is a `Patient_Vitals__c` row with Room Temperature Alert
 checked. In AWS, the salesforce-sync function logs each batch it writes (use
@@ -409,11 +391,8 @@ at once, with no deploy. To stop AWS sending flagged readings, set
 `RoomTempAlert` to `"false"` in `config/Dev.json` and deploy AWS. To keep the
 Cases but stop the doses, set `Room_Temp_Dispense__c` to false in
 `force-app/main/default/customMetadata/Device_Platform_Setting.Default.md-meta.xml`
-and deploy Salesforce; a Setup edit is overwritten by the next deploy. To
-stop the case alert, close or take the Cases; to stop it for every Case, add
-`CaseTriggerHandler` to Bypass Handlers, which also stops the queue indicator.
-A board already sweeping keeps sweeping until it is told off: send
-`CASE_ALERT` from its Asset with Case Alert On unchecked.
+and deploy Salesforce; a Setup edit is overwritten by the next deploy. The
+board's own sweep follows only its room: cool the sensor, or unplug the servo.
 
 ## Room readings in Data Cloud
 

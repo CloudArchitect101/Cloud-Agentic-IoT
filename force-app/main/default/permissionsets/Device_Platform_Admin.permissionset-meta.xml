@@ -23,7 +23,6 @@
          hand-edited reading would be a falsified clinical record.
          Wi_Fi_Network__c.Passphrase__c is editable so an admin can set it, and
          stays masked: this permission set does not grant View Encrypted Data. -->
-    <!-- Case_Alert_Active__c is read-only: CaseAlertService sets it from the device's Cases, and editing it would send nothing. -->
     <fieldPermissions>
         <editable>false</editable>
         <field>Asset.Case_Alert_Active__c</field>

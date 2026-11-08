@@ -33,16 +33,16 @@ Every board runs the same firmware (patient-monitor 2.4.0 and later); its Asset'
 
 | Record type | Who it is for | Account | Its servo turns while | Room rule, doses | Thing Group when provisioned with none named |
 |---|---|---|---|---|---|
-| `Patient_Device` (default), or none | A patient | The patient's | Its own device has an open Case in Care_Team_Queue (`CASE_ALERT`) | Yes | `Default_Thing_Group__c`, `fleet-patient-monitor` |
+| `Patient_Device` (default), or none | A patient | The patient's | Its own DHT11 reads 30 C or more, decided on the board (firmware 2.5.0) | Yes | `Default_Thing_Group__c`, `fleet-patient-monitor` |
 | `Internal_Device` | The ward: a nurse-station indicator | The ward's own Account (Salesforce wants an Account or a Contact on every Asset; Person Accounts are off in this org) | Any open Case is owned by `Internal_Device_Queue__c` (Care_Team_Queue), on any device or none (`QUEUE_DEPTH`) | No: no room-rule Case, and a `DISPENSE_MEDICATION` for it is refused | `Internal_Thing_Group__c`, `internal-devices` (inside `fleet-patient-monitor`, so every release reaches it) |
 
-Changing an Asset's record type tells its board at once: one that becomes internal gets a case alert off and the queue's depth; one that becomes a patient device gets a queue stop and its own Cases' alert. Both record types are visible in `Device_Platform_Admin` and `Device_Integration`. The AWS Thing Group is set when the device is provisioned; to move a board that is already provisioned, `scripts/ota.sh join <env> <thing> patient-monitor internal`.
+Changing an Asset's record type tells its board at once: one that becomes internal gets the queue's depth; one that becomes a patient device gets a queue stop. Both record types are visible in `Device_Platform_Admin` and `Device_Integration`. The AWS Thing Group is set when the device is provisioned; to move a board that is already provisioned, `scripts/ota.sh join <env> <thing> patient-monitor internal`.
 
 ## Device Command lifecycle
 
-A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**), by Slack's `/dispense-medication`, by the room-temperature demo rule (one `DISPENSE_MEDICATION` per new Case, Requested By `Room Temperature Rule`), by `CaseAlertService` (below), or through the API.
+A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**), by Slack's `/dispense-medication`, by the room-temperature demo rule (one `DISPENSE_MEDICATION` per new Case, Requested By `Room Temperature Rule`) or through the API.
 
-**Case alert.** A patient device's board turns its servo while the device has at least one open Case owned by Care_Team_Queue (an Internal Device follows the whole queue instead, [above](#device-roles)). `CaseAlertService`, from `CaseTrigger`, creates one `CASE_ALERT` Device Command with `Case_Alert_On__c` checked when the first such Case appears, and one unchecked when the last one is closed, deleted, given to a person or moved to another Asset. `Asset.Case_Alert_Active__c` keeps the state last sent, so nothing is sent while the state stays the same. It is sent as whoever saved the Case. When a board comes back online, `DeviceConnectionService` has it sent again: on while Case Alert is checked, off when an off was sent while the board was away.
+**Case alert (retired).** From firmware 2.3.0 to 2.4.0 a patient board turned its servo while its device had an open Case in Care_Team_Queue, through `CASE_ALERT` Device Commands from `CaseAlertService`. Since 2.5.0 the board follows its own room temperature instead; the deploy removes `CaseAlertService` (`manifest/destructiveChangesPost.xml`), `CASE_ALERT` is an inactive Command value kept for old records, and `Asset.Case_Alert_Active__c` and `Device_Command__c.Case_Alert_On__c` are kept, unused, until they are deleted.
 
 | Status | Set by | Means |
 |---|---|---|

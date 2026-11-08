@@ -164,6 +164,10 @@ FAKE_SF = textwrap.dedent(r'''
         print(json.dumps({'status': 0, 'result': {'username': org['username'], 'id': org['id']}}))
     elif args[:3] == ['project', 'deploy', 'start']:
         print('Deployed.')
+    elif args[:3] == ['project', 'generate', 'manifest']:
+        out = args[args.index('--output-dir') + 1]
+        with open(os.path.join(out, 'package.xml'), 'w') as f:
+            f.write('<Package/>\n')
     else:
         sys.stderr.write('fake sf: no answer prepared for: ' + ' '.join(args) + '\n')
         sys.exit(2)
@@ -368,6 +372,11 @@ class DeploySalesforceGuards(SetupFixture):
         self.assertEqual(self.value(f'{SF}/org-id'), ORG_ID)
         self.assertEqual(self.value('/cloud-agentic-iot/deployed-commit/salesforce'), self.head)
         self.assertEqual(len(self.deploys()), 2)   # check-only, then the deploy
+        for deploy in self.deploys():
+            # By manifest, removing what left force-app/ afterwards.
+            self.assertIn('--post-destructive-changes', deploy)
+            self.assertEqual(deploy[deploy.index('--post-destructive-changes') + 1],
+                             'manifest/destructiveChangesPost.xml')
 
     def test_an_org_paired_with_another_account_is_refused_before_anything_deploys(self):
         self.param(f'{SF}/org-id', OTHER_ORG_ID)
