@@ -111,6 +111,42 @@ static void millis_wrapping_changes_nothing() {
   CHECK(longRunning.angleAt(0xF0000000u - 0xF0000000u % SWEEP_PERIOD_MS + SWEEP_PERIOD_MS / 2) == 180);
 }
 
+static void a_new_period_changes_the_speed_not_the_place() {
+  // QUEUE_DEPTH can speed the sweep up or slow it down while it runs.
+  CaseAlertSweep sweep;
+  sweep.set(true, 0);
+  int at = sweep.angleAt(500);   // 90 degrees, on the way up
+  CHECK(at == 90);
+  sweep.setPeriod(8000, 500);
+  CHECK(sweep.period() == 8000);
+  CHECK(sweep.angleAt(500) == 90);   // where it was
+  CHECK(sweep.angleAt(500 + 2000) == 180);   // and on up, at the new speed: a quarter of 8 s to the top
+  CHECK(sweep.angleAt(500 + 6000) == 0);
+
+  // On the way down it keeps going down.
+  CaseAlertSweep down;
+  down.set(true, 0);
+  CHECK(down.angleAt(1500) == 90);   // 3/4 of the 2 s sweep: on the way back
+  down.setPeriod(1000, 1500);
+  CHECK(down.angleAt(1500) == 90);
+  CHECK(down.angleAt(1500 + 125) < 90);   // still going down, faster
+
+  // The same period, or an odd one, changes nothing it should not.
+  CaseAlertSweep same;
+  same.set(true, 0);
+  same.setPeriod(SWEEP_PERIOD_MS, 700);
+  CHECK(same.angleAt(700) == 126);
+  same.setPeriod(7201, 700);
+  CHECK(same.period() == 7200);   // even: up and down take as long
+  int previous = same.angleAt(700);
+  for (uint32_t now = 701; now < 700 + 3 * 7200; now++) {
+    int angle = same.angleAt(now);
+    CHECK(angle >= 0 && angle <= 180);
+    CHECK(std::abs(angle - previous) <= 1);
+    previous = angle;
+  }
+}
+
 int main() {
   off_until_turned_on();
   one_sweep_is_0_to_180_and_back();
@@ -119,6 +155,7 @@ int main() {
   a_repeat_changes_nothing();
   a_dose_starts_the_sweep_again_from_0();
   millis_wrapping_changes_nothing();
+  a_new_period_changes_the_speed_not_the_place();
   if (failures) {
     std::printf("%d check(s) failed\n", failures);
     return 1;

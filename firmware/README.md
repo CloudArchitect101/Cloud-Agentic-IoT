@@ -1,11 +1,11 @@
 # Firmware
 
-**Two device types**, one shared runtime.
+**One firmware for every board** (from patient-monitor 2.4.0), one shared runtime.
 
 | Sketch | What it does | Thing Groups |
 |---|---|---|
-| `patient-monitor/` | DHT11 vitals + medication servo | `canary-patient-monitor` → `fleet-patient-monitor` |
-| `queue-indicator/` | Servo driven by Salesforce Case queue depth | `canary-queue-indicator` → `fleet-queue-indicator` |
+| `patient-monitor/` | Every board: DHT11 readings, the medication servo, the case alert, and the queue indicator (QUEUE_DEPTH). What a board does is decided by its Asset's record type in Salesforce, not by its build | `canary-patient-monitor` and `internal-devices` inside `fleet-patient-monitor` |
+| `queue-indicator/` | **Retired** at 2.2.0: kept for a board already flashed with it. A new indicator is a patient-monitor board whose Asset is an Internal Device ([below](#one-firmware-for-every-board-patient-monitor-240)) | `canary-queue-indicator` → `fleet-queue-indicator` |
 | `libraries/CloudAgenticDevice/` | Shared: NVS credentials and settings, provisioning, WiFi, MQTT with backoff, OTA, live mode, commands and their answers | — |
 
 ## Why a shared library
@@ -36,11 +36,13 @@ compiles, flashes, and provisions in one interactive pass. See
 Each sketch declares its own name, which must match its folder:
 
 ```cpp
-#define FIRMWARE_VERSION "2.3.0"
+#define FIRMWARE_VERSION "2.4.0"
 CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY_SECONDS);
 ```
 
 That name travels in every OTA job document, and **the device refuses any firmware built for a different type**. Thing Group targeting should already prevent a mismatch, but a mis-targeted job must not be able to destroy hardware: queue-indicator firmware on a patient monitor means wrong pins and wrong logic, and a bricked device cannot be fixed over the air — only by USB.
+
+This is why the build every board runs is still called `patient-monitor`, internal boards included: every board in the field (Test7, Test8) runs `patient-monitor`, and it would refuse a build under a new name. Renaming would mean a USB flash of every board. A board still on the queue-indicator build refuses the patient-monitor build for the same reason; it moves over only by USB (`scripts/firmware.sh flash patient-monitor`).
 
 ## Built for a fleet, not a desk
 
@@ -75,7 +77,7 @@ From then on the board publishes a reading every `seconds` to `device/<thing>/li
 - **RAM only.** Live mode is never written to NVS, so a restart ends it.
 - **A plain MQTT topic.** Live readings go through the message broker at QoS 0 rather than Basic Ingest, because the card subscribes to them and Basic Ingest reaches only rules. AWS bills them as messaging, which is why they flow only while someone watches.
 - **The console** says `live: every 2 s for 15 min` for each command and `live: off` when it ends, by itself or by `minutes` 0. Live readings print nothing, and `DHT read failed` appears on stored readings only, so the console stays readable.
-- **The queue indicator** accepts the command too, since the library handles it, but its sketch has no reading to send. Firmware older than 2.2.0 ignores the command.
+- **A board without a sensor**, such as an internal board, streams too: from 2.4.0 its live readings say `"sensorError":"no sensor"`. The retired queue indicator accepts the command, since the library handles it, but its sketch has no reading to send. Firmware older than 2.2.0 ignores the command.
 
 `test/firmware/device_timing_test.cpp` checks the window on the host: the first reading at once, a second command extending the window, 0 minutes, and a window that straddles the `millis()` wrap.
 
@@ -91,7 +93,7 @@ Commands arrive on `device/<thing>/command`: from the device-command API (Device
 | `RESTART` | library | Restarts the board | done `restarting`, sent before it restarts |
 | `DISPENSE_MEDICATION` | patient-monitor | Turns the dispenser servo to 90°, holds it a second, brings it back to 0 | done, once the arm is home |
 | `CASE_ALERT` | patient-monitor (2.3.0) | `active` true: the servo sweeps 0 to 180° and back without stopping; false: it stops at 0 (below) | done, also for a repeat; refused when `active` is not true or false |
-| `QUEUE_DEPTH` | queue-indicator | Runs or parks the indicator servo | done |
+| `QUEUE_DEPTH` | patient-monitor (2.4.0), queue-indicator | `intensity` 0-100 (kept to that range) and `openCaseCount`: the servo turns while it is above 0, faster as the queue fills, and stops at 0 unless a case alert is on (below). It publishes `{"deviceId","openCaseCount","intensity"}` on `device/<thing>/status` | none: the queue-depth API sends no `commandId` |
 | anything else | | Nothing | refused `unknown operation <operation>`, or `no operation` when it names none |
 
 The device-command API checks a command against this table before it publishes it ([`lambda/shared/guardrails.js`](../lambda/shared/guardrails.js)): an operation not listed, a setting the operation does not take, or a value outside the range the board accepts is refused there with a 400, so it never reaches the board. `QUEUE_DEPTH` is not among those it sends; the queue-depth API publishes it itself.
@@ -120,11 +122,29 @@ Salesforce sends `{"operation":"CASE_ALERT","active":true}` when the device's fi
 - **A dose** (`DISPENSE_MEDICATION`) still swings 90° and back. The sweep then starts again from 0.
 - **Kept in NVS** (namespace `caseAlert`), so the motor turns again after a restart or an update while the Case still waits. A repeat changes nothing and writes nothing.
 - **Missed while offline?** When the board reconnects, Salesforce sends the state again: on while the Asset's Case Alert is checked, off when an off was sent while it was away.
-- **A continuous-rotation servo** (FS90R / SG90-360): uncomment `CONTINUOUS_ROTATION_SERVO` in the sketch, as on the queue indicator. It then spins at about half speed while the alert is on, and stands still at 90 when it is off.
+- **A continuous-rotation servo** (FS90R / SG90-360): uncomment `CONTINUOUS_ROTATION_SERVO` in the sketch. It then spins at about half speed while the alert is on, and stands still at 90 when it is off.
 - **The console** says `case alert: on, motor turning`, `case alert: off, motor stopped` or `case alert: already on`.
 - **Older firmware** refuses `CASE_ALERT` as an unknown operation, so the Device Command shows Failed. Update the board first: `scripts/ota.sh try Dev patient-monitor`.
 
 `test/firmware/case_alert_sweep_test.cpp` checks the sweep on the host, and `test/firmware/contract.test.js` checks that Salesforce, the device-command Lambda and the sketch spell `CASE_ALERT` and `active` the same.
+
+## One firmware for every board (patient-monitor 2.4.0)
+
+Every board runs the patient-monitor build, so one OTA reaches them all. What a board is told depends on its Asset's record type in Salesforce ([`DeviceRoles`](../force-app/main/default/classes/DeviceRoles.cls)):
+
+| Asset record type | Its servo turns while | Readings | Thing Group when Salesforce provisions it |
+|---|---|---|---|
+| Patient Device (and an Asset with no record type, every Asset made before 2.4.0) | its own device has an open Case owned by Care_Team_Queue: `CASE_ALERT` | yes: the 30 C room rule and doses apply | `fleet-patient-monitor` |
+| Internal Device: a ward board, such as a nurse-station indicator, on the ward's Account rather than a patient's | any open Case is owned by Care_Team_Queue, on any device or none, faster as the queue fills: `QUEUE_DEPTH` | none needed: an internal board usually has no DHT11, and if it has one, its readings open no Case and dose nothing | `internal-devices`, inside `fleet-patient-monitor` |
+
+- **The servo turns if either asks.** With a case alert and a queue both on, it sweeps at the faster of the two: the case alert sweeps once every 2 s; the queue from about 7 s a sweep at 1 Case (intensity 20, with a full-speed depth of 5) to about 1 s at full speed, as the queue-indicator firmware did. It stops only when neither asks. A dose still swings 90° and back, then the sweep goes on from 0. `ServoDemand.h` holds the rule, `CaseAlertSweep.h` the sweep, which can change speed without the arm jumping.
+- **A continuous-rotation servo** spins instead: about half speed for a case alert, and from just above standing still to full speed for the queue, the larger of the two.
+- **The queue's depth is not kept in NVS.** Salesforce sends it again each time an internal board connects (`DeviceConnectionService`), and at once when an Asset's record type changes. The case alert is still kept, as in 2.3.0.
+- **No sensor, no noise.** A board without a DHT11 prints `DHT read failed` for its first three readings, then `DHT11: no sensor answers, so this board sends no readings (normal on a ward board)` once, and nothing more. It keeps trying once per reading interval, silently, and says `DHT11: answering again, readings on` if a sensor is plugged in. A sensor that worked and stops says `DHT11: stopped answering` once. No reading is published without a sensor, so nothing in AWS or Salesforce reacts. Its live card shows `sensorError: "no sensor"`. `SensorPresence.h` holds the rule.
+- **The console** says `queue: 2 case(s), intensity 40% -> motor turning`, `-> motor stopped`, or `-> motor turning for the case alert`, and `case alert: off, motor turning for the queue` when the queue still turns it.
+- **Older firmware.** 2.3.0 does not know `QUEUE_DEPTH`: an internal board on it stays still until it takes 2.4.0 (`scripts/ota.sh try Dev patient-monitor`).
+
+`test/firmware/servo_demand_test.cpp` checks the servo rule and the sensor rule on the host, `test/firmware/case_alert_sweep_test.cpp` the speed change, and `test/firmware/contract.test.js` that the queue relay and the sketch spell `QUEUE_DEPTH`, `intensity` and `openCaseCount` the same, that the build keeps the name `patient-monitor`, and that `internal-devices` sits inside `fleet-patient-monitor`.
 
 ## Lifecycle: manual once, automatic thereafter
 
