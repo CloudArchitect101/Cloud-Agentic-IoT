@@ -16,6 +16,10 @@
  * a command goes only when the state changes: a second open Case, or closing
  * one of two, sends nothing.
  *
+ * A patient device only (DeviceRoles): an Internal Device follows the whole
+ * queue instead (CaseQueueMonitorService), so its Case alert stays off, and
+ * one that was on when the Asset became internal is turned off.
+ *
  * Only an Asset with a Thing ARN gets a command: a device that was never
  * provisioned has no board in AWS. Its Case_Alert_Active__c still follows its
  * Cases, so its board is told when it first comes online.
@@ -63,6 +67,14 @@ public without sharing class CaseAlertService {
             }
         }
         syncSafely(assetIds);
+    }
+
+    /**
+     * Counts these devices again, whatever their Cases did: DeviceRoles, when
+     * an Asset's record type changes. Never throws.
+     */
+    public static void refresh(Set<Id> assetIds) {
+        syncSafely(assetIds == null ? new Set<Id>() : new Set<Id>(assetIds));
     }
 
     /** After delete. */
@@ -148,7 +160,7 @@ public without sharing class CaseAlertService {
         // of one device at once then count one after the other, and the
         // second sees the first's Case closed.
         List<Asset> devices = [
-            SELECT Id, Thing_ARN__c, Case_Alert_Active__c
+            SELECT Id, RecordTypeId, Thing_ARN__c, Case_Alert_Active__c
             FROM Asset
             WHERE Id IN :assetIds
             FOR UPDATE
@@ -168,7 +180,8 @@ public without sharing class CaseAlertService {
 
         List<Asset> changed = new List<Asset>();
         for (Asset device : devices) {
-            Boolean alert = alerting.contains(device.Id);
+            // An internal board follows the whole queue, not its own Cases.
+            Boolean alert = alerting.contains(device.Id) && !DeviceRoles.isInternal(device);
             if (alert != (device.Case_Alert_Active__c == true)) {
                 device.Case_Alert_Active__c = alert;
                 changed.add(device);

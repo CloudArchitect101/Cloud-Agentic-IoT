@@ -25,6 +25,9 @@
  *   - A Device ID that is not linked is sent as it is. Slack names a board by
  *     its Thing name, and a board does not need an Asset to take a command.
  *
+ * A DISPENSE_MEDICATION for an Internal Device (DeviceRoles) is refused: a
+ * ward board has no dispenser.
+ *
  * Serial numbers and Thing names are compared exactly: AWS IoT Thing names
  * are case-sensitive, so Test7 and test7 are two boards, while SOQL compares
  * text regardless of case.
@@ -132,7 +135,7 @@ public with sharing class DeviceCommandService {
         }
         try {
             return [
-                SELECT Id, Name, SerialNumber, Thing_ARN__c
+                SELECT Id, Name, RecordTypeId, SerialNumber, Thing_ARN__c
                 FROM Asset
                 WHERE Id IN :assetIds OR SerialNumber IN :serialNumbers
             ];
@@ -147,7 +150,7 @@ public with sharing class DeviceCommandService {
         if (assetIds.isEmpty()) {
             return new List<Asset>();
         }
-        return [SELECT Id, Name, SerialNumber, Thing_ARN__c FROM Asset WHERE Id IN :assetIds];
+        return [SELECT Id, Name, RecordTypeId, SerialNumber, Thing_ARN__c FROM Asset WHERE Id IN :assetIds];
     }
 
     // Device ID becomes the Thing name of the command's Asset, unless it
@@ -156,6 +159,11 @@ public with sharing class DeviceCommandService {
         if (device == null) {
             command.Asset__c.addError('This device was not found, or you cannot see it. '
                 + 'Choose a device you can open, or leave Device empty and enter the Device ID.');
+            return;
+        }
+        if (RoomTemperatureCaseService.DISPENSE_COMMAND.equals(command.Command__c) && DeviceRoles.isInternal(device)) {
+            command.Command__c.addError(device.Name + ' is an Internal Device: a ward board with no dispenser, '
+                + 'so it takes no DISPENSE_MEDICATION. Send the dose to the patient\'s device.');
             return;
         }
         String thingName = thingNameOf(device);

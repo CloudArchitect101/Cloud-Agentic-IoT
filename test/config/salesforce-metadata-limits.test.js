@@ -37,6 +37,31 @@ test('every permission set description fits in 255 characters', () => {
   }
 });
 
+test('every record type description fits in 255 characters, and both device roles are visible where Assets are made', () => {
+  const files = filesUnder(path.join(metadata, 'objects'), '.recordType-meta.xml');
+  assert.ok(files.length >= 2, 'no record types found');
+  for (const file of files) {
+    const match = fs.readFileSync(file, 'utf8').match(/<description>([\s\S]*?)<\/description>/);
+    if (!match) continue;
+    const length = unescapeXml(match[1]).length;
+    assert.ok(length <= 255, `${path.relative(root, file)}: description is ${length} characters, the maximum is 255`);
+  }
+  for (const set of ['Device_Platform_Admin', 'Device_Integration']) {
+    const text = fs.readFileSync(path.join(metadata, `permissionsets/${set}.permissionset-meta.xml`), 'utf8');
+    for (const recordType of ['Asset.Internal_Device', 'Asset.Patient_Device']) {
+      assert.match(text, new RegExp(`<recordType>${recordType}</recordType>\\s*<visible>true</visible>`), `${set}: ${recordType}`);
+    }
+  }
+});
+
+// The queue binding used to name ESP32-Patient-Monitor-01, a board that never
+// existed, so the queue moved no motor. Internal Device boards follow the
+// queue now; a binding names a board only when one is meant.
+test('the shipped Care_Team_Queue binding names no board of its own', () => {
+  const binding = fs.readFileSync(path.join(metadata, 'customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml'), 'utf8');
+  assert.match(binding, /<field>Device_Id__c<\/field>\s*<value xsi:nil="true"\s*\/>/);
+});
+
 // The agent's metadata refers to itself by name in four places: the topic
 // names its actions, each action names an Apex class, and the permission set
 // opens those classes to the people who talk to the agent. A broken name

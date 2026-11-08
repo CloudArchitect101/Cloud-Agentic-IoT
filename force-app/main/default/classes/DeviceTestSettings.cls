@@ -16,6 +16,8 @@ public class DeviceTestSettings {
             Callout_Timeout_Seconds__c  = 25,
             Bundle_TTL_Minutes__c       = 15,
             Default_Thing_Group__c      = 'fleet-patient-monitor',
+            Internal_Thing_Group__c     = 'internal-devices',
+            Internal_Device_Queue__c    = 'Care_Team_Queue',
             Devices_Per_Callout__c      = 10,
             Commands_Per_Callout__c     = 200,
             Callouts_Per_Job__c         = 50,

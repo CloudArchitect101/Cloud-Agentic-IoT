@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Internal_Device_Queue__c</fullName>
+    <label>Internal Device Queue</label>
+    <description>DeveloperName of the queue every Internal Device board follows: its servo turns while any open Case, on any device or none, is owned by it. Blank means Escalation Case Queue.</description>
+    <length>80</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

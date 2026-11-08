@@ -312,4 +312,14 @@
         <viewAllRecords>false</viewAllRecords>
         <modifyAllRecords>false</modifyAllRecords>
     </objectPermissions>
+    <!-- Both device roles (Asset record types). Patient Device is the
+         usual one; an Asset with no record type counts as one too. -->
+    <recordTypeVisibilities>
+        <recordType>Asset.Internal_Device</recordType>
+        <visible>true</visible>
+    </recordTypeVisibilities>
+    <recordTypeVisibilities>
+        <recordType>Asset.Patient_Device</recordType>
+        <visible>true</visible>
+    </recordTypeVisibilities>
 </PermissionSet>

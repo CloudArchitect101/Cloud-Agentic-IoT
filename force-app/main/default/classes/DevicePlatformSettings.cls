@@ -8,6 +8,7 @@
  * queue that owns them, and whether (and how often) one also requests a dose.
  * Whether the rule runs at all is decided in AWS (RoomTempAlert in
  * config/<env>.json), not here.
+ * The OTA group and the queue of an Internal Device (DeviceRoles).
  * Values live in the Device_Platform_Setting__mdt record named Default, so an
  * admin changes them in Setup (or in force-app/main/default/customMetadata)
  * without touching code.
@@ -95,6 +96,24 @@ public with sharing class DevicePlatformSettings {
 
     public static String defaultThingGroup() {
         return required(get().Default_Thing_Group__c, 'Default_Thing_Group__c');
+    }
+
+    /**
+     * OTA group for a new Internal Device whose Asset names none:
+     * Internal_Thing_Group__c, or Default_Thing_Group__c when that is blank.
+     */
+    public static String internalThingGroup() {
+        String value = get().Internal_Thing_Group__c;
+        return String.isBlank(value) ? defaultThingGroup() : value;
+    }
+
+    /**
+     * DeveloperName of the queue every Internal Device board follows:
+     * Internal_Device_Queue__c, or Escalation_Case_Queue__c when that is blank.
+     */
+    public static String internalDeviceQueue() {
+        String value = get().Internal_Device_Queue__c;
+        return String.isBlank(value) ? escalationCaseQueue() : value;
     }
 
     public static String escalationCaseOrigin() {

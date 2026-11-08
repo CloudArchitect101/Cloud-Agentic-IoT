@@ -19,6 +19,14 @@
         <value xsi:type="xsd:string">fleet-patient-monitor</value>
     </values>
     <values>
+        <field>Internal_Thing_Group__c</field>
+        <value xsi:type="xsd:string">internal-devices</value>
+    </values>
+    <values>
+        <field>Internal_Device_Queue__c</field>
+        <value xsi:type="xsd:string">Care_Team_Queue</value>
+    </values>
+    <values>
         <field>Devices_Per_Callout__c</field>
         <value xsi:type="xsd:double">10</value>
     </values>

@@ -17,6 +17,10 @@
                 <field>SerialNumber</field>
             </layoutItems>
             <layoutItems>
+                <behavior>Readonly</behavior>
+                <field>RecordTypeId</field>
+            </layoutItems>
+            <layoutItems>
                 <behavior>Edit</behavior>
                 <field>AccountId</field>
             </layoutItems>

@@ -20,6 +20,10 @@
  * DISPENSE_MEDICATION Device Command, when Room_Temp_Dispense__c is on and
  * no rule dose went to the device within the cooldown.
  *
+ * An Internal Device (DeviceRoles) is a ward board, not a patient's room, so
+ * a reading from one, should it have a sensor, opens no Case and doses
+ * nothing.
+ *
  * Without sharing: the Cases are owned by a queue and the Assets may be
  * invisible to the integration user that inserts the vitals. A dedupe that
  * cannot see the open Case would open a duplicate.
@@ -197,7 +201,7 @@ public without sharing class RoomTemperatureCaseService {
     private static Map<String, Asset> assetsFor(Set<String> keys) {
         List<Asset> found;
         try {
-            found = [SELECT Id, SerialNumber, Thing_ARN__c FROM Asset WHERE SerialNumber IN :keys FOR UPDATE];
+            found = [SELECT Id, RecordTypeId, SerialNumber, Thing_ARN__c FROM Asset WHERE SerialNumber IN :keys FOR UPDATE];
         } catch (QueryException e) {
             System.debug(LoggingLevel.WARN, 'Room-temperature rule could not read the Assets now: ' + e.getMessage());
             return null;
@@ -217,6 +221,11 @@ public without sharing class RoomTemperatureCaseService {
             List<Asset> matches = bySerialNumber.get(deviceId);
             if (matches != null && matches.size() == 1
                     && deviceId.equals(DeviceProvisioningService.thingNameIn(matches[0].Thing_ARN__c))) {
+                if (DeviceRoles.isInternal(matches[0])) {
+                    // A ward board, not a patient's room: no Case, no dose.
+                    System.debug(LoggingLevel.INFO, deviceId + ' is an Internal Device, no room-temperature Case');
+                    continue;
+                }
                 byDevice.put(deviceId, matches[0]);
             } else {
                 System.debug(LoggingLevel.WARN, 'No Asset for ' + deviceId + ', no room-temperature Case');

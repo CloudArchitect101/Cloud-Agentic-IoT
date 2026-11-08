@@ -19,7 +19,8 @@
  *
  * A board that comes online is told its case alert again (CaseAlertService.
  * resendAfterReconnect), since a CASE_ALERT sent while it was away never
- * reached it.
+ * reached it, and an Internal Device board the queue's depth
+ * (CaseQueueMonitorService.resyncAfterReconnect), for the same reason.
  *
  * Without sharing: a board's connection is a fact about its Thing, so every
  * Asset with that Thing ARN must show it, whoever owns the Asset and whatever
@@ -140,6 +141,7 @@ public without sharing class DeviceConnectionService {
             }
         }
         CaseAlertService.resendAfterReconnect(cameOnline, offlineSinceById);
+        CaseQueueMonitorService.resyncAfterReconnect(cameOnline);
         return outcomes;
     }
 
@@ -186,7 +188,7 @@ public without sharing class DeviceConnectionService {
         // older change never lands last. A lock it cannot get in time fails
         // the call, and the Lambda sends the batch again.
         for (Asset device : [
-            SELECT Id, Thing_ARN__c, Connection_Status__c, Connection_Since__c, Last_Disconnect_Reason__c,
+            SELECT Id, RecordTypeId, Thing_ARN__c, Connection_Status__c, Connection_Since__c, Last_Disconnect_Reason__c,
                    Case_Alert_Active__c
             FROM Asset
             WHERE Thing_ARN__c IN :thingArns
