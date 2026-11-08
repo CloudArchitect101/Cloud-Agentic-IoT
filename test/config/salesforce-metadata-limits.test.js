@@ -92,6 +92,18 @@ test('the topic tells the agent to cite the procedure it used, by SOP ID and ver
   assert.match(cite[1], /no ward procedure covers it/);
 });
 
+// Asked "Test8 reads 31 C, what do I do?" while the procedure index was
+// unavailable, the agent answered only "I cannot access the procedure
+// details" and never read Test8. A named device's readings must not depend
+// on the procedure search.
+test('the topic tells the agent to report a named device\'s readings even when Find Procedure fails', () => {
+  const topic = fs.readFileSync(path.join(metadata, 'genAiPlugins/Patient_Device_Monitoring.genAiPlugin-meta.xml'), 'utf8');
+  const cite = topic.match(/<developerName>instruction_cite_procedures<\/developerName>[\s\S]*?<description>([\s\S]*?)<\/description>/);
+  assert.match(cite[1], /always get its latest readings/);
+  assert.match(cite[1], /If Find Procedure fails/);
+  assert.match(cite[1], /offer to escalate/);
+});
+
 // The Metadata API at 64.0 refuses a BotVersion that carries
 // staticPromptsEnabled ("Element ... invalid at this location"), and the
 // whole deploy fails with it.
