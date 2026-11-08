@@ -20,7 +20,9 @@ import textwrap
 import unittest
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-BASE = '/services/data/v64.0/ssot/calculated-insights'
+# The script takes its API version from sfdx-project.json, so the test does too.
+with open(os.path.join(os.path.dirname(__file__), '..', '..', 'sfdx-project.json')) as _f:
+    BASE = '/services/data/v%s/ssot/calculated-insights' % json.load(_f)['sourceApiVersion']
 
 FAKE_SF = textwrap.dedent(r'''
     #!/usr/bin/env python3
