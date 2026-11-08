@@ -7,14 +7,14 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 | Object | Standard or custom | Why |
 |---|---|---|
 | **Person Account** | Standard | B2C patients. Free on EE+; customers never consume licenses. |
-| **Asset** | Standard | The device registry. SerialNumber = IoT Thing name, Account = the patient, Status/InstallDate out of the box. The added fields hold what AWS knows about the board: its Thing ARN, certificate, Thing Group and provisioning status, and, from AWS IoT's own connect and disconnect events, `Connection_Status__c`, `Connection_Since__c` and `Last_Disconnect_Reason__c` ([LIVE-STATUS.md](LIVE-STATUS.md)), and `Case_Alert_Active__c`, the motor state last sent to its board (below). Readings are never stored on it. Replaced an earlier custom `Patient_Device__c` that re-implemented all of this. |
+| **Asset** | Standard | The device registry. SerialNumber = IoT Thing name, Account = the patient, Status/InstallDate out of the box. Two record types say what a board is for ([below](#device-roles)): `Patient_Device` and `Internal_Device`. The added fields hold what AWS knows about the board: its Thing ARN, certificate, Thing Group and provisioning status, and, from AWS IoT's own connect and disconnect events, `Connection_Status__c`, `Connection_Since__c` and `Last_Disconnect_Reason__c` ([LIVE-STATUS.md](LIVE-STATUS.md)), and `Case_Alert_Active__c`, the motor state last sent to its board (below). Readings are never stored on it. Replaced an earlier custom `Patient_Device__c` that re-implemented all of this. |
 | **Case** | Standard | All human-actionable work: queue depth (chapter 03), agent escalations (chapter 05, stamped `Origin=Agentforce`), and the room-temperature demo rule (chapter 03, `Origin=Room Temperature Rule`, at most one open per device's Asset). Standard queues, assignment, reports come free. |
 | **Group (Queue)** | Standard | Drives the physical indicator. No custom "work bucket". |
 | `Patient_Vitals__c` | Custom — deliberate | Alert-worthy readings only (state transitions, non-STABLE), plus room-temperature reports AWS flagged with `Room_Temperature_Alert__c` (on crossing 30 C, then at most once per re-alert interval). Health Cloud's `CareObservation` is the standard answer but Health Cloud is a paid SKU outside the free-tier build; raw telemetry belongs in DynamoDB + Data Cloud ingestion, not CRM rows. Documented tradeoff, not an oversight. |
 | `Patient_Daily_Summary__c` | Custom — deliberate | The aggregation unit that gets embedded for RAG. No standard equivalent. |
 | `Room_Reading` (Data Cloud) | Custom data model object — deliberate | Every room reading, from the S3 archive's CSV copy, for the calculated insights ([DATA-CLOUD.md](DATA-CLOUD.md)). It lives in Data Cloud, not in CRM storage, which is what lets every reading be kept where `Patient_Vitals__c` keeps only the ones someone acts on. Custom, so its fields are named as the CSV names them and the insights SQL can rely on them. |
 | `Device_Command__c` | Custom — deliberate | Auditable command lifecycle (Pending→Sent→Acked/Failed) for physical devices, with the board's own answer: [below](#device-command-lifecycle). No standard object models this. |
-| `Device_Queue_Binding__mdt` | Custom Metadata | Configuration, not data: which queue drives which device. Admin-editable, deployable, no storage cost. |
+| `Device_Queue_Binding__mdt` | Custom Metadata | Configuration, not data: how fast a queue's boards turn, and one more board that follows it if wanted. Every Internal Device follows the Internal Device Queue without one. Admin-editable, deployable, no storage cost. |
 | `Aws_Spend_Snapshot__c` | Custom setting (hierarchy) | The last AWS spend the Home page's usage card read, for when AWS does not answer. One org-default row; Platform Cache would need storage Developer Edition does not have. |
 | `Queue_Depth_Change__e`, `Patient_Vital_Alert__e` | Platform Events | The platform's native pub/sub. One publisher, any number of subscribers (servo, LWC, agent) that cannot drift apart. |
 
@@ -27,11 +27,22 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 | LWC | Four components: `queueDepthIndicator` (chapter 03), `reprovisionDevice` (the Re-provision action), `deviceLiveCard` (live status) and `platformUsageCard` (the app's Home page: AWS spend and Salesforce limits) | The queue indicator subscribes via `empApi` to the same event the servo consumes. The live card takes readings from AWS IoT over MQTT, never through Salesforce. The usage card reads AWS spend through the device API, once per page load. UI elsewhere is standard reports/dashboards/record pages. |
 | Auth | Named Credentials / JWT Bearer everywhere | No passwords, no keys in code, anywhere. |
 
+## Device roles
+
+Every board runs the same firmware (patient-monitor 2.4.0 and later); its Asset's record type decides what Salesforce tells it. `DeviceRoles` reads it.
+
+| Record type | Who it is for | Account | Its servo turns while | Room rule, doses | Thing Group when provisioned with none named |
+|---|---|---|---|---|---|
+| `Patient_Device` (default), or none | A patient | The patient's | Its own device has an open Case in Care_Team_Queue (`CASE_ALERT`) | Yes | `Default_Thing_Group__c`, `fleet-patient-monitor` |
+| `Internal_Device` | The ward: a nurse-station indicator | The ward's own Account (Salesforce wants an Account or a Contact on every Asset; Person Accounts are off in this org) | Any open Case is owned by `Internal_Device_Queue__c` (Care_Team_Queue), on any device or none (`QUEUE_DEPTH`) | No: no room-rule Case, and a `DISPENSE_MEDICATION` for it is refused | `Internal_Thing_Group__c`, `internal-devices` (inside `fleet-patient-monitor`, so every release reaches it) |
+
+Changing an Asset's record type tells its board at once: one that becomes internal gets a case alert off and the queue's depth; one that becomes a patient device gets a queue stop and its own Cases' alert. Both record types are visible in `Device_Platform_Admin` and `Device_Integration`. The AWS Thing Group is set when the device is provisioned; to move a board that is already provisioned, `scripts/ota.sh join <env> <thing> patient-monitor internal`.
+
 ## Device Command lifecycle
 
 A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**), by Slack's `/dispense-medication`, by the room-temperature demo rule (one `DISPENSE_MEDICATION` per new Case, Requested By `Room Temperature Rule`), by `CaseAlertService` (below), or through the API.
 
-**Case alert.** A device's patient monitor turns its servo while the device has at least one open Case owned by Care_Team_Queue. `CaseAlertService`, from `CaseTrigger`, creates one `CASE_ALERT` Device Command with `Case_Alert_On__c` checked when the first such Case appears, and one unchecked when the last one is closed, deleted, given to a person or moved to another Asset. `Asset.Case_Alert_Active__c` keeps the state last sent, so nothing is sent while the state stays the same. It is sent as whoever saved the Case. When a board comes back online, `DeviceConnectionService` has it sent again: on while Case Alert is checked, off when an off was sent while the board was away.
+**Case alert.** A patient device's board turns its servo while the device has at least one open Case owned by Care_Team_Queue (an Internal Device follows the whole queue instead, [above](#device-roles)). `CaseAlertService`, from `CaseTrigger`, creates one `CASE_ALERT` Device Command with `Case_Alert_On__c` checked when the first such Case appears, and one unchecked when the last one is closed, deleted, given to a person or moved to another Asset. `Asset.Case_Alert_Active__c` keeps the state last sent, so nothing is sent while the state stays the same. It is sent as whoever saved the Case. When a board comes back online, `DeviceConnectionService` has it sent again: on while Case Alert is checked, off when an off was sent while the board was away.
 
 | Status | Set by | Means |
 |---|---|---|

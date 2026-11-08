@@ -64,8 +64,9 @@ per environment, in the order they come up below:
 Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
 named and external credentials, the `AWS_IoT_Relay_Callers` permission set
 and its assignments to people (the deploy assigns it to the integration user
-once it exists), queue members, and the `Device_Queue_Binding` record's board
-name. `Care_Team_Queue` itself ships as metadata. They
+once it exists), queue members, and which boards are indicators (an Asset
+record type, Internal Device, set per board). `Care_Team_Queue` itself ships
+as metadata. They
 depend on values from each org, and become per-org metadata next.
 
 ---
@@ -789,6 +790,11 @@ there.
    The second command prints the bucket name for step 2, and
    `datacloud/room-readings/`. Within a minute of a board sending, CSV files
    appear there ([DATA-CLOUD.md, Check each step](DATA-CLOUD.md#check-each-step)).
+   S3 has no folders: the prefix appears with the first CSV, which is written
+   only when a board sends a reading. Right after the deploy, or while every
+   board is off, `datacloud/room-readings/` does not exist yet; power a board
+   on (one with a DHT11) and look again a minute later. The connection in
+   step 2 can be made before that.
 2. **Start the connection.** Data Cloud Setup → **Other Connectors** (some orgs
    list it under External Integrations, or as **More Connectors**) → **New** →
    **Amazon S3**. Name it `Room Readings S3`. **Bucket Name**: the bucket from

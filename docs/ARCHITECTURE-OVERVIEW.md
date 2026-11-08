@@ -68,7 +68,7 @@ Those additional fields are only filled by the tests and the load simulation (`t
 | Component | Purpose | Technology |
 |-----------|---------|------------|
 | Patient Device | Collects vitals, actuates on command | Physical ESP32 + DHT11 + servo (chapter `00`) |
-| Queue Indicator | Physical Case-queue depth display | ESP32 + servo, driven by custom metadata (chapter `03`) |
+| Queue Indicator | Physical Case-queue depth display | The same ESP32 firmware; an Asset of record type Internal Device follows Care_Team_Queue (chapter `03`) |
 | Slack Bot | Headless Salesforce read/write from chat | Lambda + JWT Bearer Flow (chapter `04`) |
 | Data Ingestion | Transform and route telemetry | AWS Lambda |
 | Data Cloud | Unified patient data engine | Salesforce Data Cloud |

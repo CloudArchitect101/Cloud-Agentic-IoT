@@ -143,6 +143,19 @@ scripts/ota.sh status Prod                                   # the last five job
 ```
 
 `scripts/setup-device.sh` puts a newly provisioned board in its fleet group.
+
+Internal boards (an Asset of record type Internal Device, such as a
+nurse-station indicator) run the patient-monitor build too. Their group,
+`internal-devices`, sits inside `fleet-patient-monitor`, so every Dev release,
+try, promotion and reading interval reaches them; in Prod a release reaches
+them at promotion, after the canary. Salesforce provisions an Internal Device
+whose Thing Group is blank into it. To move a board that is already
+provisioned (AWS IoT allows one group per hierarchy, so it leaves fleet and
+canary first):
+
+```bash
+scripts/ota.sh join Dev Test7 patient-monitor internal
+```
 Every sketch needs its pair of groups in that template, and `scripts/check.sh`
 fails when one is missing.
 

@@ -323,9 +323,11 @@ sets it to `"true"`.
 - Care_Team_Queue lists Case as a supported object (Setup → Queues). If not,
   the Case lands with the integration user, an ERROR is logged, and the
   indicator does not count it.
-- `Device_Queue_Binding.Care_Team_Queue` names your queue indicator's Thing.
-  It ships as `ESP32-Patient-Monitor-01`; change the record if your indicator
-  board has another name, or step 2's indicator will not move.
+- Your indicator board's Asset has the Internal Device record type, and the
+  board runs patient-monitor 2.4.0 or later. Any such board follows
+  Care_Team_Queue; `Device_Queue_Binding.Care_Team_Queue` names no board (it
+  used to name `ESP32-Patient-Monitor-01`, a board that never existed, so no
+  indicator moved).
 - The integration user has the `AWS_IoT_Relay` principal access
   ([README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach)):
   the dose is a Device Command sent as the user who created it.

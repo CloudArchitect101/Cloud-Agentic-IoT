@@ -100,13 +100,14 @@ Cloud-Agentic-IoT/
 │   ├── bots/Patient_Care_Agent/       # The Agentforce agent itself (Bot + BotVersion), shipped inactive
 │   ├── genAiPlannerBundles/           # The agent's planner
 │   ├── genAiPlugins/ genAiFunctions/  # Its topic and registered actions
-│   ├── customMetadata/                # Device_Queue_Binding — config, not code
+│   ├── customMetadata/                # Device_Queue_Binding, Device_Platform_Setting — config, not code
+│   ├── objects/Asset/recordTypes/     # Patient_Device, Internal_Device: what a board is for
 │   └── lwc/                           # queueDepthIndicator, reprovisionDevice, deviceLiveCard, platformUsageCard
 ├── lambda/<function>/                 # Lambda source + CloudFormation per function
 ├── firmware/
 │   ├── libraries/CloudAgenticDevice/  # Shared runtime: NVS, provisioning, WiFi, MQTT, OTA
-│   ├── patient-monitor/               # DHT11 vitals + medication servo
-│   └── queue-indicator/               # Servo driven by Case queue depth
+│   ├── patient-monitor/               # Every board: DHT11 readings, dispenser, case alert, queue indicator
+│   └── queue-indicator/               # Retired: kept for a board already flashed with it
 ├── datacloud/                         # Data Cloud: the room readings' columns, the calculated insights' SQL
 ├── knowledge/sops/                    # The ward's sample SOPs the agent finds and cites (indexed on every AWS deploy)
 ├── mulesoft/                          # The iPaaS alternative to the ingestion Lambda (a design sketch)
@@ -232,7 +233,7 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 [`docs/DATA-CLOUD.md`](docs/DATA-CLOUD.md) explains the path and how to check each step.
 
-**5. Case queue + its binding.** The deploy creates `Care_Team_Queue`, a Case queue (`force-app/main/default/queues/`); add its members in Setup → Queues. Put your indicator's IoT Thing name into `force-app/main/default/customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml`, then push — the binding is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so a queue of another name means changing those two values.
+**5. Case queue and its indicator.** The deploy creates `Care_Team_Queue`, a Case queue (`force-app/main/default/queues/`); add its members in Setup → Queues. The indicator is any board whose Asset has the **Internal Device** record type: it follows the queue with no further setup (chapter 03). `Device_Queue_Binding.Care_Team_Queue` sets how fast it turns, and can name one more board; it is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so a queue of another name means changing those two values.
 
 **6. Activate the agent.** The deploy creates the **Patient Care Agent** (`force-app/main/default/bots/Patient_Care_Agent`), an employee agent whose version 1 uses `Patient_Care_Planner`, and leaves it inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). Activate it, as the admin:
 
@@ -425,22 +426,26 @@ A servo on a desk that spins while there is unclaimed work in a Salesforce Case 
 
 It is a desk toy. It is also a complete demonstration of Salesforce driving the physical world from business data: trigger → Platform Event → async callout with SigV4 auth → API Gateway → Lambda → IoT Core → MQTT → motor. The payoff is visible from across a room.
 
-**The design decision that matters:** nothing about *which* queue, *which* device, or *how fast* is hardcoded. It is all `Device_Queue_Binding__mdt` custom metadata:
+**The design decision that matters:** nothing about *which* queue, *which* device, or *how fast* is hardcoded.
+
+- **Which boards.** Every board runs the same firmware; the Asset's record type decides what it is for. A **Patient Device** (the default, and every Asset with no record type) turns its servo for its own Cases (the case alert, below). An **Internal Device**, a ward board such as a nurse-station indicator, follows the whole queue: it turns while at least one open Case is owned by Care_Team_Queue, whichever device the Case is on, or none, and stops at 0. Making a board an indicator is a change of record type, and the board is told at once. Salesforce wants an Account or a Contact on every Asset, so an Internal Device sits on the ward's own Account, never a patient's.
+- **Which queue.** `Internal_Device_Queue__c` on `Device_Platform_Setting__mdt.Default` (Care_Team_Queue).
+- **How fast, and extra boards.** `Device_Queue_Binding__mdt`:
 
 | Field | Purpose |
 |---|---|
-| `Queue_Developer_Name__c` | Which queue this device watches |
-| `Device_Id__c` | AWS IoT Thing name of the indicator |
-| `Full_Speed_Depth__c` | Case count at which the motor runs flat out |
+| `Queue_Developer_Name__c` | Which queue this binding watches |
+| `Device_Id__c` | Optional: the AWS IoT Thing name of one more board that follows this queue (blank in the shipped Care_Team_Queue binding) |
+| `Full_Speed_Depth__c` | Case count at which the motor runs flat out (5); also the Internal Device boards' when this is their queue |
 | `Active__c` | Kill switch that does not require a deploy |
 
-Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesforce, so the firmware stays dumb and the business rules stay where an admin can change them. Adding a second device on a second queue is a metadata record, not a code change.
+Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesforce, so the firmware stays dumb and the business rules stay where an admin can change them. One `Queue_Depth_Change__e` goes out per queue; the relay sends its `QUEUE_DEPTH` to the board the binding names and to every Internal Device board that is provisioned and not offline. A board that was offline is sent the depth when it connects again. Internal Device boards get no case alert, no room-rule Case and no dose (a dose sent to one is refused).
 
 **Hardware note:** a standard **SG90 is a positional servo** — 0–180°, physically incapable of continuous rotation. The firmware defaults to a gauge-needle sweep that gets faster as the queue deepens, which works on the SG90 you already have and reads clearly on camera. For literal continuous spin use an **FS90R or SG90-360** (~$6) and uncomment `#define CONTINUOUS_ROTATION_SERVO`. Both paths are compile-verified.
 
-**Key files:** `objects/Device_Queue_Binding__mdt/`, `classes/CaseQueueMonitorService.cls`, `triggers/CaseTrigger.trigger`, `objects/Queue_Depth_Change__e/`, `classes/QueueDepthRelayQueueable.cls`, `lambda/queue-relay/`, `firmware/queue-indicator/`
+**Key files:** `objects/Asset/recordTypes/`, `classes/DeviceRoles.cls`, `objects/Device_Queue_Binding__mdt/`, `classes/CaseQueueMonitorService.cls`, `triggers/CaseTrigger.trigger`, `objects/Queue_Depth_Change__e/`, `classes/QueueDepthRelayQueueable.cls`, `lambda/queue-relay/`, `firmware/patient-monitor/` (2.4.0 and later; [firmware/README.md](firmware/README.md#one-firmware-for-every-board-patient-monitor-240))
 
-**To see it work:** create a Case, assign it to the bound queue, and watch the motor start. Close the Case and watch it stop.
+**To see it work:** give a board's Asset the Internal Device record type, create a Case owned by Care_Team_Queue on any device, and watch that board's motor start. Close the Case and watch it stop.
 
 #### Room-temperature demo rule
 
@@ -453,7 +458,7 @@ A demo rule, not a clinical one: warm the patient monitor's DHT11 to 30 C and a 
 - **Dose cooldown.** One dose per new Case, and at most one per device every `Room_Temp_Dispense_Cooldown_Minutes__c` (60). A Case closed and reopened inside that hour gets no second dose, and its Description says so.
 - **Switches.** `RoomTempAlert` in `config/<env>.json` decides whether AWS sends flagged readings at all: on in Dev, off in Prod. `Room_Temp_Dispense__c` on the Default `Device_Platform_Setting__mdt` record turns dosing off while keeping the Cases; change it in the repo, because a Setup edit is overwritten by the next deploy.
 - **Emergency stop.** Add `PatientVitalsTriggerHandler` to `Integration_Control__c` Bypass Handlers at org level. Instant, no deploy.
-- **Case alert.** Any Case does this, not only the rule's: while a device has at least one open Case owned by Care_Team_Queue (`Room_Temp_Case_Queue__c` and `Escalation_Case_Queue__c`), its patient monitor's servo sweeps 0 to 180° and back every 2 seconds. `CaseAlertService` sends `CASE_ALERT` on with the first such Case and off when the last one is closed, deleted, given to a person or moved to another Asset; the Asset's Case Alert field holds the state last sent, so nothing is sent in between. A dose still swings, then the sweep goes on. The board keeps the state in NVS across restarts and updates, and when it reconnects Salesforce sends the state again. A failure is logged and never stops the Case from saving. Firmware 2.3.0 and later. To stop all of it at once, add `CaseTriggerHandler` to Bypass Handlers (that also stops the queue indicator).
+- **Case alert.** Any Case does this, not only the rule's: while a patient device has at least one open Case owned by Care_Team_Queue (`Room_Temp_Case_Queue__c` and `Escalation_Case_Queue__c`), its patient monitor's servo sweeps 0 to 180° and back every 2 seconds. `CaseAlertService` sends `CASE_ALERT` on with the first such Case and off when the last one is closed, deleted, given to a person or moved to another Asset; the Asset's Case Alert field holds the state last sent, so nothing is sent in between. A dose still swings, then the sweep goes on. The board keeps the state in NVS across restarts and updates, and when it reconnects Salesforce sends the state again. A failure is logged and never stops the Case from saving. Firmware 2.3.0 and later. To stop all of it at once, add `CaseTriggerHandler` to Bypass Handlers (that also stops the queue indicator).
 - **Deploy order.** Salesforce first (the `CASE_ALERT` value and the fields), then AWS (the device-command Lambda checks `active`), then the board: `scripts/ota.sh try Dev patient-monitor`.
 
 **Key files:** `lambda/patient-vitals/index.js` (`planDevice`), `triggers/PatientVitalsTrigger.trigger`, `classes/RoomTemperatureCaseService.cls`, `classes/CaseAlertService.cls`, `firmware/patient-monitor/`, `customMetadata/Device_Platform_Setting.Default.md-meta.xml`
@@ -650,7 +655,7 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 **The flow:**
 
 1. Create a **Wi-Fi Network** record — SSID plus passphrase in an **Encrypted Text** field, available in every edition, no Shield needed
-2. Create an **Asset**: SerialNumber = intended IoT Thing name, set the Wi-Fi Network, optionally a Thing Group
+2. Create an **Asset**: SerialNumber = intended IoT Thing name, set the Wi-Fi Network, optionally a Thing Group (left blank: `fleet-patient-monitor` for a Patient Device, `internal-devices` for an Internal Device, the record type of a ward board)
 3. `AssetTrigger` fires → `DeviceProvisioningService` calls AWS via a SigV4 Named Credential
 4. The Lambda creates the Thing and certificate, attaches the least-privilege policy, adds it to the Thing Group, writes the bundle to S3, returns the pre-signed URL. If a step fails, it undoes the group membership it added and deletes the certificate again, so a failed attempt leaves only an empty Thing
 5. The Asset updates to **Provisioned** with the link and its expiry. The link is in **Provisioning Bundle Link**, a long text field: signed with the Lambda's temporary credentials, it carries their session token and runs far past the 255 characters a URL field holds. If AWS finished but Salesforce cannot save the result, the Asset turns **Failed** with the reason and keeps the Thing ARN, so **Re-provision** issues a new link once the cause is fixed. If even that update fails, for example because the device was deleted meanwhile, only the job's debug log says so

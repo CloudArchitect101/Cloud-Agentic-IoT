@@ -34,6 +34,9 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | Nov 8 | Asked "Test8 reads 31 C, what do I do?", the agent asked what Test8 was instead of calling an action | Nothing in its instructions said that users name a device by its serial number, so a bare "Test8" looked ambiguous; it also tied the procedure search to a known device | The topic now says a device name the user gives is its serial number, to pass as written, and that Find Procedure needs no device | The topic instructions and the action description |
 | Nov 7 | Room-rule Cases were owned by the AWS integration user | The org had no `Care_Team_Queue`, so the code fell back to the running user | The queue ships as metadata (`3bac33b`) | |
 | Nov 7 | A Case undelete test expected a motor command that never came | After an undelete the queue may no longer own the Case | The test checks the owner (`829ca86`) | |
+| Nov 8 | No board turned for Cases in Care_Team_Queue, whichever device they were on; only the Case's own device swept (its case alert) | `Device_Queue_Binding.Care_Team_Queue` named `ESP32-Patient-Monitor-01`, a Thing no board is. AWS IoT accepts a publish to a topic nobody listens on, so nothing failed anywhere | Boards with the Internal Device record type follow the queue; the binding names no board | `salesforce-metadata-limits.test.js` checks the shipped binding; `DeviceRolesTest` |
+| Nov 8 | Found while building the ward board: an event for a queue with no bound board would have been refused | `Queue_Depth_Change__e.Device_Id__c` was required, from when each queue drove exactly one named board | Not required; the relay works out the boards | `DeviceRolesTest` publishes one |
+| Nov 8 | Found in review: the indicator's count could be lower than the queue's | `CaseQueueMonitorService` ran with sharing, so it counted only the open Cases the user who saved one could see | Without sharing, as `CaseAlertService` already was: every open Case of the queue counts | |
 
 ## The board and the serial scripts
 
@@ -44,6 +47,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | Nov 6 | `[Errno 16] Resource busy` while flashing or provisioning | An `arduino-cli monitor` still held the port | Close the monitor first | Documented in the board steps |
 | Nov 6 | Every OTA try waited 15 minutes | The Thing Group held Things with no board behind them | Remove those Things from the group | |
 | Nov 7 | The one-burst bundle test was flaky on macOS | Pseudo-terminal chunking differs between Linux and macOS | Made deterministic | |
+| Nov 8 | A board without a DHT11 (a nurse-station board) would print `DHT read failed` every reading interval, forever | The sketch reported every failed read | From 2.4.0 it says so three times, then once that there is no sensor, then nothing (`SensorPresence.h`) | `servo_demand_test.cpp` |
 | Nov 7 | The room rule didn't fire again after cooling | A new episode needs a reading *below* 29.0 °C, and the sensor bottomed at exactly 29.0. While hot, AWS re-reports every 15 minutes | By design; demo steps document it | Documented with the rule |
 
 ## AWS accounts
@@ -55,10 +59,19 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | Nov 7 | Bedrock: `ValidationException: Operation not allowed` for every model, with every IAM right in place | An account-level hold on new accounts: `get-foundation-model-availability` shows `authorizationStatus` `NOT_AUTHORIZED` while Region, entitlement and agreement are `AVAILABLE`. No IAM change lifts it, and no console page does either: the old Model access page is retired, and Bedrock AgentCore's Create Harness page hosts agents, it does not enable models | A free Support case under Account and billing (open). `SKIP_SOP_INDEX=yes` deploys everything else meanwhile | `index-sops.sh` names the hold when it hits it |
 | Nov 5–7 | `aws` commands failed to sign in partway through work | The `aws login` session expired | `aws login --profile <profile>` | |
 
+## Readings and Data Cloud
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+| --- | --- | --- | --- | --- |
+| Nov 8 | No `datacloud/room-readings/` folder in the archive bucket after the deploy | S3 has no folders: the prefix appears with the first CSV, which patient-vitals writes only when a board sends a reading. The boards had been offline since Nov 7 08:05 UTC | Power a board on; the prefix appears within a minute of its first reading | SETUP.md §7 step 1 says so |
+
 ## Limits found while designing
 
 | When | Finding | What it changed |
 | --- | --- | --- |
+| Nov 8 | Salesforce wants an Account or a Contact on every Asset, and Person Accounts are off in this Developer Edition org | An Internal Device (a ward board) sits on the ward's own Account; its record type, not the Account, makes it internal |
+| Nov 8 | A board refuses an OTA build named for another device type, and every board in the field runs `patient-monitor` | The one build for every board keeps that name; a new name would need a USB flash of every board |
+| Nov 8 | AWS IoT allows a thing in only one group per hierarchy, and a job aimed at a group reaches its child groups | `internal-devices` sits inside `fleet-patient-monitor`, so fleet releases reach the ward boards; `ota.sh join ... internal` moves a board out of fleet and canary first |
 | Nov 7 | Data Cloud's S3 connector reads only CSV or Parquet, and ignores subfolders | patient-vitals also writes a flat CSV copy beside the NDJSON archive |
 | Nov 7 | Data Cloud metadata types are in the CLI registry, but Salesforce documents moving them only as a data kit retrieved from an org | The connection, stream and mapping are setup steps; the insights' SQL is code |
 | Nov 7 | Agentforce's MCP client supports no auth or OAuth 2.0 client credentials, not AWS SigV4 | The IAM-authenticated MCP server serves SigV4 clients; Agentforce would need an OAuth front |
