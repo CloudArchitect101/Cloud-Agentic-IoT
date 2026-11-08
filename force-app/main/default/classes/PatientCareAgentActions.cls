@@ -62,6 +62,9 @@ public with sharing class PatientCareAgentActions {
         // running user owns never reaches the queue, so the queue indicator
         // would never move for an escalation.
         Id queueId = escalationQueueId(DevicePlatformSettings.escalationCaseQueue());
+        // The device's Asset, so the Case shows on it and counts as that
+        // device's open Case (the case alert counts by AssetId).
+        Map<String, Id> assetBySerial = assetsBySerial(requests);
 
         for (Integer i = 0; i < requests.size(); i++) {
             EscalationRequest req = requests[i];
@@ -83,6 +86,7 @@ public with sharing class PatientCareAgentActions {
             if (queueId != null) {
                 escalation.OwnerId = queueId;
             }
+            escalation.AssetId = assetBySerial.get(req.deviceId.trim());
             toInsert.add(escalation);
             indexOfCase.add(i);
         }
@@ -127,6 +131,40 @@ public with sharing class PatientCareAgentActions {
         }
 
         return results;
+    }
+
+    /**
+     * Each device serial number in the batch mapped to its one Asset, in one
+     * query. A serial number with no Asset the user can see, or shared by
+     * several, maps to nothing: the Case is still created, unlinked, rather
+     * than tied to the wrong device. Matched case-sensitively, as
+     * DeviceReadingsAgentAction matches a device.
+     */
+    private static Map<String, Id> assetsBySerial(List<EscalationRequest> requests) {
+        Set<String> serials = new Set<String>();
+        for (EscalationRequest req : requests) {
+            if (req != null && String.isNotBlank(req.deviceId)) {
+                serials.add(req.deviceId.trim());
+            }
+        }
+        Map<String, Id> bySerial = new Map<String, Id>();
+        if (serials.isEmpty()) {
+            return bySerial;
+        }
+        Set<String> duplicated = new Set<String>();
+        for (Asset device : [SELECT Id, SerialNumber FROM Asset WHERE SerialNumber IN :serials]) {
+            if (!serials.contains(device.SerialNumber)) {
+                continue;   // the same serial number in another case
+            }
+            if (bySerial.containsKey(device.SerialNumber)) {
+                duplicated.add(device.SerialNumber);
+            }
+            bySerial.put(device.SerialNumber, device.Id);
+        }
+        for (String serial : duplicated) {
+            bySerial.remove(serial);
+        }
+        return bySerial;
     }
 
     /**
