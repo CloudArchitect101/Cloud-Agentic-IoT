@@ -75,3 +75,16 @@ test('the agent\'s BotVersion carries no element API 64.0 refuses', () => {
     assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /<staticPromptsEnabled>/, path.relative(root, file));
   }
 });
+
+// With Person Accounts on, Read Account depends on Read Contact: Salesforce
+// adds it in the org, and a permission set deployed without it fails the
+// whole deploy ("Permission Read Account depends on permission(s): Read
+// Contact"). Granting it keeps one copy right for orgs with and without them.
+test('every permission set that reads Account also reads Contact', () => {
+  const reads = (xml, object) => [...xml.matchAll(/<objectPermissions>([\s\S]*?)<\/objectPermissions>/g)]
+    .some(([, body]) => body.includes(`<object>${object}</object>`) && /<allowRead>true<\/allowRead>/.test(body));
+  for (const file of filesUnder(path.join(metadata, 'permissionsets'), '.permissionset-meta.xml')) {
+    const xml = fs.readFileSync(file, 'utf8');
+    if (reads(xml, 'Account')) assert.ok(reads(xml, 'Contact'), `${path.relative(root, file)} reads Account but not Contact`);
+  }
+});
