@@ -154,6 +154,8 @@ FAKE_AWS = textwrap.dedent(r'''
             {'thingArn': f"arn:aws:iot:{state['region']}:{state['account']}:thing/{thing}",
              'jobExecutionSummary': {'status': status}}
             for thing, status in snapshot]}))
+    elif call in ('iot add-thing-to-thing-group', 'iot remove-thing-from-thing-group'):
+        log(entry)
     elif call == 'iot describe-job-execution':
         log(entry)
         thing = options['thing-name']
@@ -342,6 +344,18 @@ class OtaTryTest(ScriptFixture):
         self.assertIn('2 board(s)', out)
         self.assertIn('fleet-patient-monitor: Test7 Test55', out)
         self.assertRegex(out, r'Test55\s+SUCCEEDED')
+
+    def test_reaches_the_internal_boards_with_the_one_build(self):
+        # A ward board (Internal_Device in Salesforce) runs the patient-monitor
+        # build too, from internal-devices inside the fleet group.
+        self.state['groups'] = {'fleet-patient-monitor': ['Test7'], 'internal-devices': ['Test55']}
+        self.state['children'] = {'fleet-patient-monitor': ['internal-devices']}
+        code, out = self.try_('Dev', 'patient-monitor')
+        self.assertEqual(code, 0, out)
+        [job] = self.calls('iot create-job')
+        self.assertEqual(job['options']['targets'], f'arn:aws:iot:{REGION}:{ACCOUNT}:thinggroup/fleet-patient-monitor')
+        self.assertEqual(job['document']['sketch'], 'patient-monitor')
+        self.assertIn('fleet-patient-monitor: Test7 Test55', out)
 
     def test_never_touches_what_a_release_reads_or_writes(self):
         code, out = self.try_('Dev', 'patient-monitor')
@@ -533,6 +547,47 @@ class OtaTryTest(ScriptFixture):
         code, out = self.try_('Dev', 'patient-monitr')
         self.assertEqual(code, 1, out)
         self.assertIn("No sketch named 'patient-monitr'", out)
+        self.assertEqual(self.calls(), [])
+
+
+class OtaJoinTest(ScriptFixture):
+
+    def join(self, *args):
+        return self.run_script(os.path.join(self.repo, 'scripts', 'ota.sh'), 'join', *args)
+
+    def moves(self):
+        return ([(c['options']['thing-name'], c['options']['thing-group-name'])
+                 for c in self.calls('iot remove-thing-from-thing-group')],
+                [(c['options']['thing-name'], c['options']['thing-group-name'])
+                 for c in self.calls('iot add-thing-to-thing-group')])
+
+    def test_internal_leaves_the_other_groups_of_the_fleet_first(self):
+        code, out = self.join('Dev', 'Test7', 'patient-monitor', 'internal')
+        self.assertEqual(code, 0, out)
+        removed, added = self.moves()
+        self.assertEqual(sorted(removed), [('Test7', 'canary-patient-monitor'), ('Test7', 'fleet-patient-monitor')])
+        self.assertEqual(added, [('Test7', 'internal-devices')])
+        self.assertIn('Test7 is in internal-devices.', out)
+
+    def test_fleet_and_canary_leave_internal_devices_too(self):
+        for ring, group in (('canary', 'canary-patient-monitor'), (None, 'fleet-patient-monitor')):
+            self.forget_calls()
+            code, out = self.join('Dev', 'Test7', 'patient-monitor', *([ring] if ring else []))
+            self.assertEqual(code, 0, out)
+            removed, added = self.moves()
+            self.assertIn(('Test7', 'internal-devices'), removed)
+            self.assertNotIn(('Test7', group), removed)
+            self.assertEqual(added, [('Test7', group)])
+
+    def test_only_a_patient_monitor_can_be_internal(self):
+        code, out = self.join('Dev', 'QI1', 'queue-indicator', 'internal')
+        self.assertEqual(code, 1, out)
+        self.assertIn('Only a patient-monitor board can be internal', out)
+        self.assertEqual(self.calls(), [])
+
+    def test_refuses_an_unknown_ring(self):
+        code, out = self.join('Dev', 'Test7', 'patient-monitor', 'ward')
+        self.assertEqual(code, 1, out)
         self.assertEqual(self.calls(), [])
 
 

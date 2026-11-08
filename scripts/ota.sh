@@ -5,7 +5,7 @@
 #   scripts/ota.sh release <Dev|Prod>                        publish every new FIRMWARE_VERSION (pipeline only)
 #   scripts/ota.sh try Dev <sketch>                          from a laptop: this checkout to every Dev board of a type
 #   scripts/ota.sh promote Prod <sketch> <version>           Prod canary -> every Prod board
-#   scripts/ota.sh join <Dev|Prod> <thing> <sketch> [canary] put a board in its group
+#   scripts/ota.sh join <Dev|Prod> <thing> <sketch> [canary|internal] put a board in its group
 #   scripts/ota.sh status <Dev|Prod>                         recent jobs, board by board
 #   scripts/ota.sh interval <Dev|Prod> <sketch> [seconds]    how often every board of a type reports
 #
@@ -316,19 +316,39 @@ cmd_promote() {
   note "Canary $job: $ok board(s) updated cleanly. Job $job_id is rolling $sketch $version out to fleet-$sketch."
 }
 
-# A board belongs to exactly one group of its type: canary-<sketch> sits inside
-# fleet-<sketch>, and AWS IoT does not let a thing be in two groups of one
-# hierarchy. So joining one group means leaving the other first.
+# Internal boards (Asset record type Internal_Device in Salesforce, such as a
+# nurse-station indicator) run the patient-monitor build like every board, so
+# their group sits inside fleet-patient-monitor (infra/ota): a fleet release,
+# a promotion, a try and the reading interval reach them as they reach every
+# patient monitor. The group only keeps them apart for listing.
+INTERNAL_GROUP=internal-devices
+
+# A board belongs to exactly one group of its type: canary-<sketch> (and, for
+# patient-monitor, internal-devices) sit inside fleet-<sketch>, and AWS IoT
+# does not let a thing be in two groups of one hierarchy. So joining one
+# group means leaving the others first.
 cmd_join() {
-  local env="$1" thing="${2:-}" sketch="${3:-}" ring=fleet other=canary
-  { [ -n "$thing" ] && [ -n "$sketch" ]; } || die "Usage: scripts/ota.sh join <Dev|Prod> <thing> <sketch> [canary]"
-  if [ "${4:-}" = canary ]; then ring=canary; other=fleet; fi
+  local env="$1" thing="${2:-}" sketch="${3:-}" ring="${4:-fleet}" target group groups
+  { [ -n "$thing" ] && [ -n "$sketch" ]; } || die "Usage: scripts/ota.sh join <Dev|Prod> <thing> <sketch> [canary|internal]"
   known_sketch "$sketch"
+  groups="fleet-$sketch canary-$sketch"
+  [ "$sketch" = patient-monitor ] && groups="$groups $INTERNAL_GROUP"
+  case "$ring" in
+    fleet|canary) target="$ring-$sketch" ;;
+    internal)
+      [ "$sketch" = patient-monitor ] \
+        || die "Only a patient-monitor board can be internal: $INTERNAL_GROUP sits inside fleet-patient-monitor."
+      target="$INTERNAL_GROUP" ;;
+    *) die "Usage: scripts/ota.sh join <Dev|Prod> <thing> <sketch> [canary|internal]" ;;
+  esac
   aws_whoami
   assert_aws_environment "$env"
-  aws iot remove-thing-from-thing-group --thing-name "$thing" --thing-group-name "$other-$sketch" > /dev/null 2>&1 || true
-  aws iot add-thing-to-thing-group --thing-name "$thing" --thing-group-name "$ring-$sketch"
-  note "$thing is in $ring-$sketch."
+  for group in $groups; do
+    [ "$group" = "$target" ] && continue
+    aws iot remove-thing-from-thing-group --thing-name "$thing" --thing-group-name "$group" > /dev/null 2>&1 || true
+  done
+  aws iot add-thing-to-thing-group --thing-name "$thing" --thing-group-name "$target"
+  note "$thing is in $target."
 }
 
 cmd_status() {

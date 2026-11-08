@@ -104,6 +104,26 @@ Resources:
       ThingGroupProperties:
         ThingGroupDescription: Patient monitors that take a Prod release before the rest of the fleet.
 
+  # Internal boards: an Asset of record type Internal_Device in Salesforce,
+  # such as a nurse-station indicator that turns while any Case waits in the
+  # care team queue. They run the patient-monitor build, like every board, so
+  # this group sits inside fleet-patient-monitor: every release, promotion,
+  # try and reading-interval job aimed at the fleet reaches them. In Prod a
+  # release reaches them at promotion, after the canary. Salesforce provisions
+  # an Internal_Device whose Thing Group is blank here
+  # (Device_Platform_Setting__mdt.Internal_Thing_Group__c), and
+  # scripts/ota.sh join <env> <thing> patient-monitor internal moves a board.
+  InternalDevices:
+    Type: AWS::IoT::ThingGroup
+    Properties:
+      ThingGroupName: internal-devices
+      ParentGroupName: !Ref PatientMonitorFleet
+      ThingGroupProperties:
+        ThingGroupDescription: Ward boards (Salesforce Internal Device), on the patient-monitor build; inside fleet-patient-monitor.
+
+  # Retired: a new indicator is a patient-monitor board whose Asset is an
+  # Internal Device (firmware/README.md). The sketch and these groups stay for
+  # a board still flashed with it; scripts/check.sh wants a pair per sketch.
   QueueIndicatorFleet:
     Type: AWS::IoT::ThingGroup
     Properties:
