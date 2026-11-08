@@ -31,6 +31,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | Nov 7 | A usage-card test failed in Developer Edition | Standard User has View Setup in Developer Edition | Query a profile that lacks it (`8139ba5`) | The test no longer assumes a profile |
 | Nov 7 | 7 components failed: `Ambiguous method signature: newUser(NULL, Boolean)` | Overloads on `String` and `Id`; `null` matches both | Renamed the Id version (`eb35915`) | |
 | Nov 7 | The deploy went on to AWS after a failed Salesforce validate | The script didn't stop on the validate's failure | It stops now | |
+| Nov 8 | Asked "Test8 reads 31 C, what do I do?", the agent asked what Test8 was instead of calling an action | Nothing in its instructions said that users name a device by its serial number, so a bare "Test8" looked ambiguous; it also tied the procedure search to a known device | The topic now says a device name the user gives is its serial number, to pass as written, and that Find Procedure needs no device | The topic instructions and the action description |
 | Nov 7 | Room-rule Cases were owned by the AWS integration user | The org had no `Care_Team_Queue`, so the code fell back to the running user | The queue ships as metadata (`3bac33b`) | |
 | Nov 7 | A Case undelete test expected a motor command that never came | After an undelete the queue may no longer own the Case | The test checks the owner (`829ca86`) | |
 
