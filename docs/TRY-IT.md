@@ -262,13 +262,14 @@ that can create clinical Cases is left to a person. Activate it, check it, and
 give yourself access:
 
 ```bash
-sf agent activate --api-name Patient_Care_Agent --version 1
+sf agent publish authoring-bundle --api-name Patient_Care_Agent
+sf agent activate --api-name Patient_Care_Agent --json
 sf data query --query "SELECT VersionNumber, Status FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent'"
 sf org assign permset --name Patient_Care_Agent
 ```
 
 Or activate it in Setup → **Agentforce Agents** → **Patient Care Agent**. The
-query shows version 1 `Active`. `Patient_Care_Agent` opens the agent to you
+query shows the newest version `Active`. `Patient_Care_Agent` opens the agent to you
 and gives its actions what they read and create; it is an employee agent, so
 it acts as you. Open it from the Lightning header, then:
 

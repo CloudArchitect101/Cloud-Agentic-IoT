@@ -97,9 +97,8 @@ Cloud-Agentic-IoT/
 │   ├── objects/                       # Asset, Patient_Vitals__c, the two platform events, ...
 │   ├── classes/                       # Apex services + tests
 │   ├── triggers/                      # One trigger per object, handler pattern
-│   ├── bots/Patient_Care_Agent/       # The Agentforce agent itself (Bot + BotVersion), shipped inactive
-│   ├── genAiPlannerBundles/           # The agent's planner
-│   ├── genAiPlugins/ genAiFunctions/  # Its topic and registered actions
+│   ├── aiAuthoringBundles/            # The Agentforce agent, as Agent Script (new Agentforce Builder)
+│   ├── genAiFunctions/                # The actions it calls
 │   ├── customMetadata/                # Device_Queue_Binding, Device_Platform_Setting — config, not code
 │   ├── objects/Asset/recordTypes/     # Patient_Device, Internal_Device: what a board is for
 │   └── lwc/                           # queueDepthIndicator, reprovisionDevice, deviceLiveCard, platformUsageCard
@@ -235,13 +234,14 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 **5. Case queue and its indicator.** The deploy creates `Care_Team_Queue`, a Case queue (`force-app/main/default/queues/`); add its members in Setup → Queues. The indicator is any board whose Asset has the **Internal Device** record type: it follows the queue with no further setup (chapter 03). `Device_Queue_Binding.Care_Team_Queue` sets how fast it turns, and can name one more board; it is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so a queue of another name means changing those two values.
 
-**6. Activate the agent.** The deploy creates the **Patient Care Agent** (`force-app/main/default/bots/Patient_Care_Agent`), an employee agent whose version 1 uses `Patient_Care_Planner`, and leaves it inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). Activate it, as the admin:
+**6. Publish and activate the agent.** The **Patient Care Agent** is an employee agent written in Agent Script for the new Agentforce Builder (`force-app/main/default/aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent`). The deploy stores the script; publishing compiles it into a new agent version, which starts inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). As the admin:
 
 ```bash
-sf agent activate --api-name Patient_Care_Agent --version 1 --target-org <your admin alias>
+sf agent publish authoring-bundle --api-name Patient_Care_Agent --target-org <your admin alias>
+sf agent activate --api-name Patient_Care_Agent --target-org <your admin alias> --json
 ```
 
-or Setup → Agentforce Agents → **Patient Care Agent** → Activate. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its three actions (`DeviceReadingsAgentAction`, `ProcedureSearchAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. Find Procedure calls AWS as that person, so they also need `AWS_IoT_Relay_Callers` (part d of step 1). An employee agent acts as the person talking to it, so there is no separate agent user. After a deploy that changes the agent's topic or actions, deactivate and activate it again ([SETUP.md §8](docs/SETUP.md#8-ward-procedures-for-the-agent)).
+`--json` without `--version` activates the newest version. Or open it in Agentforce Builder and click **Activate**. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its three actions (`DeviceReadingsAgentAction`, `ProcedureSearchAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. Find Procedure calls AWS as that person, so they also need `AWS_IoT_Relay_Callers` (part d of step 1). An employee agent acts as the person talking to it, so there is no separate agent user. After changing the `.agent` file, publish and activate again: each publish is a new version. A routine deploy that leaves the script alone needs no publish.
 
 ```bash
 sf org assign permset --name Patient_Care_Agent --target-org <your admin alias>
@@ -490,9 +490,7 @@ Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the ag
 
 | File | What it is |
 |---|---|
-| `bots/Patient_Care_Agent/` | The **agent**: an employee agent (`InternalCopilot`), and its version 1, which names the planner. Deploys inactive |
-| `genAiPlannerBundles/Patient_Care_Planner/` | The planner. Decides which topic handles a request |
-| `genAiPlugins/Patient_Device_Monitoring.genAiPlugin` | The **topic** — scope plus five instructions. Where the agent's behaviour actually lives |
+| `aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent` | The **agent**, in Agent Script: an employee agent, its router, the **Patient Device Monitoring** subagent with five instructions and three actions, Salesforce's standard escalation, off-topic and ambiguous-question subagents, and `connection slack` so it answers in Slack ([SETUP.md](docs/SETUP.md#talk-to-the-agent-from-slack-optional)). The org compiles the planner and bot version from it |
 | `genAiFunctions/Get_Device_Readings/` | The read action: a device's latest readings and connection state, from `DeviceReadingsAgentAction` |
 | `genAiFunctions/Find_Procedure/` | The procedure action: the ward SOP passages that answer a question, each with the SOP ID and version to cite, from `ProcedureSearchAgentAction` ([SOP-GROUNDING.md](docs/SOP-GROUNDING.md)) |
 | `genAiFunctions/Escalate_Patient_Device_Condition/` | The escalation action: a Case for the care team, from `PatientCareAgentActions` |
@@ -500,7 +498,7 @@ Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the ag
 
 The five instructions are the interesting part: **ground every answer** (only from the readings and procedure passages the actions return; say so when data is missing rather than estimating); **cite the ward procedure** (call Find Procedure when asked what to do, give only the steps a passage holds, cite each by SOP ID and version, and say so when no procedure covers it); **do not diagnose** (describe readings against thresholds, nothing more); **confirm before acting** (state which device and reading, then report the Case number); **be precise about device identity** (always the serial number; ask rather than guess when a patient has several).
 
-`isConfirmationRequired` is `true` on the escalation action (and `false` on the two read-only ones), so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
+`require_user_confirmation` is `True` on the escalation action (and `False` on the two read-only ones), so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
 
 **Key files:** `classes/PatientCareAgentActions.cls` (+ test, including a 200-record bulk invocation), `classes/DeviceReadingsAgentAction.cls` (+ test, run as a user with and without the permission set), `classes/ProcedureSearchAgentAction.cls` (+ test, every way the callout can fail)
 
@@ -508,7 +506,7 @@ The read action works as the user: `with sharing` and `WITH USER_MODE`, so the a
 
 **To see it work:** with the agent active and `Patient_Care_Agent` assigned, open the agent from the Lightning header, ask what a device (by serial number) is reporting, ask what to do about it and check the answer cites an SOP ID, then ask it to escalate, confirm when prompted, and check Cases filtered to `Origin = Agentforce`.
 
-> **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic, actions, Bot and BotVersion have deployed to a real org at API 65.0, and the agent answers and escalates there. Expect to reconcile field names against your org's API version on a first deploy elsewhere — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
+> **Honest caveat:** the agent was first built for the legacy builder (Bot, planner and topic metadata). That shape could not take a Slack connection, so it was upgraded in Agentforce Builder and the Agent Script the org produced is what the repo ships, byte for byte (Nov 9, API 66.0). Agents here are built only for the new builder. After changing one in Agentforce Builder, retrieve it (`sf project retrieve start -m AiAuthoringBundle:Patient_Care_Agent`) and commit the `.agent` file; the compiled planner and bot versions are the org's, not the repo's.
 
 ### 06 · Multi-Agent Orchestration (MCP + Agent2Agent)
 
