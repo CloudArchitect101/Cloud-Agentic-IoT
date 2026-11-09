@@ -8,12 +8,30 @@
 
   CaseAlertService: retired with firmware 2.5.0. A patient board's motor
   follows its own room temperature, so no Case turns it on or off.
+
+  Patient_Portal_Planner, Patient_Portal_Self_Service, Get_My_Devices and
+  Request_Nurse: the patient portal agent's first, old-builder metadata. The
+  agent is now Agent Script (aiAuthoringBundles/Patient_Portal_Agent), whose
+  actions call the same Apex classes directly.
 -->
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
         <members>CaseAlertService</members>
         <members>CaseAlertServiceTest</members>
         <name>ApexClass</name>
+    </types>
+    <types>
+        <members>Patient_Portal_Planner</members>
+        <name>GenAiPlannerBundle</name>
+    </types>
+    <types>
+        <members>Patient_Portal_Self_Service</members>
+        <name>GenAiPlugin</name>
+    </types>
+    <types>
+        <members>Get_My_Devices</members>
+        <members>Request_Nurse</members>
+        <name>GenAiFunction</name>
     </types>
     <version>65.0</version>
 </Package>

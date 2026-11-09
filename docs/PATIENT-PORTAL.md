@@ -21,7 +21,7 @@ signed-in account.
 | Who is asking | `PortalIdentityService` | Finds the patient from the signed-in user (the site) or from the verified chat (the agent). Everything below is scoped to the account it returns. |
 | Patient data | `PatientDeviceService` | Patient Device Assets on that one account, and their latest readings. Never another account's devices, and never an internal board. |
 | Site endpoints | `PortalDevicesResource` (`GET /portal/my-devices`), `PortalChatTokenResource` (`POST /portal/chat-token`) | Apex REST, called through the Data SDK as the patient. |
-| Agent | `genAiPlugins/Patient_Portal_Self_Service`, `genAiPlannerBundles/Patient_Portal_Planner`, actions `Get_My_Devices` and `Request_Nurse` | Topic, planner and two actions for the Patient Portal Agent. |
+| Agent | `aiAuthoringBundles/Patient_Portal_Agent` (Agent Script), published by `scripts/publish-portal-agent.sh` | The Patient Portal Agent, built for the new Agentforce Builder: a router, the **My Room** subagent and its two Apex actions (Get My Devices, Request a Nurse), plus off-topic and ambiguous-question subagents. |
 | Settings | `Patient_Portal_Setting__mdt.Default` | Certificate, key id, issuer, deployment, chat site URL, token lifetime, and the nurse request's Origin and queue. Environments differ here only. |
 | Permission sets | `Patient_Portal_User`, `Patient_Portal_Agent`, `Patient_Portal_Guest_Api` | For the patients, for the agent's user, and for the site's guest user (the sign-in pages). |
 | JWK helper | `scripts/portal-chat-jwk.mjs` | Turns the signing certificate into the key Messaging user verification asks for. |
@@ -48,9 +48,10 @@ Why the agent cannot simply use `with sharing`: an Agentforce Service Agent
 runs as its own agent user, not as the patient, so sharing rules describe the
 agent user and say nothing about who is chatting. The patient comes from the
 conversation itself, through the verified end user, and only if Messaging
-verified the token. The model never supplies the patient. The session Id
-input is mapped to the `RoutableId` context variable, not filled from the
-prompt. Even if the model passed another session Id, it would need a live,
+verified the token. The model never supplies the patient. The Agent Script
+binds each action's session Id input to the `RoutableId` variable
+(`with messagingSessionId = @variables.RoutableId`, linked to
+`@MessagingSession.Id`), so the model never fills it. Even if the model passed another session Id, it would need a live,
 verified session to get anything.
 
 Another patient's device answers "No device X is linked to your account",
@@ -137,12 +138,23 @@ that have no metadata, in order. Each one is also in
    setting's `Issuer__c`), add the key. In the channel from step 5, under User
    Verification Configuration, add that keyset. Unverified conversations now
    get nothing from the agent.
-7. **The agent.** Agentforce Builder > New Agent > Agentforce Service Agent,
-   `Patient Portal Agent`. Add the topic **Patient Portal Self Service**.
-   On both actions, map the **Messaging Session ID** input to the context
-   variable **RoutableId**. Assign `Patient_Portal_Agent` to the agent's user.
-   Under Connections, add the Enhanced Chat v2 deployment and turn on Voice.
-   Activate it.
+7. **The agent.** It is Agent Script, built for the new Agentforce Builder,
+   so it is published rather than deployed.
+   - Create its agent user: Setup > Users > New User, licence **Einstein
+     Agent**, profile **Einstein Agent User**. Assign it the permission sets
+     `AgentforceServiceAgentBase`, `AgentforceServiceAgentUser`,
+     `EinsteinGPTPromptTemplateUser` and `Patient_Portal_Agent`.
+   - Publish, with that user's username:
+     ```bash
+     PORTAL_AGENT_USER=<agent user's username> scripts/publish-portal-agent.sh test-cloudarchitect101
+     ```
+     It compiles the script (`sf agent validate authoring-bundle`), then runs
+     `sf agent publish authoring-bundle`, which creates the agent. The
+     username goes into the publish only; the repo keeps a placeholder.
+   - Activate **Patient Portal Agent** in Agentforce Builder. Under
+     Connections, add the Enhanced Chat v2 deployment and turn on Voice.
+   - To change the agent, edit `Patient_Portal_Agent.agent` and publish again:
+     each publish is a new version.
 8. **Point the site at the chat.** From the deployment's code snippet, copy
    the site URL (it holds `ESW` and the deployment name). Put it in
    `Patient_Portal_Setting.Default` as `Chat_Site_Url__c`, and redeploy. Leave
@@ -177,7 +189,9 @@ that have no metadata, in order. Each one is also in
 | "The care assistant is not available right now" with "Chat_Site_Url__c is blank" | Step 8 not done | Set `Chat_Site_Url__c` and redeploy |
 | "The chat could not sign you in" | `Crypto.signWithCertificate` found no certificate named `Certificate_Name__c` | Create it (step 3) with exactly that Unique Name |
 | The agent says "You are not signed in to the patient portal" in a signed-in chat | The keyset is not on the channel, the `kid` or `iss` differ from the key or keyset, or the token expired | Compare `Key_Id__c` and `Issuer__c` with step 6. The site refreshes an expired token on `onEmbeddedMessagingIdentityTokenExpired` |
-| The agent answers but never calls an action | The Messaging Session ID input is not mapped to `RoutableId`, or the agent user lacks `Patient_Portal_Agent` | Step 7 |
+| The agent answers but never calls an action | The agent user lacks `Patient_Portal_Agent`, so it may not run the Apex | Step 7 |
+| `sf agent publish authoring-bundle` fails on the agent user | `PORTAL_AGENT_USER` is not an active Einstein Agent user, or it lacks the three Agentforce Service Agent permission sets | Step 7 |
+| `sf agent validate authoring-bundle` is not a command | The Salesforce CLI is older than the Agent Script commands | `sf update` |
 | No voice button in the chat | The deployment is still V1, or voice is off in Messaging Settings or on the agent's connection | Step 5 and step 7 |
 | Inserting a patient's user fails: "portal account owner must have a role" | The Person Account's owner has no role | Give the owner a role, then try again |
 

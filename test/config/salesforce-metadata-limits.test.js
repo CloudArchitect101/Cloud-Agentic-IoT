@@ -62,15 +62,12 @@ test('the shipped Care_Team_Queue binding names no board of its own', () => {
   assert.match(binding, /<field>Device_Id__c<\/field>\s*<value xsi:nil="true"\s*\/>/);
 });
 
-// The agents' metadata refers to itself by name in four places: a topic
-// names its actions, each action names an Apex class, and a permission set
-// opens those classes to whoever runs them: the care team for the staff
-// topic (Patient_Care_Agent), the patient agent's user for the portal topic
-// (Patient_Portal_Agent). A broken name fails the deploy, or worse, deploys
-// an action nobody may run.
+// The staff agent's metadata refers to itself by name in four places: a
+// topic names its actions, each action names an Apex class, and a permission
+// set opens those classes to whoever runs them (Patient_Care_Agent). A broken
+// name fails the deploy, or worse, deploys an action nobody may run.
 const TOPIC_PERMISSION_SET = {
   Patient_Device_Monitoring: 'Patient_Care_Agent',
-  Patient_Portal_Self_Service: 'Patient_Portal_Agent',
 };
 
 test('every action a topic names exists, invokes a class that exists, and the topic\'s permission set opens it', () => {
@@ -96,19 +93,37 @@ test('every action a topic names exists, invokes a class that exists, and the to
   }
 });
 
-// The patient agent runs as its own agent user, so with sharing would not
-// stop it reading another patient's data. Its actions must take the patient
-// from the verified chat, never from what the model passes in.
+// The patient agent is Agent Script (new Agentforce Builder). It runs as its
+// own agent user, so with sharing would not stop it reading another patient's
+// data. Each action must take the patient from the verified chat: the Apex
+// resolves the MessagingSession, and the script binds that input to the
+// RoutableId variable itself, so the model never fills it.
+const PORTAL_AGENT = path.join(metadata, 'aiAuthoringBundles/Patient_Portal_Agent/Patient_Portal_Agent.agent');
+
+test('the patient portal agent is an Agent Script bundle with a placeholder agent user', () => {
+  const script = fs.readFileSync(PORTAL_AGENT, 'utf8');
+  assert.ok(fs.existsSync(PORTAL_AGENT.replace(/\.agent$/, '.bundle-meta.xml')), 'the bundle has no bundle-meta.xml');
+  assert.match(script, /^config:\n(?:\s{4}.*\n)*?\s{4}developer_name: "Patient_Portal_Agent"/m);
+  assert.match(script, /default_agent_user: "PORTAL_AGENT_USER"/, 'the agent user is org-specific: scripts/publish-portal-agent.sh fills it in');
+  assert.match(script, /RoutableId: linked string\n\s+source: @MessagingSession\.Id/);
+  assert.ok(!fs.existsSync(path.join(metadata, 'genAiPlugins/Patient_Portal_Self_Service.genAiPlugin-meta.xml')), 'the old-builder portal topic is back');
+});
+
 test('every patient portal action finds the patient from the verified chat', () => {
-  const plugin = fs.readFileSync(path.join(metadata, 'genAiPlugins/Patient_Portal_Self_Service.genAiPlugin-meta.xml'), 'utf8');
-  for (const [, name] of plugin.matchAll(/<functionName>(\w+)<\/functionName>/g)) {
-    const target = fs.readFileSync(path.join(metadata, 'genAiFunctions', name, `${name}.genAiFunction-meta.xml`), 'utf8')
-      .match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1];
+  const script = fs.readFileSync(PORTAL_AGENT, 'utf8');
+  const permissionSet = fs.readFileSync(path.join(metadata, 'permissionsets/Patient_Portal_Agent.permissionset-meta.xml'), 'utf8');
+  const opened = new Set([...permissionSet.matchAll(/<apexClass>(\w+)<\/apexClass>/g)].map(([, name]) => name));
+  const targets = [...script.matchAll(/^\s{8}(\w+):\n(?:\s{12}.*\n)*?\s{12}target: "apex:\/\/(\w+)"/gm)];
+  assert.deepEqual(targets.map(([, name]) => name).sort(), ['get_my_devices', 'request_nurse']);
+  for (const [, name, target] of targets) {
     const apex = fs.readFileSync(path.join(metadata, 'classes', `${target}.cls`), 'utf8');
+    assert.match(apex, /@InvocableMethod/, `${target} has no @InvocableMethod`);
     assert.match(apex, /PortalIdentityService\.forMessagingSession\(/, `${target} must resolve the patient from the MessagingSession`);
     assert.doesNotMatch(apex, /accountId\s*;\s*$/m, `${target} must not take an account Id as input`);
-    const input = JSON.parse(fs.readFileSync(path.join(metadata, 'genAiFunctions', name, 'input/schema.json'), 'utf8'));
-    assert.ok(input.required.includes('messagingSessionId'), `${name}: messagingSessionId is required`);
+    assert.ok(opened.has(target), `Patient_Portal_Agent does not open ${target}`);
+    const call = script.match(new RegExp(`^\\s+${name}: @actions\\.${name}\\n((?:\\s{16}.*\\n)+)`, 'm'));
+    assert.ok(call, `the my_room subagent does not offer ${name}`);
+    assert.match(call[1], /with messagingSessionId = @variables\.RoutableId/, `${name}: the session must be bound to RoutableId, not left to the model`);
   }
 });
 

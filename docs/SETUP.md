@@ -980,10 +980,11 @@ in this order (details and checks in
    Agentforce Voice calls in Messaging Settings.
 6. Add the JWK and a keyset (issuer `cloud-agentic-iot-patient-portal`) under
    User Verification, and put the keyset on the channel.
-7. Create the Agentforce Service Agent `Patient Portal Agent` with the topic
-   Patient Portal Self Service. Map each action's Messaging Session ID to
-   `RoutableId`, give its agent user `Patient_Portal_Agent`, connect Enhanced
-   Chat v2 with voice on, and activate it.
+7. Publish the agent, which is Agent Script (new Agentforce Builder): create
+   an Einstein Agent user with `Patient_Portal_Agent` and the Agentforce
+   Service Agent permission sets, run
+   `PORTAL_AGENT_USER=<username> scripts/publish-portal-agent.sh <org>`, then
+   activate it and connect Enhanced Chat v2 with voice on.
 8. Set `Chat_Site_Url__c` in `Patient_Portal_Setting.Default` from the
    deployment's code snippet, and deploy again.
 9. Allow the chat hosts in the site's CSP, and the site in CORS.

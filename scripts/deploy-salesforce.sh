@@ -81,6 +81,13 @@ done
 
 manifest_dir=$(mktemp -d)
 sf project generate manifest --source-dir force-app --output-dir "$manifest_dir" --name package >/dev/null
+# Agent Script agents (aiAuthoringBundles/) are published, not deployed:
+# `sf agent publish authoring-bundle` compiles the script, creates the agent
+# and its version, then deploys the bundle (scripts/publish-portal-agent.sh).
+node -e '
+  const fs = require("fs"); const f = process.argv[1];
+  fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/\s*<types>(?:(?!<\/types>)[\s\S])*<name>AiAuthoringBundle<\/name>\s*<\/types>/, ""));
+' "$manifest_dir/package.xml"
 deploy_args=(--manifest "$manifest_dir/package.xml" --post-destructive-changes manifest/destructiveChangesPost.xml
   --ignore-warnings --test-level RunLocalTests --target-org "$org" --wait 30)
 

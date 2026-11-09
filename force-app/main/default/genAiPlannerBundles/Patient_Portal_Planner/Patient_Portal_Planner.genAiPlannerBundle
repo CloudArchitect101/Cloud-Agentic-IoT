@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<GenAiPlannerBundle xmlns="http://soap.sforce.com/2006/04/metadata">
-    <masterLabel>Patient Portal Planner</masterLabel>
-    <description>Routes a signed-in patient's portal chat to the self-service topic: their own device readings and nurse requests.</description>
-    <plannerType>AiCopilot__ReAct</plannerType>
-    <genAiPlugins>
-        <genAiPluginName>Patient_Portal_Self_Service</genAiPluginName>
-    </genAiPlugins>
-</GenAiPlannerBundle>
