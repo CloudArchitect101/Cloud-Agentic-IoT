@@ -85,6 +85,13 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | Nov 7 | Agentforce's MCP client supports no auth or OAuth 2.0 client credentials, not AWS SigV4 | The IAM-authenticated MCP server serves SigV4 clients; Agentforce would need an OAuth front |
 | Nov 7 | Salesforce callouts time out after 25 seconds | Guardrails run inside device-command as a shared module, not as an extra Lambda hop |
 
+## Slack
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+| --- | --- | --- | --- | --- |
+| Nov 9 | `/patient-status failed because the app did not respond`, and the function's log showed no call from Slack | The app was created from a manifest with a placeholder Request URL, because the real address exists only after the deploy that needs the app's signing secret; the commands still pointed at the placeholder | Set both commands' Request URL to the stack's `SlackCommandsUrl` and reinstall the app | TRY-IT.md says to replace the placeholder after step 3; an empty log for the time of the command means Slack called somewhere else |
+| Nov 9 | Found while checking that call path, before Slack reached it: a first command after a deploy could miss Slack's 3-second limit, and a signed request could fail its signature check | The function read the signing secret, loaded jsforce, signed in to Salesforce and queried before answering; and API Gateway's HTTP API delivers a form body base64-encoded, while the signature was checked against the body as delivered | The function answers at once and does the Salesforce work in an asynchronous call of itself, posting to the command's `response_url`; it decodes the body before the signature check, uses the shared fetch client instead of jsforce, and never retries the asynchronous half, so a dose is never asked for twice | `test/lambda/slack-integration.test.js`: no Salesforce call before the answer, base64 and plain bodies, one Device Command per dose |
+
 ## Working on the Mac
 
 | Symptom | Cause | Fix |

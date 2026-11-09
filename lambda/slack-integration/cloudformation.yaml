@@ -68,17 +68,23 @@ Resources:
                 Condition:
                   StringEquals:
                     kms:ViaService: !Sub 'ssm.${AWS::Region}.amazonaws.com'
+        # Slack waits only 3 seconds, so the function answers at once and
+        # hands the Salesforce work to an asynchronous call of itself. The
+        # name, not GetAtt, so the role does not depend on the function.
+        - PolicyName: InvokeItself
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:cloud-agentic-iot-slack-integration'
 
   SlackIntegrationFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: cloud-agentic-iot-slack-integration
-      # nodejs22.x, not 20: this is the one Lambda that bundles jsforce, and
-      # jsforce 3 depends on undici 8, which declares "node": ">=22.19.0".
-      # On nodejs20.x the cold start dies inside require('jsforce') with
-      # "webidl.util.markAsUncloneable is not a function" before the handler
-      # is ever reached. The other functions here use only the AWS SDK and
-      # are unaffected.
+      # Uses the shared Salesforce client (fetch), not jsforce, which was the
+      # slowest part of a cold start and needed nodejs22.x for its undici.
       Runtime: nodejs22.x
       Handler: index.handler
       Timeout: 10
@@ -99,6 +105,15 @@ Resources:
           SALESFORCE_API_VERSION: !Ref SalesforceApiVersion
           SALESFORCE_TOKEN_CACHE_MINUTES: !Ref SalesforceTokenCacheMinutes
           CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds
+
+  # The asynchronous half is never retried: a retry after the Device Command
+  # was created would ask the board for a second dose.
+  SlackIntegrationAsyncConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: !Ref SlackIntegrationFunction
+      Qualifier: $LATEST
+      MaximumRetryAttempts: 0
 
   SlackApi:
     Type: AWS::ApiGatewayV2::Api
