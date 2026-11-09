@@ -989,11 +989,15 @@ Salesforce side, as an admin:
 Slack side, as the workspace owner:
 
 3. **Tools & settings** → **Manage Salesforce Organizations** → **Connect
-   Salesforce Org**, give the org's My Domain URL, untick **Map user
-   accounts automatically**, and approve the request in Salesforce.
-4. **Admin** → **Workspace settings** → **Salesforce** → **Users** → **Add
-   individually**: link each Slack member who may use the agent to their
-   Salesforce user. An unmapped member cannot use it.
+   Salesforce Org**: the org's My Domain URL, account mapping field
+   **Email**, **Automatic account mapping** off, **Request Connection**.
+   Approve it in Salesforce (**Setup** → Quick Find **Slack** → **Manage
+   Slack Connection**), then back in **Manage Salesforce Organizations**
+   open the pending connection and **Activate** it.
+4. Only now does the org have a **Users** tab (same page → the org →
+   **Users** → **Add Individually**): link each Slack member who may use the
+   agent; Slack asks them to sign in to Salesforce. An unmapped member
+   cannot use the agent.
 5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
 6. DM the agent, or mention it in a channel: "What is Test8 reading?"
 
