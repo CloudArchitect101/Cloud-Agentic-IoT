@@ -56,7 +56,9 @@ global with sharing class PortalChatTokenResource {
         }
         Patient_Portal_Setting__mdt setting = PatientPortalSettings.get();
         if (String.isBlank(setting.Chat_Site_Url__c)) {
-            chat.message = 'The chat is not set up yet (Patient_Portal_Setting__mdt.Default.Chat_Site_Url__c is blank).';
+            // The patient sees plain words; the setup detail goes to the debug log.
+            System.debug(LoggingLevel.WARN, 'Chat off: Patient_Portal_Setting__mdt.Default.Chat_Site_Url__c is blank (docs/PATIENT-PORTAL.md, step 8).');
+            chat.message = 'The care assistant is not available yet. If you need help, press the call button by your bed.';
             return chat;
         }
         chat.orgId = UserInfo.getOrganizationId();

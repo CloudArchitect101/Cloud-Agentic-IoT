@@ -199,7 +199,7 @@ that have no metadata, in order. Each one is also in
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | The React app shows the sign-in page right after a successful sign-in | The patient lacks `ApiEnabled`, so `getCurrentUser()` fails with `API_DISABLED_FOR_ORG` | Assign `Patient_Portal_User` |
-| "The care assistant is not available right now" with "Chat_Site_Url__c is blank" | Step 8 not done | Set `Chat_Site_Url__c` and redeploy |
+| The chat bubble says "The care assistant is not available yet" | Step 8 not done: `Chat_Site_Url__c` is blank (the debug log says so; the patient sees only plain words) | Set `Chat_Site_Url__c` and redeploy |
 | "The chat could not sign you in" | `Crypto.signWithCertificate` found no certificate named `Certificate_Name__c` | Create it (step 3) with exactly that Unique Name |
 | The agent says "You are not signed in to the patient portal" in a signed-in chat | The keyset is not on the channel, the `kid` or `iss` differ from the key or keyset, or the token expired | Compare `Key_Id__c` and `Issuer__c` with step 6. The site refreshes an expired token on `onEmbeddedMessagingIdentityTokenExpired` |
 | The agent answers but never calls an action | The agent user lacks `Patient_Portal_Agent`, so it may not run the Apex | Step 7 |

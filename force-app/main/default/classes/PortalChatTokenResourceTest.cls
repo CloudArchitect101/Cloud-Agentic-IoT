@@ -80,7 +80,8 @@ private class PortalChatTokenResourceTest {
         }
         Assert.isFalse(chat.enabled);
         Assert.isNull(chat.token);
-        Assert.isTrue(chat.message.contains('Chat_Site_Url__c'), chat.message);
+        Assert.isTrue(chat.message.contains('not available yet'), chat.message);
+        Assert.isFalse(chat.message.contains('__'), 'A patient never sees a setting name: ' + chat.message);
     }
 
     @IsTest
