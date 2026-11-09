@@ -253,7 +253,7 @@ It ships inactive on purpose: activating an agent that can create clinical Cases
 
 **8. Optional — MuleSoft.** Only if you want the iPaaS ingestion path instead of the Lambda. Open `mulesoft/` in Anypoint Studio, or `mvn package` and deploy to CloudHub; set the `sf.*` properties (consumer key, keystore, principal — JWT, no password); then point the AWS IoT rule at the flow's `/telemetry` endpoint. Chapter 07 explains when this is the right call and when it is not.
 
-Two pieces are written and tested but **not yet wired** into the agent's prompts: `PiiMaskingService.mask`/`unmask` (chapter 10; Find Procedure already masks the passages it returns with it) and the guardrails Lambda with its `input`, `output` and `action` phases (chapter 11).
+PII masking (chapter 10) is in the agent's actions: Get Device Readings masks the device's name and disconnect reason, and Find Procedure the passages it returns. The guardrails Lambda's `input`, `output` and `action` phases (chapter 11) guard the MCP server and every command to a room, not the agent's prompts.
 
 ### Why these stay manual
 
@@ -506,7 +506,7 @@ The read action works as the user: `with sharing` and `WITH USER_MODE`, so the a
 
 **To see it work:** with the agent active and `Patient_Care_Agent` assigned, open the agent from the Lightning header, ask what a device (by serial number) is reporting, ask what to do about it and check the answer cites an SOP ID, then ask it to escalate, confirm when prompted, and check Cases filtered to `Origin = Agentforce`.
 
-> **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic and action have deployed to a real org; the Bot and BotVersion are written against the Metadata API reference and agents retrieved from other orgs, and checked offline, but not yet deployed. Expect to reconcile field names against your org's API version on first deploy — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
+> **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic, actions, Bot and BotVersion have deployed to a real org at API 65.0, and the agent answers and escalates there. Expect to reconcile field names against your org's API version on a first deploy elsewhere — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
 
 ### 06 · Multi-Agent Orchestration (MCP + Agent2Agent)
 
@@ -595,9 +595,9 @@ Three details that matter:
 - **Only tokens actually issued get restored.** A model that hallucinates `[EMAIL_9]` gets nothing back. Blindly restoring anything token-shaped is how one patient's address ends up in another patient's summary — the failure mode worth designing against, and there is a test for it.
 - **Pattern order is load-bearing.** Email runs before phone, because the digits inside an address like `a1234@x.com` would otherwise be partly consumed by the phone pattern.
 
-**Key files:** `classes/PiiMaskingService.cls` (+ test — six cases including the hallucinated-token one)
+**Key files:** `classes/PiiMaskingService.cls` (+ test — six cases including the hallucinated-token one), `classes/DeviceReadingsAgentAction.cls`, `classes/ProcedureSearchAgentAction.cls`
 
-**Where it would be wired:** `mask` before the agent's prompt and `unmask` after its response. That is not wired yet (see [Current state](#current-state)): the Patient Care Agent's prompts are not masked today. Its one caller so far is `ProcedureSearchAgentAction`, which masks every SOP passage it hands the agent, after AWS has masked them with the same patterns.
+**Where it is wired:** on the way into the model, in the agent's actions. Every free-text value an action hands the Patient Care Agent goes through `mask` first: the device's name and last disconnect reason in Get Device Readings (people type the name, and an email or phone number typed there reaches the model as `[EMAIL_1]` or `[PHONE_1]`), and every SOP passage in Find Procedure, after AWS has masked it with the same patterns. The rest of what the actions return is numbers, times and fixed wording. What the nurse types to the agent is not masked by this code: the conversation itself goes through the platform's own Einstein Trust Layer. `unmask` is there for a caller that sends text to a model itself and shows the answer to a person; none does yet.
 
 ### 11 · Agentforce Guardrails
 
@@ -717,6 +717,21 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 465 Node tests cover 17 of the 18 Lambda functions (all but slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, the ward SOPs, their index and their search, and the firmware's timing and command logic compiled for the host; 92 Python tests run the board, OTA, setup, deploy, SOP index and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (23 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)); and every room reading can reach Data Cloud, with two calculated insights per device ([DATA-CLOUD.md](docs/DATA-CLOUD.md)). The first deploys to a real AWS account and Salesforce org ran in August; [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists what broke, why, and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+As of November 9, 2026, in the test setup (one AWS project and one Salesforce Developer Edition org, deployed from a laptop as in [TRY-IT.md](docs/TRY-IT.md)):
 
-The guardrails (chapter 11) now check every command on its way to a room, and the MCP server (chapter 06) deploys behind an IAM-authenticated URL; neither has run against a real account yet. The same goes for the ward SOPs (chapter 08): the index, the search and the agent's Find Procedure action are written and tested, not yet deployed. PII masking (chapter 10) is not yet called on the Patient Care Agent's prompts. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
+| Chapter | State |
+|---|---|
+| 00, 13 · Provisioning | Live: two boards provisioned from their Assets, one Patient Device and one Internal Device |
+| 01 · Data Cloud | The CSV copy is live in S3. The connection, stream and mapping are setup steps in the org, and the insights a script ([SETUP.md §7](docs/SETUP.md#7-data-cloud-room-readings-for-the-ward)); not set up in the test org yet |
+| 02 · Streams | Deployed. Fired by `scripts/streams-test.sh`, since the boards measure room air only |
+| 03 · Queue indicator, 30 °C rule | Live and tested on the boards (firmware 2.5.0, room alarm on the patient monitor) |
+| 04 · Slack | Written; skipped by the deploy until a Slack app exists |
+| 05 · Agent | Live: readings, escalation to a Case on the device's Asset |
+| 06 · MCP | Deployed; `get_room_status` tested by a signed call |
+| 07 · MuleSoft | A design sketch, not a buildable project |
+| 08 · SOP RAG | Written and tested; the index waits on the AWS account's Bedrock access |
+| 09 · OTA saga | Written and tested, with its template; deployed by the next AWS deploy |
+| 10 · PII masking | In the agent's readings and procedure actions |
+| 11 · Guardrails | Deployed; a refused command tested |
+
+482 Node tests cover 17 of the 18 Lambda functions (all but slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, the ward SOPs, their index and their search, and the firmware's timing and command logic compiled for the host; 105 Python tests run the board, OTA, setup, deploy, stream test, SOP index and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (24 test classes). [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists what broke on the way, why, and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are the next step: the same code, deployed by the pipeline into a second org and account.

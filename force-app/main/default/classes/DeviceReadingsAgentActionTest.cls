@@ -123,6 +123,22 @@ private class DeviceReadingsAgentActionTest {
     }
 
     @IsTest
+    static void contactDetailsTypedOnTheAssetReachTheAgentMasked() {
+        Asset d = device('Test8');
+        d.Name = 'Room 4 monitor, family 555-123-4567, nurse.lead@example.com';
+        d.Last_Disconnect_Reason__c = 'Unplugged, call 555-123-4567';
+        TriggerHandler.bypass('AssetTriggerHandler');
+        update d;
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+
+        Assert.areEqual('Room 4 monitor, family [PHONE_1], [EMAIL_1]', res.deviceName);
+        Assert.areEqual('Unplugged, call [PHONE_1]', res.lastDisconnectReason);
+        Assert.areEqual('Test8', res.deviceId, 'The device ID is the key, never masked');
+    }
+
+    @IsTest
     static void returnsTheLatestReadingsNewestFirstWithTheConnection() {
         device('Test8');
         List<Patient_Vitals__c> rows = new List<Patient_Vitals__c>();

@@ -14,6 +14,10 @@
  * fields that person may see. An unreadable field fails the query rather
  * than coming back empty, and the agent is told so instead of guessing.
  * No patient name is returned: the device is the subject, not the person.
+ * The two fields people or AWS write free text into, the Asset's name and
+ * its last disconnect reason, go through PiiMaskingService first, so an
+ * email or phone number typed there reaches the model as [EMAIL_1] or
+ * [PHONE_1], never as itself.
  *
  * Its own class because Apex allows one @InvocableMethod per class.
  */
@@ -113,10 +117,12 @@ public with sharing class DeviceReadingsAgentAction {
                 continue;
             }
             Asset device = matches[0];
-            res.deviceName = device.Name;
+            // Typed by people, so it can hold a phone number or an email; the
+            // agent's model gets the PII tokens instead (chapter 10).
+            res.deviceName = PiiMaskingService.mask(device.Name).maskedText;
             res.connectionStatus = device.Connection_Status__c;
             res.connectionSince = device.Connection_Since__c;
-            res.lastDisconnectReason = device.Last_Disconnect_Reason__c;
+            res.lastDisconnectReason = PiiMaskingService.mask(device.Last_Disconnect_Reason__c).maskedText;
             res.lastTelemetryAt = device.Last_Telemetry_At__c;
 
             List<Patient_Vitals__c> latest;
