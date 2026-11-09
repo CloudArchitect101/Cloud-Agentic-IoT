@@ -5,7 +5,8 @@
       three values a new org ships with (Phone, Email, Web) and adds the two
       this project sets: Agentforce (Escalation_Case_Origin__c, the Patient
       Care agent's Cases) and Room Temperature Rule (Room_Temp_Case_Origin__c), and Vital Alert
-      (VitalAlertCaseService, from the chapter 02 stream).
+      (VitalAlertCaseService, from the chapter 02 stream), and Patient Portal
+      (Nurse_Request_Origin__c, a patient's nurse request from the portal chat).
       An org that added its own Origin values by hand must add them here too,
       or the next deploy may take them off the list.
     -->
@@ -39,5 +40,10 @@
         <fullName>Vital Alert</fullName>
         <default>false</default>
         <label>Vital Alert</label>
+    </standardValue>
+    <standardValue>
+        <fullName>Patient Portal</fullName>
+        <default>false</default>
+        <label>Patient Portal</label>
     </standardValue>
 </StandardValueSet>

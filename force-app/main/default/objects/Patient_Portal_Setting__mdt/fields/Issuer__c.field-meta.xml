@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Issuer__c</fullName>
+    <label>Issuer</label>
+    <description>The iss the chat token carries. Must match the issuer of the Messaging user verification keyset.</description>
+    <length>255</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

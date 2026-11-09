@@ -1,0 +1,31 @@
+{
+  "unevaluatedProperties": false,
+  "required": [
+    "messagingSessionId",
+    "reason"
+  ],
+  "properties": {
+    "messagingSessionId": {
+      "title": "Messaging Session ID",
+      "description": "The Id of this conversation (MessagingSession). Bound from the context variable RoutableId; never ask the patient for it.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "reason": {
+      "title": "Reason",
+      "description": "What the patient needs, in their own words.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "deviceId": {
+      "title": "Device ID",
+      "description": "Optional: the serial number of the patient's device the request is about, for example Test8.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

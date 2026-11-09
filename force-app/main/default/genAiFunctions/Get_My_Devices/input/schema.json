@@ -1,0 +1,30 @@
+{
+  "unevaluatedProperties": false,
+  "required": [
+    "messagingSessionId"
+  ],
+  "properties": {
+    "messagingSessionId": {
+      "title": "Messaging Session ID",
+      "description": "The Id of this conversation (MessagingSession). Bound from the context variable RoutableId; never ask the patient for it.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "deviceId": {
+      "title": "Device ID",
+      "description": "Optional: one of the patient's device serial numbers, for example Test8, to read only that device.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "readingCount": {
+      "title": "Number of Readings",
+      "description": "How many of the latest readings per device, newest first. 5 if empty, at most 20.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

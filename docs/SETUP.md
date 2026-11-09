@@ -959,6 +959,41 @@ for an SOP-only change). Unchanged SOPs are not embedded again.
 
 ---
 
+## 9. Patient portal
+
+The patient portal is a React site on Salesforce, with Enhanced Chat v2 and
+Agentforce Voice, connected to a patient-facing agent that sees only the
+signed-in patient's devices. [PATIENT-PORTAL.md](PATIENT-PORTAL.md) explains
+the design and the costs. The deploy brings the site, the React app, the Apex,
+the agent's topic and actions, and the permission sets. These clicks remain,
+in this order (details and checks in
+[PATIENT-PORTAL.md, Setting it up](PATIENT-PORTAL.md#setting-it-up-in-an-org)):
+
+1. Check the org has Customer Community licences (a `UserLicense` query).
+2. Enable Digital Experiences, and allow standard external profiles.
+3. Create the self-signed certificate `Patient_Portal_Chat` (private key not
+   exportable), download its `.crt`, and run
+   `node scripts/portal-chat-jwk.mjs <file> patient-portal-chat-1`.
+4. Deploy: `scripts/deploy-salesforce.sh Dev` builds the React app first.
+5. Create the Messaging for In-App and Web channel and the Enhanced Chat
+   deployment `Patient_Portal_Chat`, switch it to V2, publish, and allow
+   Agentforce Voice calls in Messaging Settings.
+6. Add the JWK and a keyset (issuer `cloud-agentic-iot-patient-portal`) under
+   User Verification, and put the keyset on the channel.
+7. Create the Agentforce Service Agent `Patient Portal Agent` with the topic
+   Patient Portal Self Service. Map each action's Messaging Session ID to
+   `RoutableId`, give its agent user `Patient_Portal_Agent`, connect Enhanced
+   Chat v2 with voice on, and activate it.
+8. Set `Chat_Site_Url__c` in `Patient_Portal_Setting.Default` from the
+   deployment's code snippet, and deploy again.
+9. Allow the chat hosts in the site's CSP, and the site in CORS.
+10. Give the site's guest user `Patient_Portal_Guest_Api`.
+11. For each patient: enable a Customer Community user on the Person Account
+    (its owner needs a role), assign `Patient_Portal_User`, and put the
+    patient's device on that account.
+
+---
+
 ## Doing it again for Prod
 
 **The same sequence**, with these differences:
@@ -970,6 +1005,7 @@ for an SOP-only change). Unchanged SOPs are not embedded again.
 | GitHub | `./scripts/setup-github-secrets.sh`, choosing `Prod`: same secret names, different values, and you as the required reviewer. |
 | Salesforce aliases | `iot-prod-admin`, `iot-prod-deploy`, `iot-prod-integration`. |
 | AWS Organizations | Only after the free-credit phase — see `MIGRATION-RUNBOOK.md` phase 1. |
+| Patient portal (§9) | A new signing certificate and keyset in the Prod org, never Dev's. `Chat_Site_Url__c` comes from Prod's own deployment, set in Prod's copy of `Patient_Portal_Setting.Default`. |
 | Ward procedures (§8) | The same SOPs are indexed by the Prod deploy. Check Titan Text Embeddings V2 is available in `ca-central-1` before the first one: the index step fails, naming Bedrock, if it is not. |
 
 Reusing a Dev certificate or role ARN in Prod silently collapses the two

@@ -83,10 +83,52 @@ Pilot note: 100 customers × 1 conversation ≈ 2,000 flex credits-equivalent �
 
 **Slack (chapter 04):** a free workspace supports slash commands. Free.
 
-## Sources (checked 2026-07)
+## 7. Patient portal: React site, Enhanced Chat and Agentforce Voice
+
+The patient portal ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)) changes §4 in one
+way: each patient who signs in needs an Experience Cloud user licence. The
+Person Account itself is still free. The React site, the Experience Cloud site
+and the Messaging channel add no fixed fee. Each chat costs agent actions,
+and each spoken minute costs voice minutes.
+
+| Line | Basis (USD list) | $/patient/mo |
+| --- | --- | --- |
+| Portal licence, by member | Salesforce's self-service price page lists a portal member at **$10 per member per month**, with unlimited sessions | 10.00 |
+| Portal licence, by login (alternative) | **$4 per login**, a 24-hour session: cheaper below 2.5 logins a month | 4.00 per login |
+| Agent actions | 20 Flex Credits per action (Flex Credits Rate Card, Apr 21 2026) ≈ $0.10. Assume 3 chats × 3 actions (Get My Devices, sometimes Request a Nurse) | 0.90 |
+| Agentforce Voice | 60 Flex Credits per minute (Voice Minutes rate card, Feb 3 2026) ≈ $0.30. Assume 2 spoken minutes. Where voice minutes apply, they replace the per-voice-action rate (30 credits) | 0.60 |
+| Enhanced Chat (Messaging for In-App and Web) | Counted in the agent's usage here. No separate per-message line on the rate cards read | 0 |
+| **Per signed-in patient** | member licence + typical use | **≈ $11.50 (≈ $15.75 CAD)** |
+
+The Flex Credit price is the one §3 and §4 already use: $0.10 per 20-credit
+action, which is $0.005 a credit. The rate cards give credits, not dollars.
+
+**The licence dominates.** For a patient who signs in once or twice a month,
+choose login-based licences ($4 to $8). For a patient on the ward who checks
+daily, choose member licences ($10). The agent is about $1.50 a patient
+whichever licence you choose, and only voice-heavy use changes that: 10 spoken
+minutes add $3.
+
+**Customer Community vs Customer Community Plus.** A patient sees only their
+own account, so the portal needs no roles or sharing rules, and Customer
+Community is enough. Customer Community Plus costs more and adds nothing the
+portal uses. Check current Customer Community prices with your account
+executive: the public page now lists the portal tiers under new names.
+
+**Worked example (monthly):** 1,000 patients on member licences, each with
+3 chats and 2 voice minutes: $10,000 in licences + $900 in actions + $600 in
+voice ≈ **$11,500 (≈ $15,750 CAD)**. On login licences at 2 logins each:
+$8,000 + $1,500 ≈ $9,500.
+
+**In test-cloudarchitect101 it costs nothing:** a Developer Edition comes with
+a few Experience Cloud licences and an Agentforce allowance. Watch the
+allowance when testing voice. Each spoken minute uses 60 credits.
+
+## Sources (checked 2026-07; §7 on 2026-11-09)
 
 - [Agentforce flexible pricing (Salesforce)](https://www.salesforce.com/news/press-releases/2025/05/15/agentforce-flexible-pricing-news/), [Flex credits guide](https://www.jitendrazaa.com/blog/salesforce/salesforce-agentforce-credits-cost-model-complete-guide-2026/), [2026 tiers](https://ekfrazo.com/resources/blogs/salesforce-agentforce-pricing-2026/)
 - [Data Cloud pricing changes (Salesforce Ben)](https://www.salesforceben.com/new-pricing-for-salesforce-data-cloud-is-here-what-you-need-to-know/), [credit consumption](https://davidpalencia.com/salesforce-data-cloud-pricing-credit-consumption/)
 - [AWS IoT Core pricing](https://aws.amazon.com/iot-core/pricing/)
 - [Salesforce editions 2026](https://tech.co/crm-software/salesforce-pricing-how-much-does-salesforce-cost)
 - [AWS Free Tier $200/6-month plan](https://aws.amazon.com/about-aws/whats-new/2025/07/aws-free-tier-credits-month-free-plan/), [Free Tier FAQs (new customers only)](https://aws.amazon.com/free/free-tier-faqs/), [Free account plan (joining an Organization upgrades to paid)](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html), [Project spend limits (AWS News Blog)](https://aws.amazon.com/blogs/aws/aws-reimagines-the-getting-started-experience/)
+- §7: [Flex Credits Rate Card, Apr 21 2026](https://www.salesforce.com/en-us/wp-content/uploads/sites/4/assets/pdf/agentforce/Flex-Credits-Rate-Card-04.21.2026.pdf), [Agentforce Voice Minutes rate card, Feb 3 2026](https://www.salesforce.com/en-us/wp-content/uploads/sites/4/assets/pdf/agentforce/Agentforce-Voice-Minutes-Supplemental-Rate-Card-02.03.2026.pdf), [self-service portal pricing](https://www.salesforce.com/in/service/customer-self-service/pricing/), [Enhanced Chat v2](https://help.salesforce.com/s/articleView?id=service.enhanced_chat_v2_intro.htm&language=en_US&type=5)

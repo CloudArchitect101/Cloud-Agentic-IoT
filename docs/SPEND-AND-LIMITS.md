@@ -138,6 +138,21 @@ month.
 queries and, after a successful AWS answer, one DML statement on the single
 `Aws_Spend_Snapshot__c` row. No other records, no Platform Cache.
 
+**The patient portal** ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)) adds no AWS
+cost and no callout. Its costs are Salesforce's, and the card does not show
+them yet:
+- Experience Cloud user licences: one per patient who signs in. Setup >
+  Company Information > User Licenses shows used and total, and the card's
+  org limits do not include them.
+- Agentforce: 20 Flex Credits per action and 60 per Agentforce Voice minute,
+  in Digital Wallet (paid orgs) or against the Developer Edition allowance.
+- Each `GET /portal/my-devices` is one Apex REST request per patient every 30
+  seconds while My room is open: it counts against the org's daily API
+  requests, about 2,880 a day for one patient who keeps the page open all
+  day. The Developer Edition allows 15,000 a day, so close the tab when you
+  are done.
+Full figures: [COST-MODEL.md §7](COST-MODEL.md#7-patient-portal-react-site-enhanced-chat-and-agentforce-voice).
+
 ## Who can see it
 
 - Only users who hold `Platform_Usage_Viewer` **and** View Setup and

@@ -91,3 +91,13 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | --- | --- | --- |
 | A pasted multi-line command kept running after one line failed | zsh runs every pasted line | Give commands as one `&&` chain |
 | A trailing `#` comment broke a pasted command | Interactive comments are off in zsh by default | No trailing comments in commands |
+
+## Patient portal (React site, Enhanced Chat, patient agent)
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+| --- | --- | --- | --- | --- |
+| Nov 9 | The first design, a chat drawn entirely in React with Salesforce voice, could not be built as asked | Agentforce Voice exists only in Salesforce's own Enhanced Chat v2 window on a web channel. The Help comparison table marks it unavailable for Custom Client (API) and In-App deployments, so a React chat over the Messaging REST API would lose Salesforce voice | Vitaly chose Enhanced Chat v2 with Agentforce Voice, embedded in the React site, which is React everywhere else | [PATIENT-PORTAL.md](PATIENT-PORTAL.md#why-enhanced-chat-v2-and-not-a-chat-drawn-in-react) records the trade-off |
+| Nov 9 | Reusing the staff agent's readings action for patients would have let any portal patient read any device | `DeviceReadingsAgentAction` scopes by `with sharing` and `WITH USER_MODE`, which is right for an employee agent that runs as the staff member. An Agentforce Service Agent runs as its own agent user, so sharing describes the agent user, not the patient chatting | Patient actions find the patient from the verified MessagingSession (`PortalIdentityService.forMessagingSession`) and scope every query by that patient's AccountId | Apex tests with two patients; a metadata test fails if a portal action does not resolve the patient from the session |
+| Nov 9 | Sharing could not give a patient their own readings | `Patient_Vitals__c` links to its device by the serial number as text (`Device__c`), not by a lookup, so no sharing set can reach it from the patient's account | `PatientDeviceService` reads in system mode, filtered by the patient's AccountId from their User row or the verified chat, never by a value from the browser or the model | `PatientDeviceServiceTest` |
+| Nov 9 | (Known from the React template, before the first deploy) a signed-in patient lands back on the sign-in page | A Multi-Framework React site calls UI API through `/sf/api/`. Without the `ApiEnabled` permission, the proxy answers `API_DISABLED_FOR_ORG` and `getCurrentUser()` reads it as signed out | `Patient_Portal_User` grants `ApiEnabled`, and the site's members are that permission set's holders | The Network's member group is the permission set |
+

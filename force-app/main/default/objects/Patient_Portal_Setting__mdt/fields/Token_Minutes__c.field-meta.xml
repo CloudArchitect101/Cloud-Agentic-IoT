@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Token_Minutes__c</fullName>
+    <label>Token Minutes</label>
+    <description>How long a chat token is valid. Short, because it proves who the patient is: the chat asks for a new one when it reconnects.</description>
+    <precision>3</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

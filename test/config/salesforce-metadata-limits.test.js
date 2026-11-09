@@ -62,24 +62,53 @@ test('the shipped Care_Team_Queue binding names no board of its own', () => {
   assert.match(binding, /<field>Device_Id__c<\/field>\s*<value xsi:nil="true"\s*\/>/);
 });
 
-// The agent's metadata refers to itself by name in four places: the topic
-// names its actions, each action names an Apex class, and the permission set
-// opens those classes to the people who talk to the agent. A broken name
-// fails the deploy, or worse, deploys an action nobody may run.
-test('every action the agent\'s topics name exists, invokes a class that exists, and Patient_Care_Agent opens it', () => {
+// The agents' metadata refers to itself by name in four places: a topic
+// names its actions, each action names an Apex class, and a permission set
+// opens those classes to whoever runs them: the care team for the staff
+// topic (Patient_Care_Agent), the patient agent's user for the portal topic
+// (Patient_Portal_Agent). A broken name fails the deploy, or worse, deploys
+// an action nobody may run.
+const TOPIC_PERMISSION_SET = {
+  Patient_Device_Monitoring: 'Patient_Care_Agent',
+  Patient_Portal_Self_Service: 'Patient_Portal_Agent',
+};
+
+test('every action a topic names exists, invokes a class that exists, and the topic\'s permission set opens it', () => {
   const plugins = filesUnder(path.join(metadata, 'genAiPlugins'), '.genAiPlugin-meta.xml');
-  const permissionSet = fs.readFileSync(path.join(metadata, 'permissionsets/Patient_Care_Agent.permissionset-meta.xml'), 'utf8');
-  const opened = new Set([...permissionSet.matchAll(/<apexClass>(\w+)<\/apexClass>/g)].map(([, name]) => name));
-  const named = plugins.flatMap((file) => [...fs.readFileSync(file, 'utf8').matchAll(/<functionName>(\w+)<\/functionName>/g)].map(([, n]) => n));
-  assert.ok(named.includes('Find_Procedure'), 'the topic has no Find Procedure action');
-  for (const name of named) {
-    const file = path.join(metadata, 'genAiFunctions', name, `${name}.genAiFunction-meta.xml`);
-    assert.ok(fs.existsSync(file), `${name} is named by a topic but has no ${path.relative(root, file)}`);
-    const target = fs.readFileSync(file, 'utf8').match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1];
-    const apex = path.join(metadata, 'classes', `${target}.cls`);
-    assert.ok(fs.existsSync(apex), `${name} invokes ${target}, which has no class`);
-    assert.match(fs.readFileSync(apex, 'utf8'), /@InvocableMethod/, `${target} has no @InvocableMethod`);
-    assert.ok(opened.has(target), `Patient_Care_Agent does not open ${target}, so ${name} fails for the people using the agent`);
+  for (const plugin of plugins) {
+    const topic = path.basename(plugin, '.genAiPlugin-meta.xml');
+    assert.ok(TOPIC_PERMISSION_SET[topic], `${topic}: say which permission set opens its actions`);
+    const permissionSet = fs.readFileSync(path.join(metadata, `permissionsets/${TOPIC_PERMISSION_SET[topic]}.permissionset-meta.xml`), 'utf8');
+    const opened = new Set([...permissionSet.matchAll(/<apexClass>(\w+)<\/apexClass>/g)].map(([, name]) => name));
+    const named = [...fs.readFileSync(plugin, 'utf8').matchAll(/<functionName>(\w+)<\/functionName>/g)].map(([, n]) => n);
+    if (topic === 'Patient_Device_Monitoring') {
+      assert.ok(named.includes('Find_Procedure'), 'the topic has no Find Procedure action');
+    }
+    for (const name of named) {
+      const file = path.join(metadata, 'genAiFunctions', name, `${name}.genAiFunction-meta.xml`);
+      assert.ok(fs.existsSync(file), `${name} is named by a topic but has no ${path.relative(root, file)}`);
+      const target = fs.readFileSync(file, 'utf8').match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1];
+      const apex = path.join(metadata, 'classes', `${target}.cls`);
+      assert.ok(fs.existsSync(apex), `${name} invokes ${target}, which has no class`);
+      assert.match(fs.readFileSync(apex, 'utf8'), /@InvocableMethod/, `${target} has no @InvocableMethod`);
+      assert.ok(opened.has(target), `${TOPIC_PERMISSION_SET[topic]} does not open ${target}, so ${name} fails for whoever runs ${topic}`);
+    }
+  }
+});
+
+// The patient agent runs as its own agent user, so with sharing would not
+// stop it reading another patient's data. Its actions must take the patient
+// from the verified chat, never from what the model passes in.
+test('every patient portal action finds the patient from the verified chat', () => {
+  const plugin = fs.readFileSync(path.join(metadata, 'genAiPlugins/Patient_Portal_Self_Service.genAiPlugin-meta.xml'), 'utf8');
+  for (const [, name] of plugin.matchAll(/<functionName>(\w+)<\/functionName>/g)) {
+    const target = fs.readFileSync(path.join(metadata, 'genAiFunctions', name, `${name}.genAiFunction-meta.xml`), 'utf8')
+      .match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1];
+    const apex = fs.readFileSync(path.join(metadata, 'classes', `${target}.cls`), 'utf8');
+    assert.match(apex, /PortalIdentityService\.forMessagingSession\(/, `${target} must resolve the patient from the MessagingSession`);
+    assert.doesNotMatch(apex, /accountId\s*;\s*$/m, `${target} must not take an account Id as input`);
+    const input = JSON.parse(fs.readFileSync(path.join(metadata, 'genAiFunctions', name, 'input/schema.json'), 'utf8'));
+    assert.ok(input.required.includes('messagingSessionId'), `${name}: messagingSessionId is required`);
   }
 });
 

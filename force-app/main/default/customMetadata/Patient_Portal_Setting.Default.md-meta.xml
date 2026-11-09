@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <label>Default</label>
+    <protected>false</protected>
+    <values>
+        <field>Certificate_Name__c</field>
+        <value xsi:type="xsd:string">Patient_Portal_Chat</value>
+    </values>
+    <values>
+        <field>Key_Id__c</field>
+        <value xsi:type="xsd:string">patient-portal-chat-1</value>
+    </values>
+    <values>
+        <field>Issuer__c</field>
+        <value xsi:type="xsd:string">cloud-agentic-iot-patient-portal</value>
+    </values>
+    <values>
+        <field>Deployment_Name__c</field>
+        <value xsi:type="xsd:string">Patient_Portal_Chat</value>
+    </values>
+    <values>
+        <field>Scrt_Url__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Chat_Site_Url__c</field>
+        <value xsi:nil="true"/>
+    </values>
+    <values>
+        <field>Token_Minutes__c</field>
+        <value xsi:type="xsd:double">5</value>
+    </values>
+    <values>
+        <field>Nurse_Request_Origin__c</field>
+        <value xsi:type="xsd:string">Patient Portal</value>
+    </values>
+    <values>
+        <field>Nurse_Request_Queue__c</field>
+        <value xsi:type="xsd:string">Care_Team_Queue</value>
+    </values>
+</CustomMetadata>

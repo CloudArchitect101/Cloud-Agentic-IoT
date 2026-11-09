@@ -70,6 +70,15 @@ fi
 # By manifest, so the deploy can also remove what left force-app/
 # (manifest/destructiveChangesPost.xml). A component the org never had only
 # warns, hence --ignore-warnings.
+# The patient portal's React app deploys as its build (ui-bundle.json,
+# outputDir dist), which Git does not hold, so build it first.
+for bundle in force-app/main/default/uiBundles/*/; do
+  [ -f "$bundle/package.json" ] || continue
+  step "Build the React app in $bundle"
+  (cd "$bundle" && npm ci --no-audit --no-fund && npm run build)
+  endstep
+done
+
 manifest_dir=$(mktemp -d)
 sf project generate manifest --source-dir force-app --output-dir "$manifest_dir" --name package >/dev/null
 deploy_args=(--manifest "$manifest_dir/package.xml" --post-destructive-changes manifest/destructiveChangesPost.xml

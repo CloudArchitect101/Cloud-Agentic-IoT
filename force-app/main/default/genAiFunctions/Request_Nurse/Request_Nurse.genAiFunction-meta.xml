@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <masterLabel>Request a Nurse</masterLabel>
+    <!-- The patient agent's one write: a Case on the patient's own account in
+         the care team queue. Confirmed first, like the staff agent's
+         escalation. -->
+    <description>Sends the care team a nurse request for the signed-in patient and returns its Case number, or the number of the request already open. Use it when the patient asks for a nurse, for help, or says they feel unwell. Pass what they need in their own words.</description>
+    <invocationTarget>RequestNurseAgentAction</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <isConfirmationRequired>true</isConfirmationRequired>
+</GenAiFunction>
