@@ -81,7 +81,7 @@ Pilot note: 100 customers × 1 conversation ≈ 2,000 flex credits-equivalent �
 
 **MuleSoft (chapter 07):** the one thing with no free tier — Anypoint is a **30-day trial**. Build, record, and publish that chapter inside one window.
 
-**Slack (chapter 04):** a free workspace supports slash commands. Free.
+**Slack (chapter 04):** a free workspace supports slash commands. Free. Each `/patient-status` costs two Lambda runs and one DynamoDB query on AWS (well under a thousandth of a cent) and one Salesforce API call for the last saved event; the live reading never touches Salesforce's daily API limit.
 
 ## Sources (checked 2026-07)
 

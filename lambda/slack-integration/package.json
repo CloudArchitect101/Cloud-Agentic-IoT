@@ -4,7 +4,9 @@
   "description": "Slack slash commands answered from Salesforce as the integration user (JWT Bearer Flow)",
   "main": "index.js",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.665.0",
     "@aws-sdk/client-lambda": "^3.665.0",
+    "@aws-sdk/lib-dynamodb": "^3.665.0",
     "@cloud-agentic-iot/shared": "file:../shared"
   },
   "private": true

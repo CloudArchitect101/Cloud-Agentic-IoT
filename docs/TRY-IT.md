@@ -484,7 +484,10 @@ demo apart from any team's. Slash commands work on the free plan.
    `/patient-status` (hint `Test8`) and `/dispense-medication` (hint `Test8`).
 5. **Install it.** **Install App** → **Install to Workspace** → **Allow**.
 6. **Try it.** In any channel: `/patient-status Test8`. The answer shows
-   only to you. `/dispense-medication Test8` creates a
+   only to you: first "Looking up `Test8`…", then the live reading from AWS
+   (or "offline since" when the board has not sent for five minutes) and the
+   last event Salesforce saved, which can be hours older because Salesforce
+   keeps only state changes and alerts. `/dispense-medication Test8` creates a
    `DISPENSE_MEDICATION` Device Command and turns the patient board's motor,
    like **Send Command** on the Asset; anyone in the workspace who can run
    the command can do it, so keep the workspace to yourself.

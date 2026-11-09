@@ -18,6 +18,17 @@ Parameters:
     Type: String
     Default: /cloud-agentic-iot/salesforce/jwt-private-key
     AllowedPattern: '^/.+'
+  PatientVitalsTableName:
+    Type: String
+    Default: patient-vitals
+    Description: >-
+      The patient-vitals stack's table, where /patient-status reads the live
+      reading (the newest VITAL# item), as the MCP server does.
+  OfflineAfterMinutes:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    Description: A reading older than this is shown as "offline since", as the MCP server does.
   SalesforceApiVersion:
     Type: String
     Default: '64.0'
@@ -71,6 +82,14 @@ Resources:
         # Slack waits only 3 seconds, so the function answers at once and
         # hands the Salesforce work to an asynchronous call of itself. The
         # name, not GetAtt, so the role does not depend on the function.
+        # Read only, and only the one table: the live reading.
+        - PolicyName: ReadLiveReadings
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: dynamodb:Query
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PatientVitalsTableName}'
         - PolicyName: InvokeItself
           PolicyDocument:
             Version: '2012-10-17'
@@ -88,6 +107,8 @@ Resources:
       Runtime: nodejs22.x
       Handler: index.handler
       Timeout: 10
+      # Three SDK packages load faster with the CPU that comes with more memory.
+      MemorySize: 256
       Role: !GetAtt SlackIntegrationRole.Arn
       Code:
         ZipFile: |
@@ -98,6 +119,8 @@ Resources:
       Environment:
         Variables:
           SLACK_SIGNING_SECRET_PARAMETER: !Ref SlackSigningSecretParameterName
+          TABLE_NAME: !Ref PatientVitalsTableName
+          OFFLINE_AFTER_MINUTES: !Ref OfflineAfterMinutes
           SALESFORCE_CLIENT_ID: !Ref SfConsumerKeyParam
           SALESFORCE_USERNAME: !Ref SfUsernameParam
           SALESFORCE_LOGIN_URL: !Ref SfLoginUrlParam

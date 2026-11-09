@@ -11,9 +11,15 @@
  *   1. From API Gateway: check Slack's signature, check the device name,
  *      start the second half asynchronously, and answer "Working on it" at
  *      once.
- *   2. Invoked asynchronously with { slackCommand }: do the Salesforce work
- *      and post the answer to the command's response_url, which Slack keeps
- *      open for 30 minutes.
+ *   2. Invoked asynchronously with { slackCommand }: do the work and post
+ *      the answer to the command's response_url, which Slack keeps open for
+ *      30 minutes.
+ *
+ * /patient-status answers from two places. The live reading comes from AWS
+ * (the patient-vitals table, the same items the MCP server's get_room_status
+ * reads), because Salesforce keeps only the readings someone must act on:
+ * state changes and re-alerts. The last of those comes from Salesforce. The
+ * live part costs one DynamoDB query and no Salesforce API call.
  *
  * Slack never signs in to Salesforce: the signature check is the only
  * identity check on this path, and every Salesforce call runs as the one
@@ -22,11 +28,14 @@
 
 const crypto = require('node:crypto');
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, QueryCommand } = require('@aws-sdk/lib-dynamodb');
 const { getParameter } = require('@cloud-agentic-iot/shared/config');
-const { requiredEnv } = require('@cloud-agentic-iot/shared/env');
+const { requiredEnv, numberEnv } = require('@cloud-agentic-iot/shared/env');
 const salesforce = require('@cloud-agentic-iot/shared/salesforce');
 
 const lambda = new LambdaClient({});
+const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 // An AWS IoT Thing name, which is what a device is called everywhere here.
 // Checked before it goes anywhere near SOQL.
@@ -104,14 +113,79 @@ async function acknowledge(event) {
     : `Sending a dose request to \`${deviceId}\`…`);
 }
 
+/**
+ * The newest reading AWS holds for the device, as the MCP server reads it:
+ * the newest VITAL# item under PATIENT#<device>. Null when there is none
+ * (a device that never reported, or Prod, which keeps no readings in
+ * DynamoDB).
+ */
+async function liveReading(deviceId) {
+  const { Items = [] } = await dynamodb.send(new QueryCommand({
+    TableName: requiredEnv('TABLE_NAME'),
+    KeyConditionExpression: 'PK = :device AND begins_with(SK, :reading)',
+    ExpressionAttributeValues: { ':device': `PATIENT#${deviceId}`, ':reading': 'VITAL#' },
+    ScanIndexForward: false,
+    Limit: 1,
+  }));
+  if (!Items.length) return null;
+  const item = Items[0];
+  const at = Date.parse(item.CreatedAt || item.SK.slice('VITAL#'.length));
+  return { temperature: item.Temperature, humidity: item.Humidity, at: Number.isNaN(at) ? null : at };
+}
+
+/** "12 s", "4 min", "3 h", "2 d". */
+function age(ms) {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 90) return `${seconds} s`;
+  if (seconds < 90 * 60) return `${Math.round(seconds / 60)} min`;
+  if (seconds < 36 * 3600) return `${Math.round(seconds / 3600)} h`;
+  return `${Math.round(seconds / 86400)} d`;
+}
+
+const utc = (ms) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+const shown = (value, unit) => (typeof value === 'number' && Number.isFinite(value) ? `${value}${unit}` : '?');
+
+function liveLine(reading, now) {
+  if (!reading || reading.at === null) return 'Live: no reading stored in AWS for this device.';
+  const values = `${shown(reading.temperature, '°C')}, ${shown(reading.humidity, '% humidity')}`;
+  const stale = now - reading.at > numberEnv('OFFLINE_AFTER_MINUTES') * 60_000;
+  return stale
+    ? `Live: offline since ${utc(reading.at)}; last reading ${values}, ${age(now - reading.at)} ago.`
+    : `Live: ${values}, ${age(now - reading.at)} ago (online).`;
+}
+
+function savedLine(record) {
+  if (!record) return 'Last saved event: none in Salesforce.';
+  const what = [
+    `${shown(record.Temperature__c, '°C')}, ${shown(record.Humidity__c, '% humidity')}`,
+    record.Room_Temperature_Alert__c ? 'room temperature alert' : null,
+    record.Patient_State__c ? `state ${record.Patient_State__c}` : null,
+  ].filter(Boolean).join(', ');
+  return `Last saved event: ${what}, at ${utc(Date.parse(record.CreatedDate))}.`;
+}
+
 async function patientStatus(deviceId) {
-  const rows = await salesforce.query(
-    'SELECT Temperature__c, Humidity__c, CreatedDate FROM Patient_Vitals__c '
-    + `WHERE Device__c = '${deviceId}' ORDER BY CreatedDate DESC LIMIT 1`,
-  );
-  if (!rows.length) return `No vitals found for device \`${deviceId}\`.`;
-  const v = rows[0];
-  return `*Device ${deviceId}*: ${v.Temperature__c}°C, ${v.Humidity__c}% humidity (as of ${v.CreatedDate})`;
+  // Both at once; either may fail without taking the other with it.
+  const [live, saved] = await Promise.allSettled([
+    liveReading(deviceId),
+    salesforce.query(
+      'SELECT Temperature__c, Humidity__c, Patient_State__c, Room_Temperature_Alert__c, CreatedDate '
+      + `FROM Patient_Vitals__c WHERE Device__c = '${deviceId}' ORDER BY CreatedDate DESC LIMIT 1`,
+    ),
+  ]);
+  if (live.status === 'rejected') console.error('live reading failed', { deviceId, error: live.reason.message });
+  if (saved.status === 'rejected') console.error('Salesforce query failed', { deviceId, error: saved.reason.message });
+  if (live.status === 'rejected' && saved.status === 'rejected') throw saved.reason;
+
+  const record = saved.status === 'fulfilled' ? saved.value[0] : undefined;
+  if (live.status === 'fulfilled' && !live.value && saved.status === 'fulfilled' && !record) {
+    return `No readings for device \`${deviceId}\` in AWS or Salesforce. Check the name: it is the Asset's serial number.`;
+  }
+  return [
+    `*${deviceId}*`,
+    live.status === 'fulfilled' ? liveLine(live.value, Date.now()) : 'Live: unavailable, AWS could not be read just now.',
+    saved.status === 'fulfilled' ? savedLine(record) : 'Last saved event: unavailable, Salesforce could not be read just now.',
+  ].join('\n');
 }
 
 async function dispenseMedication(deviceId) {

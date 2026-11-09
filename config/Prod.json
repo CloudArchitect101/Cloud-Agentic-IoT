@@ -63,6 +63,7 @@
       "AlertMaxEventAgeSeconds": 3600
     },
     "slack-integration": {
+      "OfflineAfterMinutes": 5,
       "SalesforceApiVersion": "64.0",
       "SalesforceTokenCacheMinutes": 30,
       "ConfigCacheSeconds": 300
