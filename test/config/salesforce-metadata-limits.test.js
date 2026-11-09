@@ -62,78 +62,58 @@ test('the shipped Care_Team_Queue binding names no board of its own', () => {
   assert.match(binding, /<field>Device_Id__c<\/field>\s*<value xsi:nil="true"\s*\/>/);
 });
 
-// The staff agent's metadata refers to itself by name in four places: a
-// topic names its actions, each action names an Apex class, and a permission
-// set opens those classes to whoever runs them (Patient_Care_Agent). A broken
-// name fails the deploy, or worse, deploys an action nobody may run.
-const TOPIC_PERMISSION_SET = {
-  Patient_Device_Monitoring: 'Patient_Care_Agent',
+// The agent is built in the new Agentforce Builder: its Agent Script
+// (aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent) is the
+// source, and the org compiles the planner and bot version from it. The
+// legacy builder's agents could not take a Slack connection, so no agent is
+// shipped in the legacy shape (a Bot or a standalone GenAiPlugin topic).
+const AGENT = path.join(metadata, 'aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent');
+const agentScript = () => fs.readFileSync(AGENT, 'utf8');
+const instructionsOf = (script, subagent) => {
+  const block = script.split(/\n(?=subagent |start_agent |connection )/).find((b) => b.startsWith(`subagent ${subagent}:`));
+  assert.ok(block, `no subagent ${subagent}`);
+  return block;
 };
 
-test('every action a topic names exists, invokes a class that exists, and the topic\'s permission set opens it', () => {
-  const plugins = filesUnder(path.join(metadata, 'genAiPlugins'), '.genAiPlugin-meta.xml');
-  for (const plugin of plugins) {
-    const topic = path.basename(plugin, '.genAiPlugin-meta.xml');
-    assert.ok(TOPIC_PERMISSION_SET[topic], `${topic}: say which permission set opens its actions`);
-    const permissionSet = fs.readFileSync(path.join(metadata, `permissionsets/${TOPIC_PERMISSION_SET[topic]}.permissionset-meta.xml`), 'utf8');
-    const opened = new Set([...permissionSet.matchAll(/<apexClass>(\w+)<\/apexClass>/g)].map(([, name]) => name));
-    const named = [...fs.readFileSync(plugin, 'utf8').matchAll(/<functionName>(\w+)<\/functionName>/g)].map(([, n]) => n);
-    if (topic === 'Patient_Device_Monitoring') {
-      assert.ok(named.includes('Find_Procedure'), 'the topic has no Find Procedure action');
-    }
-    for (const name of named) {
-      const file = path.join(metadata, 'genAiFunctions', name, `${name}.genAiFunction-meta.xml`);
-      assert.ok(fs.existsSync(file), `${name} is named by a topic but has no ${path.relative(root, file)}`);
-      const target = fs.readFileSync(file, 'utf8').match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1];
-      const apex = path.join(metadata, 'classes', `${target}.cls`);
-      assert.ok(fs.existsSync(apex), `${name} invokes ${target}, which has no class`);
-      assert.match(fs.readFileSync(apex, 'utf8'), /@InvocableMethod/, `${target} has no @InvocableMethod`);
-      assert.ok(opened.has(target), `${TOPIC_PERMISSION_SET[topic]} does not open ${target}, so ${name} fails for whoever runs ${topic}`);
-    }
-  }
+test('agents ship as new-builder Agent Script, never in the legacy shape', () => {
+  assert.ok(fs.existsSync(AGENT), 'Patient_Care_Agent has no Agent Script');
+  assert.ok(fs.existsSync(AGENT.replace(/\.agent$/, '.bundle-meta.xml')), 'the authoring bundle has no -meta.xml');
+  assert.ok(!fs.existsSync(path.join(metadata, 'bots/Patient_Care_Agent')), 'a legacy Bot for Patient_Care_Agent is back');
+  assert.ok(!fs.existsSync(path.join(metadata, 'genAiPlugins/Patient_Device_Monitoring.genAiPlugin-meta.xml')), 'the legacy topic is back');
+  const script = agentScript();
+  assert.match(script, /agent_type: "AgentforceEmployeeAgent"/);
+  assert.match(script, /\nconnection slack:\n/, 'the Slack connection is gone, so the agent leaves Slack on the next publish');
 });
 
-// The patient agent is Agent Script (new Agentforce Builder). It runs as its
-// own agent user, so with sharing would not stop it reading another patient's
-// data. Each action must take the patient from the verified chat: the Apex
-// resolves the MessagingSession, and the script binds that input to the
-// RoutableId variable itself, so the model never fills it.
-const PORTAL_AGENT = path.join(metadata, 'aiAuthoringBundles/Patient_Portal_Agent/Patient_Portal_Agent.agent');
-
-test('the patient portal agent is an Agent Script bundle with a placeholder agent user', () => {
-  const script = fs.readFileSync(PORTAL_AGENT, 'utf8');
-  assert.ok(fs.existsSync(PORTAL_AGENT.replace(/\.agent$/, '.bundle-meta.xml')), 'the bundle has no bundle-meta.xml');
-  assert.match(script, /^config:\n(?:\s{4}.*\n)*?\s{4}developer_name: "Patient_Portal_Agent"/m);
-  assert.match(script, /default_agent_user: "PORTAL_AGENT_USER"/, 'the agent user is org-specific: scripts/publish-portal-agent.sh fills it in');
-  assert.match(script, /RoutableId: linked string\n\s+source: @MessagingSession\.Id/);
-  assert.ok(!fs.existsSync(path.join(metadata, 'genAiPlugins/Patient_Portal_Self_Service.genAiPlugin-meta.xml')), 'the old-builder portal topic is back');
-});
-
-test('every patient portal action finds the patient from the verified chat', () => {
-  const script = fs.readFileSync(PORTAL_AGENT, 'utf8');
-  const permissionSet = fs.readFileSync(path.join(metadata, 'permissionsets/Patient_Portal_Agent.permissionset-meta.xml'), 'utf8');
+// Each action names its GenAiFunction (source) and Apex class (target), and
+// the permission set opens those classes to the people who talk to the agent.
+// A broken name fails the publish, or worse, publishes an action nobody may run.
+test('every action the agent names exists, invokes a class that exists, and Patient_Care_Agent opens it', () => {
+  const script = agentScript();
+  const permissionSet = fs.readFileSync(path.join(metadata, 'permissionsets/Patient_Care_Agent.permissionset-meta.xml'), 'utf8');
   const opened = new Set([...permissionSet.matchAll(/<apexClass>(\w+)<\/apexClass>/g)].map(([, name]) => name));
-  const targets = [...script.matchAll(/^\s{8}(\w+):\n(?:\s{12}.*\n)*?\s{12}target: "apex:\/\/(\w+)"/gm)];
-  assert.deepEqual(targets.map(([, name]) => name).sort(), ['get_my_devices', 'request_nurse']);
-  for (const [, name, target] of targets) {
-    const apex = fs.readFileSync(path.join(metadata, 'classes', `${target}.cls`), 'utf8');
-    assert.match(apex, /@InvocableMethod/, `${target} has no @InvocableMethod`);
-    assert.match(apex, /PortalIdentityService\.forMessagingSession\(/, `${target} must resolve the patient from the MessagingSession`);
-    assert.doesNotMatch(apex, /accountId\s*;\s*$/m, `${target} must not take an account Id as input`);
-    assert.ok(opened.has(target), `Patient_Portal_Agent does not open ${target}`);
-    const call = script.match(new RegExp(`^\\s+${name}: @actions\\.${name}\\n((?:\\s{16}.*\\n)+)`, 'm'));
-    assert.ok(call, `the my_room subagent does not offer ${name}`);
-    assert.match(call[1], /with messagingSessionId = @variables\.RoutableId/, `${name}: the session must be bound to RoutableId, not left to the model`);
+  const actions = [...script.matchAll(/source: "(\w+)"\n\s+target: "apex:\/\/(\w+)"/g)].map(([, source, target]) => ({ source, target }));
+  assert.deepEqual(actions.map((a) => a.source).sort(), ['Escalate_Patient_Device_Condition', 'Find_Procedure', 'Get_Device_Readings']);
+  for (const { source, target } of actions) {
+    const file = path.join(metadata, 'genAiFunctions', source, `${source}.genAiFunction-meta.xml`);
+    assert.ok(fs.existsSync(file), `${source} is named by the agent but has no ${path.relative(root, file)}`);
+    assert.equal(fs.readFileSync(file, 'utf8').match(/<invocationTarget>(\w+)<\/invocationTarget>/)[1], target, `${source}: the agent and the function name different classes`);
+    const apex = path.join(metadata, 'classes', `${target}.cls`);
+    assert.ok(fs.existsSync(apex), `${source} invokes ${target}, which has no class`);
+    assert.match(fs.readFileSync(apex, 'utf8'), /@InvocableMethod/, `${target} has no @InvocableMethod`);
+    assert.ok(opened.has(target), `Patient_Care_Agent does not open ${target}, so ${source} fails for the people using the agent`);
   }
+});
+
+test('escalating asks the user to confirm first', () => {
+  assert.match(agentScript(), /require_user_confirmation: True\n\s+include_in_progress_indicator: False\n\s+source: "Escalate_Patient_Device_Condition"/);
 });
 
 test('the topic tells the agent to cite the procedure it used, by SOP ID and version', () => {
-  const topic = fs.readFileSync(path.join(metadata, 'genAiPlugins/Patient_Device_Monitoring.genAiPlugin-meta.xml'), 'utf8');
-  const cite = topic.match(/<developerName>instruction_cite_procedures<\/developerName>[\s\S]*?<description>([\s\S]*?)<\/description>/);
-  assert.ok(cite, 'no instruction_cite_procedures');
-  assert.match(cite[1], /Find Procedure/);
-  assert.match(cite[1], /SOP ID and version/);
-  assert.match(cite[1], /no ward procedure covers it/);
+  const topic = instructionsOf(agentScript(), 'Patient_Device_Monitoring');
+  assert.match(topic, /Find Procedure/);
+  assert.match(topic, /SOP ID and version/);
+  assert.match(topic, /no ward procedure covers it/);
 });
 
 // Asked "Test8 reads 31 C, what do I do?" while the procedure index was
@@ -141,11 +121,10 @@ test('the topic tells the agent to cite the procedure it used, by SOP ID and ver
 // details" and never read Test8. A named device's readings must not depend
 // on the procedure search.
 test('the topic tells the agent to report a named device\'s readings even when Find Procedure fails', () => {
-  const topic = fs.readFileSync(path.join(metadata, 'genAiPlugins/Patient_Device_Monitoring.genAiPlugin-meta.xml'), 'utf8');
-  const cite = topic.match(/<developerName>instruction_cite_procedures<\/developerName>[\s\S]*?<description>([\s\S]*?)<\/description>/);
-  assert.match(cite[1], /always get its latest readings/);
-  assert.match(cite[1], /If Find Procedure fails/);
-  assert.match(cite[1], /offer to escalate/);
+  const topic = instructionsOf(agentScript(), 'Patient_Device_Monitoring');
+  assert.match(topic, /always get its latest readings/);
+  assert.match(topic, /If Find Procedure fails/);
+  assert.match(topic, /offer to escalate/);
 });
 
 // An agent action deployed without input/schema.json and output/schema.json

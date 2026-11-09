@@ -7,6 +7,7 @@ system:
 config:
     developer_name: "Patient_Portal_Agent"
     agent_label: "Patient Portal Agent"
+    agent_type: "AgentforceServiceAgent"
     description: "Service agent for the patient portal's Enhanced Chat: answers a signed-in patient about their own room monitor and sends nurse requests to the care team."
     default_agent_user: "PORTAL_AGENT_USER"
 

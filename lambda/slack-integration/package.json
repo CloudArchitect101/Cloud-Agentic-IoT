@@ -1,11 +1,13 @@
 {
   "name": "slack-salesforce-integration",
   "version": "1.0.0",
-  "description": "Headless Slack <-> Salesforce integration via JWT Bearer Flow",
+  "description": "Slack slash commands answered from Salesforce as the integration user (JWT Bearer Flow)",
   "main": "index.js",
   "dependencies": {
-    "@cloud-agentic-iot/shared": "file:../shared",
-    "jsforce": "^3.4.1"
+    "@aws-sdk/client-dynamodb": "^3.665.0",
+    "@aws-sdk/client-lambda": "^3.665.0",
+    "@aws-sdk/lib-dynamodb": "^3.665.0",
+    "@cloud-agentic-iot/shared": "file:../shared"
   },
   "private": true
 }
