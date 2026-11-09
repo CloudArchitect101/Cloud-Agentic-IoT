@@ -39,7 +39,7 @@ private class WiFiCredentialServiceTest {
     }
 
     private static Asset provisionedDevice(String serial, Id networkId) {
-        Account patient = new Account(Name = 'Test Patient');
+        Account patient = TestAccounts.patient('Test Patient');
         insert patient;
         // A Thing ARN, as a provisioned device has: without one, the insert
         // would start a provisioning job of its own.
@@ -110,7 +110,7 @@ private class WiFiCredentialServiceTest {
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
         Wi_Fi_Network__c net = newNetwork();
-        Account patient = new Account(Name = 'Ward');
+        Account patient = TestAccounts.patient('Ward');
         insert patient;
         List<Asset> devices = new List<Asset>();
         for (Integer i = 0; i < 25; i++) {

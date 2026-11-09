@@ -169,7 +169,7 @@ private class PatientCareAgentActionsTest {
     }
 
     private static Asset device(String serial) {
-        Account owner = new Account(Name = 'Escalation Patient ' + serial);
+        Account owner = TestAccounts.patient('Escalation Patient ' + serial);
         insert owner;
         Asset a = new Asset(Name = 'Monitor ' + serial, SerialNumber = serial, AccountId = owner.Id, Status = 'Installed');
         // The Asset trigger would provision the device in AWS.

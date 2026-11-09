@@ -3,7 +3,7 @@ private class DeviceReprovisionControllerTest {
 
     /** A device with its trigger kept out of the way, provisioned when a Thing ARN is given. */
     private static Asset device(String serial, String thingArn) {
-        Account patient = new Account(Name = 'Test Patient');
+        Account patient = TestAccounts.patient('Test Patient');
         insert patient;
         Wi_Fi_Network__c net = new Wi_Fi_Network__c(Name = 'Clinic', SSID__c = 'clinic-wifi');
         insert net;

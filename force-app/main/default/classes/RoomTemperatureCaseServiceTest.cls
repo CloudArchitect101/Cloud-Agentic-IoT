@@ -43,7 +43,7 @@ private class RoomTemperatureCaseServiceTest {
 
     /** Provisioned devices whose serial number is their Thing name, saved without the Asset trigger. */
     private static List<Asset> devices(List<String> thingNames) {
-        Account patient = new Account(Name = 'Room Temp Patient');
+        Account patient = TestAccounts.patient('Room Temp Patient');
         insert patient;
         List<Asset> devices = new List<Asset>();
         for (Integer i = 0; i < thingNames.size(); i++) {

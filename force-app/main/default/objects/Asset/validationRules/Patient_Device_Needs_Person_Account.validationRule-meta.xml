@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Patient_Device_Needs_Person_Account</fullName>
+    <active>true</active>
+    <description>A Patient Device belongs to one patient, so its Account must be a Person Account. Checked only when the device is created or its Account or record type changes, so existing devices keep reporting status while they are fixed.</description>
+    <errorConditionFormula>AND(
+    RecordType.DeveloperName = &quot;Patient_Device&quot;,
+    NOT(ISBLANK(AccountId)),
+    NOT(Account.IsPersonAccount),
+    OR(ISNEW(), ISCHANGED(AccountId), ISCHANGED(RecordTypeId))
+)</errorConditionFormula>
+    <errorDisplayField>AccountId</errorDisplayField>
+    <errorMessage>A Patient Device belongs to a patient: choose a Person Account. A board that belongs to a ward or a business account uses the Internal Device record type.</errorMessage>
+</ValidationRule>

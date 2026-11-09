@@ -194,8 +194,16 @@ In a real org, both should be Integration Users.
 4. Setup → **Agentforce Agents** → turn on **Agentforce**. If the page or
    the switch is missing, wait a few minutes after step 3 and reload. This
    also accepts terms, and is the admin's decision too.
+5. Setup → **Account Settings** → **Enable Person Accounts** (it needs at
+   least one Account record type first, and it **cannot be turned off**).
+   Each patient is a Person Account, and the validation rule
+   `Asset.Patient_Device_Needs_Person_Account` refers to `IsPersonAccount`,
+   so the deploy fails without it. Then, in the admin profile's Record Type
+   Settings for Account, keep both Business and Person Account available:
+   **New Account** from an Asset's Account field then asks which one, and
+   Person Account is the one a Patient Device accepts.
 
-Do 3 and 4 before the first deploy (§2.3, phase 2). The repo ships the
+Do 3, 4 and 5 before the first deploy (§2.3, phase 2). The repo ships the
 Patient Care Agent as Agent Script (`aiAuthoringBundles/`) and its actions
 (`genAiFunctions/`). Expect an org
 without Agentforce to refuse the agent, and one refused component fails

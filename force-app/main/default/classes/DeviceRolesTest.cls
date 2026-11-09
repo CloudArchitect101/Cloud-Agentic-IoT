@@ -50,7 +50,7 @@ private class DeviceRolesTest {
 
     /** A provisioned board, saved without the Asset trigger. */
     private static Asset board(String thingName, Boolean internal, String connection) {
-        Account owner = new Account(Name = internal ? 'Ward 3' : 'Patient ' + thingName);
+        Account owner = internal ? new Account(Name = 'Ward 3') : TestAccounts.patient('Patient ' + thingName);
         insert owner;
         Asset device = new Asset(
             Name = 'Device ' + thingName, SerialNumber = thingName, AccountId = owner.Id, Status = 'Installed',
@@ -238,9 +238,12 @@ private class DeviceRolesTest {
         DeviceApiMock aws = settings();
         Asset in1 = board('IN-1', true, 'Online');
         insert waiting(in1.Id);
+        // A Patient Device belongs to a patient, so it moves to one as it changes role.
+        Account patient = TestAccounts.patient('Patient IN-1');
+        insert patient;
 
         Test.startTest();
-        update new Asset(Id = in1.Id, RecordTypeId = DeviceRoles.patientRecordTypeId());
+        update new Asset(Id = in1.Id, RecordTypeId = DeviceRoles.patientRecordTypeId(), AccountId = patient.Id);
         Test.stopTest();
 
         List<Map<String, Object>> sent = queueDepthSent(aws);

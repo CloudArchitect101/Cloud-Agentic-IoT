@@ -2,7 +2,7 @@
 private class DeviceProvisioningServiceTest {
 
     private static Asset newDevice(String serial) {
-        Account patient = new Account(Name = 'Test Patient');
+        Account patient = TestAccounts.patient('Test Patient');
         insert patient;
         Wi_Fi_Network__c net = new Wi_Fi_Network__c(Name = 'Clinic', SSID__c = 'clinic-wifi');
         insert net;
@@ -43,7 +43,7 @@ private class DeviceProvisioningServiceTest {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        Account patient = new Account(Name = 'Test Patient');
+        Account patient = TestAccounts.patient('Test Patient');
         insert patient;
 
         Test.startTest();
@@ -87,7 +87,7 @@ private class DeviceProvisioningServiceTest {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        Account patient = new Account(Name = 'Test Patient');
+        Account patient = TestAccounts.patient('Test Patient');
         insert patient;
         Asset device = new Asset(Name = 'ESP32-T3', SerialNumber = 'ESP32-T3',
                                  AccountId = patient.Id, Status = 'Installed');
@@ -253,7 +253,7 @@ private class DeviceProvisioningServiceTest {
     @IsTest
     static void bulkDeleteCollectsEveryThingName() {
         Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
-        Account patient = new Account(Name = 'Bulk Patient');
+        Account patient = TestAccounts.patient('Bulk Patient');
         insert patient;
         Wi_Fi_Network__c net = new Wi_Fi_Network__c(Name = 'Clinic', SSID__c = 'clinic-wifi');
         insert net;
@@ -282,7 +282,7 @@ private class DeviceProvisioningServiceTest {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        Account patient = new Account(Name = 'Ward');
+        Account patient = TestAccounts.patient('Ward');
         insert patient;
         Wi_Fi_Network__c net = new Wi_Fi_Network__c(Name = 'Ward', SSID__c = 'ward-wifi');
         insert net;

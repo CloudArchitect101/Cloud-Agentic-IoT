@@ -169,7 +169,9 @@ that have no metadata, in order. Each one is also in
     `Patient_Portal_Guest_Api` to the guest user, so the sign-in page can call
     its Apex.
 11. **Patients.** For each Person Account: Enable Customer User (profile
-    Customer Community User), and assign `Patient_Portal_User`. The account's
+    Customer Community User), and assign `Patient_Portal_User`. A Patient
+    Device Asset accepts only a Person Account (validation rule
+    `Patient_Device_Needs_Person_Account`). The account's
     owner must have a role. Attach the patient's device: its Asset's Account is
     the Person Account, record type Patient Device. For the two-patient demo:
     Test8 goes to patient A, and patient B gets a second Patient Device Asset,

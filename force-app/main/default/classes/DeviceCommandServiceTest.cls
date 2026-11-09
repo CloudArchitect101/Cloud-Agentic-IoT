@@ -15,7 +15,7 @@ private class DeviceCommandServiceTest {
      * name is provisioned as that Thing; one without has no Thing ARN yet.
      */
     private static List<Asset> devices(List<String> serialNumbers, List<String> thingNames) {
-        Account patient = new Account(Name = 'Command Patient');
+        Account patient = TestAccounts.patient('Command Patient');
         insert patient;
         List<Asset> devices = new List<Asset>();
         for (Integer i = 0; i < serialNumbers.size(); i++) {

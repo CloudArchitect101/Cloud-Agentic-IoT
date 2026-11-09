@@ -10,7 +10,7 @@ private class DataIngestionServiceTest {
     static void setup() {
         // Devices are standard Assets. An Asset must belong to an Account,
         // which in the B2C model is the patient's Person Account.
-        Account patient = new Account(Name = 'Test Patient');
+        Account patient = TestAccounts.patient('Test Patient');
         insert patient;
         insert new Asset(
             Name = 'TEST-DEVICE-001',

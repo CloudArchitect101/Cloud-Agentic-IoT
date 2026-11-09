@@ -63,7 +63,7 @@ private class DeviceReadingsAgentActionTest {
     }
 
     private static Asset device(String serialNumber) {
-        Account patient = new Account(Name = 'Readings Patient');
+        Account patient = TestAccounts.patient('Readings Patient');
         insert patient;
         Asset device = new Asset(
             Name = 'Monitor ' + serialNumber, SerialNumber = serialNumber, AccountId = patient.Id, Status = 'Installed',

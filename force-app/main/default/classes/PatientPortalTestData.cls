@@ -8,9 +8,9 @@
  *     an Internal Device PORTAL-A-INT, which a patient must not see either.
  *  B: account "Portal Patient B", Patient Device PORTAL-B1 (1 reading).
  *
- * Business accounts with a contact: the scoping is by AccountId, which works
- * the same for a Person Account, so the tests run whether or not the org has
- * Person Accounts turned on.
+ * Person Accounts, as in the portal (TestAccounts.patient); a business account
+ * with a contact only where the org has no Person Accounts. The scoping is by
+ * AccountId either way.
  */
 @IsTest
 public class PatientPortalTestData {
@@ -28,10 +28,15 @@ public class PatientPortalTestData {
 
     public static Patient patient(String name) {
         Patient p = new Patient();
-        p.account = new Account(Name = name);
+        p.account = TestAccounts.patient(name);
         insert p.account;
-        p.contact = new Contact(LastName = name, AccountId = p.account.Id);
-        insert p.contact;
+        Id personContact = TestAccounts.personContactId(p.account.Id);
+        if (personContact != null) {
+            p.contact = new Contact(Id = personContact);
+        } else {
+            p.contact = new Contact(LastName = name, AccountId = p.account.Id);
+            insert p.contact;
+        }
         return p;
     }
 
