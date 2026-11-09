@@ -52,6 +52,18 @@ test('router: an entry EventBridge rejects fails the invocation', async (t) => {
   await assert.rejects(handler({ detail: { deviceId: 'pm-1', temperature: 23.4 } }), /InternalFailure try again/);
 });
 
+test('router: a synthetic reading keeps its label, a real one is AWS_IoT', async (t) => {
+  captureConsole(t);
+  const { handler, calls } = loadRouter(t);
+
+  await handler({ deviceId: 'pm-1', heartRate: 135, spo2: 86, sourceSystem: 'SYNTHETIC_TEST' });
+  await handler({ deviceId: 'pm-1', temperature: 23.4 });
+
+  // scripts/streams-test.sh labels its reading so the logs never pass it off as measured.
+  assert.equal(JSON.parse(calls[0].input.Entries[0].Detail).sourceSystem, 'SYNTHETIC_TEST');
+  assert.equal(JSON.parse(calls[1].input.Entries[0].Detail).sourceSystem, 'AWS_IoT');
+});
+
 test('router: a reading without a device id is not published', async (t) => {
   captureConsole(t);
   const { handler, calls } = loadRouter(t);

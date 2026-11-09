@@ -416,9 +416,9 @@ The device registry uses the **standard Asset object** — SerialNumber is the I
 
 Patient vitals streaming in real time through **EventBridge** and **Platform Events** to trigger autonomous agent action within seconds.
 
-The design: telemetry hits IoT Core → an EventBridge rule routes it to the alert dispatcher → the dispatcher evaluates vitals against clinical thresholds → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it. What runs today: readings reach Salesforce through the patient-vitals stack (IoT rule → SQS → `salesforce-sync`, which upserts `Patient_Vitals__c`). The streaming stack deploys, but no IoT rule feeds its bus yet and nothing subscribes to `Patient_Vital_Alert__e`.
+The design: telemetry hits IoT Core → an EventBridge rule routes it to the alert dispatcher → the dispatcher evaluates vitals against clinical thresholds → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it. What runs today: readings reach Salesforce through the patient-vitals stack (IoT rule → SQS → `salesforce-sync`, which upserts `Patient_Vitals__c`). The streaming stack deploys, and `VitalAlertCaseService` subscribes to `Patient_Vital_Alert__e`: a `CRITICAL_VITALS` alert opens one Case per device (Origin Vital Alert) in the care team's queue, which the ward board then turns for. No IoT rule feeds the bus: the ward boards measure room air, which never reaches a clinical band, and every reading on the bus would cost more than IoT Core itself ([SCALING.md](docs/SCALING.md)). `scripts/streams-test.sh Dev <device>` sends one synthetic reading down the whole path ([TRY-IT.md, Fire the vitals stream](docs/TRY-IT.md#fire-the-vitals-stream)).
 
-**Key files:** `objects/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls` (+ test), `lambda/streaming/`
+**Key files:** `objects/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls`, `classes/VitalAlertCaseService.cls` (+ tests), `lambda/streaming/`, `scripts/streams-test.sh`
 
 ### 03 · Physical Case Queue Indicator
 

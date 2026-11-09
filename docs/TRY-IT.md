@@ -404,6 +404,26 @@ here Data Cloud signs in with an access key of an IAM user you make as
 `<name>` (step 3a), typed into Data Cloud and nowhere else.
 [DATA-CLOUD.md](DATA-CLOUD.md) explains the path.
 
+## Fire the vitals stream
+
+The boards measure room air, so the chapter 02 stream (EventBridge to
+Salesforce Platform Events) never fires on its own. Send it one synthetic
+reading with a heart rate of 135 and an SpO2 of 86, the way a wearable
+would, from the repository root and signed in as in step 2:
+
+```bash
+scripts/streams-test.sh Dev Test8
+```
+
+It prints what the alert dispatcher decided (`CRITICAL_VITALS`). Within a few
+seconds Salesforce has a Case **Critical vitals on Test8**, Origin **Vital
+Alert**, in **Care Team Queue** on Test8's Asset, and the ward board starts
+turning for it like for any other Case. Run it again while that Case is open
+and no second one opens; close it and the next run opens a new one.
+`scripts/streams-test.sh Dev Test8 warning` publishes an `ABNORMAL_TREND`
+alert, which opens nothing, and `normal` is dropped in AWS. Nothing is
+written to the device's readings and no board is contacted.
+
 ## See what it costs
 
 The app's Home page shows this month's AWS spend against the project's spend

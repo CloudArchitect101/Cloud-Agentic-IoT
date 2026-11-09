@@ -75,6 +75,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 
 | When | Finding | What it changed |
 | --- | --- | --- |
+| Nov 9 | The chapter 02 stream had never fired: the ward boards measure room air, so no reading reaches a clinical band, and nothing subscribed to `Patient_Vital_Alert__e` | `scripts/streams-test.sh` sends one synthetic reading labelled `SYNTHETIC_TEST`, and `VitalAlertCaseService` turns a critical alert into one Case per device in the care team's queue |
 | Nov 8 | Salesforce wants an Account or a Contact on every Asset, and Person Accounts are off in this Developer Edition org | An Internal Device (a ward board) sits on the ward's own Account; its record type, not the Account, makes it internal |
 | Nov 8 | A board refuses an OTA build named for another device type, and every board in the field runs `patient-monitor` | The one build for every board keeps that name; a new name would need a USB flash of every board |
 | Nov 8 | AWS IoT allows a thing in only one group per hierarchy, and a job aimed at a group reaches its child groups | `internal-devices` sits inside `fleet-patient-monitor`, so fleet releases reach the ward boards; `ota.sh join ... internal` moves a board out of fleet and canary first |
