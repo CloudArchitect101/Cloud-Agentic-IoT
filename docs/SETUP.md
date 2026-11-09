@@ -198,10 +198,12 @@ In a real org, both should be Integration Users.
    least one Account record type first, and it **cannot be turned off**).
    Each patient is a Person Account, and the validation rule
    `Asset.Patient_Device_Needs_Person_Account` refers to `IsPersonAccount`,
-   so the deploy fails without it. Then, in the admin profile's Record Type
-   Settings for Account, keep both Business and Person Account available:
-   **New Account** from an Asset's Account field then asks which one, and
-   Person Account is the one a Patient Device accepts.
+   so the deploy fails without it. Then make **Person Account** the default
+   Account record type on every profile that creates devices (Profiles →
+   Object Settings → Accounts → Record Types), keeping Business available.
+   **New Account** inside a lookup, such as an Asset's Account field, never
+   asks for a record type: it always uses the default. A ward's business
+   account is created from the Accounts tab instead.
 
 Do 3, 4 and 5 before the first deploy (§2.3, phase 2). The repo ships the
 Patient Care Agent as Agent Script (`aiAuthoringBundles/`) and its actions
