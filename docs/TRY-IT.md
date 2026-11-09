@@ -459,7 +459,9 @@ demo apart from any team's. Slash commands work on the free plan.
    **Pick features** (under **From scratch**; older dialogs call it **From
    scratch**), name it `Ward Bot`, and pick the workspace. Skip the **AI
    agent** and **Starter app** templates, which expect code hosted by
-   Slack, and the manifest, which needs the address from step 3.
+   Slack. **Paste a manifest** works too if it declares both commands with
+   a placeholder URL such as `https://example.com/slack/commands`; replace
+   it with the address from step 3.
 2. **Store its signing secret in AWS.** **Basic Information** → **App
    Credentials** → **Signing Secret** → **Show**. Then, in your terminal:
 
