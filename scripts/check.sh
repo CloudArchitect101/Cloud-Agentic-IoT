@@ -90,6 +90,15 @@ check_salesforce() {
   # Converting to Metadata API format resolves each file's type the way a
   # deploy does, so a misplaced file, a missing -meta.xml or a wrong bundle
   # layout fails here, with no org involved.
+  # A UI bundle (the patient portal's React app) converts from its build,
+  # dist/, which Git does not hold: build it first, as the deploy does.
+  local bundle
+  for bundle in force-app/main/default/uiBundles/*/; do
+    [ -f "$bundle/package.json" ] || continue
+    [ -d "$bundle/dist" ] && continue
+    has npm || die "Building $bundle needs npm (Node.js 22)."
+    (cd "$bundle" && npm ci --no-audit --no-fund > /dev/null && npm run build > /dev/null)
+  done
   local out
   out=$(mktemp -d)
   sf project convert source --output-dir "$out/mdapi" > /dev/null
