@@ -424,6 +424,28 @@ and no second one opens; close it and the next run opens a new one.
 alert, which opens nothing, and `normal` is dropped in AWS. Nothing is
 written to the device's readings and no board is contacted.
 
+## Update one board through the saga
+
+Chapter 09 sends one board one build as a saga: each step has a step that
+undoes it. Use a build that is already published, for example the last try
+(`scripts/ota.sh status Dev` names it):
+
+```bash
+scripts/ota-saga.sh send Dev Test8 patient-monitor 2.5.0-try.1
+scripts/ota-saga.sh status Dev Test8
+```
+
+`status` shows the Thing's `otaState` (`UPDATING` while the saga runs,
+`ACTIVE` with `otaVersion` once the board has installed it) and the board's
+`saga-` jobs. A board already on that version reports it as current and the
+saga completes. The trace is in
+`aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow`.
+
+To watch it unwind, unplug the board, send it again and wait: the job stays
+`QUEUED`, and after 20 minutes the log shows `cancel_iot_job`,
+`mark_device_active` and `delete_staged_firmware`, in that order, and
+`status` shows the job `CANCELED` and the Thing `ACTIVE` on its old version.
+
 ## See what it costs
 
 The app's Home page shows this month's AWS spend against the project's spend

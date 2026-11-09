@@ -84,6 +84,8 @@ DATA_CLOUD_OIDC_PROVIDER_ARN=DataCloudOidcProviderArn
 DATA_CLOUD_EXTERNAL_ID=DataCloudExternalId
 DATA_CLOUD_READER_USER=DataCloudReaderUserName"
 ALARM_TOPIC_ARN=""
+OTA_BUCKET=""
+OTA_PRESIGN_ROLE=""
 declares() { grep -q "^  $2:[[:space:]]*\$" "$1"; }   # declares <template> <parameter>
 deploy_stack() {
   local t="$1" name overrides line variable parameter
@@ -98,6 +100,12 @@ deploy_stack() {
   if [ -n "$ALARM_TOPIC_ARN" ] && declares "$t" AlarmTopicArn; then
     overrides="${overrides:+$overrides
 }AlarmTopicArn=$ALARM_TOPIC_ARN"
+  fi
+  # The firmware bucket and the signing role, for the OTA saga (lambda/ota-saga).
+  if [ -n "$OTA_BUCKET" ] && declares "$t" FirmwareBucketName; then
+    overrides="${overrides:+$overrides
+}FirmwareBucketName=$OTA_BUCKET
+OtaPresignRoleArn=$OTA_PRESIGN_ROLE"
   fi
   local args=()
   if [ -n "$overrides" ]; then
@@ -115,6 +123,12 @@ deploy_stack() {
   if [ "$name" = alarms ]; then
     ALARM_TOPIC_ARN=$(stack_output "$(stack_name alarms "$ENV")" AlarmTopicArn)
     [ "$ALARM_TOPIC_ARN" != "None" ] || ALARM_TOPIC_ARN=""
+  fi
+  if [ "$name" = ota ]; then
+    OTA_BUCKET=$(stack_output "$(stack_name ota "$ENV")" FirmwareBucketName)
+    OTA_PRESIGN_ROLE=$(stack_output "$(stack_name ota "$ENV")" OtaPresignRoleArn)
+    [ -n "$OTA_BUCKET" ] && [ "$OTA_BUCKET" != "None" ] && [ -n "$OTA_PRESIGN_ROLE" ] && [ "$OTA_PRESIGN_ROLE" != "None" ] \
+      || die "The ota stack has no FirmwareBucketName or OtaPresignRoleArn output; the OTA saga needs both."
   fi
 }
 

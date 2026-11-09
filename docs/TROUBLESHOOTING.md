@@ -75,6 +75,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 
 | When | Finding | What it changed |
 | --- | --- | --- |
+| Nov 9 | The OTA saga (chapter 09) could not be deployed: no template, and every step only returned what the AWS call would have | The steps make the real calls (S3 copy, Thing attribute, IoT Job, job execution), `lambda/ota-saga/cloudformation.yaml` adds the queue and dead-letter queue, `deploy-aws.sh` passes it the ota stack's bucket and signing role, and a saga out of attempts unwinds instead of leaving the board `UPDATING` |
 | Nov 9 | The chapter 02 stream had never fired: the ward boards measure room air, so no reading reaches a clinical band, and nothing subscribed to `Patient_Vital_Alert__e` | `scripts/streams-test.sh` sends one synthetic reading labelled `SYNTHETIC_TEST`, and `VitalAlertCaseService` turns a critical alert into one Case per device in the care team's queue |
 | Nov 8 | Salesforce wants an Account or a Contact on every Asset, and Person Accounts are off in this Developer Edition org | An Internal Device (a ward board) sits on the ward's own Account; its record type, not the Account, makes it internal |
 | Nov 8 | A board refuses an OTA build named for another device type, and every board in the field runs `patient-monitor` | The one build for every board keeps that name; a new name would need a USB flash of every board |

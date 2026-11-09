@@ -564,12 +564,12 @@ An OTA firmware rollout modelled as a **saga** — a sequence of steps spanning 
 
 **Why a saga and not a transaction:** a firmware update spans an S3 upload, a Salesforce status change, an AWS IoT Job, and a device acknowledgement. There is no shared lock and no two-phase commit across that boundary. The device may simply vanish.
 
-| Step | Compensating action |
-|---|---|
-| `stage_firmware` | `delete_staged_firmware` |
-| `mark_device_updating` | `mark_device_active` |
-| `create_iot_job` | `cancel_iot_job` |
-| `await_device_ack` | `rollback_device_firmware` |
+| Step | What it does | Compensating action |
+|---|---|---|
+| `stage_firmware` | Copies the published build to `firmware/saga/<board>/<run>.bin` | `delete_staged_firmware` deletes the copy |
+| `mark_device_updating` | Sets the Thing's `otaState` attribute to `UPDATING` | `mark_device_active` sets it back to `ACTIVE` |
+| `create_iot_job` | One IoT Job for that board, with the document `scripts/ota.sh` sends | `cancel_iot_job` cancels it |
+| `await_device_ack` | Reads the job execution: `SUCCEEDED` completes, `QUEUED` or `IN_PROGRESS` waits | `rollback_device_firmware`: nothing to undo, an ESP32 boots a new image only after a verified install |
 
 Three decisions make it work:
 
@@ -577,9 +577,11 @@ Three decisions make it work:
 - **Steps must be idempotent.** SQS delivers at least once, so every handler will eventually run twice with identical input. The retry is routine, not exceptional — the single most common thing people get wrong with queue-driven sagas.
 - **A failed compensation is logged loudly and does not stop the unwind.** Otherwise one stuck rollback strands the device in `UPDATING` forever.
 
-**Key files:** `lambda/ota-saga/index.js`
+A saga that is still waiting when its attempts run out (20 looks, one a minute) unwinds too, so a board is never left marked `UPDATING` by a message that went quietly to the dead-letter queue.
 
-**To see it work:** publish an OTA request onto the queue and watch CloudWatch for the step trace. Kill the device mid-update to see compensation run. It has no CloudFormation template yet and its step bodies are still simulated (`index.js`), so no environment deploys it. When it is built, it needs a queue with a DLQ and a visibility timeout longer than a device ack realistically takes.
+**Key files:** `lambda/ota-saga/` (function and template: the queue, its dead-letter queue and alarm), `scripts/ota-saga.sh`
+
+**To see it work:** `scripts/ota-saga.sh send Dev Test8 patient-monitor <a published version>`, then `scripts/ota-saga.sh status Dev Test8` and `aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow` for the step trace. Turn the board off first to watch the unwind ([TRY-IT.md, Update one board through the saga](docs/TRY-IT.md#update-one-board-through-the-saga)). Releases to the fleet still go through `scripts/ota.sh`: the saga is for one board at a time.
 
 ### 10 · Einstein Trust Layer — PII Masking & Audit
 
