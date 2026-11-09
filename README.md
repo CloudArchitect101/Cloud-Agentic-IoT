@@ -328,7 +328,7 @@ Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a poli
 
 **3. Download and attach.** Download the certificate, the private key, and Amazon Root CA 1 into one folder. Attach the policy to the certificate.
 
-**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. In the Cloud Agentic IoT app, Assets → New: Serial Number = the IoT Thing name, Account = the patient's Person Account (any Account, in an org without Person Accounts), Status = `Installed`.
+**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. In the Cloud Agentic IoT app, Assets → New: Serial Number = the IoT Thing name, Account = the patient's Person Account (required for a Patient Device: the validation rule `Patient_Device_Needs_Person_Account` refuses a business account; make Person Account your default Account record type so New Account from this form creates one), Status = `Installed`.
 
 #### Getting a device online
 
@@ -411,7 +411,7 @@ The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and sto
 
 **Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`, `datacloud/`
 
-The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`).
+The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`). A Patient Device must belong to a Person Account (`objects/Asset/validationRules/`); an Internal Device sits on a ward's business account.
 
 ### 02 · Real-time Streams to Agents
 
