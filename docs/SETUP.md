@@ -970,7 +970,7 @@ in this order (details and checks in
 [PATIENT-PORTAL.md, Setting it up](PATIENT-PORTAL.md#setting-it-up-in-an-org)):
 
 1. Check the org has Customer Community licences (a `UserLicense` query).
-2. Enable Digital Experiences, and allow standard external profiles.
+2. Enable Digital Experiences, and turn on "Allow using standard external profiles for self-registration, user creation, and login" (Setup > Digital Experiences > Settings). The portal Apex tests fail without it.
 3. Create the self-signed certificate `Patient_Portal_Chat` (private key not
    exportable), download its `.crt`, and run
    `node scripts/portal-chat-jwk.mjs <file> patient-portal-chat-1`.

@@ -111,6 +111,8 @@ that have no metadata, in order. Each one is also in
    after this. Then Setup > Digital Experiences > Settings > turn on "Allow
    using standard external profiles for self-registration, user creation, and
    login".
+   Without it the portal Apex tests fail with `FIELD_INTEGRITY_EXCEPTION`
+   on `ProfileId`, so the deploy fails too.
 3. **Signing certificate.** Setup > Certificate and Key Management > Create
    Self-Signed Certificate: Label and Unique Name `Patient_Portal_Chat`, key
    size 2048, Exportable Private Key **off**. Download the certificate (the
