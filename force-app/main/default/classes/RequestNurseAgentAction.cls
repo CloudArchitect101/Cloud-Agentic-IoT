@@ -47,12 +47,12 @@ public without sharing class RequestNurseAgentAction {
     public static List<NurseResult> requestNurse(List<NurseRequest> requests) {
         List<NurseResult> results = new List<NurseResult>();
         for (NurseRequest req : requests == null ? new List<NurseRequest>() : requests) {
-            results.add(request(req));
+            results.add(handle(req));
         }
         return results;
     }
 
-    private static NurseResult request(NurseRequest req) {
+    private static NurseResult handle(NurseRequest req) {
         NurseResult res = new NurseResult();
         res.success = false;
         res.alreadyOpen = false;
@@ -86,7 +86,7 @@ public without sharing class RequestNurseAgentAction {
             return res;
         }
 
-        Case request = new Case(
+        Case nurseCase = new Case(
             Subject     = 'Patient request: nurse',
             Description = req.reason.trim().left(32000),
             Priority    = 'High',
@@ -98,27 +98,27 @@ public without sharing class RequestNurseAgentAction {
             List<PatientDeviceService.Device> device =
                 PatientDeviceService.devicesFor(who.accountId, req.deviceId, 1);
             if (!device.isEmpty()) {
-                request.AssetId = device[0].assetId;
+                nurseCase.AssetId = device[0].assetId;
             }
         }
-        Id queueId = queueId(setting.Nurse_Request_Queue__c);
-        if (queueId != null) {
-            request.OwnerId = queueId;
+        Id careQueueId = findQueueId(setting.Nurse_Request_Queue__c);
+        if (careQueueId != null) {
+            nurseCase.OwnerId = careQueueId;
         }
         try {
-            insert request;
+            insert nurseCase;
         } catch (DmlException e) {
             res.message = 'The request could not be sent: ' + e.getDmlMessage(0)
                 + ' Press the call button by your bed if you need help now.';
             return res;
         }
         res.success = true;
-        res.caseNumber = [SELECT CaseNumber FROM Case WHERE Id = :request.Id].CaseNumber;
+        res.caseNumber = [SELECT CaseNumber FROM Case WHERE Id = :nurseCase.Id].CaseNumber;
         res.message = 'Your nurse request ' + res.caseNumber + ' is with the care team. A nurse will come to you.';
         return res;
     }
 
-    private static Id queueId(String queueName) {
+    private static Id findQueueId(String queueName) {
         for (QueueSobject row : [
             SELECT QueueId FROM QueueSobject
             WHERE SobjectType = 'Case' AND Queue.DeveloperName = :queueName

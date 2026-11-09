@@ -23,10 +23,12 @@
  */
 public without sharing class PortalIdentityService {
 
-    public enum Kind { PATIENT, STAFF, UNVERIFIED }
+    // Not "Kind": Apex names are case-insensitive, so an enum Kind and a
+    // field kind collide ("Illegal forward reference: kind").
+    public enum Role { PATIENT, STAFF, UNVERIFIED }
 
     public class Identity {
-        public Kind kind = Kind.UNVERIFIED;
+        public Role kind = Role.UNVERIFIED;
         public Id userId;
         public Id accountId;
         public Id contactId;
@@ -34,7 +36,7 @@ public without sharing class PortalIdentityService {
         public String reason;
 
         public Boolean isPatient() {
-            return kind == Kind.PATIENT && accountId != null;
+            return kind == Role.PATIENT && accountId != null;
         }
     }
 
@@ -118,13 +120,13 @@ public without sharing class PortalIdentityService {
                 who.reason = 'This portal user is not linked to a patient account.';
                 return who;
             }
-            who.kind = Kind.PATIENT;
+            who.kind = Role.PATIENT;
             who.accountId = row.AccountId;
             who.contactId = row.ContactId;
             return who;
         }
         if (staffAllowed && row.UserType == 'Standard') {
-            who.kind = Kind.STAFF;
+            who.kind = Role.STAFF;
             who.reason = 'Staff use the Patient Care Agent in Salesforce, not the patient portal.';
             return who;
         }

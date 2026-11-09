@@ -117,7 +117,7 @@ public class PatientPortalTestData {
 
     /** An admin with a role, to own the patient accounts. Call before creating patients. */
     public static User ownerWithRole() {
-        UserRole role = new UserRole(Name = 'Portal Test Owner', DeveloperName = 'Portal_Test_Owner_' + Crypto.getRandomInteger().format().remove(',').remove('-'));
+        UserRole role = new UserRole(Name = 'Portal Test Owner', DeveloperName = 'Portal_Test_Owner_' + Math.abs(Crypto.getRandomInteger()));
         insert role;
         User owner = user('portal-owner', UserInfo.getProfileId());
         owner.UserRoleId = role.Id;

@@ -56,7 +56,8 @@ private class PortalChatTokenResourceTest {
         Assert.areEqual(String.valueOf(portal.Id), c.get('sub'));
         Assert.areEqual('test-issuer', c.get('iss'));
         Assert.areEqual(4, c.size(), 'iss, sub, iat and exp: no name, email or account');
-        Long lifetime = (Long) c.get('exp') - (Long) c.get('iat');
+        // JSON numbers this size come back as Integer, so read them as text.
+        Long lifetime = Long.valueOf(String.valueOf(c.get('exp'))) - Long.valueOf(String.valueOf(c.get('iat')));
         Assert.areEqual(300, lifetime, 'Five minutes');
     }
 

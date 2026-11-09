@@ -120,7 +120,7 @@ that have no metadata, in order. Each one is also in
    ```
    Keep the printed JSON for step 6. It is public, but it belongs in Setup,
    not in the repo.
-4. **Deploy.** `SF_TARGET_ORG=test-cloudarchitect101 scripts/deploy-salesforce.sh Dev`.
+4. **Deploy.** `SF_TARGET_ORG=test-cloudarchitect101 scripts/deploy-salesforce.sh Dev`. If Patient Care Agent is active, run `sf agent deactivate --api-name Patient_Care_Agent` before and `sf agent activate --api-name Patient_Care_Agent --version 1` after; an active agent can't be updated.
    It builds the React app first (`npm ci && npm run build` in the bundle),
    then validates and deploys as usual.
 5. **Messaging channel and deployment.** Setup > Messaging Settings > New

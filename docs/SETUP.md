@@ -974,7 +974,7 @@ in this order (details and checks in
 3. Create the self-signed certificate `Patient_Portal_Chat` (private key not
    exportable), download its `.crt`, and run
    `node scripts/portal-chat-jwk.mjs <file> patient-portal-chat-1`.
-4. Deploy: `scripts/deploy-salesforce.sh Dev` builds the React app first.
+4. Deploy: `scripts/deploy-salesforce.sh Dev` builds the React app first. If the staff Patient Care Agent is active, deactivate it first (`sf agent deactivate --api-name Patient_Care_Agent`) and activate it again after (`sf agent activate --api-name Patient_Care_Agent --version 1`); Salesforce refuses to update an active agent.
 5. Create the Messaging for In-App and Web channel and the Enhanced Chat
    deployment `Patient_Portal_Chat`, switch it to V2, publish, and allow
    Agentforce Voice calls in Messaging Settings.

@@ -507,7 +507,7 @@ The read action works as the user: `with sharing` and `WITH USER_MODE`, so the a
 
 **To see it work:** with the agent active and `Patient_Care_Agent` assigned, open the agent from the Lightning header, ask what a device (by serial number) is reporting, ask what to do about it and check the answer cites an SOP ID, then ask it to escalate, confirm when prompted, and check Cases filtered to `Origin = Agentforce`.
 
-> **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic, actions, Bot and BotVersion have deployed to a real org at API 65.0, and the agent answers and escalates there. Expect to reconcile field names against your org's API version on a first deploy elsewhere — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
+> **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic, actions, Bot and BotVersion have deployed to a real org at API 65.0 (the project now deploys at 67.0, which Multi-Framework UI bundles need), and the agent answers and escalates there. Expect to reconcile field names against your org's API version on a first deploy elsewhere — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
 
 ### 06 · Multi-Agent Orchestration (MCP + Agent2Agent)
 

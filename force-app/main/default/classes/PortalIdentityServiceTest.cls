@@ -36,7 +36,7 @@ private class PortalIdentityServiceTest {
             session => 'v2/iamessage/UNAUTH/NA/uid:' + UserInfo.getUserId()
         };
         PortalIdentityService.Identity who = PortalIdentityService.forMessagingSession(session);
-        Assert.areEqual(PortalIdentityService.Kind.UNVERIFIED, who.kind);
+        Assert.areEqual(PortalIdentityService.Role.UNVERIFIED, who.kind);
         Assert.isTrue(who.reason.contains('not signed in'), who.reason);
     }
 
@@ -47,7 +47,7 @@ private class PortalIdentityServiceTest {
             session => PatientPortalTestData.verifiedKey(UserInfo.getUserId())
         };
         PortalIdentityService.Identity who = PortalIdentityService.forMessagingSession(session);
-        Assert.areEqual(PortalIdentityService.Kind.UNVERIFIED, who.kind,
+        Assert.areEqual(PortalIdentityService.Role.UNVERIFIED, who.kind,
             'A chat never becomes a staff conversation');
         Assert.isNull(who.accountId);
     }
@@ -55,7 +55,7 @@ private class PortalIdentityServiceTest {
     @IsTest
     static void theRunningStaffUserIsStaff() {
         PortalIdentityService.Identity who = PortalIdentityService.forCurrentUser();
-        Assert.areEqual(PortalIdentityService.Kind.STAFF, who.kind);
+        Assert.areEqual(PortalIdentityService.Role.STAFF, who.kind);
         Assert.isFalse(who.isPatient());
     }
 
