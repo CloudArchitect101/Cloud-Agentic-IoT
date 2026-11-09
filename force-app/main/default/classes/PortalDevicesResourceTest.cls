@@ -28,7 +28,7 @@ private class PortalDevicesResourceTest {
             body = PortalDevicesResource.myDevices();
         }
 
-        Assert.isTrue(body.patient, body.message);
+        Assert.isTrue(body.patient, 'The signed-in user should be a patient: ' + body.message);
         Assert.areEqual(1, body.devices.size());
         Assert.areEqual(PatientPortalTestData.SERIAL_B, body.devices[0].serialNumber);
     }

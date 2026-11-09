@@ -78,7 +78,7 @@ private class PortalIdentityServiceTest {
             session => PatientPortalTestData.verifiedKey(portal.Id)
         };
         PortalIdentityService.Identity viaChat = PortalIdentityService.forMessagingSession(session);
-        Assert.isTrue(viaChat.isPatient(), viaChat.reason);
+        Assert.isTrue(viaChat.isPatient(), 'The verified chat should be the patient: ' + viaChat.reason);
         Assert.areEqual(a.account.Id, viaChat.accountId);
         Assert.areEqual(a.contact.Id, viaChat.contactId);
 
@@ -86,7 +86,7 @@ private class PortalIdentityServiceTest {
         System.runAs(portal) {
             signedIn = PortalIdentityService.forCurrentUser();
         }
-        Assert.isTrue(signedIn.isPatient(), signedIn.reason);
+        Assert.isTrue(signedIn.isPatient(), 'The signed-in user should be the patient: ' + signedIn.reason);
         Assert.areEqual(a.account.Id, signedIn.accountId);
     }
 

@@ -10,6 +10,24 @@ private class RequestNurseAgentActionTest {
 
     private static List<PatientPortalTestData.Patient> both;
 
+    // A test-only queue, so the test neither depends on the org's
+    // Care_Team_Queue nor moves its ward-board indicator.
+    private static final String QUEUE = 'NurseRequestTestQueue';
+
+    private static Id queueId() {
+        return [SELECT Id FROM Group WHERE Type = 'Queue' AND DeveloperName = :QUEUE].Id;
+    }
+
+    private static void useTestQueue() {
+        Group q = new Group(Name = 'Nurse Request Test Queue', DeveloperName = QUEUE, Type = 'Queue');
+        insert q;
+        insert new QueueSobject(QueueId = q.Id, SobjectType = 'Case');
+        PatientPortalSettings.testOverride = new Patient_Portal_Setting__mdt(
+            DeveloperName = 'Default', Certificate_Name__c = 'Patient_Portal_Chat', Key_Id__c = 'kid-1',
+            Issuer__c = 'test-issuer', Deployment_Name__c = 'Patient_Portal_Chat', Token_Minutes__c = 5,
+            Nurse_Request_Origin__c = 'Patient Portal', Nurse_Request_Queue__c = QUEUE);
+    }
+
     private static Id chatOfPatientA() {
         // A Case on the care team queue moves the ward board: a callout.
         Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
@@ -20,6 +38,7 @@ private class RequestNurseAgentActionTest {
         User portal;
         System.runAs(PatientPortalTestData.me()) {
             portal = PatientPortalTestData.portalUser(both[0], 'nurse-patient-a');
+            useTestQueue();
         }
         Assert.isNotNull(portal, 'This org has no Experience Cloud user licence (Customer Community): docs/PATIENT-PORTAL.md');
         Id session = PatientPortalTestData.fakeSessionId(1);
@@ -47,13 +66,13 @@ private class RequestNurseAgentActionTest {
 
         Assert.isTrue(res.success, res.message);
         Assert.isFalse(res.alreadyOpen);
-        Case opened = [SELECT AccountId, ContactId, AssetId, Asset.SerialNumber, Origin, Priority, Owner.Type, Owner.Name
+        Case opened = [SELECT AccountId, ContactId, AssetId, Asset.SerialNumber, Origin, Priority, OwnerId
                        FROM Case WHERE CaseNumber = :res.caseNumber];
         Assert.areEqual(both[0].account.Id, opened.AccountId);
         Assert.areEqual(both[0].contact.Id, opened.ContactId);
         Assert.areEqual(PatientPortalTestData.SERIAL_A, opened.Asset.SerialNumber);
-        Assert.areEqual(PatientPortalSettings.get().Nurse_Request_Origin__c, opened.Origin);
-        Assert.areEqual('Queue', opened.Owner.Type, 'The care team works it from the queue');
+        Assert.areEqual('Patient Portal', opened.Origin);
+        Assert.areEqual(queueId(), opened.OwnerId, 'The care team works it from the queue named in the setting');
     }
 
     @IsTest

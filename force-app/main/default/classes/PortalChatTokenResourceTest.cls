@@ -49,7 +49,7 @@ private class PortalChatTokenResourceTest {
             chat = PortalChatTokenResource.start();
         }
 
-        Assert.isTrue(chat.enabled, chat.message);
+        Assert.isTrue(chat.enabled, 'The chat should start for a patient: ' + chat.message);
         Assert.areEqual('Patient_Portal_Chat', chat.deploymentName);
         Assert.areEqual('https://example.my.salesforce-scrt.com', chat.scrtUrl);
         Map<String, Object> c = claims(chat.token);
