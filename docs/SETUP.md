@@ -959,6 +959,44 @@ for an SOP-only change). Unchanged SOPs are not embedded again.
 
 ---
 
+## Talk to the agent from Slack (optional)
+
+The Smart Ward app in [TRY-IT](TRY-IT.md#ask-the-ward-from-slack) answers two
+fixed commands. To ask the Patient Care Agent questions in Slack, use
+Salesforce's own Agentforce in Slack: the same agent, topics and actions,
+answering as the Salesforce user each Slack member is mapped to, so their
+access in Salesforce still decides what they see. No code of ours is
+involved.
+
+What it needs, from [Slack's help](https://slack.com/help/articles/36218109305875-Set-up-and-manage-Agentforce-in-Slack):
+any Slack plan, Free included (Free lacks only the canvas action); an
+Agentforce licence in the org; and an **Employee** agent, which
+Patient Care Agent is (`InternalCopilot`). Whether a Developer Edition can
+connect to Slack is not stated outside Trailhead's Agentforce Developer
+Edition; step 3 below is where that shows. If it cannot, the fallback is a
+slash command that calls the agent through the Agent API from
+`lambda/slack-integration`.
+
+Salesforce side, as an admin:
+
+1. The agent must be active. A Salesforce deploy deactivates it first, so
+   after one:
+   `sf agent activate --api-name Patient_Care_Agent --version 1 --target-org "$SF_TARGET_ORG"`
+2. **Agentforce Builder** → Patient Care Agent → **Connections** → **Add
+   Connection** → **Slack** → **Add to Agent**, then **Commit Version** and
+   **Activate**.
+
+Slack side, as the workspace owner:
+
+3. **Tools & settings** → **Manage Salesforce Organizations** → **Connect
+   Salesforce Org**, give the org's My Domain URL, untick **Map user
+   accounts automatically**, and approve the request in Salesforce.
+4. **Admin** → **Workspace settings** → **Salesforce** → **Users** → **Add
+   individually**: link each Slack member who may use the agent to their
+   Salesforce user. An unmapped member cannot use it.
+5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
+6. DM the agent, or mention it in a channel: "What is Test8 reading?"
+
 ## Doing it again for Prod
 
 **The same sequence**, with these differences:
