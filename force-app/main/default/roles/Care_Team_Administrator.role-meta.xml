@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A role for whoever owns patients' Person Accounts. Salesforce refuses to
+  enable a Customer Community user on an account whose owner has no role
+  ("portal account owner must have a role"). Assign it once: Setup > Users >
+  the admin > Edit > Role. Customer Community users themselves get no role.
+-->
+<Role xmlns="http://soap.sforce.com/2006/04/metadata">
+    <caseAccessLevel>Edit</caseAccessLevel>
+    <contactAccessLevel>Edit</contactAccessLevel>
+    <description>Owns patients' Person Accounts, so their portal users can be enabled.</description>
+    <mayForecastManagerShare>false</mayForecastManagerShare>
+    <name>Care Team Administrator</name>
+    <opportunityAccessLevel>Edit</opportunityAccessLevel>
+</Role>

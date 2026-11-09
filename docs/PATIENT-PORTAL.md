@@ -168,11 +168,22 @@ that have no metadata, in order. Each one is also in
 10. **Guest user.** Site > Administration > Pages > Public Access: assign
     `Patient_Portal_Guest_Api` to the guest user, so the sign-in page can call
     its Apex.
-11. **Patients.** For each Person Account: Enable Customer User (profile
-    Customer Community User), and assign `Patient_Portal_User`. A Patient
-    Device Asset accepts only a Person Account (validation rule
-    `Patient_Device_Needs_Person_Account`). The account's
-    owner must have a role. Attach the patient's device: its Asset's Account is
+11. **Patients.**
+    - **A role for the account owner, once.** Salesforce enables a portal user
+      only on an account whose owner has a role; otherwise it stops with
+      "portal account owner must have a role". The deploy ships the role
+      **Care Team Administrator** (`roles/`). Setup > Users > your user (the
+      one who owns, creates and enables the patients' Person Accounts) > Edit
+      > Role: **Care Team Administrator** > Save. If another user owns the
+      accounts, that user needs the role. The patients' own users get no role:
+      Customer Community users don't have one.
+    - **The enabling user's rights.** The user who clicks Enable Customer User
+      needs Manage External Users, which System Administrator has.
+    - For each Person Account: Enable Customer User (profile Customer
+      Community User), and assign `Patient_Portal_User`. A Patient Device
+      Asset accepts only a Person Account (validation rule
+      `Patient_Device_Needs_Person_Account`).
+    - Attach the patient's device: its Asset's Account is
     the Person Account, record type Patient Device. For the two-patient demo:
     Test8 goes to patient A, and patient B gets a second Patient Device Asset,
     which can be a placeholder with no board.
@@ -195,7 +206,7 @@ that have no metadata, in order. Each one is also in
 | `sf agent publish authoring-bundle` fails on the agent user | `PORTAL_AGENT_USER` is not an active Einstein Agent user, or it lacks the three Agentforce Service Agent permission sets | Step 7 |
 | `sf agent validate authoring-bundle` is not a command | The Salesforce CLI is older than the Agent Script commands | `sf update` |
 | No voice button in the chat | The deployment is still V1, or voice is off in Messaging Settings or on the agent's connection | Step 5 and step 7 |
-| Inserting a patient's user fails: "portal account owner must have a role" | The Person Account's owner has no role | Give the owner a role, then try again |
+| Inserting a patient's user fails: "portal account owner must have a role" | The Person Account's owner has no role | Give the owner the role Care Team Administrator (step 11), then try again |
 
 ## Sources
 

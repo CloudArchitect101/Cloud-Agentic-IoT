@@ -1043,8 +1043,11 @@ in this order (details and checks in
    deployment's code snippet, and deploy again.
 9. Allow the chat hosts in the site's CSP, and the site in CORS.
 10. Give the site's guest user `Patient_Portal_Guest_Api`.
-11. For each patient: enable a Customer Community user on the Person Account
-    (its owner needs a role), assign `Patient_Portal_User`, and put the
+11. Give the user who owns the patients' Person Accounts (usually you) the
+    role **Care Team Administrator**, which the deploy ships: Setup > Users >
+    Edit > Role. Without it, enabling a portal user fails with "portal account
+    owner must have a role". Then, for each patient: enable a Customer
+    Community user on the Person Account, assign `Patient_Portal_User`, and put the
     patient's device on that account.
 
 ---
