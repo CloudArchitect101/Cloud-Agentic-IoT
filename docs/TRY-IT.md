@@ -456,7 +456,10 @@ workspace where you may install apps; a free workspace of your own keeps the
 demo apart from any team's. Slash commands work on the free plan.
 
 1. **Make the app.** <https://api.slack.com/apps> → **Create New App** →
-   **From scratch**, name it `Ward Bot`, and pick the workspace.
+   **Pick features** (under **From scratch**; older dialogs call it **From
+   scratch**), name it `Ward Bot`, and pick the workspace. Skip the **AI
+   agent** and **Starter app** templates, which expect code hosted by
+   Slack, and the manifest, which needs the address from step 3.
 2. **Store its signing secret in AWS.** **Basic Information** → **App
    Credentials** → **Signing Secret** → **Show**. Then, in your terminal:
 
