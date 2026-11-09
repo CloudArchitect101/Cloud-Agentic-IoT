@@ -446,6 +446,49 @@ To watch it unwind, unplug the board, send it again and wait: the job stays
 `mark_device_active` and `delete_staged_firmware`, in that order, and
 `status` shows the job `CANCELED` and the Thing `ACTIVE` on its old version.
 
+## Ask the ward from Slack
+
+Optional (chapter 04). Slack never signs in to Salesforce: a slash command
+reaches the `cloud-agentic-iot-slack-integration` function through API
+Gateway, the function checks Slack's signature, and it calls Salesforce as
+the integration user from step 5, as every other function does. Use a
+workspace where you may install apps; a free workspace of your own keeps the
+demo apart from any team's. Slash commands work on the free plan.
+
+1. **Make the app.** <https://api.slack.com/apps> → **Create New App** →
+   **From scratch**, name it `Ward Bot`, and pick the workspace.
+2. **Store its signing secret in AWS.** **Basic Information** → **App
+   Credentials** → **Signing Secret** → **Show**. Then, in your terminal:
+
+   ```bash
+   scripts/seed-ssm.sh Dev
+   ```
+
+   Press Enter at every question except **Slack signing secret**, and paste
+   the secret there, where nothing is shown. A value already in SSM is kept
+   when you press Enter.
+3. **Deploy AWS again.** `scripts/deploy-aws.sh Dev` now finds the secret and
+   deploys the Slack stack. Its address for Slack:
+
+   ```bash
+   aws cloudformation describe-stacks --stack-name cloud-agentic-iot-slack-integration-Dev \
+     --query "Stacks[0].Outputs[?OutputKey=='SlackCommandsUrl'].OutputValue" --output text
+   ```
+4. **Add the commands.** In the app, **Slash Commands** → **Create New
+   Command**, twice, both with that address as **Request URL**:
+   `/patient-status` (hint `Test8`) and `/dispense-medication` (hint `Test8`).
+5. **Install it.** **Install App** → **Install to Workspace** → **Allow**.
+6. **Try it.** In any channel: `/patient-status Test8`. The answer shows
+   only to you. `/dispense-medication Test8` creates a
+   `DISPENSE_MEDICATION` Device Command and turns the patient board's motor,
+   like **Send Command** on the Asset; anyone in the workspace who can run
+   the command can do it, so keep the workspace to yourself.
+
+If Slack says `dispatch_failed` or the command times out, the address is
+wrong or the stack is not deployed; `aws logs tail
+/aws/lambda/cloud-agentic-iot-slack-integration --since 10m` shows whether
+the call arrived and why it was refused.
+
 ## See what it costs
 
 The app's Home page shows this month's AWS spend against the project's spend
