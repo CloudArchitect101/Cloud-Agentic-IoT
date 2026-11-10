@@ -211,7 +211,12 @@ that have no metadata, in order. Each one is also in
    page in its Administration, because Experience Builder can't open it, so
    the org's Trusted URLs are where its CSP comes from. The chat's own site
    (`ESW...`) and the portal's Apex REST sit on the portal's my.site.com host,
-   so they need no entry and no CORS rule. If the browser console still shows
+   so they need no Trusted URL. **CORS is still needed:** the chat script on
+   the portal fetches its configuration from the messaging host
+   (`*.salesforce-scrt.com`), which answers only origins on the org's CORS
+   list. Setup > CORS > New: `https://<your My Domain>.my.site.com` (the
+   portal's origin, no path). Also publish the Embedded Service deployment
+   after every change to it. If the browser console still shows
    a "Refused to connect" or "Refused to frame" CSP error, add that host
    under Setup > Trusted URLs, and if a custom domain goes live, add it to
    the deployment's allowed domains.
