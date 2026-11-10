@@ -136,9 +136,13 @@ that have no metadata, in order. Each one is also in
    Voice calls in Enhanced Chat**. The channel's routing to the agent comes in
    step 7.
 6. **User verification.** Setup > **Enhanced Chat User Verification** > JSON
-   Web Keys > New Key: upload the `.json` file from step 3. New Keyset: issuer `cloud-agentic-iot-patient-portal` (the
-   setting's `Issuer__c`), add the key. In the channel from step 5, under User
-   Verification Configuration, add that keyset. Unverified conversations now
+   Web Keys > New Key: upload the `.json` file from step 3. Then JSON Web
+   Keysets > **New Keyset** (a separate record: the channel lists keysets,
+   not keys): name `Patient_Portal_Keyset`, issuer
+   `cloud-agentic-iot-patient-portal` (the setting's `Issuer__c`), add the
+   key. In Messaging Settings, open the channel from step 5: tick **Add User
+   Verification** (Session-Based Chat stays off), save, then under **User
+   Verification Configuration** > New choose `Patient_Portal_Keyset`. Unverified conversations now
    get nothing from the agent.
 7. **The agent.** It is Agent Script, built for the new Agentforce Builder,
    so it is published rather than deployed.
