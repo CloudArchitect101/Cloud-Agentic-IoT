@@ -31,15 +31,21 @@ SCRIPT="force-app/main/default/aiAuthoringBundles/$BUNDLE/$BUNDLE.agent"
 PLACEHOLDER='default_agent_user: "PORTAL_AGENT_USER"'
 grep -qF "$PLACEHOLDER" "$SCRIPT" || die "$SCRIPT has no agent user placeholder; restore it with git checkout -- $SCRIPT"
 
-# The publish (or validate) can also rewrite the bundle's -meta.xml, so both
-# files go back as they were: the repo copy stays clean and
-# scripts/deploy-salesforce.sh doesn't stop on uncommitted changes.
-META="force-app/main/default/aiAuthoringBundles/$BUNDLE/$BUNDLE.bundle-meta.xml"
-backup=$(mktemp)
-meta_backup=$(mktemp)
-cp "$SCRIPT" "$backup"
-cp "$META" "$meta_backup"
-trap 'cp "$backup" "$SCRIPT"; cp "$meta_backup" "$META"; rm -f "$backup" "$meta_backup"' EXIT
+# The publish (or validate) rewrites files under force-app: the bundle's
+# -meta.xml, reformatted genAiFunctions and, without --skip-retrieve, bots/
+# and genAiPlannerBundles/. Left there, they make the next
+# scripts/deploy-salesforce.sh refuse an uncommitted tree. So this script
+# refuses a dirty force-app and puts force-app back to the commit on exit,
+# which also restores the agent user placeholder filled in below.
+if [ -n "$(git status --porcelain -- force-app)" ]; then
+  git status --short -- force-app >&2
+  die "force-app has uncommitted changes. Commit or stash them first: after publishing, this script resets force-app to the commit."
+fi
+restore() {
+  git checkout -- force-app
+  git clean -fdq -- force-app
+}
+trap restore EXIT
 PORTAL_AGENT_USER="$PORTAL_AGENT_USER" node -e '
   const fs = require("fs"); const f = process.argv[1];
   fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(process.argv[2], `default_agent_user: ${JSON.stringify(process.env.PORTAL_AGENT_USER)}`));
