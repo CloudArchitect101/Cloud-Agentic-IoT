@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Net_Value__c</fullName>
+    <label>Net Value</label>
+    <description>Staff time value minus Agentforce and AWS cost, for the window.</description>
+    <precision>12</precision>
+    <scale>2</scale>
+    <required>false</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

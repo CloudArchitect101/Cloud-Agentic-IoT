@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Staff_Time_Value__c</fullName>
+    <label>Staff Time Value</label>
+    <description>Hours avoided (manual checks + nurse chat time) x the staff hourly rate.</description>
+    <precision>12</precision>
+    <scale>2</scale>
+    <required>false</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

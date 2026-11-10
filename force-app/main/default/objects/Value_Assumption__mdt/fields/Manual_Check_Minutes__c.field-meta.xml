@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Manual_Check_Minutes__c</fullName>
+    <label>Minutes per Manual Check</label>
+    <description>As is: minutes a staff member spends checking one monitored spot by hand.</description>
+    <precision>5</precision>
+    <scale>1</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Break_Even_Deflection_Pct__c</fullName>
+    <label>Break-even Deflection %</label>
+    <description>The deflection rate at which Agentforce costs exactly what the nurse time it saves is worth. Above it, the agent saves money.</description>
+    <precision>5</precision>
+    <scale>1</scale>
+    <required>false</required>
+    <type>Percent</type>
+    <unique>false</unique>
+</CustomField>

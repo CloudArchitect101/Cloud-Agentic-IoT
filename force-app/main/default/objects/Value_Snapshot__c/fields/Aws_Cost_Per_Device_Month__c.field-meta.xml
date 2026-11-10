@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Aws_Cost_Per_Device_Month__c</fullName>
+    <label>AWS Cost per Device per Month</label>
+    <description>Month-to-date AWS spend per active device, projected to a full month.</description>
+    <precision>12</precision>
+    <scale>2</scale>
+    <required>false</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>
