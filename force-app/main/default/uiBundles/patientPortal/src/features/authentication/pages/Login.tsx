@@ -80,7 +80,7 @@ export default function Login() {
 			<form.AppForm>
 				<AuthForm
 					title="Login"
-					description="Sign in to see your temperature monitor and chat with the care assistant"
+					description="Sign in to see your temperature sensor and chat with the care assistant"
 					error={submitError}
 					submit={{ text: "Login", loadingText: "Logging in…" }}
 					footer={{

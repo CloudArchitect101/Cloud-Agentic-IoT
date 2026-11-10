@@ -34,7 +34,7 @@ export function RoomCard({ device }: { device: Device }) {
 			<dl className="mt-6 grid grid-cols-2 gap-4">
 				<div className="rounded-xl bg-[var(--tile)] p-4">
 					<dt className="flex items-center gap-1.5 text-sm text-muted-foreground">
-						<Thermometer className="size-4" aria-hidden /> Your temperature
+						<Thermometer className="size-4" aria-hidden /> Temperature
 					</dt>
 					<dd className="mt-1 text-3xl font-semibold tabular-nums text-foreground">
 						{formatValue(now?.temperature, " °C")}
@@ -53,13 +53,13 @@ export function RoomCard({ device }: { device: Device }) {
 			{now?.roomTemperatureAlert && (
 				<p className="mt-4 flex items-start gap-2 rounded-xl bg-[var(--warn-bg)] p-3 text-sm text-[var(--warn-fg)]">
 					<TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-					Your temperature is higher than it should be. Your monitor's motor spins to let you know, and the care team has been told.
+					Temperature alert: the temperature is above its limit. The device's motor spins to let you know, and the care team has been told.
 				</p>
 			)}
 
 			{trend && (
 				<figure className="mt-6">
-					<svg viewBox="0 0 240 48" preserveAspectRatio="none" className="h-12 w-full" role="img" aria-label="Your temperature trend, oldest to newest">
+					<svg viewBox="0 0 240 48" preserveAspectRatio="none" className="h-12 w-full" role="img" aria-label="Temperature trend, oldest to newest">
 						<polyline points={trend} fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
 					</svg>
 					<figcaption className="mt-1 text-xs text-muted-foreground">

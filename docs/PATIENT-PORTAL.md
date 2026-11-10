@@ -1,7 +1,7 @@
 # Patient portal: a React site with Enhanced Chat and Agentforce Voice
 
-Patients sign in to a React site on Salesforce, see their own body temperature from the
-monitor they wear (its sensor sits under the arm), and talk to a care assistant, by typing or by voice. The
+Patients sign in to a React site on Salesforce, see the readings of their own temperature
+sensor device, and talk to a care assistant, by typing or by voice. The
 assistant is an Agentforce Service Agent. It only ever sees the signed-in
 patient's own devices, and it can send the care team a nurse request.
 

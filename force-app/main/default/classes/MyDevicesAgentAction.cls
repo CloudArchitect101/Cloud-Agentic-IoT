@@ -100,7 +100,7 @@ public with sharing class MyDevicesAgentAction {
                 + ', humidity ' + value(r.humidity, ' %')
                 + (r.heartRate == null ? '' : ', heart rate ' + value(r.heartRate, ' bpm'))
                 + (r.spO2 == null ? '' : ', SpO2 ' + value(r.spO2, ' %'))
-                + (r.roomTemperatureAlert ? ', raised-temperature flag set' : ''));
+                + (r.roomTemperatureAlert ? ', temperature-above-limit flag set' : ''));
         }
         return String.join(lines, '\n');
     }
