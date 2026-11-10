@@ -119,22 +119,24 @@ that have no metadata, in order. Each one is also in
    size 2048, Exportable Private Key **off**. Download the certificate (the
    public `.crt`), then run:
    ```bash
-   node scripts/portal-chat-jwk.mjs ~/Downloads/Patient_Portal_Chat.crt patient-portal-chat-1
+   node scripts/portal-chat-jwk.mjs ~/Downloads/Patient_Portal_Chat.crt patient-portal-chat-1 > ~/Downloads/patient-portal-chat-key.json
    ```
-   Keep the printed JSON for step 6. It is public, but it belongs in Setup,
-   not in the repo.
+   Keep the file for step 6. It is public, but it belongs in Setup, not in
+   the repo.
 4. **Deploy.** `SF_TARGET_ORG=test-cloudarchitect101 scripts/deploy-salesforce.sh Dev`.
    It builds the React app first (`npm ci && npm run build` in the bundle),
    then validates and deploys as usual.
-5. **Messaging channel and deployment.** Setup > Messaging Settings > New
-   Channel > Messaging for In-App and Web, routed through Omni-Channel to the
-   agent in step 7. Then Setup > Embedded Service Deployments > New >
-   Messaging for In-App and Web > Web. Name it `Patient_Portal_Chat`, and set
-   the domain to the site's domain (`*.my.site.com`). Open it, choose
-   **Switch to V2**, and publish. In Messaging Settings, turn on **Allow
-   Agentforce Voice calls in Enhanced Chat**.
-6. **User verification.** Setup > User Verification > New Key: paste the JSON
-   from step 3. New Keyset: issuer `cloud-agentic-iot-patient-portal` (the
+5. **Messaging channel and deployment.** Turn on Omni-Channel (Omni-Channel
+   Settings) and Messaging (Messaging Settings). Then Setup > Embedded Service
+   Deployments > New Deployment > **Enhanced Chat** > Web. Name it
+   `Patient_Portal_Chat`, set the domain to the site's domain
+   (`*.my.site.com`; add a custom domain here too when it exists, and publish
+   again), and let it create the Messaging channel. Open it, choose **Switch
+   to V2**, and publish. In Messaging Settings, turn on **Allow Agentforce
+   Voice calls in Enhanced Chat**. The channel's routing to the agent comes in
+   step 7.
+6. **User verification.** Setup > **Enhanced Chat User Verification** > JSON
+   Web Keys > New Key: upload the `.json` file from step 3. New Keyset: issuer `cloud-agentic-iot-patient-portal` (the
    setting's `Issuer__c`), add the key. In the channel from step 5, under User
    Verification Configuration, add that keyset. Unverified conversations now
    get nothing from the agent.
