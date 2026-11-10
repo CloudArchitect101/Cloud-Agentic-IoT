@@ -32,9 +32,9 @@ connect and disconnect events:
 They change only when the board connects or disconnects, so they work whether
 or not anyone has the card open, and a list view or report can filter on them.
 
-(A fourth, Case Alert, is retired: since firmware 2.5.0 a patient board's
-servo follows its own room temperature, not Cases. See
-[README, chapter 03](../README.md#room-temperature-demo-rule).)
+(A fourth, Case Alert, is retired: since firmware 2.5.0 a monitored board's
+servo follows its own sensor's temperature, not Cases. See
+[README, chapter 03](../README.md#temperature-alert-demo-rule).)
 
 **On the card**, while it is on screen:
 

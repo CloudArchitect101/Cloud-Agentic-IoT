@@ -58,7 +58,7 @@ static void command_id_rule() {
 static void copy_text() {
   char out[8];
   CHECK(std::strcmp(cad::copyText(out, sizeof out, "LIVE"), "LIVE") == 0);
-  CHECK(std::strcmp(cad::copyText(out, sizeof out, "DISPENSE_MEDICATION"), "DISPENS") == 0);   // cut to fit
+  CHECK(std::strcmp(cad::copyText(out, sizeof out, "SET_TELEMETRY_INTERVAL"), "SET_TEL") == 0);   // cut to fit
   CHECK(std::strcmp(cad::copyText(out, sizeof out, ""), "") == 0);
   CHECK(std::strcmp(cad::copyText(out, sizeof out, nullptr), "") == 0);
   // What would need escaping in JSON, or is not printable ASCII, becomes '?':
@@ -159,14 +159,14 @@ static void recent_commands_forget_the_oldest() {
 //   3. and a valid commandId is remembered and answered.
 struct Board {
   cad::RecentCommands recent;
-  int servoMoves = 0;
+  int servoMoves = 0;   // how many times the command was carried out
   std::string lastAnswer;
 
   void command(const char* operation, const char* commandId) {
     const char* id = cad::validCommandId(commandId) ? commandId : "";
     CommandResult result = CommandResult::Done;
     if (recent.find(id, result)) { answer(id, result, "already carried out"); return; }
-    if (std::strcmp(operation, "DISPENSE_MEDICATION") == 0) servoMoves++;
+    if (std::strcmp(operation, "RESTART") == 0) servoMoves++;
     else result = CommandResult::Refused;
     answer(id, result, "");
   }
@@ -181,15 +181,15 @@ struct Board {
 
 static void a_command_sent_twice_is_carried_out_once() {
   Board board;
-  board.command("DISPENSE_MEDICATION", "a0Bbm00000AbCdEFGH");
+  board.command("RESTART", "a0Bbm00000AbCdEFGH");
   CHECK(board.servoMoves == 1);
   CHECK(board.lastAnswer == "done");
-  board.command("DISPENSE_MEDICATION", "a0Bbm00000AbCdEFGH");
+  board.command("RESTART", "a0Bbm00000AbCdEFGH");
   CHECK(board.servoMoves == 1);                        // not twice
   CHECK(board.lastAnswer == "done already carried out");
 
-  // A second dose is another record, so another commandId: carried out.
-  board.command("DISPENSE_MEDICATION", "a0Bbm00000AbCdEFGI");
+  // A second restart is another record, so another commandId: carried out.
+  board.command("RESTART", "a0Bbm00000AbCdEFGI");
   CHECK(board.servoMoves == 2);
 
   // An operation the board does not know is remembered as refused too.
@@ -199,8 +199,8 @@ static void a_command_sent_twice_is_carried_out_once() {
 
   // Without a valid commandId nothing can tell two sends apart: each is
   // carried out, and none is answered.
-  board.command("DISPENSE_MEDICATION", "");
-  board.command("DISPENSE_MEDICATION", "not/valid");
+  board.command("RESTART", "");
+  board.command("RESTART", "not/valid");
   CHECK(board.servoMoves == 4);
   CHECK(board.lastAnswer.empty());
 }

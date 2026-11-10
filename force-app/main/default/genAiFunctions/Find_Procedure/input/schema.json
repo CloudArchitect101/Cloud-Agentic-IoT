@@ -6,7 +6,7 @@
   "properties": {
     "question": {
       "title": "Question",
-      "description": "What the user needs a procedure for, in their words, for example \"room reads 31 C\" or \"SOP-WARD-003\".",
+      "description": "What the user needs a procedure for, in their words, for example \"sensor reads 31 C\" or \"SOP-WARD-003\".",
       "lightning:type": "lightning__textType",
       "lightning:isPII": false,
       "copilotAction:isUserInput": false

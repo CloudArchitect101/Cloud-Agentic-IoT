@@ -4,8 +4,7 @@
  * Covers Patient_Vitals__c insert -> PatientVitalsTrigger ->
  * PatientVitalsTriggerHandler -> RoomTemperatureCaseService: one open Case
  * per device from a flagged reading, owned by the configured queue and
- * linked to the device's Asset, and one dose per new Case within the
- * cooldown. When a reading counts (30 C, the throttle) is AWS's decision and
+ * linked to the device's Asset, and nothing else: no Device Command. When a reading counts (30 C, the throttle) is AWS's decision and
  * is tested in test/lambda/patient-vitals.test.js; here a reading counts
  * when Room_Temperature_Alert__c is true.
  */
@@ -86,10 +85,9 @@ private class RoomTemperatureCaseServiceTest {
                 FROM Case WHERE Origin = :ORIGIN ORDER BY CreatedDate, Id];
     }
 
-    // Only the doses.
-    private static List<Device_Command__c> doses() {
-        return [SELECT Device__c, Command__c, Requested_By__c FROM Device_Command__c
-                WHERE Command__c = 'DISPENSE_MEDICATION' ORDER BY CreatedDate, Id];
+    // The rule opens Cases only: it never sends the board a command.
+    private static Integer commands() {
+        return [SELECT COUNT() FROM Device_Command__c];
     }
 
     private static void close(Case roomCase) {
@@ -113,7 +111,9 @@ private class RoomTemperatureCaseServiceTest {
         Assert.areEqual(queueId(QUEUE), cases[0].OwnerId, 'Owned by the queue');
         Assert.isTrue(cases[0].Subject.contains('30.0'), cases[0].Subject);
         Assert.isTrue(cases[0].Subject.contains('Test8'), cases[0].Subject);
-        Assert.isTrue(cases[0].Description.contains('not a clinical alert'), cases[0].Description);
+        Assert.isTrue(cases[0].Subject.startsWith('High temperature'), cases[0].Subject);
+        Assert.isTrue(cases[0].Description.contains('not a diagnosis'), cases[0].Description);
+        Assert.isTrue(cases[0].Description.contains('SOP-WARD-001'), cases[0].Description);
     }
 
     @IsTest
@@ -169,7 +169,7 @@ private class RoomTemperatureCaseServiceTest {
         List<Case> cases = ruleCases();
         Assert.areEqual(1, cases.size(), 'One Case for the device');
         Assert.isTrue(cases[0].Subject.contains('30.0'), 'The first reading wins: ' + cases[0].Subject);
-        Assert.areEqual(1, doses().size(), 'One dose');
+        Assert.areEqual(0, commands(), 'No command to the board');
     }
 
     @IsTest
@@ -227,56 +227,6 @@ private class RoomTemperatureCaseServiceTest {
     }
 
     @IsTest
-    static void oneDispenseCommandPerNewCase() {
-        settings();
-        device('Test8');
-
-        Test.startTest();
-        insert hot('Test8');
-        insert hot('Test8');
-        Test.stopTest();
-
-        List<Device_Command__c> commands = doses();
-        Assert.areEqual(1, commands.size(), 'One dose while the Case is open');
-        Assert.areEqual('DISPENSE_MEDICATION', commands[0].Command__c, 'Command');
-        Assert.areEqual(ORIGIN, commands[0].Requested_By__c, 'Requested by the rule');
-        Assert.areEqual('Test8', commands[0].Device__c, 'For the device');
-        Assert.isTrue(ruleCases()[0].Description.contains('Dose: requested'), ruleCases()[0].Description);
-    }
-
-    @IsTest
-    static void aClosedCaseInsideTheCooldownGetsANewCaseButNoDose() {
-        settings();
-        device('Test8');
-
-        Test.startTest();
-        insert hot('Test8');
-        close(ruleCases()[0]);
-        insert hot('Test8');
-        Test.stopTest();
-
-        List<Case> cases = ruleCases();
-        Assert.areEqual(2, cases.size(), 'A new Case after the first was closed');
-        Assert.areEqual(1, doses().size(), 'But no second dose inside the cooldown');
-        Assert.isTrue(cases[1].Description.contains('not requested, a dose was requested'), cases[1].Description);
-        Assert.isTrue(cases[1].Description.contains('60 minutes'), cases[1].Description);
-    }
-
-    @IsTest
-    static void noCommandWhenDispenseIsOff() {
-        settings().Room_Temp_Dispense__c = false;
-        device('Test8');
-
-        Test.startTest();
-        insert hot('Test8');
-        Test.stopTest();
-
-        Assert.areEqual(1, ruleCases().size(), 'The Case is still opened');
-        Assert.areEqual(0, doses().size(), 'No dose');
-        Assert.isTrue(ruleCases()[0].Description.contains('automatic dosing is switched off'), ruleCases()[0].Description);
-    }
-
-    @IsTest
     static void noAssetMeansNoCaseAndTheVitalsStillSave() {
         settings();
 
@@ -286,7 +236,6 @@ private class RoomTemperatureCaseServiceTest {
 
         Assert.areEqual(1, [SELECT COUNT() FROM Patient_Vitals__c WHERE Device__c = 'NoSuchBoard'], 'The reading saved');
         Assert.areEqual(0, ruleCases().size(), 'Nothing to link a Case to');
-        Assert.areEqual(0, doses().size(), 'And no dose');
     }
 
     @IsTest
@@ -345,7 +294,6 @@ private class RoomTemperatureCaseServiceTest {
 
         Assert.isTrue(result.isSuccess(), 'The reading saved');
         Assert.areEqual(0, [SELECT COUNT() FROM Case], 'No Case');
-        Assert.areEqual(0, doses().size(), 'No dose');
     }
 
     @IsTest
@@ -383,10 +331,7 @@ private class RoomTemperatureCaseServiceTest {
         Assert.areEqual(1, cases.size(), 'The Case is opened for the integration user');
         Assert.areEqual(queueId(QUEUE), cases[0].OwnerId, 'Owned by the queue');
         Assert.areEqual(test8.Id, cases[0].AssetId, 'Linked to the device');
-        Assert.areEqual(1, [SELECT COUNT() FROM Device_Command__c
-                            WHERE Device__c = 'Test8' AND Command__c = 'DISPENSE_MEDICATION'], 'And the dose requested');
-        Assert.areEqual(0, [SELECT COUNT() FROM Device_Command__c WHERE Command__c = 'CASE_ALERT'],
-            'No case alert: since firmware 2.5.0 the board\'s motor follows its own room');
+        Assert.areEqual(0, commands(), 'No command: the patient monitor\'s motor follows its own reading');
     }
 
     @IsTest
@@ -401,9 +346,6 @@ private class RoomTemperatureCaseServiceTest {
         for (Integer i = 1; i < 201; i++) {
             two00.add(hot(names[i]));
         }
-        // Measures only this service; the send path has its own bulk test.
-        TriggerHandler.bypass('DeviceCommandTriggerHandler');
-
         Test.startTest();
         Integer queries = Limits.getQueries();
         Integer dml = Limits.getDmlStatements();
@@ -421,6 +363,6 @@ private class RoomTemperatureCaseServiceTest {
         Assert.areEqual(oneQueries, manyQueries, 'The same queries for 1 device and for 200');
         Assert.areEqual(oneDml, manyDml, 'The same DML statements for 1 device and for 200');
         Assert.areEqual(201, ruleCases().size(), 'A Case for every device');
-        Assert.areEqual(201, doses().size(), 'And a dose for every Case');
+        Assert.areEqual(0, commands(), 'And no command');
     }
 }

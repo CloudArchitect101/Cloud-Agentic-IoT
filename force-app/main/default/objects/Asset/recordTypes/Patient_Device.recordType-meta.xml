@@ -2,8 +2,8 @@
 <RecordType xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Patient_Device</fullName>
     <active>true</active>
-    <description>A patient's board, linked to the patient's Account: room readings, the 30 C room rule, doses, and its own Case alert. An Asset with no record type is one too.</description>
-    <label>Patient Device</label>
+    <description>A monitored device, on the Account of what it watches: its temperature readings, the 30 C temperature alert Case, and its own alarm motor. An Asset with no record type is one too.</description>
+    <label>Monitoring Device</label>
     <picklistValues>
         <picklist>Connection_Status__c</picklist>
         <values>

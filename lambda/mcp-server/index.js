@@ -1,20 +1,21 @@
 'use strict';
 
 /**
- * Model Context Protocol (MCP) server for the Smart Ward: each patient room's
- * monitor and medication store as tools any MCP-speaking agent can discover
- * and call.
+ * Model Context Protocol (MCP) server for the Smart Ward: each monitored
+ * device (a temperature sensor on a patient, in a fridge or in a room) as
+ * tools any MCP-speaking agent can discover and call. The tool names still
+ * say "room" (API names, renamed later); what they say to a model is generic.
  *
  * Why MCP rather than a bespoke REST API: the agent discovers the tools at
  * runtime from tools/list, so adding a capability does not require redeploying
  * or re-prompting the agent. The contract is the schema, not the prompt.
  *
- *   get_room_status          one room: its newest reading, whether its board
- *                            is still sending, the patient's state, and
- *                            whether a room-temperature alert is open
- *   list_rooms_out_of_range  every room at or above the room-temperature
- *                            threshold, with an alert open, or gone quiet
- *   send_device_command      one command to one room, through the
+ *   get_room_status          one device: its newest reading, whether its
+ *                            board is still sending, its state, and whether
+ *                            a high temperature alert is open
+ *   list_rooms_out_of_range  every device at or above the temperature alert
+ *                            level, with an alert open, or gone quiet
+ *   send_device_command      one command to one device, through the
  *                            guardrails and the device-command function
  *
  * Transport: MCP's Streamable HTTP, answered as plain JSON (no event stream),
@@ -56,7 +57,7 @@ const READ_PARALLEL = 8;
 
 const DEVICE_ID = {
   type: 'string',
-  description: 'The room monitor\'s AWS IoT Thing name, which is its Asset\'s serial number in Salesforce, e.g. ESP32-Patient-Monitor-01.',
+  description: 'The monitored device\'s AWS IoT Thing name, which is its Asset\'s serial number in Salesforce, e.g. ESP32-Patient-Monitor-01.',
 };
 
 /**
@@ -67,12 +68,13 @@ const DEVICE_ID = {
 const TOOLS = [
   {
     name: 'get_room_status',
-    title: 'Room status',
+    title: 'Device status',
     description:
-      'Returns the current status of one patient room: the newest temperature and humidity reading '
-      + 'from its monitor and when it was taken, whether the monitor is still sending (online, stale '
-      + 'or unknown), the patient state and risk score, and whether a room-temperature alert is open '
-      + '(Salesforce opens one care team Case per alert). Use it when asked about one room or device.',
+      'Returns the current status of one monitored device (its sensor may be on a patient, in a fridge or '
+      + 'in a room): the newest temperature and humidity reading and when it was taken, whether the device '
+      + 'is still sending (online, stale or unknown), its state and risk score, and whether a high '
+      + 'temperature alert is open (Salesforce opens one care team Case per alert). Use it when asked about '
+      + 'one device.',
     inputSchema: {
       type: 'object',
       properties: { deviceId: DEVICE_ID },
@@ -83,16 +85,16 @@ const TOOLS = [
   },
   {
     name: 'list_rooms_out_of_range',
-    title: 'Rooms out of range',
+    title: 'Devices out of range',
     description:
-      'Lists the rooms that need attention now: the newest reading is at or above the room-temperature '
-      + 'threshold (30 C unless configured otherwise), a room-temperature alert is open, or the monitor '
-      + 'has stopped sending. Each room says why it is listed. Use it when asked which rooms, or how many, '
-      + 'are too warm or offline.',
+      'Lists the monitored devices that need attention now: the newest reading is at or above the '
+      + 'temperature alert level (30 C unless configured otherwise), a high temperature alert is open, or '
+      + 'the device has stopped sending. Each device says why it is listed. Use it when asked which '
+      + 'devices, or how many, read too high or are offline.',
     inputSchema: {
       type: 'object',
       properties: {
-        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'At most this many rooms in the answer (default 25).' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'At most this many devices in the answer (default 25).' },
       },
       additionalProperties: false,
     },
@@ -100,13 +102,13 @@ const TOOLS = [
   },
   {
     name: 'send_device_command',
-    title: 'Send a command to one room',
+    title: 'Send a command to one device',
     description:
-      'Sends one command to one room\'s monitor: RESTART restarts the board; CASE_ALERT with active true '
+      'Sends one command to one monitored device: RESTART restarts the board; CASE_ALERT with active true '
       + 'or false turns its alert motor on or off; SET_TELEMETRY_INTERVAL with seconds (5 to 86400) sets '
-      + 'how often it reports. Medication and Wi-Fi changes are not available here: they go through '
-      + 'Salesforce, which holds the prescription and the credentials. The answer says whether AWS IoT '
-      + 'took the command, not whether the board carried it out.',
+      + 'how often it reports. Wi-Fi changes are not available here: they go through Salesforce, which '
+      + 'holds the credentials. The answer says whether AWS IoT took the command, not whether the board '
+      + 'carried it out.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -130,7 +132,7 @@ const ALIASES = { get_device_telemetry: 'get_room_status' };
 // Cases live in Salesforce, which this server does not read.
 const RETIRED = {
   get_queue_depth: 'get_queue_depth is retired: it only ever returned a placeholder. Open Cases and the care '
-    + 'team queue live in Salesforce; ask the Salesforce agent, or use list_rooms_out_of_range for the rooms '
+    + 'team queue live in Salesforce; ask the Salesforce agent, or use list_rooms_out_of_range for the devices '
     + 'with an alert open.',
 };
 
@@ -165,8 +167,9 @@ exports.handler = async (event) => {
         protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'cloud-agentic-iot-smart-ward', title: 'Smart Ward', version: '2.0.0' },
-        instructions: 'Room monitoring for a hospital ward. Read with get_room_status and list_rooms_out_of_range; '
-          + 'send_device_command acts on one room at a time and is checked by guardrails outside the model.',
+        instructions: 'Temperature monitoring for a hospital ward\'s devices (on a patient, in a fridge or in a room). '
+          + 'Read with get_room_status and list_rooms_out_of_range; send_device_command acts on one device at a '
+          + 'time and is checked by guardrails outside the model.',
       });
     }
     case 'ping':
@@ -323,7 +326,7 @@ async function roomsOutOfRange(limit) {
   for (const room of rooms) {
     const reasons = [];
     if (room.roomTemperatureAlert.atOrAboveThreshold) reasons.push(`temperature at or above ${config.thresholdC} C`);
-    if (room.roomTemperatureAlert.alertOpen) reasons.push('room-temperature alert open');
+    if (room.roomTemperatureAlert.alertOpen) reasons.push('high temperature alert open');
     if (room.connectivity.status === 'stale') reasons.push(`no reading for over ${config.offlineAfterMinutes} minutes`);
     if (room.connectivity.status === 'unknown') unknown += 1;
     if (reasons.length) {

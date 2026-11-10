@@ -62,7 +62,7 @@ static void a_slow_pass_does_not_slow_the_sweep() {
   ServoSweep sweep;
   sweep.set(true, 0);
   CHECK(sweep.next(10) >= 0);
-  // A dose, a reading or a reconnect held loop() for 1.5 s: the arm goes
+  // A reading or a reconnect held loop() for 1.5 s: the arm goes
   // where it should be by now, not on from where it was.
   CHECK(sweep.next(10 + 1500) == sweep.angleAt(10 + 1500));
   CHECK(sweep.angleAt(1500) == 90);
@@ -80,11 +80,11 @@ static void a_repeat_changes_nothing() {
   CHECK(sweep.next(1000) == -1);
 }
 
-static void a_dose_starts_the_sweep_again_from_0() {
+static void a_restart_starts_the_sweep_again_from_0() {
   ServoSweep sweep;
   sweep.set(true, 0);
   sweep.next(500);   // somewhere up the sweep
-  sweep.restart(5000);   // the dose left the arm at 0
+  sweep.restart(5000);   // the arm is back at 0
   CHECK(sweep.next(5000) == 0);
   CHECK(sweep.angleAt(5000 + SWEEP_PERIOD_MS / 2) == 180);
 }
@@ -153,7 +153,7 @@ int main() {
   writes_only_a_new_angle();
   a_slow_pass_does_not_slow_the_sweep();
   a_repeat_changes_nothing();
-  a_dose_starts_the_sweep_again_from_0();
+  a_restart_starts_the_sweep_again_from_0();
   millis_wrapping_changes_nothing();
   a_new_period_changes_the_speed_not_the_place();
   if (failures) {

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Room_Temp_Dispense__c</fullName>
-    <label>Room Temp Dispense</label>
-    <description>When checked, each new room-temperature Case also requests one DISPENSE_MEDICATION command. Change it in the repo: Setup edits are overwritten on deploy.</description>
+    <label>Retired: Dispense</label>
+    <description>Retired Nov 10: the monitored device is a temperature alert and takes no doses. Nothing reads it; kept until it is deleted from the org.</description>
     <defaultValue>false</defaultValue>
     <type>Checkbox</type>
 </CustomField>

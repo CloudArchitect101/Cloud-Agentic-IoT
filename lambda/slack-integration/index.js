@@ -40,7 +40,9 @@ const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 // An AWS IoT Thing name, which is what a device is called everywhere here.
 // Checked before it goes anywhere near SOQL.
 const DEVICE_NAME = /^[A-Za-z0-9_:-]{1,100}$/;
-const COMMANDS = new Set(['/patient-status', '/dispense-medication']);
+// /dispense-medication was retired on Nov 10: the device is a temperature
+// alert now and takes no dose commands.
+const COMMANDS = new Set(['/patient-status']);
 const SLACK_HOOKS = /^https:\/\/hooks\.slack\.com\//;
 
 /**
@@ -108,9 +110,7 @@ async function acknowledge(event) {
     Payload: Buffer.from(JSON.stringify({ slackCommand: { command, deviceId, responseUrl } })),
   }));
   console.log('accepted', { command, deviceId });
-  return slackResponse(command === '/patient-status'
-    ? `Looking up \`${deviceId}\`…`
-    : `Sending a dose request to \`${deviceId}\`…`);
+  return slackResponse(`Looking up \`${deviceId}\`…`);
 }
 
 /**
@@ -158,7 +158,7 @@ function savedLine(record) {
   if (!record) return 'Last saved event: none in Salesforce.';
   const what = [
     `${shown(record.Temperature__c, '°C')}, ${shown(record.Humidity__c, '% humidity')}`,
-    record.Room_Temperature_Alert__c ? 'room temperature alert' : null,
+    record.Room_Temperature_Alert__c ? 'temperature alert' : null,
     record.Patient_State__c ? `state ${record.Patient_State__c}` : null,
   ].filter(Boolean).join(', ');
   return `Last saved event: ${what}, at ${utc(Date.parse(record.CreatedDate))}.`;
@@ -188,32 +188,18 @@ async function patientStatus(deviceId) {
   ].join('\n');
 }
 
-async function dispenseMedication(deviceId) {
-  // A Pending Device Command, as Send Command on the Asset makes:
-  // DeviceCommandTrigger sends it to the board through the device-command
-  // function and the guardrails, and the board's ack moves it to Acked or
-  // Failed. So the answer says the command was queued, not carried out.
-  const id = await salesforce.createRecord('Device_Command__c', {
-    Device__c: deviceId,
-    Command__c: 'DISPENSE_MEDICATION',
-    Requested_By__c: 'Slack',
-    Status__c: 'Pending',
-  });
-  return `Dispense command queued for \`${deviceId}\` (Device Command ${id}). Its Status in Salesforce shows when the board answers.`;
-}
-
-/** The second half: do the Salesforce work and answer on response_url. */
+/** The second half: do the work and answer on response_url. */
 async function respond({ command, deviceId, responseUrl }) {
   if (!SLACK_HOOKS.test(responseUrl) || !DEVICE_NAME.test(deviceId)) {
     throw new Error('refused: a Slack command with no valid response_url or device name');
   }
   let text;
   try {
-    text = command === '/patient-status' ? await patientStatus(deviceId) : await dispenseMedication(deviceId);
+    text = await patientStatus(deviceId);
   } catch (err) {
     // The person sees that it failed; the log keeps what Salesforce said.
     console.error('Slack command failed', { command, deviceId, error: err.message });
-    text = `Sorry, \`${command} ${deviceId}\` failed in Salesforce. The function's log says why.`;
+    text = `Sorry, \`${command} ${deviceId}\` failed: neither AWS nor Salesforce could be read. The function's log says why.`;
   }
   const reply = await fetch(responseUrl, {
     method: 'POST',

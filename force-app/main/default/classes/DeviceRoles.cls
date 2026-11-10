@@ -4,10 +4,11 @@
  * What a board is for, read from its Asset's record type. Every board runs
  * the same patient-monitor firmware; Salesforce decides what it is told.
  *
- *   Patient_Device   A patient's board, on the patient's Account. Its room
- *                    readings feed the 30 C room rule, which opens a Case and
- *                    requests a dose. Its servo follows its own room (30 C or
- *                    more, decided on the board, firmware 2.5.0), not Cases.
+ *   Patient_Device   A patient's board, on the patient's Account. Its
+ *                    temperature readings feed the patient temperature alert,
+ *                    which opens a Case. Its servo spins while its own
+ *                    reading is 30 C or more (decided on the board), not for
+ *                    Cases.
  *                    An Asset with no record type, which is every
  *                    Asset made before the record types existed, is one too.
  *   Internal_Device  A board of the ward itself, such as a nurse-station
@@ -15,7 +16,7 @@
  *                    by the Internal Device Queue (Care_Team_Queue as shipped),
  *                    whichever device the Case is on, or none, and stops when
  *                    the queue is empty (CaseQueueMonitorService, QUEUE_DEPTH).
- *                    It gets no room-rule Case and no dose.
+ *                    It gets no patient temperature Case.
  *                    Salesforce wants an Account or a Contact on every Asset,
  *                    so it sits on the ward's own Account, never a patient's.
  *

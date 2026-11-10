@@ -155,7 +155,7 @@
     },
     "liveTemperature": {
       "title": "Live Temperature",
-      "description": "Room temperature in C of the newest reading stored in AWS.",
+      "description": "Temperature in C of the newest reading stored in AWS.",
       "lightning:type": "lightning__numberType",
       "lightning:isPII": false,
       "copilotAction:isDisplayable": false,

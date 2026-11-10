@@ -51,7 +51,7 @@
         <name>sidebar</name>
         <type>Region</type>
     </flexiPageRegions>
-    <masterLabel>Patient Vitals Record Page</masterLabel>
+    <masterLabel>Device Reading Record Page</masterLabel>
     <sobjectType>Patient_Vitals__c</sobjectType>
     <template>
         <name>flexipage:recordHomeTemplateDesktop</name>

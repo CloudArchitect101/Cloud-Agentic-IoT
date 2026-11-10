@@ -4,8 +4,9 @@
 #
 #   scripts/streams-test.sh <Dev|Prod> <device> [critical|warning|normal]
 #
-# The ward boards measure room air, so nothing they send ever reaches a
-# clinical band and the stream never fires on its own. This puts one reading
+# The boards send only temperature and humidity (from a DHT11, which is not
+# a clinical instrument), so nothing they send ever reaches a clinical band
+# and the stream never fires on its own. This puts one reading
 # with a heart rate and an SpO2 on it, the way a wearable would:
 #
 #   event-router -> patient-vitals-event-bus -> alert-dispatcher
@@ -18,8 +19,8 @@
 # Patient_Vitals__c and no board is contacted: the reading is labelled
 # SYNTHETIC_TEST in the AWS logs so it cannot be taken for a measured one.
 #
-# The device must be a Patient Device Asset (its serial number is its Thing
-# name). The script prints what the dispatcher decided, from its log.
+# The device must be a Monitoring Device Asset (API name Patient_Device;
+# its serial number is its Thing name). The script prints what the dispatcher decided, from its log.
 
 set -euo pipefail
 # shellcheck source=lib/common.sh

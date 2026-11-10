@@ -39,24 +39,24 @@ test('output with an SSN or a private key is blocked', () => {
   assert.equal(checkOutput('Heart rate 72').allowed, true);
 });
 
-test('dispensing fails closed when the dose history is missing', () => {
-  // undefined >= undefined is false, so this used to pass.
-  const result = checkBusinessRules('DISPENSE_MEDICATION', { prescriptionVerified: true });
-  assert.deepEqual(result, { allowed: false, failures: ['dose_history_unknown'] });
+test('closing a temperature alert fails closed when the reading is missing', () => {
+  // undefined >= undefined is false, so a missing number must not pass.
+  const result = checkBusinessRules('CLOSE_TEMPERATURE_ALERT', { recheckedByPerson: true });
+  assert.deepEqual(result, { allowed: false, failures: ['temperature_unknown'] });
 
-  const partial = checkBusinessRules('DISPENSE_MEDICATION', { prescriptionVerified: true, dosesInLast24h: 1 });
-  assert.deepEqual(partial.failures, ['dose_history_unknown']);
+  const partial = checkBusinessRules('CLOSE_TEMPERATURE_ALERT', { recheckedByPerson: true, latestTemperature: 28 });
+  assert.deepEqual(partial.failures, ['temperature_unknown']);
 });
 
-test('dispensing is allowed under the daily limit and refused at it', () => {
-  const under = { prescriptionVerified: true, dosesInLast24h: 2, maxDailyDoses: 4 };
-  assert.deepEqual(checkBusinessRules('DISPENSE_MEDICATION', under), { allowed: true, failures: [] });
+test('closing a temperature alert is allowed below the re-arm level and refused at it', () => {
+  const below = { recheckedByPerson: true, latestTemperature: 28.5, rearmBelow: 29 };
+  assert.deepEqual(checkBusinessRules('CLOSE_TEMPERATURE_ALERT', below), { allowed: true, failures: [] });
 
-  const at = { prescriptionVerified: true, dosesInLast24h: 4, maxDailyDoses: 4 };
-  assert.deepEqual(checkBusinessRules('DISPENSE_MEDICATION', at).failures, ['daily_dose_limit_reached']);
+  const at = { recheckedByPerson: true, latestTemperature: 29, rearmBelow: 29 };
+  assert.deepEqual(checkBusinessRules('CLOSE_TEMPERATURE_ALERT', at).failures, ['still_high']);
 
-  const unverified = { dosesInLast24h: 0, maxDailyDoses: 4 };
-  assert.deepEqual(checkBusinessRules('DISPENSE_MEDICATION', unverified).failures, ['prescription_not_verified']);
+  const unchecked = { latestTemperature: 25, rearmBelow: 29 };
+  assert.deepEqual(checkBusinessRules('CLOSE_TEMPERATURE_ALERT', unchecked).failures, ['recheck_not_recorded']);
 });
 
 test('escalation requires a device', () => {
@@ -82,7 +82,8 @@ const read = (file) => fs.readFileSync(path.join(__dirname, '../..', file), 'utf
 
 test('what Salesforce sends is allowed', () => {
   // DeviceCommandSendJob, one Device Command each.
-  assert.equal(checkCommand({ operation: 'DISPENSE_MEDICATION', fields: { commandId: 'a0B' } }).allowed, true);
+  // Retired Nov 10: an old Device Command asking for a dose is refused.
+  assert.deepEqual(checkCommand({ operation: 'DISPENSE_MEDICATION', fields: { commandId: 'a0B' } }).failures, ['unknown_operation']);
   assert.equal(checkCommand({ operation: 'RESTART', fields: { commandId: 'a0B' } }).allowed, true);
   assert.equal(checkCommand({ operation: 'CASE_ALERT', fields: { active: false, commandId: 'a0B' } }).allowed, true);
   // WiFiCredentialPushJob: a whole network's rooms, and an open network has no passphrase.
@@ -120,14 +121,13 @@ test('a refusal never repeats a value, and a strange field name is not echoed', 
   assert.ok(!JSON.stringify(odd).includes(secret));
 });
 
-test('an agent may only change how a room is watched, one room at a time', () => {
+test('an agent may only change how a device is watched, one device at a time', () => {
   const agent = (operation, fields, deviceCount = 1) => checkCommand({ operation, fields, deviceCount, profile: 'agent' });
   assert.equal(agent('CASE_ALERT', { active: true }).allowed, true);
   assert.equal(agent('RESTART', {}).allowed, true);
   assert.equal(agent('SET_TELEMETRY_INTERVAL', { seconds: 60 }).allowed, true);
   assert.deepEqual(agent('RESTART', {}, 2).failures, ['too_many_devices']);
-  // Fails closed: the prescription and the day's doses are in Salesforce.
-  assert.deepEqual(agent('DISPENSE_MEDICATION', {}).failures, ['dispense_needs_salesforce']);
+  assert.deepEqual(agent('DISPENSE_MEDICATION', {}).failures, ['unknown_operation']);
   assert.deepEqual(agent('WIFI_UPDATE', { ssid: 'ward-3', passphrase: 'long-enough' }).failures, ['credentials_not_for_agents']);
   assert.deepEqual(agent('LIVE', { seconds: 2, minutes: 5 }).failures, ['not_for_agents']);
   // And the ranges still hold for an agent.
@@ -144,11 +144,17 @@ test('the command limits are the ones the boards and Salesforce hold', () => {
   assert.deepEqual([live.seconds.min, live.seconds.max, live.minutes.max],
     [constant('MIN_LIVE_SECONDS'), constant('MAX_LIVE_SECONDS'), constant('MAX_LIVE_MINUTES')]);
 
-  // Every command a Device Command record can name is one the guardrails know.
+  // Every active command a Device Command record can name is one the
+  // guardrails know; a retired (inactive) one is refused.
   const picklist = read('force-app/main/default/objects/Device_Command__c/fields/Command__c.field-meta.xml');
-  const commands = [...picklist.matchAll(/<fullName>([A-Z_]+)<\/fullName>/g)].map(([, name]) => name);
-  assert.ok(commands.length >= 3);
-  for (const command of commands) assert.ok(Object.hasOwn(OPERATIONS, command), command);
+  const values = [...picklist.matchAll(/<value>(.*?)<\/value>/g)].map(([, value]) => ({
+    name: value.match(/<fullName>([A-Z_]+)<\/fullName>/)[1], active: !value.includes('<isActive>false</isActive>'),
+  }));
+  assert.ok(values.filter((v) => v.active).length >= 1);
+  for (const { name, active } of values) {
+    if (active) assert.ok(Object.hasOwn(OPERATIONS, name), name);
+  }
+  assert.ok(!Object.hasOwn(OPERATIONS, 'DISPENSE_MEDICATION'), 'retired Nov 10');
   assert.ok(Object.hasOwn(OPERATIONS, 'WIFI_UPDATE'), 'WiFiCredentialPushJob sends WIFI_UPDATE');
 
   // Salesforce never sends more rooms per request than the guardrails allow.

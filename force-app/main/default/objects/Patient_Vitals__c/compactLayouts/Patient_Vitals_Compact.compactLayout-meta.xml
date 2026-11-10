@@ -8,5 +8,5 @@
     <fields>Heart_Rate__c</fields>
     <fields>SpO2__c</fields>
     <fields>Timestamp__c</fields>
-    <label>Patient Vitals Compact</label>
+    <label>Device Reading Compact</label>
 </CompactLayout>

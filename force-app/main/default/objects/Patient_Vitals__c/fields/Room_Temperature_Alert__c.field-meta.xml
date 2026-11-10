@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Room_Temperature_Alert__c</fullName>
-    <label>Room Temperature Alert</label>
-    <description>Set by AWS patient-vitals on a reading at or above the room-temperature demo threshold. PatientVitalsTrigger opens a Case from it.</description>
+    <label>Temperature Alert</label>
+    <description>Set by AWS patient-vitals on a reading at or above the temperature alert level (30 C in the demo). PatientVitalsTrigger opens a Case from it. API name from the room-air demo, to be renamed later.</description>
     <defaultValue>false</defaultValue>
     <type>Checkbox</type>
 </CustomField>

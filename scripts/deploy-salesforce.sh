@@ -92,7 +92,7 @@ rm -rf "$manifest_dir"
 if [ "$paired" = true ]; then record_deployed_commit salesforce; fi
 
 # The integration user writes the readings, so the triggers they fire (a
-# room-temperature dose, a Case moving the queue indicator) call AWS as that
+# temperature alert Case moving the queue indicator) call AWS as that
 # user, through the hand-made AWS_IoT_Relay credential. Give it the callers'
 # permission set once that exists (README, Stage 2 part d).
 if [ "$paired" = true ]; then
@@ -103,7 +103,7 @@ if [ "$paired" = true ]; then
   if [ -z "$integration" ] || [ "$integration" = "placeholder" ]; then
     warn "No integration username in SSM yet, so AWS_IoT_Relay_Callers was not assigned. Run scripts/seed-ssm.sh $ENV, then deploy again."
   elif [ "$callers" = "0" ]; then
-    warn "The org has no AWS_IoT_Relay_Callers permission set yet (README, Stage 2 part d). Until it does and $integration holds it, a room-temperature dose fails with \"couldn't access the credential\"."
+    warn "The org has no AWS_IoT_Relay_Callers permission set yet (README, Stage 2 part d). Until it does and $integration holds it, a temperature alert Case cannot move the queue indicator: \"couldn't access the credential\"."
   else
     held=$(sf data query --target-org "$org" --json \
       --query "SELECT Id FROM PermissionSetAssignment WHERE PermissionSet.Name = 'AWS_IoT_Relay_Callers' AND Assignee.Username = '$integration'" 2>/dev/null | jq -r '.result.totalSize // 0' || echo 0)

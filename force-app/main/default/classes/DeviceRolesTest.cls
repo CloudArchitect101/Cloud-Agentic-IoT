@@ -4,7 +4,7 @@
  * The two device roles, Patient_Device and Internal_Device (Asset record
  * types), end to end: an Internal Device board follows the whole queue
  * (QUEUE_DEPTH, any Case on any device), gets no Case alert, no room-rule
- * Case and no dose, is sent the depth again when it comes online, and is
+ * Case, is sent the depth again when it comes online, and is
  * provisioned into internal-devices; a change of record type tells the board
  * its new role at once.
  *
@@ -143,7 +143,7 @@ private class DeviceRolesTest {
         Assert.areEqual(1, sent[0].get('openCaseCount'), 'Its count');
         Assert.areEqual('ACTIVE', sent[0].get('motorState'), 'Running');
 
-        Assert.areEqual(0, alerts(), 'The patient device is sent nothing: its motor follows its room');
+        Assert.areEqual(0, alerts(), 'The monitoring device is sent nothing: its motor follows its own sensor');
     }
 
     @IsTest
@@ -338,24 +338,6 @@ private class DeviceRolesTest {
         Test.stopTest();
 
         Assert.areEqual(0, [SELECT COUNT() FROM Case], 'No room-rule Case for a ward board');
-        Assert.areEqual(0, [SELECT COUNT() FROM Device_Command__c WHERE Command__c = 'DISPENSE_MEDICATION'], 'No dose');
-    }
-
-    @IsTest
-    static void aDoseForAnInternalBoardIsRefused() {
-        settings();
-        Asset in1 = board('IN-1', true, 'Online');
-
-        Test.startTest();
-        Database.SaveResult dose = Database.insert(
-            new Device_Command__c(Asset__c = in1.Id, Command__c = 'DISPENSE_MEDICATION'), false);
-        Database.SaveResult restart = Database.insert(
-            new Device_Command__c(Asset__c = in1.Id, Command__c = 'RESTART'), false);
-        Test.stopTest();
-
-        Assert.isFalse(dose.isSuccess(), 'No dispenser on a ward board');
-        Assert.isTrue(dose.getErrors()[0].getMessage().contains('Internal Device'), dose.getErrors()[0].getMessage());
-        Assert.isTrue(restart.isSuccess(), 'Other commands go as before');
     }
 
     @IsTest

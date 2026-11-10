@@ -20,7 +20,7 @@ Parameters:
     Default: 30
     MinValue: 1
     Description: >-
-      The room-temperature threshold, inclusive, in C. Keep it equal to the
+      The temperature alert level, inclusive, in C. Keep it equal to the
       patient-vitals stack's RoomTempAlertCelsius;
       test/config/environments.test.js fails when config/<env>.json says otherwise.
   OfflineAfterMinutes:

@@ -958,8 +958,8 @@ each step. Almost all of it is the deploy's job:
    scripts/deploy-salesforce.sh Dev
    sf agent activate --api-name Patient_Care_Agent --target-org iot-dev-admin --json
    ```
-4. **Try it.** Ask the agent what to do about a room reading 31 C, and check
-   the answer cites `SOP-WARD-001 v1.2`.
+4. **Try it.** Ask the agent what to do about a sensor reading 31 C, and check
+   the answer cites `SOP-WARD-001 v2.0`.
 
 To change a procedure, edit its file in `knowledge/sops/`, raise its
 `version`, commit, and deploy AWS again (or run `scripts/index-sops.sh Dev`

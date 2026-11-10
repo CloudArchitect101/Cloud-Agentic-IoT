@@ -14,7 +14,7 @@
  *       -> DynamoDB          one STATE item per device (and every reading, if
  *                            KEEP_READINGS_IN_DYNAMODB is true)
  *       -> sync queue (SQS)  state changes, due re-alerts and (demo rule)
- *                            flagged room-temperature reports only
+ *                            flagged high temperature reports only
  *                            --> salesforce-sync --> Patient_Vitals__c
  *
  * Why it is shaped like this, at a million devices sending every 30 seconds
@@ -29,7 +29,7 @@
  *   - Salesforce never sees raw telemetry: 2,880 readings per device per day
  *     would exhaust any org's storage and API limits. It gets transitions,
  *     and a reminder every REALERT_INTERVAL_MINUTES while a patient stays
- *     AT_RISK or CRITICAL. With the room-temperature demo rule on
+ *     AT_RISK or CRITICAL. With the temperature alert demo rule on
  *     (ROOM_TEMP_ALERT), it also gets a reading flagged
  *     Room_Temperature_Alert__c when a device first reaches
  *     ROOM_TEMP_ALERT_CELSIUS, and again at most every re-alert interval while
@@ -73,7 +73,7 @@ const SQS_BATCH_LIMIT = 10;
 // and SQS retries it on its own schedule (maxReceiveCount, in the template).
 const UNPROCESSED_RETRIES = 4;
 const PARALLEL_REQUESTS = 8;
-// Room-temperature episodes end only 1 C below the threshold. Readings are
+// Temperature alert episodes end only 1 C below the threshold. Readings are
 // floats and a warming or cooling sensor wanders around the line; without
 // the margin each wobble would count as a new crossing and a new report.
 const ROOM_TEMP_REARM_MARGIN_C = 1;
@@ -235,7 +235,7 @@ function groupByDevice(readings) {
  *   - a change of state;
  *   - a reminder while the patient is not STABLE and the last sync went out
  *     REALERT_INTERVAL_MINUTES ago or more;
- *   - (room-temperature demo rule, ROOM_TEMP_ALERT on) hotDue: the reading is
+ *   - (temperature alert demo rule, ROOM_TEMP_ALERT on) hotDue: the reading is
  *     at or above ROOM_TEMP_ALERT_CELSIUS and either the device was not hot
  *     before (a crossing) or the re-alert interval has passed. The record is
  *     flagged Room_Temperature_Alert__c. An episode ends only when a reading

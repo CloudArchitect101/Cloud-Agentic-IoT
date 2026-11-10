@@ -82,7 +82,7 @@ public with sharing class DeviceReadingsAgentAction {
         @InvocableVariable(label='Live Reading Age Minutes'
             description='How many minutes ago the board took its newest reading stored in AWS.')
         public Integer liveReadingAgeMinutes;
-        @InvocableVariable(label='Live Temperature' description='Room temperature in C of the newest reading stored in AWS.')
+        @InvocableVariable(label='Live Temperature' description='Temperature in C of the newest reading stored in AWS.')
         public Decimal liveTemperature;
         @InvocableVariable(label='Live Humidity' description='Relative humidity in % of the newest reading stored in AWS.')
         public Decimal liveHumidity;
@@ -93,7 +93,7 @@ public with sharing class DeviceReadingsAgentAction {
 
     @InvocableMethod(
         label='Get Latest Device Readings'
-        description='Returns the latest vital-sign readings a patient monitoring device reported, and whether the device is connected.'
+        description='Returns the latest readings a monitored device reported, and whether the device is connected.'
         category='Patient Care')
     public static List<ReadingsResult> getLatestReadings(List<ReadingsRequest> requests) {
         List<ReadingsResult> results = new List<ReadingsResult>();
@@ -293,7 +293,7 @@ public with sharing class DeviceReadingsAgentAction {
             + ', humidity ' + value(reading.Humidity__c, ' %')
             + ', state ' + (String.isBlank(reading.Patient_State__c) ? 'not reported' : reading.Patient_State__c)
             + ', risk score ' + value(reading.Risk_Score__c, '')
-            + (reading.Room_Temperature_Alert__c == true ? ', room-temperature flag set' : '');
+            + (reading.Room_Temperature_Alert__c == true ? ', temperature alert flag set' : '');
     }
 
     private static String value(Decimal measured, String unit) {

@@ -1,8 +1,8 @@
 'use strict';
 
-// Compiles and runs servo_sweep_test.cpp: the patient monitor's sweep
-// while its room is hot or its queue has Cases: 0 to 180 degrees and
-// back, from the clock, a repeat that changes nothing, a dose that starts it
+// Compiles and runs servo_sweep_test.cpp: the board's sweep while its
+// sensor reads high or its queue has Cases: 0 to 180 degrees and
+// back, from the clock, a repeat that changes nothing, a restart that starts it
 // again from 0, and millis() wrapping. The header it tests is plain C++, so
 // any host compiler will do; without one (a bare laptop) the test is skipped,
 // and CI always has one.
@@ -23,7 +23,7 @@ function compiler() {
   return null;
 }
 
-test('firmware case alert: the sweep, a repeat, a dose, millis() wrap', (t) => {
+test('firmware servo: the sweep, a repeat, a restart, millis() wrap', (t) => {
   const cxx = compiler();
   if (!cxx) {
     t.skip('no C++ compiler on this machine');
