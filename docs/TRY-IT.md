@@ -262,8 +262,7 @@ that can create clinical Cases is left to a person. Activate it, check it, and
 give yourself access:
 
 ```bash
-sf agent publish authoring-bundle --api-name Patient_Care_Agent
-sf agent activate --api-name Patient_Care_Agent --json
+scripts/publish-agent.sh Dev
 sf data query --query "SELECT VersionNumber, Status FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent'"
 sf org assign permset --name Patient_Care_Agent
 ```

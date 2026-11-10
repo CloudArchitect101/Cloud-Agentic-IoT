@@ -237,9 +237,10 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 **6. Publish and activate the agent.** The **Patient Care Agent** is an employee agent written in Agent Script for the new Agentforce Builder (`force-app/main/default/aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent`). The deploy stores the script; publishing compiles it into a new agent version, which starts inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). As the admin:
 
 ```bash
-sf agent publish authoring-bundle --api-name Patient_Care_Agent --target-org <your admin alias>
-sf agent activate --api-name Patient_Care_Agent --target-org <your admin alias> --json
+SF_TARGET_ORG=<your admin alias> scripts/publish-agent.sh Dev
 ```
+
+`scripts/publish-agent.sh` publishes, activates the newest version and then resets `force-app` to the commit, because publishing writes generated files (a `bots/` and a `genAiPlannerBundles/` folder, reformatted `genAiFunctions`) back into the checkout, which the next deploy would refuse as uncommitted.
 
 `--json` without `--version` activates the newest version. Or open it in Agentforce Builder and click **Activate**. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its three actions (`DeviceReadingsAgentAction`, `ProcedureSearchAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. Find Procedure calls AWS as that person, so they also need `AWS_IoT_Relay_Callers` (part d of step 1). An employee agent acts as the person talking to it, so there is no separate agent user. After changing the `.agent` file, publish and activate again: each publish is a new version. A routine deploy that leaves the script alone needs no publish.
 
