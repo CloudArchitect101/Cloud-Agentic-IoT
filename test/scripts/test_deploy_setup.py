@@ -166,6 +166,10 @@ FAKE_SF = textwrap.dedent(r'''
         print(json.dumps({'status': 0, 'result': {'username': org['username'], 'id': org['id']}}))
     elif args[:3] == ['project', 'deploy', 'start']:
         print('Deployed.')
+    elif args[:3] == ['project', 'deploy', 'validate']:
+        print(json.dumps({'status': 0, 'result': {'id': '0AfVALIDATION'}}))
+    elif args[:3] in (['project', 'deploy', 'resume'], ['project', 'deploy', 'quick']):
+        print('Done.')
     elif args[:3] == ['project', 'generate', 'manifest']:
         out = args[args.index('--output-dir') + 1]
         with open(os.path.join(out, 'package.xml'), 'w') as f:
@@ -366,19 +370,23 @@ class DeploySalesforceGuards(SetupFixture):
         self.param(LABEL, 'Dev')
 
     def deploys(self):
-        return [args for args in self.lines('sf.jsonl') if args[:3] == ['project', 'deploy', 'start']]
+        return [args for args in self.lines('sf.jsonl') if args[:2] == ['project', 'deploy']]
 
     def test_the_first_deploy_pairs_the_org_with_the_account_and_records_the_commit(self):
         code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org')
         self.assertEqual(code, 0, out)
         self.assertEqual(self.value(f'{SF}/org-id'), ORG_ID)
         self.assertEqual(self.value('/cloud-agentic-iot/deployed-commit/salesforce'), self.head)
-        self.assertEqual(len(self.deploys()), 2)   # check-only, then the deploy
-        for deploy in self.deploys():
-            # By manifest, removing what left force-app/ afterwards.
-            self.assertIn('--post-destructive-changes', deploy)
-            self.assertEqual(deploy[deploy.index('--post-destructive-changes') + 1],
-                             'manifest/destructiveChangesPost.xml')
+        # Validate with tests, follow it, then quick-deploy that validation:
+        # the Apex tests run once.
+        self.assertEqual([d[2] for d in self.deploys()], ['validate', 'resume', 'quick'])
+        validate, resume, quick = self.deploys()
+        # By manifest, removing what left force-app/ afterwards.
+        self.assertEqual(validate[validate.index('--post-destructive-changes') + 1],
+                         'manifest/destructiveChangesPost.xml')
+        self.assertEqual(validate[validate.index('--test-level') + 1], 'RunLocalTests')
+        self.assertEqual(resume[resume.index('--job-id') + 1], '0AfVALIDATION')
+        self.assertEqual(quick[quick.index('--job-id') + 1], '0AfVALIDATION')
 
     def test_an_org_paired_with_another_account_is_refused_before_anything_deploys(self):
         self.param(f'{SF}/org-id', OTHER_ORG_ID)
@@ -411,7 +419,7 @@ class DeploySalesforceGuards(SetupFixture):
         code, out = self.run_script('deploy-salesforce.sh', 'Dev', '--dry-run', SF_TARGET_ORG='test-org')
         self.assertEqual(code, 0, out)
         self.assertEqual(self.puts(), [])
-        self.assertEqual(len(self.deploys()), 1)
+        self.assertEqual([d[2] for d in self.deploys()], ['validate', 'resume'])
 
     def test_an_org_with_no_aws_side_can_skip_the_pairing(self):
         code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='scratch', ALLOW_UNPAIRED_ORG='yes')

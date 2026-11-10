@@ -88,11 +88,18 @@ node -e '
   const fs = require("fs"); const f = process.argv[1];
   fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/\s*<types>(?:(?!<\/types>)[\s\S])*<name>AiAuthoringBundle<\/name>\s*<\/types>/, ""));
 ' "$manifest_dir/package.xml"
-deploy_args=(--manifest "$manifest_dir/package.xml" --post-destructive-changes manifest/destructiveChangesPost.xml
-  --ignore-warnings --test-level RunLocalTests --target-org "$org" --wait 30)
-
+# Validate once, then quick-deploy that validation: Salesforce applies the
+# package it already compiled and tested, without running the Apex tests a
+# second time. It refuses the quick deploy if the org changed since, so it is
+# as safe as a second full deploy, in seconds instead of minutes.
 step "Validate: check-only deploy, running every local Apex test"
-sf project deploy start --dry-run "${deploy_args[@]}"
+validation=$(sf project deploy validate --manifest "$manifest_dir/package.xml" \
+  --post-destructive-changes manifest/destructiveChangesPost.xml --ignore-warnings \
+  --test-level RunLocalTests --target-org "$org" --async --json | jq -r '.result.id // empty')
+[ -n "$validation" ] || die "Salesforce did not start the validation."
+note "Validation $validation"
+# Readable progress and, on a failure, every component and test that failed.
+sf project deploy resume --job-id "$validation" --wait 30
 endstep
 
 if [ "$DRY_RUN" = true ]; then
@@ -101,8 +108,8 @@ if [ "$DRY_RUN" = true ]; then
   exit 0
 fi
 
-step "Deploy to $org"
-sf project deploy start "${deploy_args[@]}"
+step "Deploy to $org: quick deploy of validation $validation (tests already passed)"
+sf project deploy quick --job-id "$validation" --target-org "$org" --wait 30
 endstep
 rm -rf "$manifest_dir"
 if [ "$paired" = true ]; then record_deployed_commit salesforce; fi
