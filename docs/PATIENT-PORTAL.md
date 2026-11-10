@@ -205,11 +205,16 @@ that have no metadata, in order. Each one is also in
    `Patient_Portal_Setting.Default` as `Chat_Site_Url__c`, and redeploy. Leave
    `Scrt_Url__c` blank unless the snippet's `scrt2URL` differs from your My
    Domain with `.my.salesforce-scrt.com`.
-9. **Trusted sites.** In the site's Security settings (Content Security
-   Policy), allow `*.my.salesforce-scrt.com`, `*.salesforce-scrt.com` and the
-   chat site URL's host, for scripts, connections and frames. Add the site's
-   URL to Setup > CORS. In the deployment, the site's domain must be in its
-   allowed domains.
+9. **Trusted sites.** Nothing to click: the deploy ships two Trusted URLs
+   (`cspTrustedSites/Enhanced_Chat_SCRT*`) for `https://` and `wss://`
+   `*.salesforce-scrt.com`. A Multi-Framework site has no Security & Privacy
+   page in its Administration, because Experience Builder can't open it, so
+   the org's Trusted URLs are where its CSP comes from. The chat's own site
+   (`ESW...`) and the portal's Apex REST sit on the portal's my.site.com host,
+   so they need no entry and no CORS rule. If the browser console still shows
+   a "Refused to connect" or "Refused to frame" CSP error, add that host
+   under Setup > Trusted URLs, and if a custom domain goes live, add it to
+   the deployment's allowed domains.
 10. **Guest user.** Site > Administration > Pages > Public Access: assign
     `Patient_Portal_Guest_Api` to the guest user, so the sign-in page can call
     its Apex.
