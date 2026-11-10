@@ -1008,6 +1008,11 @@ Slack side, as the workspace owner:
    one active Salesforce user; if the row says **Authentication failed**
    ("multiple users in Salesforce with the same email"), give the other
    users their own emails, or **Add Individually** by Salesforce username.
+   Each member's Salesforce user also needs the **Sales Cloud for Slack**
+   permission set (`SlackSalesCloud`, which grants Slack capabilities) as
+   well as `Patient_Care_Agent`:
+   `sf org assign permset --name SlackSalesCloud --on-behalf-of <username> --target-org "$SF_TARGET_ORG"`.
+   Quit and reopen Slack after changing either.
 5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
 6. DM the agent, or mention it in a channel: "What is Test8 reading?"
 
