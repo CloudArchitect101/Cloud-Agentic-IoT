@@ -107,6 +107,16 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | A pasted multi-line command kept running after one line failed | zsh runs every pasted line | Give commands as one `&&` chain |
 | A trailing `#` comment broke a pasted command | Interactive comments are off in zsh by default | No trailing comments in commands |
 
+## Agent evals (Testing Center and SOP retrieval)
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+| --- | --- | --- | --- | --- |
+| Nov 10 (design) | A Testing Center case for the patient agent could only ever get "You are not signed in" | The patient agent trusts only a Messaging session whose token Messaging verified (`PortalIdentityService.forMessagingSession`); Testing Center sends no chat, so `RoutableId` is empty | `scripts/eval-agents.sh` finds a verified MessagingSession of the test patient and passes its Id as the `RoutableId` context variable; one case deliberately passes none and must share nothing | The spec test checks exactly one unverified case exists; the script skips the suite with a warning when no verified chat exists |
+| Nov 10 (design) | Risk: topic assertions fail although the agent routed correctly | Published Agent Script subagents can get generated API names with a suffix (seen on the legacy agent: `Patient_Device_Monitoring_16jbm...`), and Testing Center compares against those | The specs use the `.agent` names; the script looks up the org's `GenAiPluginDefinition` names and substitutes them, and falls back to the plain name | `scripts/lib/agent-spec.js` with a unit test |
+| Nov 10 (design) | `sf agent test create` leaves an untracked `aiEvaluationDefinitions/` folder in force-app, which would make the next laptop deploy refuse an uncommitted tree (like the publish problem above) | The command retrieves what it deployed into the project | The script deletes that folder on exit; the YAML spec is the source | `scripts/eval-agents.sh` cleanup trap |
+| Nov 10 (design) | Each eval run would leave open Cases in Care_Team_Queue | The confirmed escalation and nurse request cases call the real actions | The script closes Cases with those subjects created since the run started | `close_eval_cases` in the script |
+| Nov 10 (design) | The CLI docs do not say whether `sf agent test run` exits non-zero when cases fail | Undocumented | The script reads pass or fail from the JUnit XML | Same |
+
 ## Patient portal (React site, Enhanced Chat, patient agent)
 
 | When | Symptom | Root cause | Fix | What prevents it now |
