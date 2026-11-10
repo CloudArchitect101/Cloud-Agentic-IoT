@@ -11,4 +11,10 @@
     <queueSobject>
         <sobjectType>Case</sobjectType>
     </queueSobject>
+    <!-- The patient portal chat's fallback: a conversation the Patient
+         Portal Agent cannot take (Route_Patient_Portal_Chat) waits here for
+         the care team. The ward board counts only Cases, so it is not moved. -->
+    <queueSobject>
+        <sobjectType>MessagingSession</sobjectType>
+    </queueSobject>
 </Queue>

@@ -60,6 +60,33 @@ learn that it exists. The Apex tests prove it: `MyDevicesAgentActionTest`,
 `RequestNurseAgentActionTest`, `PatientDeviceServiceTest` and
 `PortalDevicesResourceTest` each use two patients.
 
+## Why two agents and not one
+
+The original wish was one agent that tells a staff request from a patient's.
+Salesforce does not allow it: an agent has exactly one type, and the two
+types run differently.
+
+| | Patient Care Agent | Patient Portal Agent |
+| --- | --- | --- |
+| Type | Employee agent | Service agent |
+| Runs as | The signed-in staff member | Its own agent user |
+| Reached from | Salesforce and Slack | Enhanced Chat on the portal (text and voice) |
+| Who sees what | The staff member's own sharing and permissions | The patient from the verified chat token, scoped in Apex to their Person Account |
+
+An employee agent cannot sit on a public chat channel. A service agent's
+sharing describes its agent user, not the person chatting, so it cannot keep
+patients apart by sharing. Two agents give a hard boundary instead of a
+judgement call:
+
+- Staff never reach the portal agent from inside Salesforce.
+- A staff user who signs in to the portal chat counts as unverified. They get
+  no patient data, and the agent points them to the Patient Care Agent.
+
+The Apex behind them is shared (device readings, PII masking); only the
+identity check differs. One service agent for both is possible, but staff
+would then run as the agent user and lose their own permissions, which is
+the weaker design for a hospital.
+
 ## Why Enhanced Chat v2 and not a chat drawn in React
 
 Agentforce Voice runs only in Salesforce's own Enhanced Chat v2 window on an
