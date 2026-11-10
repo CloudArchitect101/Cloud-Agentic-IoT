@@ -729,7 +729,7 @@ As of November 9, 2026, in the test setup (one AWS project and one Salesforce De
 | 05 · Agent | Live: readings, escalation to a Case on the device's Asset |
 | 06 · MCP | Deployed; `get_room_status` tested by a signed call |
 | 07 · MuleSoft | A design sketch, not a buildable project |
-| 08 · SOP RAG | Written and tested; the index waits on the AWS account's Bedrock access |
+| 08 · SOP RAG | Live in test-cloudarchitect101 since Nov 10: Find Procedure cites SOP-WARD-001 v1.2 in Slack |
 | 09 · OTA saga | Written and tested, with its template; deployed by the next AWS deploy |
 | 10 · PII masking | In the agent's readings and procedure actions |
 | 11 · Guardrails | Deployed; a refused command tested |

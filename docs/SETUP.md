@@ -935,7 +935,9 @@ each step. Almost all of it is the deploy's job:
    allowed`, `authorizationStatus` `NOT_AUTHORIZED`): that takes a free
    Support case under Account and billing, and no IAM change fixes it.
    Until then, `SKIP_SOP_INDEX=yes scripts/deploy-aws.sh Dev` deploys
-   everything else.
+   everything else; once the case is resolved, run
+   `scripts/index-sops.sh Dev --force` once, as the skipped deploy built
+   no index.
 2. **Who may ask.** The action calls AWS as the person talking to the
    agent, through the `AWS_IoT_Relay` Named Credential, so each care team
    member needs `AWS_IoT_Relay_Callers` (README, Stage 2 part d) besides
