@@ -8,6 +8,6 @@
     -->
     <capacityWeight>1</capacityWeight>
     <label>Care Team Chat</label>
-    <routingModel>MostAvailable</routingModel>
+    <routingModel>MOST_AVAILABLE</routingModel>
     <routingPriority>1</routingPriority>
 </QueueRoutingConfig>
