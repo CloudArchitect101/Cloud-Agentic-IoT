@@ -24,7 +24,7 @@
     </values>
     <values>
         <field>Chat_Site_Url__c</field>
-        <value xsi:nil="true"/>
+        <value xsi:type="xsd:string">https://orgfarm-75453701a9-dev-ed.develop.my.site.com/ESWPatientPortal1794268374222</value>
     </values>
     <values>
         <field>Token_Minutes__c</field>
