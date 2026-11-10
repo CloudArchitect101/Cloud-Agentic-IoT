@@ -48,6 +48,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 
 | When | Symptom | Root cause | Fix | What prevents it now |
 | --- | --- | --- | --- | --- |
+| Nov 10 | The Firmware check failed on the dispense removal: `queue-indicator changed ... but FIRMWARE_VERSION is still 2.2.0` | A comment edit in the shared library (`DeviceCommands.h`) counts as a change to every sketch that uses it, including the retired queue-indicator | Reverted the library comment; only patient-monitor changed (2.6.0) | `scripts/firmware.sh check-version` on every pull request; leave the shared library alone unless every sketch's version is raised |
 | Nov 6 | `provision-device.sh` printed nothing and stopped | Under `set -o pipefail`, `ls` with an unmatched glob exits 1 | A glob loop instead of `ls` | Shell tests and shellcheck |
 | Nov 6 | The bundle was lost and the board came back in PROVISIONING MODE | Opening the serial port toggles DTR, which resets the ESP32, and the script wrote before the board had booted | Wait for the board's prompt, then send in paced pieces (`8eaca7f`) | A simulated-board test that loses a one-burst bundle |
 | Nov 6 | `[Errno 16] Resource busy` while flashing or provisioning | An `arduino-cli monitor` still held the port | Close the monitor first | Documented in the board steps |

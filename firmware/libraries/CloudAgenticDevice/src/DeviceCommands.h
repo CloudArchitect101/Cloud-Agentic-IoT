@@ -72,8 +72,8 @@ inline char* copyText(char* out, size_t size, const char* in) {
  *
  * One command can reach a board twice: a send retried upstream after a
  * timeout is a second message with the same commandId. The board answers the
- * second from here instead of carrying it out again, so one RESTART never
- * restarts the board twice.
+ * second from here instead of carrying it out again, so one
+ * DISPENSE_MEDICATION never moves the servo twice.
  *
  * RAM only, a fixed array: the oldest is overwritten, and a restart forgets
  * them all. That is enough because the board subscribes at QoS 0 with a
