@@ -184,8 +184,20 @@ that have no metadata, in order. Each one is also in
      It compiles the script (`sf agent validate authoring-bundle`), then runs
      `sf agent publish authoring-bundle`, which creates the agent. The
      username goes into the publish only; the repo keeps a placeholder.
-   - Activate **Patient Portal Agent** in Agentforce Builder. Under
-     Connections, add the Enhanced Chat v2 deployment and turn on Voice.
+   - Activate it: `sf agent activate --api-name Patient_Portal_Agent --target-org <org>`.
+   - Route the chat to it. In Setup > Queues > Care Team Queue, Messaging
+     Session must be a supported object (the deploy ships that). Then:
+     ```bash
+     scripts/deploy-portal-routing.sh test-cloudarchitect101
+     ```
+     It looks up the agent, the Messaging service channel and the queue by
+     name, fills their Ids into the Omni-Channel flow
+     `Route_Patient_Portal_Chat` (`salesforce-templates/portal-routing/`;
+     Route Work stores Ids, so the flow cannot live in `force-app/`), and
+     deploys it. Then Messaging Settings > Patient Portal Chat > Routing Type
+     **Omni-Flow**, Flow `Route_Patient_Portal_Chat`, Fallback Queue **Care
+     Team Queue**. (Agentforce Builder's Connections list showed no channel
+     in a Developer Edition, which is why the flow does the routing.)
    - To change the agent, edit `Patient_Portal_Agent.agent` and publish again:
      each publish is a new version.
 8. **Point the site at the chat.** From the deployment's code snippet, copy

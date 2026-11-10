@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <!--
+      Omni-Channel flow for the patient portal's Enhanced Chat channel: every
+      new conversation goes to the Patient Portal Agent; if the agent cannot
+      take it, Omni-Channel falls back to Care_Team_Queue.
+      The Route Work action takes org-specific Ids (agent, service channel,
+      queue), so this file holds placeholders that
+      scripts/deploy-portal-routing.sh fills from the org by DeveloperName.
+    -->
+    <actionCalls>
+        <name>Route_to_Patient_Portal_Agent</name>
+        <label>Route to Patient Portal Agent</label>
+        <locationX>176</locationX>
+        <locationY>134</locationY>
+        <actionName>routeWork</actionName>
+        <actionType>routeWork</actionType>
+        <flowTransactionModel>CurrentTransaction</flowTransactionModel>
+        <inputParameters>
+            <name>recordId</name>
+            <value>
+                <elementReference>recordId</elementReference>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>serviceChannelId</name>
+            <value>
+                <stringValue>__SERVICE_CHANNEL_ID__</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>serviceChannelLabel</name>
+            <value>
+                <stringValue>Messaging</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>serviceChannelDevName</name>
+            <value>
+                <stringValue>sfdc_livemessage</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>routingType</name>
+            <value>
+                <stringValue>Bot</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>botId</name>
+            <value>
+                <stringValue>__BOT_ID__</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>botLabel</name>
+            <value>
+                <stringValue>Patient Portal Agent</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>isQueueVariable</name>
+            <value>
+                <booleanValue>false</booleanValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>fallbackQueueId</name>
+            <value>
+                <stringValue>__QUEUE_ID__</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>fallbackQueueLabel</name>
+            <value>
+                <stringValue>Care Team Queue</stringValue>
+            </value>
+        </inputParameters>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </actionCalls>
+    <apiVersion>67.0</apiVersion>
+    <environments>Default</environments>
+    <interviewLabel>Route Patient Portal Chat {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Route Patient Portal Chat</label>
+    <processMetadataValues>
+        <name>BuilderType</name>
+        <value>
+            <stringValue>LightningFlowBuilder</stringValue>
+        </value>
+    </processMetadataValues>
+    <processMetadataValues>
+        <name>CanvasMode</name>
+        <value>
+            <stringValue>AUTO_LAYOUT_CANVAS</stringValue>
+        </value>
+    </processMetadataValues>
+    <processType>RoutingFlow</processType>
+    <start>
+        <locationX>50</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference>Route_to_Patient_Portal_Agent</targetReference>
+        </connector>
+    </start>
+    <status>Active</status>
+    <variables>
+        <name>recordId</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>true</isInput>
+        <isOutput>false</isOutput>
+    </variables>
+</Flow>
