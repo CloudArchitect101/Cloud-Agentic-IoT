@@ -160,8 +160,11 @@ that have no metadata, in order. Each one is also in
    (`*.my.site.com`; add a custom domain here too when it exists, and publish
    again), and let it create the Messaging channel. Open it, choose **Switch
    to V2**, and publish. In Messaging Settings, turn on **Allow Agentforce
-   Voice calls in Enhanced Chat**. The channel's routing to the agent comes in
-   step 7.
+   Voice calls in Enhanced Chat**, but only in an org licensed for
+   Agentforce Voice. A Developer Edition shows the toggle and then refuses
+   with "Organization does not have access to Voice features", and the agent
+   then takes no chats, so leave voice off there. The channel's routing to the
+   agent comes in step 7.
 6. **User verification.** Setup > **Enhanced Chat User Verification** > JSON
    Web Keys > New Key: upload the `.json` file from step 3. Then JSON Web
    Keysets > **New Keyset** (a separate record: the channel lists keysets,

@@ -122,7 +122,10 @@ $8,000 + $1,500 ≈ $9,500.
 
 **In test-cloudarchitect101 it costs nothing:** a Developer Edition comes with
 a few Experience Cloud licences and an Agentforce allowance. Watch the
-allowance when testing voice. Each spoken minute uses 60 credits.
+allowance. **Voice does not work there:** on Nov 10 the org answered "Voice
+modality cannot be used. Organization does not have access to Voice
+features." Agentforce Voice needs a paid org with the Agentforce Voice
+entitlement, so a Developer Edition demo is text chat only.
 
 ## Sources (checked 2026-07; §7 on 2026-11-09)
 
