@@ -31,9 +31,15 @@ SCRIPT="force-app/main/default/aiAuthoringBundles/$BUNDLE/$BUNDLE.agent"
 PLACEHOLDER='default_agent_user: "PORTAL_AGENT_USER"'
 grep -qF "$PLACEHOLDER" "$SCRIPT" || die "$SCRIPT has no agent user placeholder; restore it with git checkout -- $SCRIPT"
 
+# The publish (or validate) can also rewrite the bundle's -meta.xml, so both
+# files go back as they were: the repo copy stays clean and
+# scripts/deploy-salesforce.sh doesn't stop on uncommitted changes.
+META="force-app/main/default/aiAuthoringBundles/$BUNDLE/$BUNDLE.bundle-meta.xml"
 backup=$(mktemp)
+meta_backup=$(mktemp)
 cp "$SCRIPT" "$backup"
-trap 'cp "$backup" "$SCRIPT"; rm -f "$backup"' EXIT
+cp "$META" "$meta_backup"
+trap 'cp "$backup" "$SCRIPT"; cp "$meta_backup" "$META"; rm -f "$backup" "$meta_backup"' EXIT
 PORTAL_AGENT_USER="$PORTAL_AGENT_USER" node -e '
   const fs = require("fs"); const f = process.argv[1];
   fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(process.argv[2], `default_agent_user: ${JSON.stringify(process.env.PORTAL_AGENT_USER)}`));
