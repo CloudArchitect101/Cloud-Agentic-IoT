@@ -230,7 +230,10 @@ that have no metadata, in order. Each one is also in
     - **The enabling user's rights.** The user who clicks Enable Customer User
       needs Manage External Users, which System Administrator has.
     - For each Person Account: Enable Customer User (profile Customer
-      Community User), and assign `Patient_Portal_User`. A Patient Device
+      Community User), and assign `Patient_Portal_User`. Give each test
+      patient its own email, such as a plus address (`you+patient-a@...`),
+      never the admin's: Slack and other connected apps match users by
+      email and refuse an address two users share. A Patient Device
       Asset accepts only a Person Account (validation rule
       `Patient_Device_Needs_Person_Account`).
     - Attach the patient's device: its Asset's Account is
