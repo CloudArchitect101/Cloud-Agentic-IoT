@@ -25,6 +25,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 
 | When | Symptom | Root cause | Fix | What prevents it now |
 | --- | --- | --- | --- | --- |
+| Nov 10 | After `sf agent publish authoring-bundle` (agent v3 published and active), the next step, `deploy-aws.sh`, stopped: `These changes are not committed, so this deploy would ship what no commit holds` | Publishing writes what Salesforce generated back into the project: untracked `bots/` and `genAiPlannerBundles/<agent>_v3`, and reformatted copies of the three `genAiFunctions` and the bundle-meta (no real change) | Discarded them: `git checkout -- force-app && git clean -fd force-app/main/default/bots force-app/main/default/genAiPlannerBundles`, then ran the remaining steps | `scripts/publish-agent.sh` refuses a tree with changes under `force-app`, publishes and activates, then resets `force-app` to the commit; the docs use it instead of the bare `sf agent` commands |
 | Nov 7 | Validate rejected two permission sets | A permission set description may be at most 255 characters | Shorter descriptions (`a276c67`) | A test checks every permission set's description |
 | Nov 7 | Validate rejected the BotVersion | `staticPromptsEnabled` is not valid at API 64.0 | Removed | A metadata test |
 | Nov 7 | 8 Apex tests failed with `Invalid id: 00101026` | An Apex ternary takes the type of its first branch, so a Case number was cast to an Id. Every real agent escalation would have crashed | `String.valueOf` on both branches (`fd94dd5`) | The agent action's tests |

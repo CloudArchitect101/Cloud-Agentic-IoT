@@ -721,9 +721,11 @@ switched on by a person, not by a deploy.
    newest one (without either, the command stops to ask).
 
    ```bash
-   sf agent publish authoring-bundle --api-name Patient_Care_Agent --target-org iot-dev-admin
-   sf agent activate --api-name Patient_Care_Agent --target-org iot-dev-admin --json
+   SF_TARGET_ORG=iot-dev-admin scripts/publish-agent.sh Dev
    ```
+
+   `scripts/publish-agent.sh` publishes, activates the newest version and then resets `force-app` to the commit,
+   because publishing writes generated files (a `bots/` and a `genAiPlannerBundles/` folder, reformatted `genAiFunctions`) back into the checkout, which the next deploy would refuse as uncommitted.
 
    Or Setup → **Agentforce Agents** → **Patient Care Agent** → **Activate**.
 2. Check that it took:
