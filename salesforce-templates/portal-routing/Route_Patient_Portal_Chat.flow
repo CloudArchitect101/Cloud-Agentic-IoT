@@ -7,6 +7,8 @@
       The Route Work action takes org-specific Ids (agent, service channel,
       queue), so this file holds placeholders that
       scripts/deploy-portal-routing.sh fills from the org by DeveloperName.
+      An Agentforce Service Agent is routingType Copilot with copilotId (the
+      BotDefinition Id); this is the shape Flow Builder saved on Nov 10.
     -->
     <actionCalls>
         <name>Route_to_Patient_Portal_Agent</name>
@@ -43,7 +45,7 @@
         <inputParameters>
             <name>routingType</name>
             <value>
-                <stringValue>Bot</stringValue>
+                <stringValue>Copilot</stringValue>
             </value>
         </inputParameters>
         <inputParameters>
@@ -54,6 +56,18 @@
         </inputParameters>
         <inputParameters>
             <name>botLabel</name>
+            <value>
+                <stringValue>Patient Portal Agent</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>copilotId</name>
+            <value>
+                <stringValue>__BOT_ID__</stringValue>
+            </value>
+        </inputParameters>
+        <inputParameters>
+            <name>copilotLabel</name>
             <value>
                 <stringValue>Patient Portal Agent</stringValue>
             </value>
