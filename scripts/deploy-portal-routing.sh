@@ -44,15 +44,18 @@ endstep
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-mkdir -p "$work/flows" "$work/queues"
+mkdir -p "$work/flows" "$work/queues" "$work/queueRoutingConfigs"
 sed -e "s/__BOT_ID__/$bot/" -e "s/__SERVICE_CHANNEL_ID__/$channel/" -e "s/__QUEUE_ID__/$queue/" \
   salesforce-templates/portal-routing/Route_Patient_Portal_Chat.flow > "$work/flows/Route_Patient_Portal_Chat.flow"
 cp force-app/main/default/queues/Care_Team_Queue.queue-meta.xml "$work/queues/Care_Team_Queue.queue"
+cp force-app/main/default/queueRoutingConfigs/Care_Team_Chat.queueRoutingConfig-meta.xml \
+  "$work/queueRoutingConfigs/Care_Team_Chat.queueRoutingConfig"
 cat > "$work/package.xml" <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types><members>Route_Patient_Portal_Chat</members><name>Flow</name></types>
     <types><members>Care_Team_Queue</members><name>Queue</name></types>
+    <types><members>Care_Team_Chat</members><name>QueueRoutingConfig</name></types>
     <version>67.0</version>
 </Package>
 XML

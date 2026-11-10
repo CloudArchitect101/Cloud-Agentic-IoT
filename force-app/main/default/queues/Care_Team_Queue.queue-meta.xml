@@ -8,6 +8,9 @@
     -->
     <doesSendEmailToMembers>false</doesSendEmailToMembers>
     <name>Care Team Queue</name>
+    <!-- Omni-Channel routing, needed for the portal chat's fallback
+         (queueRoutingConfigs/Care_Team_Chat). -->
+    <queueRoutingConfig>Care_Team_Chat</queueRoutingConfig>
     <queueSobject>
         <sobjectType>Case</sobjectType>
     </queueSobject>

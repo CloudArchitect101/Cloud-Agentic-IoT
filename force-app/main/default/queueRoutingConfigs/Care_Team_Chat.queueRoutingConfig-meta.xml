@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QueueRoutingConfig xmlns="http://soap.sforce.com/2006/04/metadata">
+    <!--
+      Makes Care_Team_Queue an Omni-Channel queue. Route Work refuses a
+      fallback queue without one ("The referenced fallback queue must be an
+      Omni-Channel queue"), so the patient portal chat could not reach the
+      Patient Portal Agent until this was attached.
+    -->
+    <capacityWeight>1</capacityWeight>
+    <label>Care Team Chat</label>
+    <routingModel>MostAvailable</routingModel>
+    <routingPriority>1</routingPriority>
+</QueueRoutingConfig>
