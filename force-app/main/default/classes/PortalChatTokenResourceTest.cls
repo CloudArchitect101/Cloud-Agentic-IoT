@@ -51,6 +51,8 @@ private class PortalChatTokenResourceTest {
 
         Assert.isTrue(chat.enabled, 'The chat should start for a patient: ' + chat.message);
         Assert.areEqual('Patient_Portal_Chat', chat.deploymentName);
+        Assert.areEqual(15, chat.orgId.length(), 'Enhanced Chat matches the 15-character org Id in its token');
+        Assert.isTrue(String.valueOf(UserInfo.getOrganizationId()).startsWith(chat.orgId));
         Assert.areEqual('https://example.my.salesforce-scrt.com', chat.scrtUrl);
         Map<String, Object> c = claims(chat.token);
         Assert.areEqual(String.valueOf(portal.Id), c.get('sub'));

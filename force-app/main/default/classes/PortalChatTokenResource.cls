@@ -61,7 +61,10 @@ global with sharing class PortalChatTokenResource {
             chat.message = 'The care assistant is not available yet. If you need help, press the call button by your bed.';
             return chat;
         }
-        chat.orgId = UserInfo.getOrganizationId();
+        // Enhanced Chat wants the 15-character org Id, as in the deployment's
+        // code snippet. Its access token carries 15 characters, and with the
+        // 18-character Id every call after the first reply fails with 400.
+        chat.orgId = String.valueOf(UserInfo.getOrganizationId()).left(15);
         chat.deploymentName = setting.Deployment_Name__c;
         chat.siteUrl = setting.Chat_Site_Url__c.removeEnd('/');
         chat.scrtUrl = PatientPortalSettings.scrtUrl();
