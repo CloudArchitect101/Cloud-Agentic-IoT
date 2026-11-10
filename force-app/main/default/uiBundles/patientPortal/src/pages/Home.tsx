@@ -35,13 +35,13 @@ export default function HomePage() {
 
 	return (
 		<main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-			<title>My room | Patient Portal</title>
+			<title>My monitor | Patient Portal</title>
 			<h1 className="text-3xl font-semibold tracking-tight text-foreground">
 				{greeting()}
 				{firstName ? `, ${firstName}` : ""}
 			</h1>
 			<p className="mt-2 text-muted-foreground">
-				Here is what the monitor in your room is reporting. It refreshes on its own.
+				Here is what your temperature monitor is reporting. It refreshes on its own.
 			</p>
 
 			<section aria-label="My devices" className="mt-8 grid gap-6 md:grid-cols-2">
@@ -52,7 +52,7 @@ export default function HomePage() {
 				)}
 				{!data && !error && (
 					<p role="status" className="text-muted-foreground">
-						Loading your room…
+						Loading your monitor…
 					</p>
 				)}
 				{data && data.devices.length === 0 && (
@@ -68,7 +68,7 @@ export default function HomePage() {
 					<MessageCircleHeart className="size-6 text-primary" aria-hidden /> Need something?
 				</h2>
 				<p className="mt-2 max-w-2xl text-foreground/80">
-					Open the care assistant with the chat button in the corner. Ask about your room, or ask for a nurse
+					Open the care assistant with the chat button in the corner. Ask about your temperature, or ask for a nurse
 					and it sends your request to the care team. It only ever sees your own devices.
 				</p>
 				<ul className="mt-4 grid gap-3 text-sm text-foreground/80 sm:grid-cols-2">

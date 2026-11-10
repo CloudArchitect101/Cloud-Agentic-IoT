@@ -96,11 +96,11 @@ public with sharing class MyDevicesAgentAction {
         }
         for (PatientDeviceService.Reading r : device.readings) {
             lines.add('  ' + (r.at == null ? 'unknown time' : utc(r.at))
-                + ': room temperature ' + value(r.temperature, ' C')
+                + ': temperature ' + value(r.temperature, ' C')
                 + ', humidity ' + value(r.humidity, ' %')
                 + (r.heartRate == null ? '' : ', heart rate ' + value(r.heartRate, ' bpm'))
                 + (r.spO2 == null ? '' : ', SpO2 ' + value(r.spO2, ' %'))
-                + (r.roomTemperatureAlert ? ', room-temperature flag set' : ''));
+                + (r.roomTemperatureAlert ? ', raised-temperature flag set' : ''));
         }
         return String.join(lines, '\n');
     }

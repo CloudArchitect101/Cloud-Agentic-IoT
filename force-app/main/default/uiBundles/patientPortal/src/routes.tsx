@@ -36,7 +36,7 @@ export const routes: RouteObject[] = [
           {
             index: true,
             element: <Home />,
-            handle: { showInNavigation: true, label: "My room", title: "My room | Patient Portal" }
+            handle: { showInNavigation: true, label: "My monitor", title: "My monitor | Patient Portal" }
           },
           {
             path: ROUTES.PROFILE.PATH,

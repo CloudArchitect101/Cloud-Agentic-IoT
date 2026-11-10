@@ -1,7 +1,7 @@
 # Patient portal: a React site with Enhanced Chat and Agentforce Voice
 
-Patients sign in to a React site on Salesforce, see what the monitor in their
-room reports, and talk to a care assistant, by typing or by voice. The
+Patients sign in to a React site on Salesforce, see their own body temperature from the
+monitor they wear (its sensor sits under the arm), and talk to a care assistant, by typing or by voice. The
 assistant is an Agentforce Service Agent. It only ever sees the signed-in
 patient's own devices, and it can send the care team a nurse request.
 
@@ -16,7 +16,7 @@ signed-in account.
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| React site | `force-app/main/default/uiBundles/patientPortal` | Salesforce Multi-Framework (React 19, Vite, Tailwind), from the official `reactexternalapp` template. Sign-in and password pages, **My room** (`src/pages/Home.tsx`), and the chat (`src/components/PatientChat.tsx`). There is no self-registration: the care team creates each patient's user. |
+| React site | `force-app/main/default/uiBundles/patientPortal` | Salesforce Multi-Framework (React 19, Vite, Tailwind), from the official `reactexternalapp` template. Sign-in and password pages, **My monitor** (`src/pages/Home.tsx`), and the chat (`src/components/PatientChat.tsx`). There is no self-registration: the care team creates each patient's user. |
 | Site | `networks/`, `sites/`, `digitalExperiences/`, `digitalExperienceConfigs/` | The Experience Cloud site that hosts the React app (`appContainer: true`). Its members are holders of `Patient_Portal_User`, plus admins. |
 | Who is asking | `PortalIdentityService` | Finds the patient from the signed-in user (the site) or from the verified chat (the agent). Everything below is scoped to the account it returns. |
 | Patient data | `PatientDeviceService` | Patient Device Assets on that one account, and their latest readings. Never another account's devices, and never an internal board. |
@@ -248,8 +248,8 @@ that have no metadata, in order. Each one is also in
     the Person Account, record type Patient Device. For the two-patient demo:
     Test8 goes to patient A, and patient B gets a second Patient Device Asset,
     which can be a placeholder with no board.
-12. **Try it.** Sign in as patient A. My room shows Test8. Ask the assistant
-    "how warm is my room?", then "what does device <B's serial> say?" (it
+12. **Try it.** Sign in as patient A. My monitor shows Test8. Ask the assistant
+    "what is my temperature?", then "what does device <B's serial> say?" (it
     should answer that the device is not linked to your account). Then "I
     need a nurse": a Case with Origin Patient Portal appears on Care_Team_Queue
     and the ward board moves. Start a voice conversation from the chat window

@@ -1,4 +1,4 @@
-/** Small, pure helpers for the room cards; tested in format.test.ts. */
+/** Small, pure helpers for the monitor cards; tested in format.test.ts. */
 import type { Device, Reading } from "../../api/portal/portalApi";
 
 export function latest(device: Device): Reading | undefined {

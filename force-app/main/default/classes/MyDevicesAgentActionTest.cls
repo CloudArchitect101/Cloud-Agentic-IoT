@@ -50,7 +50,7 @@ private class MyDevicesAgentActionTest {
         Assert.isTrue(res.patientVerified);
         Assert.areEqual(1, res.deviceCount);
         Assert.isTrue(res.devices.contains(PatientPortalTestData.SERIAL_A), res.devices);
-        Assert.isTrue(res.devices.contains('room temperature 23.0 C'), res.devices);
+        Assert.isTrue(res.devices.contains('temperature 23.0 C'), res.devices);
         Assert.isFalse(res.devices.contains(PatientPortalTestData.SERIAL_B), 'Never B\'s device');
         Assert.isFalse(res.devices.contains(PatientPortalTestData.SERIAL_A_INTERNAL), 'Never an internal board');
     }

@@ -61,7 +61,7 @@ private class RequestNurseAgentActionTest {
         Id chat = chatOfPatientA();
 
         Test.startTest();
-        RequestNurseAgentAction.NurseResult res = ask(chat, 'My room feels very warm', PatientPortalTestData.SERIAL_A);
+        RequestNurseAgentAction.NurseResult res = ask(chat, 'I feel very warm', PatientPortalTestData.SERIAL_A);
         Test.stopTest();
 
         Assert.isTrue(res.success, res.message);
