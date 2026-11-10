@@ -57,9 +57,11 @@ subagent Patient_Device_Monitoring:
         instructions: ->
             | Your job is to help care team members understand what patient room and medication storage monitors are reporting, tell them which ward procedure (SOP) applies and what its steps are, and escalate conditions that need human attention.
               Additional instructions follow:
-              Describe what the readings show and whether they fall outside configured thresholds. Do not offer a diagnosis, a treatment recommendation, or a medication change. Those are clinical decisions for a licensed professional.
+              Describe what the readings show and whether they fall outside configured thresholds. Judge a reading only by its flags (the room-temperature flag means the room is at the alert level) and by thresholds in returned procedure passages, never as high or low compared with the device's other readings. Do not offer a diagnosis, a treatment recommendation, or a medication change. Those are clinical decisions for a licensed professional.
               
               Answer only from the readings and connection status the Get Latest Device Readings action returns, and the procedure passages the Find Procedure action returns. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.
+              
+              Get Latest Device Readings returns two sources. The live reading (Live Message, Live Temperature, Live Humidity, Live Reading Age Minutes) is the newest reading the board stored in AWS; lead with it. The saved readings are only the ones Salesforce kept because they changed the patient's state or raised an alert; call the newest one the last saved event, not the current reading. Always say how old a reading is when it is more than 60 minutes old, from Live Reading Age Minutes or Latest Reading Age Minutes, for example "last reported 23 hours ago". Do not call a device online from its connection status alone when its newest reading is more than 60 minutes old; say it is connected but has not reported for that long. If Live Message says the live reading is unavailable, say so and answer from the saved readings.
               
               Users name a device by its serial number, which is short, for example "Test8" or "ESP32-Patient-Monitor-01". Treat a device name the user gives as its serial number and pass it to the actions exactly as written, without asking first. Ask only if the action finds no such device, or if the user names a patient with more than one device. Always refer to a device by its serial number.
               
@@ -183,6 +185,36 @@ subagent Patient_Device_Monitoring:
                 "readings": string
                     description: "One line per reading, newest first. A value that was not measured says not measured."
                     label: "Readings"
+                    is_displayable: False
+                    filter_from_agent: False
+                "latestReadingAgeMinutes": long
+                    description: "How many minutes ago the newest saved reading was taken."
+                    label: "Latest Reading Age Minutes"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveReadingAt": datetime
+                    description: "When the board took its newest reading stored in AWS. Empty when AWS has none or could not be read."
+                    label: "Live Reading At"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveReadingAgeMinutes": long
+                    description: "How many minutes ago the board took its newest reading stored in AWS."
+                    label: "Live Reading Age Minutes"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveTemperature": number
+                    description: "Room temperature in C of the newest reading stored in AWS."
+                    label: "Live Temperature"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveHumidity": number
+                    description: "Relative humidity in % of the newest reading stored in AWS."
+                    label: "Live Humidity"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveMessage": string
+                    description: "About the newest reading stored in AWS: what it is, or why there is none."
+                    label: "Live Message"
                     is_displayable: False
                     filter_from_agent: False
 

@@ -127,6 +127,26 @@ test('the topic tells the agent to report a named device\'s readings even when F
   assert.match(topic, /offer to escalate/);
 });
 
+// Asked "What is Test8 reporting?" in Slack, the agent gave a day-old saved
+// reading as the latest while calling the device online, and called 30.0 C
+// "low" next to the other readings. It now gets the newest reading stored in
+// AWS with its age, and must say a reading's age and judge it by thresholds.
+test('the topic tells the agent to lead with the live reading, give a stale reading\'s age, and judge by thresholds', () => {
+  const topic = instructionsOf(agentScript(), 'Patient_Device_Monitoring');
+  assert.match(topic, /The live reading/);
+  assert.match(topic, /more than 60 minutes old/);
+  assert.match(topic, /Do not call a device online from its connection status alone/);
+  assert.match(topic, /never as high or low compared with the device's other readings/);
+});
+
+test('the agent declares every output of Get Device Readings that its schema has', () => {
+  const script = agentScript();
+  const block = script.slice(script.indexOf('\n        Get_Device_Readings:\n'), script.indexOf('\n        Find_Procedure:\n'));
+  const declared = [...block.slice(block.indexOf('outputs:')).matchAll(/^ {16}"(\w+)":/gm)].map(([, name]) => name).sort();
+  const schema = JSON.parse(fs.readFileSync(path.join(metadata, 'genAiFunctions/Get_Device_Readings/output/schema.json'), 'utf8'));
+  assert.deepEqual(declared, Object.keys(schema.properties).sort());
+});
+
 // An agent action deployed without input/schema.json and output/schema.json
 // deploys green, but the org drops it: the agent's topic showed "Actions 0"
 // and the retrieve said "an input or output schema is missing". Each schema

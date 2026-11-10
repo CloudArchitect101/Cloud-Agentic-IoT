@@ -70,6 +70,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | When | Symptom | Root cause | Fix | What prevents it now |
 | --- | --- | --- | --- | --- |
 | Nov 8 | No `datacloud/room-readings/` folder in the archive bucket after the deploy | S3 has no folders: the prefix appears with the first CSV, which patient-vitals writes only when a board sends a reading. The boards had been offline since Nov 7 08:05 UTC | Power a board on; the prefix appears within a minute of its first reading | SETUP.md §7 step 1 says so |
+| Nov 10 | Asked in Slack "What is Test8 reporting?", the agent gave a reading from the day before as the latest while calling the device online, and called 30.0 C "low" because the other readings were higher | Its readings action read only Patient_Vitals__c, which keeps just the readings that change the patient's state or raise an alert, and "online" came from the connection status; nothing told the agent how old the reading was or to judge it by thresholds | The action also asks AWS for the newest stored reading (POST /device-live, mode latest, read only) and returns both readings' ages in minutes; the agent leads with the live reading, says a reading's age past 60 minutes, and judges readings only by flags and procedure thresholds | Apex tests for the live reading and a failed live call; a config test checks the instructions and that the agent declares every output of the action |
 
 ## Limits found while designing
 

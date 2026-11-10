@@ -491,7 +491,7 @@ Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the ag
 | File | What it is |
 |---|---|
 | `aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent` | The **agent**, in Agent Script: an employee agent, its router, the **Patient Device Monitoring** subagent with five instructions and three actions, Salesforce's standard escalation, off-topic and ambiguous-question subagents, and `connection slack` so it answers in Slack ([SETUP.md](docs/SETUP.md#talk-to-the-agent-from-slack-optional)). The org compiles the planner and bot version from it |
-| `genAiFunctions/Get_Device_Readings/` | The read action: a device's latest readings and connection state, from `DeviceReadingsAgentAction` |
+| `genAiFunctions/Get_Device_Readings/` | The read action: a device's newest reading stored in AWS (one read-only POST /device-live), its latest saved readings and connection state, each reading with its age, from `DeviceReadingsAgentAction` |
 | `genAiFunctions/Find_Procedure/` | The procedure action: the ward SOP passages that answer a question, each with the SOP ID and version to cite, from `ProcedureSearchAgentAction` ([SOP-GROUNDING.md](docs/SOP-GROUNDING.md)) |
 | `genAiFunctions/Escalate_Patient_Device_Condition/` | The escalation action: a Case for the care team, from `PatientCareAgentActions` |
 | `permissionsets/Patient_Care_Agent` | Who may use the agent, and the access its actions run with |
