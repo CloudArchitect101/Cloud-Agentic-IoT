@@ -48,7 +48,7 @@ public with sharing class PatientCareAgentActions {
     // endpoint with a schema", except the caller is an AI agent or a Flow.
     // Signature is List-in/List-out by contract: the platform batches calls.
     @InvocableMethod(
-        label='Escalate Patient Device Condition'
+        label='Escalate Device Condition'
         description='Creates a care team Case for a device condition the agent judged significant.'
         category='Patient Care')
     public static List<EscalationResult> escalate(List<EscalationRequest> requests) {

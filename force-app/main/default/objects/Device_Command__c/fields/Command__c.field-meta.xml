@@ -5,8 +5,9 @@
     <valueSet>
         <valueSetDefinition>
             <sorted>false</sorted>
-            <value><fullName>DISPENSE_MEDICATION</fullName><default>false</default><label>DISPENSE_MEDICATION</label></value>
             <value><fullName>RESTART</fullName><default>false</default><label>RESTART</label></value>
+            <!-- Retired Nov 10: the patient monitor is a temperature alert, not a medication dispenser. Inactive, so old commands keep their value. -->
+            <value><fullName>DISPENSE_MEDICATION</fullName><default>false</default><isActive>false</isActive><label>DISPENSE_MEDICATION</label></value>
             <!-- Retired with firmware 2.5.0: a patient board's motor follows its room, not Cases. Inactive, so old commands keep their value. -->
             <value><fullName>CASE_ALERT</fullName><default>false</default><isActive>false</isActive><label>CASE_ALERT</label></value>
         </valueSetDefinition>

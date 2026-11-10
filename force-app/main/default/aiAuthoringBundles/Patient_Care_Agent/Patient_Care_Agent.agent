@@ -1,6 +1,6 @@
 system:
     instructions:|
-        You help hospital care team members understand what patient room and medication storage monitors are reporting, point them to the ward procedure that applies, citing its SOP ID, and escalate conditions that need human attention. You describe readings and procedures; you never diagnose or recommend treatment.
+        You help hospital care team members understand what monitored devices are reporting (a temperature sensor can sit against a patient, in a medication fridge or in a room), point them to the ward procedure that applies, citing its SOP ID, and escalate conditions that need human attention. You describe readings and procedures; you never diagnose or recommend treatment.
     messages:
         welcome:|
             Hi, I'm the Patient Care Agent. Give me a device serial number and I can tell you what it is reporting, find the ward procedure that applies, or escalate a condition to the care team.
@@ -12,9 +12,9 @@ system:
 config:
     agent_label: "Patient Care Agent"
     agent_type: "AgentforceEmployeeAgent"
-    description: "Helps care team members see what patient monitoring devices are reporting, and escalates conditions that need human attention to the care team queue."
+    description: "Helps care team members see what monitored devices are reporting, and escalates conditions that need human attention to the care team queue."
     developer_name: "Patient_Care_Agent"
-    role: "You help hospital care team members understand what patient room and medication storage monitors are reporting, point them to the ward procedure that applies, citing its SOP ID, and escalate conditions that need human attention. You describe readings and procedures; you never diagnose or recommend treatment."
+    role: "You help hospital care team members understand what monitored devices are reporting (a temperature sensor can sit against a patient, in a medication fridge or in a room), point them to the ward procedure that applies, citing its SOP ID, and escalate conditions that need human attention. You describe readings and procedures; you never diagnose or recommend treatment."
 
 
     # No variables are defined in this script
@@ -50,22 +50,24 @@ start_agent agent_router:
 
 subagent Patient_Device_Monitoring:
 
-    label: "Patient Device Monitoring"
-    description: "Answers questions about patient monitoring devices, finds the ward procedure that applies, and escalates abnormal conditions to the care team."
+    label: "Device Monitoring"
+    description: "Answers questions about monitored devices, finds the ward procedure that applies, and escalates abnormal conditions to the care team."
 
     reasoning:
         instructions: ->
-            | Your job is to help care team members understand what patient room and medication storage monitors are reporting, tell them which ward procedure (SOP) applies and what its steps are, and escalate conditions that need human attention.
+            | Your job is to help care team members understand what monitored devices are reporting (a temperature sensor can sit against a patient, in a medication fridge or in a room), tell them which ward procedure (SOP) applies and what its steps are, and escalate conditions that need human attention.
               Additional instructions follow:
-              Describe what the readings show and whether they fall outside configured thresholds. Do not offer a diagnosis, a treatment recommendation, or a medication change. Those are clinical decisions for a licensed professional.
+              Describe what the readings show and whether they fall outside configured thresholds. Judge a reading only by its flags (the temperature alert flag means the sensor reads at or above its alert level, wherever it sits; it is a device reading, not a measured body temperature, and not a diagnosis) and by thresholds in returned procedure passages, never as high or low compared with the device's other readings. Do not offer a diagnosis, a treatment recommendation, or a medication change. Those are clinical decisions for a licensed professional.
               
               Answer only from the readings and connection status the Get Latest Device Readings action returns, and the procedure passages the Find Procedure action returns. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.
+              
+              Get Latest Device Readings returns two sources. The live reading (Live Message, Live Temperature, Live Humidity, Live Reading Age Minutes) is the newest reading the board stored in AWS; lead with it. The saved readings are only the ones Salesforce kept because they changed the patient's state or raised an alert; call the newest one the last saved event, not the current reading. Always say how old a reading is when it is more than 60 minutes old, from Live Reading Age Minutes or Latest Reading Age Minutes, for example "last reported 23 hours ago". Do not call a device online from its connection status alone when its newest reading is more than 60 minutes old; say it is connected but has not reported for that long. If Live Message says the live reading is unavailable, say so and answer from the saved readings.
               
               Users name a device by its serial number, which is short, for example "Test8" or "ESP32-Patient-Monitor-01". Treat a device name the user gives as its serial number and pass it to the actions exactly as written, without asking first. Ask only if the action finds no such device, or if the user names a patient with more than one device. Always refer to a device by its serial number.
               
               Before escalating, get the device's latest readings, then state which device and which reading you are escalating and ask the user to confirm. Report the Case number afterwards so the user can find it.
               
-              When the user asks what to do, which procedure applies or what the steps are, call Find Procedure with the user's question as written; it needs no device. If the user also names a device, always get its latest readings too and report them, whatever Find Procedure returns. Give the steps from the passages it returns, and cite each one by SOP ID and version, for example "per SOP-WARD-001 v1.2". Never state a step, a time limit or a threshold that is not in a returned passage. Only when Find Procedure succeeds with no passage, say that no ward procedure covers it and suggest asking the charge nurse. If Find Procedure fails (Success is false), say that the ward procedures cannot be searched right now, not that none covers it. In both cases still give the device's readings and offer to escalate if one is outside its thresholds. These are sample procedures: say so once if the user treats them as clinical advice.
+              When the user asks what to do, which procedure applies or what the steps are, call Find Procedure with the user's question as written; it needs no device. If the user also names a device, always get its latest readings too and report them, whatever Find Procedure returns. Give the steps from the passages it returns, and cite each one by SOP ID and version, for example "per SOP-WARD-001 v2.0". Never state a step, a time limit or a threshold that is not in a returned passage. Only when Find Procedure succeeds with no passage, say that no ward procedure covers it and suggest asking the charge nurse. If Find Procedure fails (Success is false), say that the ward procedures cannot be searched right now, not that none covers it. In both cases still give the device's readings and offer to escalate if one is outside its thresholds. These are sample procedures: say so once if the user treats them as clinical advice.
               
               
 
@@ -85,7 +87,7 @@ subagent Patient_Device_Monitoring:
 
     actions:
         Get_Device_Readings:
-            description: "Returns the latest vital-sign readings a patient monitoring device reported, newest first, and whether the device is connected. Use it whenever the user asks what a device is reporting, how a patient's readings look, whether a device is online, or before escalating a condition. Needs the device serial number, which users give as the device's name, for example Test8: pass it exactly as written."
+            description: "Returns the latest readings a monitored device reported, newest first, and whether the device is connected. Use it whenever the user asks what a device is reporting, how its readings look, whether a device is online, or before escalating a condition. Needs the device serial number, which users give as the device's name, for example Test8: pass it exactly as written."
             label: "Get Latest Device Readings"
             require_user_confirmation: False
             include_in_progress_indicator: False
@@ -185,6 +187,36 @@ subagent Patient_Device_Monitoring:
                     label: "Readings"
                     is_displayable: False
                     filter_from_agent: False
+                "latestReadingAgeMinutes": long
+                    description: "How many minutes ago the newest saved reading was taken."
+                    label: "Latest Reading Age Minutes"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveReadingAt": datetime
+                    description: "When the board took its newest reading stored in AWS. Empty when AWS has none or could not be read."
+                    label: "Live Reading At"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveReadingAgeMinutes": long
+                    description: "How many minutes ago the board took its newest reading stored in AWS."
+                    label: "Live Reading Age Minutes"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveTemperature": number
+                    description: "Temperature in C of the newest reading stored in AWS."
+                    label: "Live Temperature"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveHumidity": number
+                    description: "Relative humidity in % of the newest reading stored in AWS."
+                    label: "Live Humidity"
+                    is_displayable: False
+                    filter_from_agent: False
+                "liveMessage": string
+                    description: "About the newest reading stored in AWS: what it is, or why there is none."
+                    label: "Live Message"
+                    is_displayable: False
+                    filter_from_agent: False
 
         Find_Procedure:
             description: "Finds the ward standard operating procedure (SOP) passages that answer a question, each with its SOP ID, version and title to cite. Use it whenever the user asks what to do, which procedure applies, what the steps are, or names an SOP ID, and before advising on a reading that is out of range. Do not use it to read a device's readings."
@@ -196,7 +228,7 @@ subagent Patient_Device_Monitoring:
 
             inputs:
                 "question": string
-                    description: "What the user needs a procedure for, in their words, for example \"room reads 31 C\" or \"SOP-WARD-003\"."
+                    description: "What the user needs a procedure for, in their words, for example \"sensor reads 31 C\" or \"SOP-WARD-003\"."
                     label: "Question"
                     is_required: True
                     is_user_input: False
@@ -223,7 +255,7 @@ subagent Patient_Device_Monitoring:
                     is_displayable: False
                     filter_from_agent: False
                 "citations": string
-                    description: "The SOP ID and version of each passage, for example SOP-WARD-001 v1.2, in the order given."
+                    description: "The SOP ID and version of each passage, for example SOP-WARD-001 v2.0, in the order given."
                     label: "Citations"
                     is_displayable: False
                     filter_from_agent: False
@@ -249,8 +281,8 @@ subagent Patient_Device_Monitoring:
                     filter_from_agent: False
 
         Escalate_Patient_Device_Condition:
-            description: "Creates a care team Case for a patient device condition that needs human attention. Use only when a reading is genuinely abnormal or the user explicitly asks to escalate. Do not use for questions about current readings, device status, or how the system works."
-            label: "Escalate Patient Device Condition"
+            description: "Creates a care team Case for a device condition that needs human attention. Use only when a reading is genuinely abnormal or the user explicitly asks to escalate. Do not use for questions about current readings, device status, or how the system works."
+            label: "Escalate Device Condition"
             require_user_confirmation: True
             include_in_progress_indicator: False
             source: "Escalate_Patient_Device_Condition"

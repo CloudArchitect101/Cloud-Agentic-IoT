@@ -232,7 +232,12 @@ Setup → **Users** → New User, twice:
 | Username | `integration@iot-dev.<yourdomain>` | `deploy@iot-dev.<yourdomain>` |
 | Gets permissions from | The `Salesforce API Integration` permission set license, then the `Device_Integration` permission set (from the repo) | Its profile, plus the `Metadata_Deploy` permission set from `scripts/` (§2.3) |
 
-Note: For the last name, you can use "Integration" / "Deploy" and reuse your original email address for that ORG.
+Note: For the last name, use "Integration" / "Deploy". Give each user its
+own email, for example plus addresses of yours (`you+integration@…`,
+`you+deploy@…`), which still reach your inbox. Never reuse the admin's
+address: Slack links people to Salesforce users by email and refuses an
+address that more than one active user has (see "Talk to the agent from
+Slack"). The same goes for any test portal user.
 
 Both profiles are minimal on purpose: **all** capability arrives via permission
 sets. That is what makes "what can this user actually do?" answerable by
@@ -940,7 +945,9 @@ each step. Almost all of it is the deploy's job:
    allowed`, `authorizationStatus` `NOT_AUTHORIZED`): that takes a free
    Support case under Account and billing, and no IAM change fixes it.
    Until then, `SKIP_SOP_INDEX=yes scripts/deploy-aws.sh Dev` deploys
-   everything else.
+   everything else; once the case is resolved, run
+   `scripts/index-sops.sh Dev --force` once, as the skipped deploy built
+   no index.
 2. **Who may ask.** The action calls AWS as the person talking to the
    agent, through the `AWS_IoT_Relay` Named Credential, so each care team
    member needs `AWS_IoT_Relay_Callers` (README, Stage 2 part d) besides
@@ -961,8 +968,8 @@ each step. Almost all of it is the deploy's job:
    scripts/deploy-salesforce.sh Dev
    sf agent activate --api-name Patient_Care_Agent --target-org iot-dev-admin --json
    ```
-4. **Try it.** Ask the agent what to do about a room reading 31 C, and check
-   the answer cites `SOP-WARD-001 v1.2`.
+4. **Try it.** Ask the agent what to do about a sensor reading 31 C, and check
+   the answer cites `SOP-WARD-001 v2.0`.
 
 To change a procedure, edit its file in `knowledge/sops/`, raise its
 `version`, commit, and deploy AWS again (or run `scripts/index-sops.sh Dev`
@@ -1009,7 +1016,15 @@ Slack side, as the workspace owner:
 4. Only now does the org have a **Users** tab (same page → the org →
    **Users** → **Add Individually**): link each Slack member who may use the
    agent; Slack asks them to sign in to Salesforce. An unmapped member
-   cannot use the agent.
+   cannot use the agent. Each member's Slack email must belong to exactly
+   one active Salesforce user; if the row says **Authentication failed**
+   ("multiple users in Salesforce with the same email"), give the other
+   users their own emails, or **Add Individually** by Salesforce username.
+   Each member's Salesforce user also needs the **Sales Cloud for Slack**
+   permission set (`SlackSalesCloud`, which grants Slack capabilities) as
+   well as `Patient_Care_Agent`:
+   `sf org assign permset --name SlackSalesCloud --on-behalf-of <username> --target-org "$SF_TARGET_ORG"`.
+   Quit and reopen Slack after changing either.
 5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
 6. DM the agent, or mention it in a channel: "What is Test8 reading?"
 

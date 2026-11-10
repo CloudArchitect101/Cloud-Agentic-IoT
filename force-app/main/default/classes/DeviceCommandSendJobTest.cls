@@ -35,7 +35,7 @@ private class DeviceCommandSendJobTest {
         List<Device_Command__c> commands = new List<Device_Command__c>();
         for (Integer i = 0; i < count; i++) {
             commands.add(new Device_Command__c(
-                Device__c = deviceId, Asset__c = assetId, Command__c = 'DISPENSE_MEDICATION',
+                Device__c = deviceId, Asset__c = assetId, Command__c = 'RESTART',
                 Status__c = 'Pending', Requested_By__c = 'Send Job Test'
             ));
         }
@@ -80,7 +80,7 @@ private class DeviceCommandSendJobTest {
         Assert.areEqual(new List<String>{ 'device-command' }, aws.paths, 'One call, to POST /device-command');
         Map<String, Object> body = aws.bodies[0];
         Assert.areEqual('PM-1', body.get('thingName'), 'To its board');
-        Assert.areEqual('DISPENSE_MEDICATION', body.get('operation'), 'The command');
+        Assert.areEqual('RESTART', body.get('operation'), 'The command');
         Assert.areEqual(String.valueOf(command.Id), body.get('commandId'), 'Its record Id, which the board answers with');
         Assert.areEqual(18, String.valueOf(body.get('commandId')).length(), 'All 18 characters');
         Device_Command__c saved = saved(command.Id);
@@ -177,7 +177,7 @@ private class DeviceCommandSendJobTest {
         answer.commandId = command.Id;
         answer.thingName = 'PM-1';
         answer.outcome = 'done';
-        answer.detail = 'dispensed';
+        answer.detail = 'restarting';
         answer.answeredAtMillis = SINCE.addMinutes(1).getTime();
 
         Test.startTest();
@@ -192,7 +192,7 @@ private class DeviceCommandSendJobTest {
         Assert.areEqual('Sent', outcomes.get(command.Id).Status__c, 'The job had Sent to save');
         Device_Command__c saved = saved(command.Id);
         Assert.areEqual('Acked', saved.Status__c, 'The answer stands');
-        Assert.areEqual('dispensed', saved.Status_Detail__c, 'With what the board said');
+        Assert.areEqual('restarting', saved.Status_Detail__c, 'With what the board said');
         Assert.areEqual(SINCE.addMinutes(1), saved.Answered_At__c, 'When the board answered');
         Assert.isNotNull(saved.Sent_At__c, 'And it gains when it was sent');
     }

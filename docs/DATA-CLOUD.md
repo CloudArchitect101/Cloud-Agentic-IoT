@@ -47,7 +47,7 @@ flowchart LR
 5. **Insights.** Two **calculated insights**, SQL that Data Cloud runs on a
    schedule over the DMO, give a table per device:
    - `Room_Out_Of_Range_Daily__cio`: per device and day, how many readings were
-     at or above 30.0 C (the room-temperature rule's threshold,
+     at or above 30.0 C (the temperature alert rule's threshold,
      `RoomTempAlertCelsius`), about how many minutes that is at one reading
      every 30 seconds, and the day's highest temperature.
    - `Room_Device_Silence__cio`: per device, minutes since its last reading,
@@ -83,7 +83,7 @@ Lambda differ.
 | `serial_number` | Text | The Thing name again. It is the device Asset's `SerialNumber`, which is how a row finds its Asset |
 | `reading_ts` | DateTime, event time | When the reading was taken, ISO 8601 in UTC (`2025-10-27T16:00:00.000Z`). The board sends no clock, so today it is when AWS IoT received it |
 | `received_ts` | DateTime | When AWS IoT received it |
-| `temperature_c` | Number | Room temperature in °C; empty when the sensor did not read |
+| `temperature_c` | Number | Temperature in °C, wherever the sensor sits; empty when the sensor did not read |
 | `humidity_pct` | Number | Relative humidity in %; empty when the sensor did not read |
 | `room` | Text | A room or location label, when the board sends `room` or `location`. The patient monitor sends neither, so it is empty today; the Asset's Account and location are in CRM |
 | `source_system` | Text | `AWS_IoT` |
@@ -210,7 +210,7 @@ echo "$BUCKET"
    A `reading_id__c` that is also a `Patient_Vitals__c.Device_Reading_Id__c`
    in CRM is the same reading.
 5. **Out of range counts.** Warm the sensor to 30 C or above for a few
-   minutes ([TRY-IT.md](TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose)).
+   minutes ([TRY-IT.md](TRY-IT.md#warm-the-sensor-get-a-high-temperature-alert)).
    After the next stream refresh and insight run, Data Explorer → Calculated
    Insight **Room Out Of Range Daily** shows today's row for that device with
    `readings_out_of_range__c` above 0 and `minutes_out_of_range__c` at half
@@ -226,8 +226,8 @@ insights are as old as the stream's last refresh plus the insight's last run:
 up to a couple of hours with hourly schedules. They are for the ward's trends
 and daily review, not for alarms. The live signals stay where they are: a
 board's **Connection** on its Asset changes within seconds of it going offline
-([LIVE-STATUS.md](LIVE-STATUS.md)), and a hot room opens a Case through the
-room-temperature rule (README, chapter 03).
+([LIVE-STATUS.md](LIVE-STATUS.md)), and a high reading opens a Case through the
+temperature alert rule (README, chapter 03).
 
 `Room_Device_Silence__cio` lists only devices with at least one reading in
 Data Cloud. A board that never sent a reading is not in it.

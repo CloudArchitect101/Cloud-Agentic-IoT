@@ -35,7 +35,7 @@ const ID = 'a0Bbm00000AbCdEFGH';
 // (commandId, operation, outcome and, when it has one, detail), the Thing
 // name from the topic, and AWS IoT's clock.
 const answer = (fields = {}) => ({
-  commandId: ID, operation: 'DISPENSE_MEDICATION', outcome: 'done', thingName: 'Test7', answeredAtMillis: T, ...fields,
+  commandId: ID, operation: 'RESTART', outcome: 'done', thingName: 'Test7', answeredAtMillis: T, ...fields,
 });
 
 const queueBatch = (bodies) => ({
@@ -104,7 +104,7 @@ test('each answer goes to DeviceCommandAckService as one input, in one call', as
   const { handler, calls } = load(t);
 
   const result = await handler(queueBatch([
-    answer({ detail: 'dispensed' }),
+    answer({ detail: 'restarting' }),
     answer({
       commandId: 'a0Bbm00000AbCdEFGI', operation: 'SET_TELEMETRY_INTERVAL', outcome: 'failed',
       detail: 'seconds must be 5-86400', thingName: 'Test8', answeredAtMillis: T + 1000,
@@ -124,7 +124,7 @@ test('each answer goes to DeviceCommandAckService as one input, in one call', as
   // No operation: the command has its own.
   assert.deepEqual(JSON.parse(request.body), {
     inputs: [
-      { commandId: ID, thingName: 'Test7', outcome: 'done', detail: 'dispensed', answeredAtMillis: T },
+      { commandId: ID, thingName: 'Test7', outcome: 'done', detail: 'restarting', answeredAtMillis: T },
       {
         commandId: 'a0Bbm00000AbCdEFGI', thingName: 'Test8', outcome: 'failed',
         detail: 'seconds must be 5-86400', answeredAtMillis: T + 1000,
@@ -252,7 +252,7 @@ test('a drop line says what it safely can of the answer, and never its detail', 
   const drops = lines.filter((line) => line.startsWith('Dropped a command answer: '));
   assert.deepEqual(drops.map(fields), [
     {
-      messageId: 'm-0', commandId: ID, thingName: 'Test7', operation: 'DISPENSE_MEDICATION',
+      messageId: 'm-0', commandId: ID, thingName: 'Test7', operation: 'RESTART',
     },
     { messageId: 'm-1', operation: 'x'.repeat(64) },
     { messageId: 'm-2', thingName: 'Test7' },
@@ -301,7 +301,7 @@ test('an empty batch is no call', async (t) => {
 test('an answer delivered twice is one input', async (t) => {
   const lines = captureConsole(t);
   const { handler, inputs } = load(t);
-  await handler(queueBatch([answer({ detail: 'dispensed' }), answer({ detail: 'dispensed' })]));
+  await handler(queueBatch([answer({ detail: 'restarting' }), answer({ detail: 'restarting' })]));
   assert.equal(inputs().length, 1);
   assert.deepEqual(summary(lines), {
     answers: 2, dropped: {}, commands: 1, ...NOTHING, sent: 1, applied: 1,
@@ -316,7 +316,7 @@ test('a command its board answered twice goes on with the earliest answer, the o
   // it remembers. SQS keeps no order, so the repeat may come first.
   await handler(queueBatch([
     answer({ detail: 'already carried out', answeredAtMillis: T + 4000 }),
-    answer({ detail: 'dispensed', answeredAtMillis: T }),
+    answer({ detail: 'restarting', answeredAtMillis: T }),
     answer({ detail: 'already carried out', answeredAtMillis: T + 9000 }),
     answer({
       commandId: 'c-2', outcome: 'failed', detail: 'seconds must be 5-86400', answeredAtMillis: T + 100,
@@ -328,7 +328,7 @@ test('a command its board answered twice goes on with the earliest answer, the o
 
   assert.deepEqual(inputs(), [
     {
-      commandId: ID, thingName: 'Test7', outcome: 'done', detail: 'dispensed', answeredAtMillis: T,
+      commandId: ID, thingName: 'Test7', outcome: 'done', detail: 'restarting', answeredAtMillis: T,
     },
     {
       commandId: 'c-2', thingName: 'Test7', outcome: 'failed', detail: 'seconds must be 5-86400', answeredAtMillis: T + 100,
@@ -433,7 +433,7 @@ test('an input Salesforce answers with isSuccess false is logged with its errors
   assert.deepEqual(fields(logged[0]), {
     commandId: 'c-8',
     thingName: 'Test8',
-    operation: 'DISPENSE_MEDICATION',
+    operation: 'RESTART',
     errors: [{ statusCode: 'UNKNOWN_EXCEPTION', message: 'Something went wrong in DeviceCommandAckService' }],
   });
   assert.deepEqual(summary(lines), {
@@ -483,10 +483,10 @@ test('an answer that changed no command is logged with its reason, counted by re
       commandId: 'c-2', thingName: 'Test7', operation: 'RESTART', reason: 'The command was answered already.',
     },
     {
-      commandId: 'c-3', thingName: 'Test7', operation: 'DISPENSE_MEDICATION', reason: 'The command was answered already.',
+      commandId: 'c-3', thingName: 'Test7', operation: 'RESTART', reason: 'The command was answered already.',
     },
     {
-      commandId: 'c-4', thingName: 'Test8', operation: 'DISPENSE_MEDICATION', reason: 'No Device Command has this Id.',
+      commandId: 'c-4', thingName: 'Test8', operation: 'RESTART', reason: 'No Device Command has this Id.',
     },
   ]);
   assert.deepEqual(summary(lines), {

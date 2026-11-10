@@ -2,8 +2,7 @@
  * PatientVitalsTriggerHandler.cls
  *
  * Routes Patient_Vitals__c inserts to RoomTemperatureCaseService, which opens
- * a Case (and requests a dose) for readings AWS flagged as room-temperature
- * alerts. Unflagged readings, which is nearly all of them, cost nothing.
+ * a Case for readings AWS flagged as patient temperature alerts. Unflagged readings, which is nearly all of them, cost nothing.
  *
  * Emergency stop without a deploy: add PatientVitalsTriggerHandler to
  * Integration_Control__c.Bypass_Handlers__c.

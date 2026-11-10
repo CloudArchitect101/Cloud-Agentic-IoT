@@ -30,9 +30,7 @@ public class DeviceTestSettings {
             Escalation_Case_Origin__c   = 'Agentforce',
             Escalation_Case_Queue__c    = 'Care_Team_Queue',
             Room_Temp_Case_Origin__c    = 'Room Temperature Rule',
-            Room_Temp_Case_Queue__c     = 'Care_Team_Queue',
-            Room_Temp_Dispense__c       = true,
-            Room_Temp_Dispense_Cooldown_Minutes__c = 60
+            Room_Temp_Case_Queue__c     = 'Care_Team_Queue'
         );
     }
 

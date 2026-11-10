@@ -15,7 +15,7 @@
  *   - A read that works again after that says the sensor is back, once.
  *
  * A failed read never publishes a reading, so nothing in AWS or Salesforce
- * reacts to a board without a sensor: no Patient Vitals, no room rule.
+ * reacts to a board without a sensor: no Device Readings, no temperature alert.
  *
  * Plain C++, checked on the host by test/firmware.
  */

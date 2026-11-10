@@ -15,7 +15,8 @@ A room's device shows Connection Status "Offline" on its Asset, or the agent
 reports that the newest stored reading is more than 5 minutes old. A monitor
 reads every 30 seconds, so 5 minutes is ten missed readings. While a monitor
 is offline, nothing about that room reaches the system: no temperature
-Case, no case alert, no dose.
+Case, no high temperature alert. The device's own motor still follows its
+sensor while it has power.
 
 ## Steps
 
@@ -35,6 +36,6 @@ Case, no case alert, no dose.
 
 ## Back online
 
-When the monitor reconnects, the system sends it the current case alert
-state again. Confirm in the agent that new readings are arriving before
+When the monitor reconnects, the system sends an internal board the
+queue's depth again. Confirm in the agent that new readings are arriving before
 stopping the manual checks.

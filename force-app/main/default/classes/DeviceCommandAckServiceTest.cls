@@ -14,7 +14,7 @@ private class DeviceCommandAckServiceTest {
     private static List<Device_Command__c> commands(String status, Integer count) {
         List<Device_Command__c> commands = new List<Device_Command__c>();
         for (Integer i = 0; i < count; i++) {
-            commands.add(new Device_Command__c(Device__c = 'PM-1', Command__c = 'DISPENSE_MEDICATION',
+            commands.add(new Device_Command__c(Device__c = 'PM-1', Command__c = 'RESTART',
                                                Status__c = status, Requested_By__c = 'Ack Test'));
         }
         TriggerHandler.bypass('DeviceCommandTriggerHandler');
@@ -97,12 +97,12 @@ private class DeviceCommandAckServiceTest {
         Device_Command__c command = command('Sent');
 
         DeviceCommandAckService.Recorded recorded = recordOne(
-            answer(command.Id, 'PM-1', 'refused', 'unknown operation DISPENSE_MEDICATION'));
+            answer(command.Id, 'PM-1', 'refused', 'unknown operation FLY'));
 
         Assert.isTrue(recorded.applied, 'Applied');
         Device_Command__c saved = saved(command.Id);
         Assert.areEqual('Failed', saved.Status__c, 'Failed');
-        Assert.areEqual('The board does not take this command: unknown operation DISPENSE_MEDICATION',
+        Assert.areEqual('The board does not take this command: unknown operation FLY',
             saved.Status_Detail__c, 'Why');
     }
 
@@ -145,12 +145,12 @@ private class DeviceCommandAckServiceTest {
         Device_Command__c command = command('Failed');
         update new Device_Command__c(Id = command.Id, Status_Detail__c = 'Not sent: HTTP 0: Read timed out');
 
-        DeviceCommandAckService.Recorded recorded = recordOne(answer(command.Id, 'PM-1', 'done', 'dispensed'));
+        DeviceCommandAckService.Recorded recorded = recordOne(answer(command.Id, 'PM-1', 'done', 'restarting'));
 
         Assert.isTrue(recorded.applied, 'The board carried it out, so that is what the record says');
         Device_Command__c saved = saved(command.Id);
         Assert.areEqual('Acked', saved.Status__c, 'Acked');
-        Assert.areEqual('dispensed', saved.Status_Detail__c, 'The board\'s word replaces the timeout');
+        Assert.areEqual('restarting', saved.Status_Detail__c, 'The board\'s word replaces the timeout');
     }
 
     @IsTest
@@ -182,14 +182,14 @@ private class DeviceCommandAckServiceTest {
         Device_Command__c command = command('Sent');
 
         List<DeviceCommandAckService.Recorded> recorded = record(new List<DeviceCommandAckService.Answer>{
-            answer(command.Id, 'PM-1', 'done', 'dispensed'),
+            answer(command.Id, 'PM-1', 'done', 'restarting'),
             answer(command.Id, 'PM-1', 'done', 'already carried out')
         });
 
         Assert.isTrue(recorded[0].applied, 'The first applies');
         Assert.isFalse(recorded[1].applied, 'The repeat does not');
         Assert.isTrue(recorded[1].skipped.contains('Already answered'), recorded[1].skipped);
-        Assert.areEqual('dispensed', saved(command.Id).Status_Detail__c, 'The first answer stands');
+        Assert.areEqual('restarting', saved(command.Id).Status_Detail__c, 'The first answer stands');
     }
 
     @IsTest

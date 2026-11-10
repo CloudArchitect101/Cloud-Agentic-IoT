@@ -1,11 +1,13 @@
 #pragma once
 /**
- * ServoDemand - why the patient monitor's servo turns, and how fast.
+ * ServoDemand - why the board's servo turns, and how fast.
  *
  * Every board runs this one firmware, and Salesforce decides what it is
  * told (DeviceRoles in Salesforce):
  *
- *   - The room: a patient board's own DHT11 reads ROOM_HOT_C (30 C) or more.
+ *   - High temperature: a monitored board's own DHT11 reads ROOM_HOT_C
+ *     (30 C) or more, wherever it sits (on a patient, in a fridge, in a
+ *     room). ROOM_HOT_C keeps its first name for now.
  *     The board decides this itself, from every reading, with no Case and
  *     no cloud round trip, so it works while offline too. The positional
  *     servo sweeps once every SWEEP_PERIOD_MS (2 s) until a reading is
@@ -35,7 +37,7 @@ namespace pm {
 const int CONTINUOUS_STOP = 90;
 const int CONTINUOUS_ROOM_HOT = 135;   // about half speed
 
-// The room is hot at this temperature or more, and calm again below it.
+// The temperature is high at this many degrees or more, and normal again below it.
 const float ROOM_HOT_C = 30.0f;
 
 /** Whether a reading in degrees C is hot: at ROOM_HOT_C or more. */

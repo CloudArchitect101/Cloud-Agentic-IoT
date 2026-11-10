@@ -2,7 +2,7 @@
  * DeviceCommandService.cls
  *
  * What happens when a Device Command is created: by hand, from Send Command
- * on a device's Asset, or by Slack's /dispense-medication. prepare (before
+ * on a device's Asset. prepare (before
  * insert) makes the command ready to send, and send (after insert) starts
  * the job that sends it. A trigger cannot call out, so the callouts happen
  * in DeviceCommandSendJob.
@@ -24,9 +24,6 @@
  *     its creator did not name.
  *   - A Device ID that is not linked is sent as it is. Slack names a board by
  *     its Thing name, and a board does not need an Asset to take a command.
- *
- * A DISPENSE_MEDICATION for an Internal Device (DeviceRoles) is refused: a
- * ward board has no dispenser.
  *
  * Serial numbers and Thing names are compared exactly: AWS IoT Thing names
  * are case-sensitive, so Test7 and test7 are two boards, while SOQL compares
@@ -159,11 +156,6 @@ public with sharing class DeviceCommandService {
         if (device == null) {
             command.Asset__c.addError('This device was not found, or you cannot see it. '
                 + 'Choose a device you can open, or leave Device empty and enter the Device ID.');
-            return;
-        }
-        if (RoomTemperatureCaseService.DISPENSE_COMMAND.equals(command.Command__c) && DeviceRoles.isInternal(device)) {
-            command.Command__c.addError(device.Name + ' is an Internal Device: a ward board with no dispenser, '
-                + 'so it takes no DISPENSE_MEDICATION. Send the dose to the patient\'s device.');
             return;
         }
         String thingName = thingNameOf(device);

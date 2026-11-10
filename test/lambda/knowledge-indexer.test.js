@@ -29,7 +29,7 @@ const { chunk } = load();
 
 const sentence = (n) => `Sentence ${n} explains a clinical step for the care team in plain words here.`;
 const paragraphOf = (count) => Array.from({ length: count }, (_, i) => sentence(i)).join(' ');
-const longSentence = (n) => `Step ${n}: ${'administer the dose and record it in the chart '.repeat(22)}.`;
+const longSentence = (n) => `Step ${n}: ${'recheck the temperature and record it in the Case '.repeat(22)}.`;
 
 /** Every word of the input appears in the output, in order. Overlap may repeat words. */
 function assertNoTextLost(input, chunks) {
@@ -93,7 +93,7 @@ test('text after the last full stop is kept', () => {
 });
 
 test('a decimal point is not a sentence boundary', () => {
-  // Slide the dose across the point where a chunk fills up. Splitting at the
+  // Slide the step across the point where a chunk fills up. Splitting at the
   // decimal used to let a chunk end on "Give 2." with the "5 mg" in the next.
   for (let pad = 0; pad < 60; pad++) {
     const text = `${paragraphOf(15)} ${'word '.repeat(pad)}Give 2.5 mg twice daily. ${paragraphOf(5)}`;
@@ -111,10 +111,10 @@ test('short paragraphs are grouped up to the cap', () => {
 });
 
 test('a sentence longer than the cap is split at whitespace', () => {
-  const text = 'dose '.repeat(700).trim();
+  const text = 'alert '.repeat(700).trim();
   const chunks = chunk(text);
   assert.ok(chunks.length > 2);
-  for (const c of chunks) assert.match(c, /^dose( dose)*$/);
+  for (const c of chunks) assert.match(c, /^alert( alert)*$/);
 });
 
 const sop = (id, extra = '') => ({

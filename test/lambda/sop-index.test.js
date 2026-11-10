@@ -17,12 +17,12 @@ const { maskPii } = require('../../lambda/shared/guardrails');
 const root = path.join(__dirname, '../..');
 
 const doc = (front, body = '## Steps\n\n1. Do the thing.\n') => `---\n${front}\n---\n\n> Notice.\n\n${body}`;
-const FRONT = 'id: SOP-WARD-001\ntitle: Room temperature excursion\nversion: 1.2\nowner: Ward charge nurse\nreviewed: 2026-10-15';
+const FRONT = 'id: SOP-WARD-001\ntitle: High temperature alert\nversion: 1.2\nowner: Ward charge nurse\nreviewed: 2026-10-15';
 
 test('an SOP file reads as its front matter and one passage per "## " section', () => {
   const sop = sops.parseSop(doc(FRONT, '## When\n\nA room is hot.\n\n## Steps\n\n1. Go.\n2. Check.\n\n## Empty\n\n'), 'a.md');
   assert.deepEqual(sop, {
-    id: 'SOP-WARD-001', title: 'Room temperature excursion', version: '1.2', owner: 'Ward charge nurse',
+    id: 'SOP-WARD-001', title: 'High temperature alert', version: '1.2', owner: 'Ward charge nurse',
     reviewed: '2026-10-15', file: 'a.md',
     sections: [{ heading: 'When', text: 'A room is hot.' }, { heading: 'Steps', text: '1. Go.\n2. Check.' }],
   });
@@ -38,7 +38,7 @@ test('an SOP file with a missing or malformed field is refused, naming the file 
     'version v1 is not like 1.0': doc(FRONT.replace('1.2', 'v1')),
     'reviewed last week is not a date': doc(FRONT.replace('2026-10-15', 'last week')),
     'is not "key: value"': doc(`${FRONT}\njust words`),
-    'title is longer than 120 characters': doc(FRONT.replace('Room temperature excursion', 'x'.repeat(121))),
+    'title is longer than 120 characters': doc(FRONT.replace('High temperature alert', 'x'.repeat(121))),
     'has no "## " section with text in it': doc(FRONT, 'No headings here.\n'),
   };
   for (const [message, markdown] of Object.entries(cases)) {
@@ -121,7 +121,7 @@ test('every SOP an SOP refers to exists', () => {
 
 // Dev's numbers: the rule runs in Dev only (RoomTempAlert is "false" in
 // Prod's config), and the demo SOPs describe the demo ward.
-test('SOP-WARD-001 gives the room-temperature rule the numbers AWS runs it with in Dev', () => {
+test('SOP-WARD-001 gives the temperature alert rule the numbers AWS runs it with in Dev', () => {
   const sop = ward().find((s) => s.id === 'SOP-WARD-001');
   const marginLine = fs.readFileSync(path.join(root, 'lambda/patient-vitals/index.js'), 'utf8').match(/ROOM_TEMP_REARM_MARGIN_C = (\d+(?:\.\d+)?)/);
   assert.ok(marginLine, 'patient-vitals no longer declares ROOM_TEMP_REARM_MARGIN_C');

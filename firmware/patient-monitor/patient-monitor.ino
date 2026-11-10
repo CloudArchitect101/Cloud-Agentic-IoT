@@ -2,12 +2,13 @@
  * @file patient-monitor.ino
  * @brief The firmware of every board: patient monitors and ward indicators.
  *
- * Reads a DHT11 and drives a servo: a medication dispenser that swings out a
- * dose (DISPENSE_MEDICATION); sweeps back and forth without stopping while its
- * own DHT11 reads 30 C or more, and stops once a reading is below 30 C, decided
- * on the board from every reading, with no Case involved; and, on a ward's
- * internal board such as a
- * nurse-station indicator, turns while any Case waits in the queue, faster as
+ * Reads a DHT11 and drives a servo as a temperature alert: on a monitored
+ * device the servo sweeps back and forth without stopping while its own DHT11
+ * reads 30 C or more, and stops once a reading is below 30 C, decided on the
+ * board from every reading, with no Case involved. The sensor can sit wherever
+ * the temperature matters: against a patient (the demo puts it under an arm),
+ * in a fridge, in a room. On a ward's internal board such as a
+ * nurse-station indicator, it turns while any Case waits in the queue, faster as
  * it fills (QUEUE_DEPTH, sent by CaseQueueMonitorService). Which of these a
  * board is told depends on its Asset's record type in Salesforce, not on its
  * firmware, so one OTA build serves every board. A board without a DHT11, as
@@ -33,7 +34,7 @@
 // Raise this to ship a change. The pipeline publishes each version once and a
 // board installs only a version it is not already running, so a change under
 // the same number never reaches a board; the pull request checks fail it.
-#define FIRMWARE_VERSION "2.5.0"
+#define FIRMWARE_VERSION "2.6.0"
 
 // Seconds between readings until the fleet sets its own. The fleet's value
 // (scripts/ota.sh interval, or SET_TELEMETRY_INTERVAL through the device
@@ -50,19 +51,19 @@ CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY
 #define DHT_PIN   4
 #define SERVO_PIN 5
 // Uncomment for a continuous-rotation servo (FS90R / SG90-360): it spins
-// while the room is hot instead of sweeping. A standard SG90 is positional
+// while the temperature is high instead of sweeping. A standard SG90 is positional
 // (0-180) and physically cannot spin.
 // #define CONTINUOUS_ROTATION_SERVO
 
 DHT dht(DHT_PIN, DHT11);
-Servo dispenser;
+Servo motor;
 pm::SensorPresence sensor;
 
-// Up to 2.4.0 the board kept a Case alert here. 2.5.0 follows the room
-// temperature instead, so it clears what an older version left, once, at
+// Up to 2.4.0 the board kept a Case alert here. 2.5.0 follows its own
+// sensor's temperature instead, so it clears what an older version left, once, at
 // start: a stale "on" must not keep the motor turning. The library's
 // namespaces are identity, wifi and config; this one was the sketch's own.
-// Nothing else is kept: the room is read again within seconds, and
+// Nothing else is kept: the sensor is read again within seconds, and
 // Salesforce sends the queue's depth every time the board connects.
 #define NVS_CASE_ALERT "caseAlert"
 pm::ServoDemand demand;
@@ -77,9 +78,9 @@ pm::ServoSweep sweep;
 // continuous one.
 void park() {
 #ifdef CONTINUOUS_ROTATION_SERVO
-  dispenser.write(pm::CONTINUOUS_STOP);
+  motor.write(pm::CONTINUOUS_STOP);
 #else
-  dispenser.write(0);
+  motor.write(0);
 #endif
 }
 
@@ -88,13 +89,13 @@ void clearOldCaseAlert() {
   old.begin(NVS_CASE_ALERT, false);   // read-write creates the namespace, so no "not found" log
   if (old.isKey("active")) {
     old.clear();
-    Serial.println("case alert: retired in 2.5.0, the motor follows the room temperature");
+    Serial.println("case alert: retired in 2.5.0, the motor follows the sensor's temperature");
   }
   old.end();
 }
 
-// Sets the servo going, faster or slower, or stops it, for what the room
-// and the queue ask now.
+// Sets the servo going, faster or slower, or stops it, for what the
+// temperature and the queue ask now.
 void applyDemand() {
   uint32_t now = millis();
   if (demand.active()) {
@@ -104,7 +105,7 @@ void applyDemand() {
     sweep.set(false, now);
   }
 #ifdef CONTINUOUS_ROTATION_SERVO
-  dispenser.write(demand.continuousWrite());
+  motor.write(demand.continuousWrite());
 #else
   if (!demand.active()) park();
 #endif
@@ -116,7 +117,7 @@ void roomReading(float celsius) {
   bool hot = pm::roomIsHot(celsius);
   if (!demand.setRoomHot(hot)) return;
   applyDemand();
-  Serial.printf("room %.1fC: %s\n", celsius, hot ? "30 C or more, motor turning"
+  Serial.printf("temperature %.1fC: %s\n", celsius, hot ? "30 C or more, motor turning"
                 : demand.active() ? "below 30 C, motor turning for the queue" : "below 30 C, motor stopped");
 }
 
@@ -130,7 +131,7 @@ void setQueue(JsonDocument& doc) {
   if (changed) applyDemand();
   Serial.printf("queue: %d case(s), intensity %d%% -> %s\n", demand.openCases(), demand.queueIntensity(),
                 demand.queueIntensity() > 0 ? "motor turning"
-                : demand.active() ? "motor turning for the room" : "motor stopped");
+                : demand.active() ? "motor turning for the temperature" : "motor stopped");
 
   StaticJsonDocument<200> status;
   status["deviceId"]      = device.thingName();
@@ -143,42 +144,20 @@ void setQueue(JsonDocument& doc) {
 void driveServo() {
 #ifndef CONTINUOUS_ROTATION_SERVO
   int angle = sweep.next(millis());
-  if (angle >= 0) dispenser.write(angle);
+  if (angle >= 0) motor.write(angle);
 #endif
-}
-
-void dispense() {
-  Serial.println("dispensing");
-  dispenser.write(90);
-  delay(1000);
-  dispenser.write(0);
-  // Done means the dose is out and the arm is home again, so a dose sent
-  // right behind this one starts from 0, not from halfway back. A hobby
-  // servo turns 90 degrees in well under half a second.
-  delay(500);
-  // Then the sweep, if anything asks for it, carries on from 0, where the arm is.
-  if (demand.active()) {
-    sweep.restart(millis());
-#ifdef CONTINUOUS_ROTATION_SERVO
-    dispenser.write(demand.continuousWrite());
-#endif
-  } else {
-    park();
-  }
 }
 
 // True once the command is carried out, false for an operation this sketch
 // does not know: the library answers the command with that, done or refused.
 bool onCommand(JsonDocument& doc) {
   const char* op = doc["operation"] | doc["command"] | "";
-  if (strcmp(op, "DISPENSE_MEDICATION") == 0) {
-    dispense();
-    return true;
-  }
+  // DISPENSE_MEDICATION was retired in 2.6.0: this is a temperature alert,
+  // not a dispenser, so the board refuses it as an operation it does not know.
   if (strcmp(op, "CASE_ALERT") == 0) {
-    // Retired in 2.5.0: the motor follows the room, not the Cases. Answered
+    // Retired in 2.5.0: the motor follows the sensor, not the Cases. Answered
     // as done, so an org that still sends it sees no failed command.
-    Serial.println("case alert: ignored, the motor follows the room temperature");
+    Serial.println("case alert: ignored, the motor follows the sensor's temperature");
     return true;
   }
   if (strcmp(op, "QUEUE_DEPTH") == 0) {
@@ -212,7 +191,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   dht.begin();
-  dispenser.attach(SERVO_PIN);
+  motor.attach(SERVO_PIN);
   park();
   clearOldCaseAlert();
 
@@ -228,7 +207,7 @@ void loop() {
   // keeps both). Ask both on every pass; either can fall due alone.
   bool store = device.telemetryDue();
   bool live  = device.liveDue();
-  // And a third, for the motor alone: the room every few seconds, so it
+  // And a third, for the motor alone: the sensor every few seconds, so it
   // starts and stops within seconds of 30 C, not at the next stored reading.
   bool room = !sensor.missing() && millis() - lastRoomCheck >= ROOM_CHECK_MS;
   if (!store && !live && !room) return;
@@ -260,10 +239,10 @@ void loop() {
   if (store) {
     // Said on stored readings only: every 2 s it would bury the console.
     reportSensor(ok);
-    // A sensor that stopped answering cannot say the room is still hot.
+    // A sensor that stopped answering cannot say the temperature is still high.
     if (sensor.missing() && demand.setRoomHot(false)) {
       applyDemand();
-      Serial.println("room: no sensor, motor stopped for the room");
+      Serial.println("temperature: no sensor, motor stopped");
     }
     if (ok) {
       device.publishTelemetry(doc);

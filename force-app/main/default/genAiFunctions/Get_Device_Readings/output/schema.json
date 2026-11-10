@@ -128,6 +128,54 @@
       "lightning:isPII": false,
       "copilotAction:isDisplayable": false,
       "copilotAction:isUsedByPlanner": true
+    },
+    "latestReadingAgeMinutes": {
+      "title": "Latest Reading Age Minutes",
+      "description": "How many minutes ago the newest saved reading was taken.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveReadingAt": {
+      "title": "Live Reading At",
+      "description": "When the board took its newest reading stored in AWS. Empty when AWS has none or could not be read.",
+      "lightning:type": "lightning__dateTimeStringType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveReadingAgeMinutes": {
+      "title": "Live Reading Age Minutes",
+      "description": "How many minutes ago the board took its newest reading stored in AWS.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveTemperature": {
+      "title": "Live Temperature",
+      "description": "Temperature in C of the newest reading stored in AWS.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveHumidity": {
+      "title": "Live Humidity",
+      "description": "Relative humidity in % of the newest reading stored in AWS.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveMessage": {
+      "title": "Live Message",
+      "description": "About the newest reading stored in AWS: what it is, or why there is none.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
     }
   },
   "lightning:type": "lightning__objectType"

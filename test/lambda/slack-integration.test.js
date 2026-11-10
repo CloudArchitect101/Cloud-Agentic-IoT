@@ -151,7 +151,7 @@ test('patient status: the live reading from AWS and the last saved event from Sa
   assert.equal(reply.text, [
     '*Test8*',
     'Live: 24.1°C, 46% humidity, 12 s ago (online).',
-    'Last saved event: 35.5°C, 33% humidity, room temperature alert, state NORMAL, at 2026-11-09 03:01 UTC.',
+    'Last saved event: 35.5°C, 33% humidity, temperature alert, state NORMAL, at 2026-11-09 03:01 UTC.',
   ].join('\n'));
 });
 
@@ -190,26 +190,22 @@ test('patient status: a device with no readings anywhere is named back', async (
   assert.match(replyText(requests), /No readings for device `Test8` in AWS or Salesforce/);
 });
 
-test('dispense: one Pending Device Command from Slack, and the reply says it was queued', async (t) => {
+test('the retired /dispense-medication is an unknown command and creates nothing', async (t) => {
   captureConsole(t);
-  const { handler, requests } = load(t, { salesforce: () => jsonResponse(201, { id: 'a0X1', success: true }) });
-  await handler({ slackCommand: { command: '/dispense-medication', deviceId: 'Test8', responseUrl: HOOK } });
-
-  const creates = requests.filter((r) => r.url === `${INSTANCE}/services/data/v64.0/sobjects/Device_Command__c`);
-  assert.equal(creates.length, 1);
-  assert.deepEqual(JSON.parse(creates[0].body), {
-    Device__c: 'Test8', Command__c: 'DISPENSE_MEDICATION', Requested_By__c: 'Slack', Status__c: 'Pending',
-  });
-  assert.match(JSON.parse(requests.find((r) => r.url === HOOK).body).text, /queued for `Test8` \(Device Command a0X1\)/);
+  const { handler, invokes, requests } = load(t);
+  const res = await handler(slackRequest({ command: '/dispense-medication', text: 'Test8' }));
+  assert.equal(text(res), 'Unknown command: /dispense-medication');
+  assert.equal(invokes.length, 0);
+  assert.equal(requests.length, 0);
 });
 
-test('a Salesforce failure is reported to the person and logged, not thrown into a retry', async (t) => {
+test('AWS and Salesforce both failing is reported to the person and logged, not thrown into a retry', async (t) => {
   const logs = captureConsole(t);
-  const { handler, requests } = load(t, { salesforce: () => jsonResponse(400, [{ errorCode: 'INVALID_FIELD' }]) });
-  const res = await handler({ slackCommand: { command: '/dispense-medication', deviceId: 'Test8', responseUrl: HOOK } });
+  const { handler, requests } = load(t, { salesforce: () => jsonResponse(400, [{ errorCode: 'INVALID_FIELD' }]), dynamoFails: true });
+  const res = await handler(STATUS);
 
   assert.deepEqual(res, { answered: true });
-  assert.match(JSON.parse(requests.find((r) => r.url === HOOK).body).text, /failed in Salesforce/);
+  assert.match(replyText(requests), /neither AWS nor Salesforce could be read/);
   assert.ok(logs.some((l) => l.includes('Slack command failed')));
 });
 

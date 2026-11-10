@@ -17,17 +17,17 @@ returns the best passages from the SOPs, best first, each headed by what to
 cite:
 
 ```
-[SOP-WARD-001 v1.2, Room temperature excursion, section "Steps"]
-1. Take the Case from Care_Team_Queue so the room's alert motor stops
-   (SOP-WARD-005) and the team can see someone has it.
-2. Go to the room within 10 minutes. ...
+[SOP-WARD-001 v2.0, High temperature alert, section "Steps"]
+1. Take the Case from Care_Team_Queue so the team can see someone has it.
+2. Go to what the device monitors within 10 minutes: the person wearing the
+   sensor, the fridge, or the room. ...
 ```
 
-plus `Citations` (`SOP-WARD-001 v1.2`), the top SOP's ID and title, and the
+plus `Citations` (`SOP-WARD-001 v2.0`), the top SOP's ID and title, and the
 sample notice. The topic's new instruction, **Cite the ward procedure**,
 tells the agent to call Find Procedure whenever the user asks what to do,
 to give steps only from the passages it returns, to cite each by SOP ID and
-version ("per SOP-WARD-001 v1.2"), and to say that no ward procedure covers
+version ("per SOP-WARD-001 v2.0"), and to say that no ward procedure covers
 it when no passage comes back. The planner, the bot's role and its welcome
 message say the same.
 
@@ -36,19 +36,19 @@ A conversation then goes:
 > **Nurse:** PM-0042 is reading 31 degrees, what do I do?
 > **Agent:** *(Get Latest Device Readings, then Find Procedure)* PM-0042's
 > latest reading is 31.2 C at 14:05 UTC, at or above the 30.0 C threshold.
-> Per SOP-WARD-001 v1.2: take the Case from Care_Team_Queue so the room's
-> alert motor stops, go to the room within 10 minutes, ... If it is still
-> at or above 30.0 C after 30 minutes, call facilities and escalate under
-> SOP-WARD-006 v1.3.
+> Per SOP-WARD-001 v2.0: take the Case from Care_Team_Queue, go to what the
+> device monitors within 10 minutes and recheck the temperature with a
+> suitable instrument, ... If the recheck confirms it, tell the person in
+> charge (SOP-WARD-006 v1.3 for escalation).
 
 ## The procedures
 
 | ID | Title | Owner role |
 |---|---|---|
-| SOP-WARD-001 | Room temperature excursion (the 30.0 C rule: a Case at 30.0 C or higher, the episode ends below 29.0 C, re-reported at most every 15 minutes) | Ward charge nurse |
+| SOP-WARD-001 | High temperature alert (the 30.0 C rule, wherever the sensor sits: a Case at 30.0 C or higher, the episode ends below 29.0 C, re-reported at most every 15 minutes) | Ward charge nurse |
 | SOP-WARD-002 | Medication storage humidity out of range (30 to 60 %; the system records humidity but opens no Case for it) | Pharmacy lead |
 | SOP-WARD-003 | Room monitor offline | Clinical engineering |
-| SOP-WARD-004 | Dispenser jam or dose command failed | Pharmacy lead |
+| SOP-WARD-004 | Alert motor not turning or not stopping (replaced the dispenser procedure on Nov 10) | Clinical engineering |
 | SOP-WARD-005 | Case alert motor acknowledgement | Ward charge nurse |
 | SOP-WARD-006 | Escalation and shift handover | Nurse unit manager |
 | SOP-WARD-007 | Using the Patient Care Agent | Nurse unit manager |
@@ -58,10 +58,10 @@ Each file is markdown with front matter, then `## ` sections:
 ```markdown
 ---
 id: SOP-WARD-001
-title: Room temperature excursion
-version: 1.2
+title: High temperature alert
+version: 2.0
 owner: Ward charge nurse
-reviewed: 2026-10-15
+reviewed: 2026-11-10
 ---
 
 > Sample procedure for the Smart Ward demo. Fictional, not clinical advice, ...
@@ -103,7 +103,7 @@ Patient Care Agent ─ Find Procedure ─> ProcedureSearchAgentAction         �
           │                                                         cosine over every passage,
           │                                                         mask the passages
           v
-   "Per SOP-WARD-001 v1.2: ..."
+   "Per SOP-WARD-001 v2.0: ..."
 ```
 
 - **Indexing is a deploy step.** `scripts/deploy-aws.sh` ends by running
@@ -193,7 +193,7 @@ and no Data Cloud credits.
 
    ```bash
    aws lambda invoke --function-name cloud-agentic-iot-procedure-search --cli-binary-format raw-in-base64-out \
-     --payload '{"body":"{\"query\":\"the room reads 31 degrees\",\"maxResults\":2}"}' /dev/stdout
+     --payload '{"body":"{\"query\":\"the sensor reads 31 degrees\",\"maxResults\":2}"}' /dev/stdout
    ```
 
    Expect `statusCode` 200 and `SOP-WARD-001` first.
@@ -202,11 +202,11 @@ and no Data Cloud credits.
 
    ```apex
    ProcedureSearchAgentAction.ProcedureRequest r = new ProcedureSearchAgentAction.ProcedureRequest();
-   r.question = 'the room reads 31 degrees';
+   r.question = 'the sensor reads 31 degrees';
    System.debug(ProcedureSearchAgentAction.findProcedure(new List<ProcedureSearchAgentAction.ProcedureRequest>{ r })[0]);
    ```
-4. **The agent cites it.** Ask the agent what to do about a room at 31 C,
-   and check the answer names `SOP-WARD-001 v1.2`. Ask about something no
+4. **The agent cites it.** Ask the agent what to do about a sensor at 31 C,
+   and check the answer names `SOP-WARD-001 v2.0`. Ask about something no
    SOP covers ("the lift is broken") and check it says no ward procedure
    covers it.
 

@@ -2,7 +2,7 @@
 <RecordType xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Internal_Device</fullName>
     <active>true</active>
-    <description>A board of the ward itself, such as a nurse-station indicator, on no Account. Its servo turns while any Case waits in the care team queue; it takes no readings, Case alerts or doses.</description>
+    <description>A board of the ward itself, such as a nurse-station indicator, on no Account. Its servo turns while any Case waits in the care team queue; it takes no readings or temperature alerts.</description>
     <label>Internal Device</label>
     <picklistValues>
         <picklist>Connection_Status__c</picklist>

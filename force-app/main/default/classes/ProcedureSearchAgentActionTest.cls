@@ -41,21 +41,21 @@ private class ProcedureSearchAgentActionTest {
     static void passagesComeBackWithWhatTheAgentCites() {
         DeviceApiMock api = useApi();
         Test.startTest();
-        ProcedureSearchAgentAction.ProcedureResult res = one(ask('  The room reads 31 C, what do I do?  ', null));
+        ProcedureSearchAgentAction.ProcedureResult res = one(ask('  The sensor reads 31 C, what do I do?  ', null));
         Test.stopTest();
 
         Assert.areEqual(new List<String>{ 'find-procedure' }, api.paths, 'one POST /find-procedure');
-        Assert.areEqual('The room reads 31 C, what do I do?', api.bodies[0].get('query'), 'the question, trimmed');
+        Assert.areEqual('The sensor reads 31 C, what do I do?', api.bodies[0].get('query'), 'the question, trimmed');
         Assert.areEqual(ProcedureSearchAgentAction.DEFAULT_PASSAGES, api.bodies[0].get('maxResults'), 'three when not asked');
 
         Assert.isTrue(res.success, res.message);
         Assert.areEqual(2, res.passagesReturned);
         Assert.areEqual('SOP-WARD-001', res.topProcedureId);
-        Assert.areEqual('Room temperature excursion', res.topProcedureTitle);
-        Assert.areEqual('SOP-WARD-001 v1.2', res.citations, 'one citation per SOP version, however many passages');
-        Assert.isTrue(res.passages.startsWith('[SOP-WARD-001 v1.2, Room temperature excursion, section "Steps"]\n1. Take the Case'),
+        Assert.areEqual('High temperature alert', res.topProcedureTitle);
+        Assert.areEqual('SOP-WARD-001 v2.0', res.citations, 'one citation per SOP version, however many passages');
+        Assert.isTrue(res.passages.startsWith('[SOP-WARD-001 v2.0, High temperature alert, section "Steps"]\n1. Take the Case'),
             res.passages);
-        Assert.isTrue(res.passages.contains('\n\n[SOP-WARD-001 v1.2, Room temperature excursion, section "When this applies"]'),
+        Assert.isTrue(res.passages.contains('\n\n[SOP-WARD-001 v2.0, High temperature alert, section "When this applies"]'),
             'passages in the order AWS ranked them');
         Assert.isTrue(res.message.contains('Cite the SOP ID and version'), res.message);
         Assert.isTrue(res.notice.contains('not clinical advice'), res.notice);
@@ -66,7 +66,7 @@ private class ProcedureSearchAgentActionTest {
         DeviceApiMock api = useApi();
         Test.startTest();
         ProcedureSearchAgentAction.findProcedure(new List<ProcedureSearchAgentAction.ProcedureRequest>{
-            ask('room temperature', 9), ask('room temperature', 0), ask('x'.repeat(800), 2)
+            ask('high temperature', 9), ask('high temperature', 0), ask('x'.repeat(800), 2)
         });
         Test.stopTest();
         Assert.areEqual(ProcedureSearchAgentAction.MAX_PASSAGES, api.bodies[0].get('maxResults'));
@@ -114,7 +114,7 @@ private class ProcedureSearchAgentActionTest {
             null, ask(null, null), ask('  ', null), ask('hi', null)
         };
         for (Integer i = 0; i < ProcedureSearchAgentAction.MAX_QUESTIONS_PER_CALL + 1; i++) {
-            requests.add(ask('room temperature ' + i, null));
+            requests.add(ask('high temperature ' + i, null));
         }
         Test.startTest();
         List<ProcedureSearchAgentAction.ProcedureResult> results = ProcedureSearchAgentAction.findProcedure(requests);
@@ -157,7 +157,7 @@ private class ProcedureSearchAgentActionTest {
         for (List<Object> c : cases) {
             api.procedureStatus = (Integer) c[0];
             api.procedureBody = (String) c[1];
-            ProcedureSearchAgentAction.ProcedureResult res = one(ask('room temperature', null));
+            ProcedureSearchAgentAction.ProcedureResult res = one(ask('high temperature', null));
             Assert.isFalse(res.success, String.valueOf(c));
             Assert.isTrue(res.message.contains((String) c[2]), c[0] + ' ' + c[1] + ' -> ' + res.message);
             Assert.areEqual(0, res.passagesReturned);
@@ -170,7 +170,7 @@ private class ProcedureSearchAgentActionTest {
         DeviceTestSettings.use();
         Test.setMock(HttpCalloutMock.class, new Unreachable());
         Test.startTest();
-        ProcedureSearchAgentAction.ProcedureResult res = one(ask('room temperature', null));
+        ProcedureSearchAgentAction.ProcedureResult res = one(ask('high temperature', null));
         Test.stopTest();
         Assert.isFalse(res.success);
         Assert.isTrue(res.message.contains('AWS_IoT_Relay_Callers'), res.message);

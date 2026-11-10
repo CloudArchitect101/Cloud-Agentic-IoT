@@ -4,7 +4,8 @@
       Case Origin. A deploy replaces the org's whole list, so this keeps the
       three values a new org ships with (Phone, Email, Web) and adds the two
       this project sets: Agentforce (Escalation_Case_Origin__c, the Patient
-      Care agent's Cases) and Room Temperature Rule (Room_Temp_Case_Origin__c), and Vital Alert
+      Care agent's Cases) and Room Temperature Rule (Room_Temp_Case_Origin__c, labelled
+      Temperature Alert Rule: the value keeps its first name for now), and Vital Alert
       (VitalAlertCaseService, from the chapter 02 stream), and Patient Portal
       (Nurse_Request_Origin__c, a patient's nurse request from the portal chat).
       An org that added its own Origin values by hand must add them here too,
@@ -34,7 +35,7 @@
     <standardValue>
         <fullName>Room Temperature Rule</fullName>
         <default>false</default>
-        <label>Room Temperature Rule</label>
+        <label>Temperature Alert Rule</label>
     </standardValue>
     <standardValue>
         <fullName>Vital Alert</fullName>

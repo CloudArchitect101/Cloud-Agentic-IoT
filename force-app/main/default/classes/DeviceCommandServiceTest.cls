@@ -37,7 +37,7 @@ private class DeviceCommandServiceTest {
     }
 
     private static Device_Command__c command(String deviceId, Id assetId) {
-        return new Device_Command__c(Device__c = deviceId, Asset__c = assetId, Command__c = 'DISPENSE_MEDICATION');
+        return new Device_Command__c(Device__c = deviceId, Asset__c = assetId, Command__c = 'RESTART');
     }
 
     private static Device_Command__c saved(Id commandId) {
@@ -71,7 +71,7 @@ private class DeviceCommandServiceTest {
     @IsTest
     static void whatTheCreatorSetIsKept() {
         // What Slack sets.
-        Device_Command__c command = new Device_Command__c(Device__c = 'PM-NONE', Command__c = 'DISPENSE_MEDICATION',
+        Device_Command__c command = new Device_Command__c(Device__c = 'PM-NONE', Command__c = 'RESTART',
                                                           Status__c = 'Pending', Requested_By__c = 'Slack');
 
         DeviceCommandService.prepare(new List<Device_Command__c>{ command });
@@ -279,12 +279,12 @@ private class DeviceCommandServiceTest {
     }
 
     @IsTest
-    static void aSlackCommandForABoardWithoutAnAssetIsStillSent() {
+    static void anIntegrationCommandForABoardWithoutAnAssetIsStillSent() {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        // Exactly what lambda/slack-integration creates for /dispense-medication.
-        Device_Command__c command = new Device_Command__c(Device__c = 'PM-SLACK', Command__c = 'DISPENSE_MEDICATION',
+        // A command an integration creates with no Asset, as the retired Slack /dispense-medication did.
+        Device_Command__c command = new Device_Command__c(Device__c = 'PM-SLACK', Command__c = 'RESTART',
                                                           Requested_By__c = 'Slack', Status__c = 'Pending');
 
         Test.startTest();
@@ -295,17 +295,17 @@ private class DeviceCommandServiceTest {
         Assert.areEqual('Sent', saved.Status__c, 'Sent');
         Assert.areEqual('Slack', saved.Requested_By__c, 'Still Slack');
         Assert.isNull(saved.Asset__c, 'No Asset has this serial number');
-        Assert.areEqual('PM-SLACK', aws.bodies[0].get('thingName'), 'To the board Slack named');
-        Assert.areEqual('DISPENSE_MEDICATION', aws.bodies[0].get('operation'), 'The command Slack asked for');
+        Assert.areEqual('PM-SLACK', aws.bodies[0].get('thingName'), 'To the board named');
+        Assert.areEqual('RESTART', aws.bodies[0].get('operation'), 'The command asked for');
     }
 
     @IsTest
-    static void aSlackCommandForADeviceWithAnAssetIsLinkedToIt() {
+    static void anIntegrationCommandForADeviceWithAnAssetIsLinkedToIt() {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
         Asset device = device('PM-1', 'PM-1');
-        Device_Command__c command = new Device_Command__c(Device__c = 'PM-1', Command__c = 'DISPENSE_MEDICATION',
+        Device_Command__c command = new Device_Command__c(Device__c = 'PM-1', Command__c = 'RESTART',
                                                           Requested_By__c = 'Slack', Status__c = 'Pending');
 
         Test.startTest();

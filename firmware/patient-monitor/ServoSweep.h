@@ -1,13 +1,13 @@
 #pragma once
 /**
- * ServoSweep - where the patient monitor's servo should be while it
+ * ServoSweep - where the board's servo should be while it
  * turns: a sweep from 0 to 180 degrees and back, over and over. One full
- * sweep takes SWEEP_PERIOD_MS while a patient board's room is at 30 C or
+ * sweep takes SWEEP_PERIOD_MS while a monitored board's sensor reads 30 C or
  * more (ServoDemand.h); the queue's depth (QUEUE_DEPTH, ServoDemand.h) can make it
  * faster or slower with setPeriod, and the arm carries on from where it is.
  *
  * The angle comes from the clock, not from counting steps, so a pass of
- * loop() that took long (a reading, a reconnect, a dose) does not slow the
+ * loop() that took long (a reading, a reconnect) does not slow the
  * sweep down: the arm goes on where it should be by now. Nothing here waits,
  * so the MQTT loop never stalls.
  *
@@ -51,7 +51,7 @@ class ServoSweep {
     return true;
   }
 
-  /** Starts the sweep again from 0 at `now`, where a dose leaves the arm. */
+  /** Starts the sweep again from 0 at `now`, with the arm at home. */
   void restart(uint32_t now) {
     _start = now;
     _written = -1;

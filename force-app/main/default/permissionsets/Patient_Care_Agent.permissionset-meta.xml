@@ -4,8 +4,8 @@
     <description>For care team members who use the Patient Care Agent: the agent, its three actions (latest device readings, find a ward procedure, escalate to the care team queue) and the device, reading and Case access they need. The agent acts as its user.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <!-- Which employee agent assigned users may open (PermissionSet
-         agentAccesses, API 63.0 and later). The Bot ships in
-         bots/Patient_Care_Agent. -->
+         agentAccesses, API 63.0 and later). The agent ships as Agent Script
+         in aiAuthoringBundles/Patient_Care_Agent. -->
     <agentAccesses>
         <agentName>Patient_Care_Agent</agentName>
         <enabled>true</enabled>

@@ -129,8 +129,8 @@ Resources:
           SALESFORCE_TOKEN_CACHE_MINUTES: !Ref SalesforceTokenCacheMinutes
           CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds
 
-  # The asynchronous half is never retried: a retry after the Device Command
-  # was created would ask the board for a second dose.
+  # The asynchronous half is never retried: a retry would post a second
+  # answer to the same Slack command.
   SlackIntegrationAsyncConfig:
     Type: AWS::Lambda::EventInvokeConfig
     Properties:
