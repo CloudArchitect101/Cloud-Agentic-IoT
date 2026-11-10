@@ -222,7 +222,12 @@ Setup → **Users** → New User, twice:
 | Username | `integration@iot-dev.<yourdomain>` | `deploy@iot-dev.<yourdomain>` |
 | Gets permissions from | The `Salesforce API Integration` permission set license, then the `Device_Integration` permission set (from the repo) | Its profile, plus the `Metadata_Deploy` permission set from `scripts/` (§2.3) |
 
-Note: For the last name, you can use "Integration" / "Deploy" and reuse your original email address for that ORG.
+Note: For the last name, use "Integration" / "Deploy". Give each user its
+own email, for example plus addresses of yours (`you+integration@…`,
+`you+deploy@…`), which still reach your inbox. Never reuse the admin's
+address: Slack links people to Salesforce users by email and refuses an
+address that more than one active user has (see "Talk to the agent from
+Slack"). The same goes for any test portal user.
 
 Both profiles are minimal on purpose: **all** capability arrives via permission
 sets. That is what makes "what can this user actually do?" answerable by
@@ -999,7 +1004,10 @@ Slack side, as the workspace owner:
 4. Only now does the org have a **Users** tab (same page → the org →
    **Users** → **Add Individually**): link each Slack member who may use the
    agent; Slack asks them to sign in to Salesforce. An unmapped member
-   cannot use the agent.
+   cannot use the agent. Each member's Slack email must belong to exactly
+   one active Salesforce user; if the row says **Authentication failed**
+   ("multiple users in Salesforce with the same email"), give the other
+   users their own emails, or **Add Individually** by Salesforce username.
 5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
 6. DM the agent, or mention it in a channel: "What is Test8 reading?"
 
