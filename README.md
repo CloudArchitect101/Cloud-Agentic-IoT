@@ -724,7 +724,7 @@ As of November 9, 2026, in the test setup (one AWS project and one Salesforce De
 | 00, 13 · Provisioning | Live: two boards provisioned from their Assets, one Monitoring Device and one Internal Device |
 | 01 · Data Cloud | The CSV copy is live in S3. The connection, stream and mapping are setup steps in the org, and the insights a script ([SETUP.md §7](docs/SETUP.md#7-data-cloud-room-readings-for-the-ward)); not set up in the test org yet |
 | 02 · Streams | Deployed. Fired by `scripts/streams-test.sh`, since the boards send only temperature and humidity |
-| 03 · Queue indicator, 30 °C rule | Live and tested on the boards (firmware 2.5.0: the temperature alert motor on the monitored device; 2.6.0, which drops the dispense swing, is not yet installed) |
+| 03 · Queue indicator, 30 °C rule | Live: firmware 2.6.0-try.1 on Test7 and Test8 since Nov 10 (the temperature alert motor, no dispense swing); the armpit test is next |
 | 04 · Slack | Live: `/patient-status`, and the Patient Care Agent answers in Slack DMs. `/dispense-medication` retired Nov 10 |
 | 05 · Agent | Live in the new Agentforce Builder: readings, procedures, escalation to a Case on the device's Asset, in Salesforce and Slack |
 | 06 · MCP | Deployed; `get_room_status` tested by a signed call |
