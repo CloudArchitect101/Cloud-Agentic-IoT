@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CspTrustedSite xmlns="http://soap.sforce.com/2006/04/metadata">
     <context>All</context>
-    <description>The patient portal's Enhanced Chat (Patient_Portal_Chat deployment) talks to Salesforce's messaging servers here: the conversation stream, files, and Agentforce Voice audio. The chat's own site (ESW...) sits on the org's my.site.com host, so it needs no entry.</description>
+    <description>Patient portal Enhanced Chat: messaging servers for the conversation, files and Agentforce Voice audio. The chat site (ESW...) is on the org's my.site.com host, so it needs no entry.</description>
     <endpointUrl>https://*.salesforce-scrt.com</endpointUrl>
     <isActive>true</isActive>
     <isApplicableToConnectSrc>true</isApplicableToConnectSrc>

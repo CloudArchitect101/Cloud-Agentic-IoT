@@ -37,6 +37,17 @@ test('every permission set description fits in 255 characters', () => {
   }
 });
 
+test('every Trusted URL description fits in 255 characters', () => {
+  const files = filesUnder(path.join(metadata, 'cspTrustedSites'), '.cspTrustedSite-meta.xml');
+  assert.ok(files.length > 0, 'no Trusted URLs found');
+  for (const file of files) {
+    const match = fs.readFileSync(file, 'utf8').match(/<description>([\s\S]*?)<\/description>/);
+    if (!match) continue;
+    const length = unescapeXml(match[1]).length;
+    assert.ok(length <= 255, `${path.relative(root, file)}: description is ${length} characters, the maximum is 255`);
+  }
+});
+
 test('every record type description fits in 255 characters, and both device roles are visible where Assets are made', () => {
   const files = filesUnder(path.join(metadata, 'objects'), '.recordType-meta.xml');
   assert.ok(files.length >= 2, 'no record types found');
