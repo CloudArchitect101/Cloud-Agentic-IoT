@@ -345,12 +345,38 @@ test('costs are for admins: the card checks the custom permission, the Apex chec
   assert.doesNotMatch(deviceAdmin, /View_Platform_Usage/, 'device operators never see costs');
 });
 
+test('the headline: rings for storage and API, the most used limits first, and how many are past half', () => {
+  const view = usage.salesforceView({ orgLimits: [
+    { name: 'DataStorageMB', used: 3, max: 5 },
+    { name: 'DailyApiRequests', used: 100, max: 15000 },
+    { name: 'DailyAsyncApexExecutions', used: 9000, max: 10000 },
+    { name: 'SingleEmail', used: 0, max: 15 },
+  ] }, ...EN);
+  const h = usage.highlightsOf(view, 3);
+  assert.deepEqual(h.storage, { key: 'DataStorageMB', title: 'Data storage', shown: '60%', text: '3 of 5 MB (60%)', ringClass: 'ring ring_warn', ringStyle: '--p: 60' });
+  assert.equal(h.api.ringClass, 'ring ring_ok');
+  assert.deepEqual(h.watch.map((row) => [row.key, row.pillClass]),
+    [['DailyAsyncApexExecutions', 'pill pill_high'], ['DataStorageMB', 'pill pill_warn'], ['DailyApiRequests', 'pill pill_ok']]);
+  assert.equal(h.nearEdge, 2);
+  assert.equal(h.nearEdgeText, '2 of 4 limits are at least half used.');
+  assert.equal(usage.highlightsOf(usage.salesforceView({ orgLimits: [{ name: 'SingleEmail', used: 0, max: 15 }] }, ...EN)).nearEdgeText,
+    'All 1 limits are under half used.');
+  assert.equal(usage.highlightsOf(view).storage.key, 'DataStorageMB');
+  assert.equal(usage.highlightsOf(usage.salesforceView({ orgLimits: [] }, ...EN)).storage, null, 'no ring for a limit the org lacks');
+
+  const aws = usage.awsView(budgetAnswer({ amount: 15 }, { amount: 20, name: 'cloud-agentic-iot-monthly' }), ...EN);
+  assert.deepEqual(usage.awsRingOf(aws), { shown: '75%', ringClass: 'ring ring_warn', ringStyle: '--p: 75' });
+  assert.equal(usage.awsRingOf(usage.awsView(budgetAnswer({ amount: 15 }, null), ...EN)), null);
+});
+
 test("the card is this app's Home page, on desktop, and nowhere else", () => {
   assert.deepEqual([...app('lwc/platformUsageCard/platformUsageCard.js-meta.xml').matchAll(/<target>(.+?)<\/target>/g)].map(([, t]) => t), ['lightning__HomePage']);
   const page = app('flexipages/Cloud_Agentic_IoT_Home.flexipage-meta.xml');
   assert.match(page, /<type>HomePage<\/type>/);
   assert.match(page, /<name>home:desktopTemplate<\/name>/);
-  assert.deepEqual([...page.matchAll(/<componentName>(.+?)<\/componentName>/g)].map(([, c]) => c), ['platformUsageCard']);
+  assert.deepEqual([...page.matchAll(/<componentName>(.+?)<\/componentName>/g)].map(([, c]) => c),
+    ['desktopDashboards:embeddedDashboard', 'platformUsageCard'], 'the Business Value KPIs first, then cost and limits');
+  assert.match(page, /<name>dashboardName<\/name>\s*<value>Business_Value<\/value>/);
   const overrides = [...app('applications/Cloud_Agentic_IoT.app-meta.xml').matchAll(/<actionOverrides>([\s\S]*?)<\/actionOverrides>/g)]
     .map(([, body]) => body).filter((body) => body.includes('<actionName>Tab</actionName>'));
   assert.equal(overrides.length, 1);

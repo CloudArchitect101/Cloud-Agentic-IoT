@@ -1,8 +1,9 @@
 # Business Value dashboard: what the platform is worth, before and after
 
 A business owner asks one question first: what does this save me, and what
-does it cost? The **Business Value** dashboard (App Launcher -> Dashboards ->
-Business Value) answers it with numbers the org measures every night, next
+does it cost? The **Business Value** dashboard answers it. It is the first thing
+on the Cloud Agentic IoT app's **Home** tab (above the cost and limits
+card), and also under Dashboards -> Business Value. It answers it with numbers the org measures every night, next
 to the as-is baseline and the prices you set.
 
 ## What it shows
