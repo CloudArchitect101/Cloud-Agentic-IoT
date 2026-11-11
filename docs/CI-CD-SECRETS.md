@@ -98,5 +98,5 @@ One habit catches most of the above before a push, and it is the same check the 
 
 ```bash
 scripts/check.sh                               # includes resolving all Salesforce source offline
-scripts/deploy-salesforce.sh Dev --dry-run     # then validate against the Dev org, as the deploy user
+scripts/deploy-salesforce.sh Dev --dry-run --with-tests   # then validate against the Dev org, as the deploy user, with every Apex test
 ```

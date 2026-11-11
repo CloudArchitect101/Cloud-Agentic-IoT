@@ -211,3 +211,13 @@ test('deploy-aws.sh never deploys the bootstrap template', () => {
   assert.match(source('scripts/deploy-aws.sh'), /find \. -name cloudformation\.yaml/);
   assert.match(source('scripts/check.sh'), /infra\/bootstrap/, 'check.sh must still lint it');
 });
+
+// Laptop deploys to Dev may skip Apex tests; the pipeline and Prod never do.
+test('deploy-salesforce.sh always runs Apex tests in CI and on Prod', () => {
+  const script = fs.readFileSync(path.join(root, 'scripts/deploy-salesforce.sh'), 'utf8');
+  assert.match(script, /if in_ci \|\| \[ "\$ENV" = "Prod" \]; then RUN_TESTS=yes; fi/);
+  assert.match(script, /--test-level RunLocalTests/);
+  const forced = script.indexOf('then RUN_TESTS=yes; fi');
+  const firstNoTest = script.indexOf('--test-level NoTestRun');
+  assert.ok(forced > 0 && forced < firstNoTest, 'the CI/Prod override must come before any NoTestRun deploy');
+});
