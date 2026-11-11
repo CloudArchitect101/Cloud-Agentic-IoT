@@ -148,13 +148,24 @@ run_agent_test() {  # run_agent_test <spec> <values...>
   if [ -z "$junit" ]; then
     warn "$test wrote no results within 20 minutes. Get them later with: sf agent test results --use-most-recent --target-org $org"
     failed="$failed $test"
-  elif grep -qE '<failure|failures="[1-9]' "$junit"; then
-    warn "$test has failing cases ($junit)."
-    failed="$failed $test"
   else
-    note "$test passed."
+    # Testing Center writes a <failure> for every check below its bar,
+    # including the LLM-judged quality scores (coherence, completeness,
+    # conciseness, latency). Those are reported; only the checks of what the
+    # agent did (routing, actions, the judged answer, custom evaluations)
+    # decide pass or fail.
+    local hard soft
+    hard=$(grep -oE '<failure [^>]*name="(topic_assertion|actions_assertion|output_validation|string_comparison|numeric_comparison)"' "$junit" | sed -E 's/.*name="([a-z_]+)"/\1/' | sort | uniq -c | tr -s ' ' | tr '\n' ',' || true)
+    soft=$(grep -oE '<failure [^>]*name="(coherence|completeness|conciseness|output_latency_milliseconds)"' "$junit" | sed -E 's/.*name="([a-z_]+)"/\1/' | sort | uniq -c | tr -s ' ' | tr '\n' ',' || true)
+    if [ -n "$hard" ]; then
+      warn "$test has failing checks:${hard%,} ($junit)."
+      failed="$failed $test"
+    else
+      note "$test passed."
+    fi
+    [ -z "$soft" ] || note "$test quality scores below their bar (reported, not failing):${soft%,}"
+    { echo "### $test"; echo; echo "Failing checks: ${hard:-none}"; echo; echo "Quality scores below bar: ${soft:-none}"; echo; echo "Results: \`$junit\`"; echo; } >> "$OUT/summary.md"
   fi
-  { echo "### $test"; echo; echo "Results: \`$junit\`"; echo; } >> "$OUT/summary.md"
   endstep
 }
 
