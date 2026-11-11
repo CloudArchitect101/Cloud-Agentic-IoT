@@ -121,6 +121,14 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | Nov 10 (design) | Each eval run would leave open Cases in Care_Team_Queue | The confirmed escalation and nurse request cases call the real actions | The script closes Cases with those subjects created since the run started | `close_eval_cases` in the script |
 | Nov 10 (design) | The CLI docs do not say whether `sf agent test run` exits non-zero when cases fail | Undocumented | The script reads pass or fail from the JUnit XML | Same |
 
+## Business Value dashboard
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+|---|---|---|---|---|
+| Nov 11 | First deploy failed with 74 component errors, most of them `Invalid type: Value_Snapshot__c` in the Apex and `no CustomObject named Value_Snapshot__c found` in the reports and permission set | One error on the object itself: `Allow Sharing, Allow Bulk API Access, and Allow Streaming API Access must be enabled together or disabled together`. The object had Streaming off, so it never deployed, and everything that names it failed after it | `enableStreamingApi` set to true, to match Sharing and Bulk API | `salesforce-metadata-limits.test.js` checks the three flags match on every custom object |
+| Nov 11 | Same deploy: `Metric, gauge, or table dashboard component missing indicatorLowColor attribute` | Salesforce requires the indicator colours on metric components, even with no breakpoints set; hand-written dashboard XML left them out | Low, middle and high indicator colours on the four metric tiles | The same test file checks every Metric and Gauge component |
+| Nov 11 | Same deploy: `Invalid property [showHeader] in component [desktopDashboards:embeddedDashboard]` on the app's Home page | The standard Dashboard component takes fewer properties than the Lightning App Builder panel suggests | Kept `dashboardName`, `height`, `hideOnError` and `showTitle`; removed `showHeader` and `showSharing` | The same test file allows only those four properties |
+
 ## Patient portal (React site, Enhanced Chat, patient agent)
 
 | When | Symptom | Root cause | Fix | What prevents it now |

@@ -23,6 +23,9 @@
             <displayUnits>Auto</displayUnits>
             <footer>Staff time value minus Agentforce and AWS cost</footer>
             <header>Net value (last 7 days)</header>
+            <indicatorHighColor>#54C473</indicatorHighColor>
+            <indicatorLowColor>#C23934</indicatorLowColor>
+            <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>Net value (last 7 days)</metricLabel>
             <report>Business_Value/Value_Latest</report>
             <showPercentage>false</showPercentage>
@@ -48,6 +51,9 @@
             <displayUnits>Auto</displayUnits>
             <footer>Patient chats with no nurse request</footer>
             <header>Chats the agent handled %</header>
+            <indicatorHighColor>#54C473</indicatorHighColor>
+            <indicatorLowColor>#C23934</indicatorLowColor>
+            <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>Chats the agent handled %</metricLabel>
             <report>Business_Value/Value_Latest</report>
             <showPercentage>false</showPercentage>
@@ -73,6 +79,9 @@
             <displayUnits>Auto</displayUnits>
             <footer>Alert close time vs the as-is baseline</footer>
             <header>Faster response %</header>
+            <indicatorHighColor>#54C473</indicatorHighColor>
+            <indicatorLowColor>#C23934</indicatorLowColor>
+            <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>Faster response %</metricLabel>
             <report>Business_Value/Value_Latest</report>
             <showPercentage>false</showPercentage>
@@ -98,6 +107,9 @@
             <displayUnits>Auto</displayUnits>
             <footer>Month-to-date spend, projected</footer>
             <header>AWS per device per month</header>
+            <indicatorHighColor>#54C473</indicatorHighColor>
+            <indicatorLowColor>#C23934</indicatorLowColor>
+            <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>AWS per device per month</metricLabel>
             <report>Business_Value/Value_Latest</report>
             <showPercentage>false</showPercentage>

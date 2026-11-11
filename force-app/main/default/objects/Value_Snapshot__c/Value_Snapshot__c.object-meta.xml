@@ -11,7 +11,7 @@
     <enableReports>true</enableReports>
     <enableSearch>false</enableSearch>
     <enableSharing>true</enableSharing>
-    <enableStreamingApi>false</enableStreamingApi>
+    <enableStreamingApi>true</enableStreamingApi>
     <nameField>
         <displayFormat>VS-{0000}</displayFormat>
         <label>Snapshot</label>
