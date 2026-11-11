@@ -13,10 +13,8 @@
             <columnIndex>0</columnIndex>
             <dashboardComponent>
             <autoselectColumnsFromReport>false</autoselectColumnsFromReport>
-            <chartAxisRange>Auto</chartAxisRange>
             <chartSummary>
                 <aggregate>Sum</aggregate>
-                <axisBinding>y</axisBinding>
                 <column>Value_Snapshot__c.Net_Value__c</column>
             </chartSummary>
             <componentType>Metric</componentType>
@@ -28,10 +26,7 @@
             <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>Net value (last 7 days)</metricLabel>
             <report>Business_Value/Value_Latest</report>
-            <showPercentage>false</showPercentage>
-            <showValues>true</showValues>
-            <sortBy>RowLabelAscending</sortBy>
-            <useReportChart>false</useReportChart>
+            <showRange>false</showRange>
             </dashboardComponent>
             <rowIndex>0</rowIndex>
             <rowSpan>4</rowSpan>
@@ -41,10 +36,8 @@
             <columnIndex>3</columnIndex>
             <dashboardComponent>
             <autoselectColumnsFromReport>false</autoselectColumnsFromReport>
-            <chartAxisRange>Auto</chartAxisRange>
             <chartSummary>
                 <aggregate>Sum</aggregate>
-                <axisBinding>y</axisBinding>
                 <column>Value_Snapshot__c.Deflection_Rate_Pct__c</column>
             </chartSummary>
             <componentType>Metric</componentType>
@@ -56,10 +49,7 @@
             <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>Chats the agent handled %</metricLabel>
             <report>Business_Value/Value_Latest</report>
-            <showPercentage>false</showPercentage>
-            <showValues>true</showValues>
-            <sortBy>RowLabelAscending</sortBy>
-            <useReportChart>false</useReportChart>
+            <showRange>false</showRange>
             </dashboardComponent>
             <rowIndex>0</rowIndex>
             <rowSpan>4</rowSpan>
@@ -69,10 +59,8 @@
             <columnIndex>6</columnIndex>
             <dashboardComponent>
             <autoselectColumnsFromReport>false</autoselectColumnsFromReport>
-            <chartAxisRange>Auto</chartAxisRange>
             <chartSummary>
                 <aggregate>Sum</aggregate>
-                <axisBinding>y</axisBinding>
                 <column>Value_Snapshot__c.Response_Improvement_Pct__c</column>
             </chartSummary>
             <componentType>Metric</componentType>
@@ -84,10 +72,7 @@
             <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>Faster response %</metricLabel>
             <report>Business_Value/Value_Latest</report>
-            <showPercentage>false</showPercentage>
-            <showValues>true</showValues>
-            <sortBy>RowLabelAscending</sortBy>
-            <useReportChart>false</useReportChart>
+            <showRange>false</showRange>
             </dashboardComponent>
             <rowIndex>0</rowIndex>
             <rowSpan>4</rowSpan>
@@ -97,10 +82,8 @@
             <columnIndex>9</columnIndex>
             <dashboardComponent>
             <autoselectColumnsFromReport>false</autoselectColumnsFromReport>
-            <chartAxisRange>Auto</chartAxisRange>
             <chartSummary>
                 <aggregate>Sum</aggregate>
-                <axisBinding>y</axisBinding>
                 <column>Value_Snapshot__c.Aws_Cost_Per_Device_Month__c</column>
             </chartSummary>
             <componentType>Metric</componentType>
@@ -112,10 +95,7 @@
             <indicatorMiddleColor>#FFB75D</indicatorMiddleColor>
             <metricLabel>AWS per device per month</metricLabel>
             <report>Business_Value/Value_Latest</report>
-            <showPercentage>false</showPercentage>
-            <showValues>true</showValues>
-            <sortBy>RowLabelAscending</sortBy>
-            <useReportChart>false</useReportChart>
+            <showRange>false</showRange>
             </dashboardComponent>
             <rowIndex>0</rowIndex>
             <rowSpan>4</rowSpan>
@@ -140,6 +120,7 @@
             <displayUnits>Auto</displayUnits>
             <groupingColumn>Value_Snapshot__c.Phase__c</groupingColumn>
             <header>Response time: before vs after (minutes)</header>
+            <legendPosition>Bottom</legendPosition>
             <report>Business_Value/Value_By_Phase</report>
             <showPercentage>false</showPercentage>
             <showValues>true</showValues>
@@ -174,6 +155,7 @@
             <displayUnits>Auto</displayUnits>
             <groupingColumn>Value_Snapshot__c.Phase__c</groupingColumn>
             <header>Agentforce: cost vs value (last 7 days)</header>
+            <legendPosition>Bottom</legendPosition>
             <report>Business_Value/Value_Latest</report>
             <showPercentage>false</showPercentage>
             <showValues>true</showValues>
@@ -203,6 +185,7 @@
             <displayUnits>Auto</displayUnits>
             <groupingColumn>Value_Snapshot__c.Snapshot_Date__c</groupingColumn>
             <header>Deflection rate vs break-even (%)</header>
+            <legendPosition>Bottom</legendPosition>
             <report>Business_Value/Value_Trend</report>
             <showPercentage>false</showPercentage>
             <showValues>true</showValues>
@@ -227,6 +210,7 @@
             <displayUnits>Auto</displayUnits>
             <groupingColumn>Value_Snapshot__c.Snapshot_Date__c</groupingColumn>
             <header>Net value, trailing 7 days, by day</header>
+            <legendPosition>Bottom</legendPosition>
             <report>Business_Value/Value_Trend</report>
             <showPercentage>false</showPercentage>
             <showValues>true</showValues>
@@ -256,6 +240,7 @@
             <displayUnits>Auto</displayUnits>
             <groupingColumn>Value_Snapshot__c.Snapshot_Date__c</groupingColumn>
             <header>Hours avoided, trailing 7 days: manual checks and nurse chat time</header>
+            <legendPosition>Bottom</legendPosition>
             <report>Business_Value/Value_Trend</report>
             <showPercentage>false</showPercentage>
             <showValues>true</showValues>

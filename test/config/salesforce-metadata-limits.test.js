@@ -216,19 +216,23 @@ test('custom objects enable Sharing, Bulk API and Streaming API together', () =>
   }
 });
 
-test('metric and gauge dashboard components set indicator colours', () => {
+test('metric and gauge dashboard components set indicator colours and no chart-only attributes', () => {
   for (const file of filesUnder(path.join(metadata, 'dashboards'), '.dashboard-meta.xml')) {
     const xml = fs.readFileSync(file, 'utf8');
     const components = xml.split('<dashboardComponent>').slice(1);
     for (const c of components) {
       if (!/<componentType>(Metric|Gauge)<\/componentType>/.test(c)) continue;
-      assert.match(c, /<indicatorLowColor>/, `${path.basename(file)}: ${(c.match(/<header>([^<]*)/) || [])[1]}`);
+      const name = `${path.basename(file)}: ${(c.match(/<header>([^<]*)/) || [])[1]}`;
+      assert.match(c, /<indicatorLowColor>/, name);
+      for (const tag of ['sortBy', 'chartAxisRange', 'showPercentage', 'showValues', 'useReportChart', 'axisBinding']) {
+        assert.doesNotMatch(c.split('</dashboardComponent>')[0], new RegExp(`<${tag}>`), `${name} uses ${tag}`);
+      }
     }
   }
 });
 
 test('embedded dashboards use only the properties Salesforce accepts', () => {
-  const allowed = new Set(['dashboardName', 'height', 'hideOnError', 'showTitle']);
+  const allowed = new Set(['dashboardName', 'height', 'hideOnError']);
   for (const file of filesUnder(path.join(metadata, 'flexipages'), '.flexipage-meta.xml')) {
     const xml = fs.readFileSync(file, 'utf8');
     for (const inst of xml.split('<componentInstance>').slice(1)) {
