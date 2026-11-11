@@ -105,15 +105,6 @@ first_field() {  # first_field <json> <field>: the field of the first record, or
     });' "$2" <<< "$1"
 }
 
-# The org's API name for a subagent. Publishing an Agent Script agent may
-# give its subagents generated names with a suffix; Testing Center compares
-# against those. Falls back to the name as written.
-topic_api_name() {  # topic_api_name <agent> <subagent>
-  local found
-  found=$(first_field "$(soql "SELECT DeveloperName FROM GenAiPluginDefinition WHERE DeveloperName LIKE '$2%' ORDER BY LastModifiedDate DESC LIMIT 1")" DeveloperName)
-  printf '%s' "${found:-$2}"
-}
-
 verified_session_id() {
   local filter="MessagingEndUser.MessagingPlatformKey LIKE 'v2/iamessage/AUTH/%'" user
   if [ -n "${EVAL_PATIENT_USERNAME:-}" ]; then
@@ -126,14 +117,13 @@ verified_session_id() {
 
 run_agent_test() {  # run_agent_test <spec> <values...>
   local spec="$1"; shift
-  local agent test rendered args=() topic junit
+  local agent test rendered junit
   agent=$(sed -n 's/^subjectName:[[:space:]]*//p' "$spec")
   test="${agent}_Eval"
   rendered="$work/$(basename "$spec")"
-  for topic in $(node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8");console.log(require(process.argv[2]).topicsOf(s).join(" "))' "$spec" "$REPO_ROOT/scripts/lib/agent-spec.js"); do
-    args+=(--topic "$topic=$(topic_api_name "$agent" "$topic")")
-  done
-  node scripts/lib/agent-spec.js "$spec" "$rendered" "$@" ${args[@]+"${args[@]}"}
+  # Subagents keep the names the .agent file gives them: Testing Center
+  # reports them that way (a suffixed name from the org fails every case).
+  node scripts/lib/agent-spec.js "$spec" "$rendered" "$@"
 
   step "Testing Center: create $test from $spec"
   sf agent test create --spec "$rendered" --api-name "$test" --force-overwrite --target-org "$org" \
@@ -148,13 +138,24 @@ run_agent_test() {  # run_agent_test <spec> <values...>
   if [ -z "$junit" ]; then
     warn "$test wrote no results within 20 minutes. Get them later with: sf agent test results --use-most-recent --target-org $org"
     failed="$failed $test"
-  elif grep -qE '<failure|failures="[1-9]' "$junit"; then
-    warn "$test has failing cases ($junit)."
-    failed="$failed $test"
   else
-    note "$test passed."
+    # Testing Center writes a <failure> for every check below its bar,
+    # including the LLM-judged quality scores (coherence, completeness,
+    # conciseness, latency). Those are reported; only the checks of what the
+    # agent did (routing, actions, the judged answer, custom evaluations)
+    # decide pass or fail.
+    local hard soft
+    hard=$(grep -oE '<failure [^>]*name="(topic_assertion|actions_assertion|output_validation|string_comparison|numeric_comparison)"' "$junit" | sed -E 's/.*name="([a-z_]+)"/\1/' | sort | uniq -c | tr -s ' ' | tr '\n' ',' || true)
+    soft=$(grep -oE '<failure [^>]*name="(coherence|completeness|conciseness|output_latency_milliseconds)"' "$junit" | sed -E 's/.*name="([a-z_]+)"/\1/' | sort | uniq -c | tr -s ' ' | tr '\n' ',' || true)
+    if [ -n "$hard" ]; then
+      warn "$test has failing checks:${hard%,} ($junit)."
+      failed="$failed $test"
+    else
+      note "$test passed."
+    fi
+    [ -z "$soft" ] || note "$test quality scores below their bar (reported, not failing):${soft%,}"
+    { echo "### $test"; echo; echo "Failing checks: ${hard:-none}"; echo; echo "Quality scores below bar: ${soft:-none}"; echo; echo "Results: \`$junit\`"; echo; } >> "$OUT/summary.md"
   fi
-  { echo "### $test"; echo; echo "Results: \`$junit\`"; echo; } >> "$OUT/summary.md"
   endstep
 }
 

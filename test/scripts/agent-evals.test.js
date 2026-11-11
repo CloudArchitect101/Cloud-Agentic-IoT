@@ -38,8 +38,11 @@ for (const [agent, specPath] of Object.entries(SPECS)) {
     const spec = read(specPath);
     const have = agentScript(agent);
     assert.match(spec, new RegExp(`^subjectName: ${agent}$`, 'm'));
+    // Agentforce's own guard topic and its built-in hand-off to a person
+    // are reported by these names, though no .agent file declares them.
+    const platform = ['Prompt_Injection', 'human'];
     for (const topic of topicsOf(spec)) {
-      assert.ok(have.subagents.includes(topic), `${specPath} expects subagent ${topic}; ${agent} has ${have.subagents.join(', ')}`);
+      assert.ok(have.subagents.includes(topic) || platform.includes(topic), `${specPath} expects subagent ${topic}; ${agent} has ${have.subagents.join(', ')}`);
     }
     const actions = actionsOf(spec);
     assert.ok(actions.length > 0);
@@ -62,21 +65,23 @@ for (const [agent, specPath] of Object.entries(SPECS)) {
 
 test('the staff agent spec checks SOP citations, confirmation before escalation, and refusals', () => {
   const spec = read(SPECS.Patient_Care_Agent);
-  for (const sop of ['SOP-WARD-001', 'SOP-WARD-002', 'SOP-WARD-003']) assert.match(spec, new RegExp(`expected\\n\\s+value: ${sop}`));
+  for (const sop of ['SOP-WARD-001', 'SOP-WARD-002', 'SOP-WARD-003']) assert.match(spec, new RegExp(`expectedOutcome: .*${sop}`));
   assert.match(spec, /asks the user to confirm\. Does not say a Case was created/);
   assert.match(spec, /- Escalate_Patient_Device_Condition/);
   assert.match(spec, /expectedTopic: off_topic/);
+  assert.match(spec, /expectedTopic: Prompt_Injection/);
 });
 
 test('the patient agent spec runs as a verified chat, refuses other devices, and confirms nurse requests', () => {
   const spec = read(SPECS.Patient_Portal_Agent);
   assert.match(spec, /name: RoutableId\n\s+value: "\{\{VERIFIED_SESSION_ID\}\}"/);
   assert.match(spec, /can only see the patient's own devices/);
+  assert.match(spec, /does not confirm or deny that \{\{OTHER_DEVICE\}\} exists/);
   assert.match(spec, /- request_nurse/);
   // One case runs without a verified chat and must see nothing.
   const unverified = spec.split(/^ {2}- utterance:/m).slice(1).filter((c) => !c.includes('RoutableId'));
   assert.equal(unverified.length, 1);
-  assert.match(unverified[0], /shares no patient data/);
+  assert.match(unverified[0], /gives no temperature reading or other patient data/);
 });
 
 test('render fills placeholders and maps subagents to the org names, and reports what is left', () => {
