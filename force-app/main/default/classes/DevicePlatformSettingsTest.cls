@@ -17,6 +17,10 @@ private class DevicePlatformSettingsTest {
         Assert.isFalse(String.isBlank(DevicePlatformSettings.defaultThingGroup()), 'Default thing group');
         Assert.isTrue(deployed.At_Risk_Score__c < deployed.Critical_Score__c, 'AT_RISK comes before CRITICAL');
 
+        // Where the Patient Care agent's Cases go, as the Default record ships it.
+        Assert.areEqual('Agentforce', DevicePlatformSettings.escalationCaseOrigin(), 'Agent Case Origin');
+        Assert.areEqual('Care_Team_Queue', DevicePlatformSettings.escalationCaseQueue(), 'Agent Case queue');
+
         // The room-temperature rule's settings, as the Default record ships them.
         Assert.areEqual('Room Temperature Rule', DevicePlatformSettings.roomTempCaseOrigin(), 'Room-temperature Case Origin');
         Assert.areEqual('Care_Team_Queue', DevicePlatformSettings.roomTempCaseQueue(), 'Room-temperature Case queue');
@@ -41,6 +45,18 @@ private class DevicePlatformSettingsTest {
             Assert.fail('A blank queue name must not be accepted');
         } catch (DevicePlatformSettings.SettingException expected) {
             Assert.isTrue(expected.getMessage().contains('Room_Temp_Case_Queue__c'), expected.getMessage());
+        }
+    }
+
+    @IsTest
+    static void aBlankEscalationQueueIsRefused() {
+        Device_Platform_Setting__mdt settings = DeviceTestSettings.use();
+        settings.Escalation_Case_Queue__c = '';
+        try {
+            DevicePlatformSettings.escalationCaseQueue();
+            Assert.fail('A blank queue name must not be accepted');
+        } catch (DevicePlatformSettings.SettingException expected) {
+            Assert.isTrue(expected.getMessage().contains('Escalation_Case_Queue__c'), expected.getMessage());
         }
     }
 

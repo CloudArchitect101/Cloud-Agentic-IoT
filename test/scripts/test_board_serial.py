@@ -10,8 +10,11 @@ come, with Stream's one-second timeout between them. It starts when the
 helper opens the port, as the real board restarts then, and it records any
 byte that reaches it before it has asked for one.
 
-A pseudo-terminal delivers a burst at once rather than at 115200 baud, so here
-a burst always loses its end and is rejected. On a real board the end arrives
+A UART thread drains the pseudo-terminal the moment bytes arrive, into a
+receive buffer that drops what does not fit while the firmware is not reading.
+So a burst is lost the same way on every OS, however the kernel chunks it: a
+pseudo-terminal delivers it far faster than 115200 baud, and the end is
+rejected. On a real board the end arrives
 after the firmware starts reading, so the line can lose a piece from inside
 the certificate and still be stored. Either way the bundle does not arrive
 whole, which is what the burst test checks.
@@ -87,11 +90,16 @@ class FakeBoard:
         self.lines_read = []
         self.boots = 0
         self.rx = b''
+        self._uart = b''             # the ESP32's receive buffer, filled by _drain
+        self._reading = False        # inside readStringUntil: nothing overflows
+        self._uart_lock = threading.Condition()
         self._en = threading.Event()
         self._stopping = False
         os.set_blocking(master, False)
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
+        self._drainer = threading.Thread(target=self._drain, daemon=True)
+        self._drainer.start()
 
     def press_en(self):
         self._en.set()
@@ -104,6 +112,7 @@ class FakeBoard:
         self._power.set()
         self._en.set()
         self.thread.join(5)
+        self._drainer.join(5)
 
     # ------------------------------------------------------------ plumbing
 
@@ -140,16 +149,32 @@ class FakeBoard:
     def _println(self, text):
         self._print(text + '\r\n')
 
-    def _take(self):
-        data = b''
-        while True:
+    def _drain(self):
+        # The UART: takes bytes off the wire as they arrive, whatever the
+        # firmware is doing. While the firmware is not reading, what does not
+        # fit in RX_ROOM is lost, as on the chip.
+        while not self._stopping:
             try:
+                if not select.select([self.master], [], [], 0.02)[0]:
+                    continue
                 chunk = os.read(self.master, 65536)
             except BlockingIOError:
-                return data
+                continue
+            except (OSError, ValueError):
+                return                # the test closed the pseudo-terminal
             if not chunk:
-                return data
-            data += chunk
+                continue
+            with self._uart_lock:
+                if self._reading:
+                    self._uart += chunk
+                else:
+                    self._uart += chunk[:max(self.RX_ROOM - len(self._uart), 0)]
+                self._uart_lock.notify_all()
+
+    def _take(self):
+        with self._uart_lock:
+            data, self._uart = self._uart, b''
+            return data
 
     def _readable_within(self, seconds):
         end = time.monotonic() + seconds
@@ -159,8 +184,10 @@ class FakeBoard:
             left = end - time.monotonic()
             if left <= 0:
                 return False
-            if select.select([self.master], [], [], min(left, 0.02))[0]:
-                return True
+            with self._uart_lock:
+                if self._uart:
+                    return True
+                self._uart_lock.wait(min(left, 0.02))
 
     # ------------------------------------------------- the firmware's reads
 
@@ -174,6 +201,15 @@ class FakeBoard:
 
     def _read_line(self):
         # Stream::readStringUntil('\n'), with its one-second timeout.
+        with self._uart_lock:
+            self._reading = True
+        try:
+            return self._read_line_now()
+        finally:
+            with self._uart_lock:
+                self._reading = False
+
+    def _read_line_now(self):
         got = b''
         while True:
             if not self.rx:

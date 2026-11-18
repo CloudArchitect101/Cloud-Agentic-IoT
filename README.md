@@ -89,7 +89,8 @@ Cloud-Agentic-IoT/
 │   ├── objects/                       # Asset, Patient_Vitals__c, the two platform events, ...
 │   ├── classes/                       # Apex services + tests
 │   ├── triggers/                      # One trigger per object, handler pattern
-│   ├── genAiPlannerBundles/           # The Agentforce agent's planner
+│   ├── bots/Patient_Care_Agent/       # The Agentforce agent itself (Bot + BotVersion), shipped inactive
+│   ├── genAiPlannerBundles/           # The agent's planner
 │   ├── genAiPlugins/ genAiFunctions/  # Its topic and registered actions
 │   ├── customMetadata/                # Device_Queue_Binding — config, not code
 │   └── lwc/                           # queueDepthIndicator, reprovisionDevice, deviceLiveCard, platformUsageCard
@@ -115,7 +116,7 @@ Code uses one standard layout rather than per-chapter copies, so the repo looks 
 
 | Stage | What | How long |
 |---|---|---|
-| 0 | Prerequisites — [`docs/SETUP.md`](docs/SETUP.md) | Once, ~a day |
+| 0 | Prerequisites — [`docs/SETUP.md`](docs/SETUP.md), including turning on Einstein and Agentforce in each org before its first deploy | Once, ~a day |
 | 1 | Push to `Dev` → AWS, Salesforce and the Dev boards deploy automatically | Minutes |
 | 2 | Connect the seams CI cannot reach (Named Credentials, Slack, Data Cloud, agent) | ~an hour |
 | 3 | Hardware — create the Thing, flash and provision each device | ~20 min per device |
@@ -212,9 +213,21 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 **4. Data Cloud ingestion.** Configure ingestion for the External Objects that carry patient vitals. Point-and-click only — there is no metadata API coverage for it.
 
-**5. Case queue + its binding.** Create a Case queue in Salesforce and note its Developer Name. Put that and your indicator's IoT Thing name into `force-app/main/default/customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml`, then push — the binding is configuration, so it ships as metadata rather than being clicked in.
+**5. Case queue + its binding.** Create a Case queue in Salesforce and note its Developer Name. Put that and your indicator's IoT Thing name into `force-app/main/default/customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml`, then push — the binding is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so name yours `Care_Team_Queue` or change those two values.
 
-**6. Activate the agent.** Setup → Agentforce Agents → **Patient Care Agent** → activate the version, then assign the agent user a permission set granting access to `PatientCareAgentActions`. It ships `Inactive` on purpose: activating an agent that can create clinical Cases should be a deliberate act, not a side effect of a deploy.
+**6. Activate the agent.** The deploy creates the **Patient Care Agent** (`force-app/main/default/bots/Patient_Care_Agent`), an employee agent whose version 1 uses `Patient_Care_Planner`, and leaves it inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). Activate it, as the admin:
+
+```bash
+sf agent activate --api-name Patient_Care_Agent --version 1 --target-org <your admin alias>
+```
+
+or Setup → Agentforce Agents → **Patient Care Agent** → Activate. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its two actions (`DeviceReadingsAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. An employee agent acts as the person talking to it, so there is no separate agent user.
+
+```bash
+sf org assign permset --name Patient_Care_Agent --target-org <your admin alias>
+```
+
+It ships inactive on purpose: activating an agent that can create clinical Cases should be a deliberate act, not a side effect of a deploy.
 
 **7. Register the MCP endpoint** with whichever agent client you are using, so it can discover the device tools at runtime.
 
@@ -233,6 +246,7 @@ Two pieces are written and tested but **not yet wired** into the agent's action 
 | The Salesforce caller's IAM user and access key | The deploy identities may not create users or keys, and the key should exist only in Salesforce |
 | Slack app creation + signing secret | Lives in Slack's console |
 | Data Cloud ingestion config | Point-and-click configuration, no metadata API coverage |
+| Turning on Einstein and Agentforce | Accepting their terms is the org admin's decision. The settings that switch them on are documented for scratch orgs, not for deploying to an existing org |
 | Activating the Agentforce agent | A deliberate human checkpoint, not a deploy step |
 
 ### Stage 3 — Hardware
@@ -340,7 +354,7 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
-| The agent acts | Agent conversation preview | A Case with `Origin = Agentforce` |
+| The agent acts | The agent's panel in Lightning, as a holder of `Patient_Care_Agent`: ask for a device's latest readings, then escalate | The readings, then a Case with `Origin = Agentforce` in Care_Team_Queue |
 | Room-temp Case | Warm the DHT11 above 30 C (with `RoomTempAlert` on, [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose)) | A Case with Origin `Room Temperature Rule` in Care_Team_Queue, and one `DISPENSE_MEDICATION` Device Command |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
 
@@ -433,7 +447,7 @@ A Slack slash-command bot that reads and writes Salesforce data — `/patient-st
 
 ### 05 · The Agent and Its Actions
 
-The **actual Agentforce agent** — bot, planner, topic, registered action — plus the Apex it invokes and the integration plumbing that lets it reach outside Salesforce. This is the centre of the system: everything else in the repo produces data for it, constrains it, or gives it somewhere to act.
+The **actual Agentforce agent** — bot, planner, topic, registered actions — plus the Apex it invokes and the integration plumbing that lets it reach outside Salesforce. This is the centre of the system: everything else in the repo produces data for it, constrains it, or gives it somewhere to act.
 
 **The idea worth defending:** an LLM deciding to escalate is a *suggestion*, not an authorisation. The agent chooses whether to call the action; Apex decides what is allowed to happen when it does. Validation, sharing enforcement, and the audit trail live in `PatientCareAgentActions.cls` where no prompt can talk them out of it.
 
@@ -442,23 +456,28 @@ Two details follow from treating agent input as untrusted:
 - **Bulk-safe by default.** Agentforce may invoke an action once per record in a batch, so the method takes a `List` and does one DML — a per-invocation insert would hit the governor limit on the third patient.
 - **`allOrNone=false`.** One malformed request from the agent must not fail its neighbours.
 
-Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the agent actually do" is a report, not an investigation.
+Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the agent actually do" is a report, not an investigation, and owned by Care_Team_Queue, so it moves the queue indicator like any other care team Case.
 
 | File | What it is |
 |---|---|
+| `bots/Patient_Care_Agent/` | The **agent**: an employee agent (`InternalCopilot`), and its version 1, which names the planner. Deploys inactive |
 | `genAiPlannerBundles/Patient_Care_Planner/` | The planner. Decides which topic handles a request |
 | `genAiPlugins/Patient_Device_Monitoring.genAiPlugin` | The **topic** — scope plus four instructions. Where the agent's behaviour actually lives |
-| `genAiFunctions/Escalate_Patient_Device_Condition.genAiFunction` | Registers the Apex `@InvocableMethod` as an action the agent may call |
+| `genAiFunctions/Get_Device_Readings/` | The read action: a device's latest readings and connection state, from `DeviceReadingsAgentAction` |
+| `genAiFunctions/Escalate_Patient_Device_Condition/` | The escalation action: a Case for the care team, from `PatientCareAgentActions` |
+| `permissionsets/Patient_Care_Agent` | Who may use the agent, and the access its actions run with |
 
-The four instructions are the interesting part: **ground every answer** (only from retrieved readings and articles; say so when data is missing rather than estimating); **do not diagnose** (describe readings against thresholds, nothing more); **confirm before acting** (state which device and reading, then report the Case number); **be precise about device identity** (always the serial number; ask rather than guess when a patient has several).
+The four instructions are the interesting part: **ground every answer** (only from the readings the read action returns; say so when data is missing rather than estimating); **do not diagnose** (describe readings against thresholds, nothing more); **confirm before acting** (state which device and reading, then report the Case number); **be precise about device identity** (always the serial number; ask rather than guess when a patient has several).
 
-`isConfirmationRequired` is `true` on the action, so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
+`isConfirmationRequired` is `true` on the escalation action (and `false` on the read-only one), so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
 
-**Key files:** `classes/PatientCareAgentActions.cls` (+ test, including a 200-record bulk invocation)
+**Key files:** `classes/PatientCareAgentActions.cls` (+ test, including a 200-record bulk invocation), `classes/DeviceReadingsAgentAction.cls` (+ test, run as a user with and without the permission set)
 
-**To see it work:** open the conversation preview, ask something that should escalate, confirm when prompted, then check Cases filtered to `Origin = Agentforce`.
+The read action works as the user: `with sharing` and `WITH USER_MODE`, so the agent sees only the Assets, readings and fields that person may see, and it returns no patient name.
 
-> **Honest caveat:** Agentforce metadata schema moves between releases, and this is validated as **well-formed XML but not yet deployed to a live org**. Expect to reconcile field names against your org's API version on first deploy — `sf project deploy start --dry-run` will tell you exactly what it disagrees with. Everything else in this repo is verified to the same standard as its claims; this is the one place where "written correctly" and "confirmed working" have not yet met.
+**To see it work:** with the agent active and `Patient_Care_Agent` assigned, open the agent from the Lightning header, ask what a device (by serial number) is reporting, then ask it to escalate, confirm when prompted, and check Cases filtered to `Origin = Agentforce`.
+
+> **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic and action have deployed to a real org; the Bot and BotVersion are written against the Metadata API reference and agents retrieved from other orgs, and checked offline, but not yet deployed. Expect to reconcile field names against your org's API version on first deploy — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
 
 ### 06 · Multi-Agent Orchestration (MCP + Agent2Agent)
 
@@ -543,7 +562,7 @@ Three details that matter:
 
 **Key files:** `classes/PiiMaskingService.cls` (+ test — six cases including the hallucinated-token one)
 
-**Where it is wired:** `mask` runs before every Agentforce prompt callout and `unmask` on the response — a code integration point, not a deploy step.
+**Where it would be wired:** `mask` before the agent's prompt and `unmask` after its response. It is not called yet (see [Current state](#current-state)): the Patient Care Agent's prompts are not masked today.
 
 ### 11 · Agentforce Guardrails
 

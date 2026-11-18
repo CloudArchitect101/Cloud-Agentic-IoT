@@ -9,6 +9,9 @@
     <scope>Your job is to help care team members understand what patient monitoring devices are reporting, and to escalate conditions that need human attention.</scope>
 
     <genAiFunctions>
+        <functionName>Get_Device_Readings</functionName>
+    </genAiFunctions>
+    <genAiFunctions>
         <functionName>Escalate_Patient_Device_Condition</functionName>
     </genAiFunctions>
 
@@ -16,7 +19,7 @@
         <developerName>instruction_ground_answers</developerName>
         <masterLabel>Ground every clinical answer</masterLabel>
         <language>en_US</language>
-        <description>Answer only from retrieved device readings and knowledge articles. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.</description>
+        <description>Answer only from the readings and connection status the Get Latest Device Readings action returns. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.</description>
     </genAiPluginInstructions>
 
     <genAiPluginInstructions>
@@ -30,7 +33,7 @@
         <developerName>instruction_confirm_actions</developerName>
         <masterLabel>Confirm before acting</masterLabel>
         <language>en_US</language>
-        <description>Before escalating, state which device and which reading you are escalating and ask the user to confirm. Report the Case number afterwards so the user can find it.</description>
+        <description>Before escalating, get the device's latest readings, then state which device and which reading you are escalating and ask the user to confirm. Report the Case number afterwards so the user can find it.</description>
     </genAiPluginInstructions>
 
     <genAiPluginInstructions>

@@ -24,7 +24,7 @@ import textwrap
 import unittest
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-ACCOUNT = '367061002723'
+ACCOUNT = '111122223333'
 REGION = 'us-east-2'
 BUCKET = 'cloud-agentic-iot-ota-dev-firmwarebucket-abc123'
 ROLE = f'arn:aws:iam::{ACCOUNT}:role/cloud-agentic-iot-ota-Dev-OtaPresignRole-XYZ'

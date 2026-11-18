@@ -128,6 +128,26 @@ In a real org, both should be Integration Users.
    ~5 MB data limit. Use an email alias you control, e.g. `you+iot-dev@…`.
 2. Setup → **Company Information** → confirm your license counts. You should
    see 2 Salesforce and 1 Integration User license available.
+3. Setup → **Einstein Setup** → **Turn on Einstein**. This turns on
+   generative AI for the org and accepts its terms, so it is the org admin's
+   decision, not something a deploy does for you.
+4. Setup → **Agentforce Agents** → turn on **Agentforce**. If the page or
+   the switch is missing, wait a few minutes after step 3 and reload. This
+   also accepts terms, and is the admin's decision too.
+
+Do 3 and 4 before the first deploy (§2.3, phase 2). The repo ships the
+Patient Care Agent (`bots/`) with its planner, topic and actions
+(`genAiPlannerBundles/`, `genAiPlugins/`, `genAiFunctions/`). Expect an org
+without Agentforce to refuse the agent, and one refused component fails
+the whole deploy. A Developer Edition org has no charge for either
+switch; agent conversations draw on its included Einstein allowance.
+
+Why by hand: the Metadata API documents
+`EinsteinGptSettings.enableEinsteinGptPlatform`, and Salesforce's Agentforce
+scratch org guide switches both on with it and
+`agentPlatformSettings.enableAgentPlatform`. Neither says that deploying
+them to an existing Developer Edition org turns the features on without
+accepting the terms in Setup, so the repo does not deploy them.
 
 Note: For additional security, activate MFA, for sandbox/prod environmenta this is must.
 
@@ -167,9 +187,9 @@ That gives three phases, and only the first is manual:
 
 | Phase | Who does it | What happens |
 |---|---|---|
-| **1. Bootstrap** | You, in Setup UI | Grant `deploy@…` the two permissions below. Nothing else. |
-| **2. First deploy** | GitHub Actions | Deploys the entire repo — objects, Apex, LWC, the agent, and the `Device_Integration` permission set |
-| **3. Activation** | You, once | Give `integration@…` the Salesforce API Integration permission set license, then `Device_Integration`; activate the agent |
+| **1. Bootstrap** | You, in Setup UI | Turn on Einstein and Agentforce (§2.1, steps 3 and 4), and grant `deploy@…` the two permissions below. Nothing else. |
+| **2. First deploy** | GitHub Actions | Deploys the entire repo — objects, Apex, LWC, the Patient Care Agent (inactive) with its planner, topic and actions, and the `Device_Integration` and `Patient_Care_Agent` permission sets |
+| **3. Activation** | You, once | Give `integration@…` the Salesforce API Integration permission set license, then `Device_Integration`; activate the agent and assign `Patient_Care_Agent` to the people who use it (§6.4) |
 
 Phases 1 and 3 are one-time. From then on, every change ships through GitHub.
 
@@ -213,9 +233,10 @@ metadata type still demands its own permission behind it:
 | any | **API Enabled** (JWT login) and **Modify Metadata Through Metadata API Functions** |
 | `ApexClass`, `ApexTrigger` | **Author Apex** |
 | `LightningComponentBundle` | **Author Apex** *and* **Customize Application**. Author Apex alone fails with `insufficient access rights on entity: LightningComponentResource` |
-| `CustomObject`, `CustomField`, `CustomMetadata`, `CustomApplication`, `CustomTab`, `FlexiPage`, `Layout`, `CompactLayout`, `QuickAction` | **Customize Application** |
+| `CustomObject`, `CustomField`, `CustomMetadata`, `CustomApplication`, `CustomTab`, `FlexiPage`, `Layout`, `CompactLayout`, `QuickAction`, `StandardValueSet` | **Customize Application** |
 | `PermissionSet`, `CustomPermission` | **Manage Profiles and Permission Sets**, **Manage Custom Permissions** |
 | `GenAiFunction`, `GenAiPlannerBundle`, `GenAiPlugin` | An Agentforce permission set, not a checkbox: `CopilotSalesforceAdmin` ("Agentforce Default Admin"). `AgentPlatformBuilder` is narrower but not every org has it |
+| `Bot`, `BotVersion` (the Patient Care Agent) | Einstein and Agentforce on in the org (§2.1). Expected to need the same Agentforce permission set as the GenAi types; a System Administrator deploy user covers it |
 
 > **This gap hides longest.** Everything an admin runs locally succeeds, because
 > a System Administrator holds all of these implicitly. Only a least-privilege
@@ -541,9 +562,38 @@ the org's limits, need `Platform_Usage_Viewer`. Its AWS half also needs the
 sf org assign permset --name Platform_Usage_Viewer --target-org iot-dev-admin
 ```
 
-Also activate the Agentforce agent (Setup → Agentforce Agents → **Patient Care
-Agent** → activate). It ships inactive deliberately: an agent that can create
-clinical Cases should be switched on by a person, not by a deploy.
+Then the agent. The deploy created the **Patient Care Agent** and left it
+inactive deliberately: an agent that can create clinical Cases should be
+switched on by a person, not by a deploy.
+
+1. Activate it, as the admin. `--version 1` matches
+   `bots/Patient_Care_Agent/v1.botVersion-meta.xml`; without it, and without
+   `--api-name`, the command stops to ask.
+
+   ```bash
+   sf agent activate --api-name Patient_Care_Agent --version 1 --target-org iot-dev-admin
+   ```
+
+   Or Setup → **Agentforce Agents** → **Patient Care Agent** → **Activate**.
+2. Check that it took:
+
+   ```bash
+   sf data query --target-org iot-dev-admin \
+     --query "SELECT VersionNumber, Status FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent'"
+   ```
+
+   Expect version 1 with Status `Active`.
+3. Assign the `Patient_Care_Agent` permission set to each care team member who
+   will use the agent, yourself included. It opens the agent to them and gives
+   its two actions what they read and create: the device's readings and
+   connection fields, and a Case for Care_Team_Queue. An employee agent runs
+   as the person talking to it, so there is no agent user to set up.
+
+   ```bash
+   sf org assign permset --name Patient_Care_Agent --target-org iot-dev-admin
+   sf org assign permset --name Patient_Care_Agent --target-org iot-dev-admin \
+     --on-behalf-of <care team member's username>
+   ```
 
 That is the end of setup. Everything after this ships through GitHub.
 
