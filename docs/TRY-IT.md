@@ -413,6 +413,16 @@ stop the case alert, close or take the Cases; to stop it for every Case, add
 A board already sweeping keeps sweeping until it is told off: send
 `CASE_ALERT` from its Asset with Case Alert On unchecked.
 
+## Room readings in Data Cloud
+
+If the org has Data Cloud, every room reading can reach it from the S3
+archive, with a daily count of minutes at or above 30 C per device and a
+list of devices that went quiet: [SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward).
+A project cannot hold the IAM identity provider the keyless way needs, so
+here Data Cloud signs in with an access key of an IAM user you make as
+`<name>` (step 3a), typed into Data Cloud and nowhere else.
+[DATA-CLOUD.md](DATA-CLOUD.md) explains the path.
+
 ## See what it costs
 
 The app's Home page shows this month's AWS spend against the project's spend

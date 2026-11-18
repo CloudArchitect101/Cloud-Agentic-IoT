@@ -43,6 +43,14 @@ per environment, in the order they come up below:
 14. Optional: connect an MCP client to the Smart Ward MCP server (§6.5). The
     deploy creates the server, its IAM-authenticated URL and its client role;
     only your client's configuration is by hand.
+15. Optional, for Data Cloud: make what Data Cloud signs in to AWS with. In
+    an AWS project, the IAM user and its access key, typed into Data Cloud
+    only; in a regular account, the IAM identity provider for the org's My
+    Domain (§7, step 3).
+16. Optional, for Data Cloud: create the Amazon S3 connection, the room
+    readings data stream and its mapping to the `Room_Reading` data model
+    object (§7, steps 2 and 4 to 6). The calculated insights are a script
+    (§7, step 7).
 
 Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
 named and external credentials, the `AWS_IoT_Relay_Callers` permission set
@@ -543,6 +551,7 @@ credential in one.
 | `AWS_ROLE_ARN` | Secret | `DeployRoleArn` of the bootstrap stack (§3.2) | every part: AWS deploys, the Salesforce org pairing, OTA |
 | `AWS_REGION` | Variable | `ca-central-1` | all AWS jobs |
 | `ALARM_EMAIL` | Variable | Optional: who the CloudWatch alarms email | the alarms stack |
+| `DATA_CLOUD_OIDC_PROVIDER_ARN`, `DATA_CLOUD_EXTERNAL_ID` | Variable | Optional: what Data Cloud reads the readings archive as (§7, step 3b) | the patient-vitals stack |
 | `SF_CONSUMER_KEY` | Secret | **Deploy** Connected App consumer key | Salesforce deploy |
 | `SF_JWT_KEY` | Secret | `base64 -i server-deploy.key` | Salesforce deploy |
 | `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` | Salesforce deploy |
@@ -733,6 +742,154 @@ MCP client (Claude Code, Claude Desktop, any client that runs a local stdio
 server), follow [GUARDRAILS-AND-MCP.md, Connect an MCP
 client](GUARDRAILS-AND-MCP.md#connect-an-mcp-client). Salesforce needs nothing:
 the Patient Care Agent keeps its Apex actions.
+
+---
+
+## 7. Data Cloud: room readings for the ward
+
+Optional. Every room reading reaches Data Cloud from the S3 archive, and two
+calculated insights say, per device, how long its room was at or above
+30.0 C each day and whether it has gone quiet.
+[DATA-CLOUD.md](DATA-CLOUD.md) explains the path and how to check each step;
+this is the order to set it up. It needs Data Cloud (Data 360 in newer orgs)
+provisioned in the org, and you signed in as an admin with the **Data Cloud
+Architect** permission set or the System Administrator profile.
+
+Two ways to let Data Cloud read the bucket; use the one your AWS side allows:
+
+| Your AWS side | Data Cloud signs in with | Step 3 |
+|---|---|---|
+| An AWS project with a spend limit ([TRY-IT.md](TRY-IT.md)) | An access key of an IAM user you make | 3a |
+| A regular account (the pipelines) | A role, through the org's own identity provider. No key | 3b |
+
+A project cannot hold an IAM identity provider, so the role is not possible
+there.
+
+1. **Turn the CSV copy on.** `DataCloudExport` is `"true"` in
+   `config/Dev.json` (and `"false"` in `config/Prod.json`), so the next AWS
+   deploy turns it on:
+
+   ```bash
+   scripts/deploy-aws.sh Dev
+   aws cloudformation describe-stacks --stack-name cloud-agentic-iot-patient-vitals-Dev \
+     --query "Stacks[0].Outputs[?OutputKey=='ArchiveBucketName' || OutputKey=='DataCloudFolder'].[OutputKey,OutputValue]" \
+     --output text
+   ```
+
+   The second command prints the bucket name for step 2, and
+   `datacloud/room-readings/`. Within a minute of a board sending, CSV files
+   appear there ([DATA-CLOUD.md, Check each step](DATA-CLOUD.md#check-each-step)).
+2. **Start the connection.** Data Cloud Setup → **Other Connectors** (some orgs
+   list it under External Integrations, or as **More Connectors**) → **New** →
+   **Amazon S3**. Name it `Room Readings S3`. **Bucket Name**: the bucket from
+   step 1. **Parent Directory**: `datacloud/room-readings/`. Authentication:
+   - In an AWS project: **Access Key/Secret Based**. Leave the page open for
+     step 3a.
+   - In a regular account: **Identity Provider (IdP) Based**. Copy the
+     **External ID** it shows and leave the page open for step 3b.
+3. **Give Data Cloud read access in AWS.** Everything it may do is in the
+   template: list and read `datacloud/`, nothing else. What is left is the
+   identity, which the deploy identities may not make.
+
+   **3a. AWS project: the IAM user and its key.** In your own terminal,
+   signed in as the project's profile (`aws login`, as in [TRY-IT.md](TRY-IT.md)),
+   from the repository root. The user has no policy of its own; the bucket
+   policy the deploy writes lets it read `datacloud/`. Make the user before
+   the deploy names it: S3 refuses a bucket policy for a user that does not
+   exist.
+
+   ```bash
+   READER=cloud-agentic-iot-data-cloud-reader
+   aws iam get-user --user-name "$READER" > /dev/null 2>&1 || aws iam create-user --user-name "$READER" > /dev/null
+   DATA_CLOUD_READER_USER="$READER" scripts/deploy-aws.sh Dev
+   aws iam create-access-key --user-name "$READER"
+   ```
+
+   `create-access-key` prints the key once. Type its `AccessKeyId` and
+   `SecretAccessKey` into the connection's **AWS Access Key** and **AWS
+   Secret Key** fields from step 2, and nowhere else: not a file, not the
+   repo, not a chat. Later deploys keep the user's grant without
+   `DATA_CLOUD_READER_USER`. To rotate the key, make a second one, put it in
+   the connection, then `aws iam delete-access-key` the first.
+
+   **3b. Regular account: the identity provider and the role.** As an
+   identity that may create IAM identity providers (root, or an admin; the
+   `github-actions-deploy` role and `iot-operator` may not), with your My
+   Domain from Setup → **My Domain** (for example
+   `yourdomain.my.salesforce.com`, no `https://`) and the External ID from
+   step 2:
+
+   ```bash
+   MY_DOMAIN=<your My Domain>
+   aws iam create-open-id-connect-provider \
+     --url "https://$MY_DOMAIN/services/connectors" --client-id-list "https://$MY_DOMAIN"
+   PROVIDER_ARN="arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):oidc-provider/$MY_DOMAIN/services/connectors"
+   gh variable set DATA_CLOUD_OIDC_PROVIDER_ARN --env Dev --body "$PROVIDER_ARN"
+   gh variable set DATA_CLOUD_EXTERNAL_ID --env Dev --body '<External ID>'
+   ```
+
+   Then run Deploy with part `aws` (§6.3), or, as `iot-operator`,
+   `DATA_CLOUD_OIDC_PROVIDER_ARN="$PROVIDER_ARN" DATA_CLOUD_EXTERNAL_ID='<External ID>' scripts/deploy-aws.sh Dev`.
+   The stack creates `cloud-agentic-iot-data-cloud-reader`, which trusts only
+   that connection. Its ARN is the stack's `DataCloudReaderRoleArn` output:
+   paste it into the connection's **IAM Role Name**.
+4. **Test and save the connection.** **Test Connection**, then **Save**. If
+   the test fails, [DATA-CLOUD.md, If a step fails](DATA-CLOUD.md#if-a-step-fails)
+   lists the usual causes.
+5. **Create the data stream.** Data Streams → **New** → **Amazon S3** → the
+   connection from step 2.
+   - **File Type** CSV. **Import from Directory** empty, so it reads the
+     connection's Parent Directory. **File Name** `room-readings-*.csv`.
+     **Source** `AWS IoT`.
+   - A new data lake object, **Room Readings** (`Room_Readings`). Give the
+     fields the types in [`datacloud/room-readings.columns.json`](../datacloud/room-readings.columns.json):
+     `reading_ts` and `received_ts` DateTime, `temperature_c` and
+     `humidity_pct` Number, the rest Text.
+   - Category **Engagement**, primary key `reading_id`, event time field
+     `reading_ts`.
+   - Data space: default. Refresh mode **Upsert**, so each run takes only new
+     files and a reading seen twice stays one record. Schedule: the most
+     frequent the org offers.
+   - **Deploy**, then **Refresh Now** once to import what is already there.
+6. **Map it to the data model.** On the stream, **Start** the data mapping →
+   **New Custom Object**, `Room_Reading`, with every field of the stream under
+   the same name and `reading_id` as its primary key. Data Cloud names them
+   `reading_id__c` and so on, on `Room_Reading__dlm`; the insights in step 7
+   read exactly those names. Save.
+7. **Create the calculated insights.** Once step 6's object has rows
+   ([DATA-CLOUD.md, Check each step](DATA-CLOUD.md#check-each-step), item 4),
+   as the admin:
+
+   ```bash
+   SF_TARGET_ORG=<your admin alias> scripts/data-cloud-insights.sh --dry-run
+   SF_TARGET_ORG=<your admin alias> scripts/data-cloud-insights.sh
+   ```
+
+   It creates `Room_Out_Of_Range_Daily__cio` and `Room_Device_Silence__cio`
+   from the SQL in `datacloud/calculated-insights/`, and leaves one that
+   exists already alone. If Data Cloud refuses one, paste its SQL into
+   Calculated Insights → **New** → **Create with SQL**; **Check Syntax**
+   names the problem. Then set each insight's schedule to the most frequent
+   the org offers.
+8. **Keep it as metadata, for the next org.** Data Cloud metadata is moved
+   with a data kit built in an org that has it, not written by hand. Data
+   Cloud Setup → **Data Kits** → **New**, type **DevOps**, add the data
+   stream, its mapping and the two insights → **Download Manifest**, saved as
+   `datacloud/kit/package.xml`. Then:
+
+   ```bash
+   sf project retrieve start --manifest datacloud/kit/package.xml \
+     --output-dir datacloud/kit/source --target-org <your admin alias>
+   find datacloud/kit/source -name 'KQ_*' -exec rm {} \;
+   ```
+
+   It sits outside `force-app/` on purpose: `scripts/deploy-salesforce.sh`
+   deploys all of `force-app/` together, and a Data Cloud component another
+   org refuses would fail that whole deploy. Deploying the kit to another org
+   is `sf project deploy start --source-dir datacloud/kit/source --target-org
+   <alias>`, after its connection exists there (steps 2 to 4): the
+   connection's credential never travels with a kit. This repo does not ship
+   a retrieved kit yet.
 
 ---
 

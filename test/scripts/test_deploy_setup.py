@@ -226,7 +226,7 @@ class SetupFixture(unittest.TestCase):
         env = {k: v for k, v in os.environ.items()
                if k not in ('GITHUB_ACTIONS', 'AWS_PROFILE', 'ALLOW_DIRTY', 'ALLOW_LOCAL_PROD', 'ALLOW_UNPAIRED_ORG',
                             'SF_TARGET_ORG', 'ALARM_EMAIL', 'GITHUB_REPO', 'GITHUB_OIDC', 'BUDGET_USD', 'BUDGET_EMAIL')
-               and not k.startswith(('SF_INTEGRATION_', 'SF_LOGIN_URL', 'SLACK_'))}
+               and not k.startswith(('SF_INTEGRATION_', 'SF_LOGIN_URL', 'SLACK_', 'DATA_CLOUD_'))}
         env.update(PATH=self.bin + os.pathsep + os.environ['PATH'], AWS_REGION=REGION, FAKE_AWS_STATE=self.state_dir)
         if ci:
             env['GITHUB_ACTIONS'] = 'true'
@@ -433,6 +433,27 @@ class DeployAws(SetupFixture):
         code, out = self.run_script('deploy-aws.sh', 'Dev')
         self.assertEqual(code, 0, out)
         self.assertFalse(any(o.startswith('AlarmEmail=') for o in self.overrides('cloud-agentic-iot-alarms-Dev')))
+
+    def test_what_data_cloud_reads_as_goes_only_to_the_stack_that_declares_it(self):
+        provider = f'arn:aws:iam::{ACCOUNT}:oidc-provider/example.my.salesforce.com/services/connectors'
+        code, out = self.run_script('deploy-aws.sh', 'Dev', DATA_CLOUD_READER_USER='cloud-agentic-iot-data-cloud-reader',
+                                    DATA_CLOUD_OIDC_PROVIDER_ARN=provider, DATA_CLOUD_EXTERNAL_ID='app:0000:1111')
+        self.assertEqual(code, 0, out)
+        vitals = self.overrides('cloud-agentic-iot-patient-vitals-Dev')
+        self.assertIn('DataCloudReaderUserName=cloud-agentic-iot-data-cloud-reader', vitals)
+        self.assertIn(f'DataCloudOidcProviderArn={provider}', vitals)
+        self.assertIn('DataCloudExternalId=app:0000:1111', vitals)
+        for stack in ('cloud-agentic-iot-alarms-Dev', 'cloud-agentic-iot-queue-relay-Dev'):
+            self.assertFalse(any(o.startswith('DataCloud') for o in self.overrides(stack)), stack)
+
+    def test_without_data_cloud_names_the_stack_keeps_what_it_has(self):
+        code, out = self.run_script('deploy-aws.sh', 'Dev')
+        self.assertEqual(code, 0, out)
+        vitals = self.overrides('cloud-agentic-iot-patient-vitals-Dev')
+        self.assertFalse(any(o.startswith(('DataCloudReaderUserName=', 'DataCloudOidcProviderArn=', 'DataCloudExternalId='))
+                             for o in vitals), vitals)
+        # The CSV copy itself is configuration, from config/Dev.json.
+        self.assertIn('DataCloudExport=true', vitals)
 
     def test_every_packaged_function_keeps_its_logs_for_the_configured_days(self):
         code, out = self.run_script('deploy-aws.sh', 'Dev')

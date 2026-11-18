@@ -101,6 +101,11 @@ jobs:
           # Who the alarms email (infra/alarms). A variable, not config, so no
           # address is written into the repository. Unset keeps what is there.
           ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
+          # What Data Cloud reads the readings archive as (docs/DATA-CLOUD.md),
+          # made by hand per account and org. Unset keeps what is there.
+          DATA_CLOUD_OIDC_PROVIDER_ARN: ${{ vars.DATA_CLOUD_OIDC_PROVIDER_ARN }}
+          DATA_CLOUD_EXTERNAL_ID:       ${{ vars.DATA_CLOUD_EXTERNAL_ID }}
+          DATA_CLOUD_READER_USER:       ${{ vars.DATA_CLOUD_READER_USER }}
         run: scripts/deploy-aws.sh "$ENVIRONMENT"
 
       - name: Salesforce - install the CLI

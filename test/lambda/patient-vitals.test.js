@@ -59,8 +59,11 @@ function load(t, {
   t.mock.method(Math, 'random', () => 0);         // DynamoDB retries back off for 0 ms
   const dynamo = fakeDynamoDb(items, dynamoOptions);
   const sqs = fakeSqs(sqsOptions);
-  const s3 = fakeAwsSdk('S3Client', ['PutObjectCommand'], () => {
-    if (s3Error) throw s3Error;
+  // s3Error fails every write, or, as a function of the write's input, the
+  // writes it returns an error for.
+  const s3 = fakeAwsSdk('S3Client', ['PutObjectCommand'], (command, input) => {
+    const error = typeof s3Error === 'function' ? s3Error(input) : s3Error;
+    if (error) throw error;
     return {};
   });
   const ssm = fakeSsm({ [THRESHOLDS_PARAMETER]: JSON.stringify(thresholds) });
@@ -320,6 +323,143 @@ test('a batch the archive cannot take is retried whole, before anything else is 
   await assert.rejects(handler(queueBatch(dht11Message())), /ServiceUnavailable/);
   assert.equal(dynamo.calls.length, 0);
   assert.equal(sqs.calls.length, 0);
+});
+
+// The Data Cloud copy (docs/DATA-CLOUD.md). Data Cloud's Amazon S3 connector
+// reads CSV or Parquet from one flat folder, so with DATA_CLOUD_EXPORT_PREFIX
+// set each batch also lands as one CSV file there.
+const DATA_CLOUD = { DATA_CLOUD_EXPORT_PREFIX: 'datacloud/room-readings/' };
+const csvRows = (body) => {
+  const [header, ...rows] = body.trimEnd().split('\n');
+  return { header: header.split(','), rows };
+};
+
+test('the CSV columns are the ones datacloud/room-readings.columns.json tells Data Cloud to expect', (t) => {
+  withEnv(t, ENV);
+  const { _internal } = loadWithFakes(HANDLER, {
+    '@aws-sdk/client-dynamodb': { DynamoDBClient: class {} },
+    '@aws-sdk/lib-dynamodb': fakeDynamoDb().sdk,
+    '@aws-sdk/client-sqs': fakeSqs().sdk,
+    '@aws-sdk/client-s3': fakeAwsSdk('S3Client', ['PutObjectCommand']).sdk,
+    '@aws-sdk/client-ssm': fakeSsm().sdk,
+  });
+  const spec = require('../../datacloud/room-readings.columns.json');
+  assert.deepEqual(_internal.ROOM_READING_COLUMNS, spec.columns.map((column) => column.name));
+  assert.deepEqual(spec.columns.filter((column) => column.primaryKey).map((column) => column.name), [spec.dataStream.primaryKey]);
+  // Data Cloud asks for ASCII in field names, and turns each into a DMO field name with __c.
+  for (const column of spec.columns) {
+    assert.match(column.name, /^[a-z][a-z0-9_]*$/, column.name);
+    assert.equal(column.dmoField, `${column.name}__c`);
+    assert.ok(['Text', 'Number', 'DateTime'].includes(column.type), `${column.name}: ${column.type}`);
+  }
+  // The file name pattern matches what the function writes, in the folder the template names.
+  const pattern = new RegExp(`^${spec.file.fileNamePattern.replace('.', '\\.').replace('*', '.*')}$`);
+  assert.match('room-readings-2025-10-27-16-m-0-3.csv', pattern);
+  assert.match(_internal.roomReadingsCsv([]), /^reading_id,device_id,/);
+});
+
+test('without DATA_CLOUD_EXPORT_PREFIX, only the archive is written, as before', async (t) => {
+  captureConsole(t);
+  const { handler, s3 } = load(t);
+  await handler(queueBatch(dht11Message()));
+  assert.deepEqual(s3.calls.map((call) => call.input.Key), ['readings/date=2025-10-27/hour=16/m-0-1.ndjson.gz']);
+});
+
+test('with DATA_CLOUD_EXPORT_PREFIX, each batch is also one flat CSV file for Data Cloud', async (t) => {
+  captureConsole(t);
+  const { handler, s3 } = load(t, { env: DATA_CLOUD });
+
+  const result = await handler(queueBatch(
+    dht11Message(),
+    dht11Message({ receivedAt: RECEIVED_AT + 30_000, temperature: 30.5, humidity: 38.2 }),
+    dht11Message({ ...device(2), receivedAt: RECEIVED_AT + 1000, temperature: undefined, humidity: undefined }),
+  ));
+  assert.deepEqual(result.batchItemFailures, []);
+
+  const keys = s3.calls.map((call) => call.input.Key).sort();
+  assert.deepEqual(keys, [
+    'datacloud/room-readings/room-readings-2025-10-27-16-m-0-3.csv',
+    'readings/date=2025-10-27/hour=16/m-0-3.ndjson.gz',
+  ]);
+  const csv = s3.calls.find((call) => call.input.Key.endsWith('.csv')).input;
+  assert.equal(csv.Bucket, 'patient-vitals-archive');
+  assert.equal(csv.ContentType, 'text/csv; charset=utf-8');
+  assert.equal(csv.ContentEncoding, undefined);
+  // No colon and no subfolder: Data Cloud refuses the first and ignores the second.
+  const name = csv.Key.slice(DATA_CLOUD.DATA_CLOUD_EXPORT_PREFIX.length);
+  assert.doesNotMatch(name, /[:/']/);
+
+  const { header, rows } = csvRows(csv.Body);
+  assert.deepEqual(header, [
+    'reading_id', 'device_id', 'serial_number', 'reading_ts', 'received_ts',
+    'temperature_c', 'humidity_pct', 'room', 'source_system',
+  ]);
+  assert.deepEqual(rows, [
+    `"pm-1-${RECEIVED_ISO}","pm-1","pm-1","${RECEIVED_ISO}","${RECEIVED_ISO}",23.4,41,,"AWS_IoT"`,
+    '"pm-1-2025-10-27T16:00:30.000Z","pm-1","pm-1","2025-10-27T16:00:30.000Z","2025-10-27T16:00:30.000Z",30.5,38.2,,"AWS_IoT"',
+    // A failed sensor read: empty, so Data Cloud loads null, not 0.
+    '"pm-2-2025-10-27T16:00:01.000Z","pm-2","pm-2","2025-10-27T16:00:01.000Z","2025-10-27T16:00:01.000Z",,,,"AWS_IoT"',
+  ]);
+});
+
+test('the CSV row id is the Salesforce reading id, and a reading delivered twice is one row', async (t) => {
+  captureConsole(t);
+  const { handler, s3, syncs } = load(t, { env: DATA_CLOUD });
+  await handler(queueBatch(dht11Message(), dht11Message()));
+  const { rows } = csvRows(s3.calls.find((call) => call.input.Key.endsWith('.csv')).input.Body);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].split(',')[0], `"${syncs()[0].Device_Reading_Id__c}"`);
+});
+
+test('a room or location label, when a board sends one, reaches the CSV on one line and quoted', async (t) => {
+  captureConsole(t);
+  const { handler, s3 } = load(t, { env: DATA_CLOUD });
+  await handler(queueBatch(
+    dht11Message({ room: 'Ward 3, "Bay" 2\nnorth' }),
+    dht11Message({ ...device(2), location: 'Ward 4' }),
+    dht11Message({ ...device(3), room: '   ' }),
+  ));
+  const csv = s3.calls.find((call) => call.input.Key.endsWith('.csv')).input.Body;
+  const { rows } = csvRows(csv);
+  assert.equal(rows.length, 3);
+  assert.match(rows[0], /,"Ward 3, ""Bay"" 2 north","AWS_IoT"$/);
+  assert.match(rows[1], /,"Ward 4","AWS_IoT"$/);
+  assert.match(rows[2], /,,"AWS_IoT"$/);
+
+  // The archive keeps the label too, and has no room key for a board that sent none.
+  const ndjson = s3.calls.find((call) => call.input.Key.endsWith('.ndjson.gz')).input.Body;
+  const lines = gunzipSync(ndjson).toString().trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(lines[0].room, 'Ward 3, "Bay" 2 north');
+  assert.equal(lines[1].room, 'Ward 4');
+  assert.equal(Object.hasOwn(lines[2], 'room'), false);
+});
+
+test('a long room label is cut to 64 characters', async (t) => {
+  captureConsole(t);
+  const { handler, s3 } = load(t, { env: DATA_CLOUD });
+  await handler(queueBatch(dht11Message({ room: 'x'.repeat(200) })));
+  const csv = s3.calls.find((call) => call.input.Key.endsWith('.csv')).input.Body;
+  assert.match(csv, new RegExp(`,"${'x'.repeat(64)}","AWS_IoT"\n$`));
+});
+
+test('a batch the Data Cloud copy cannot take is retried whole, before anything else is written', async (t) => {
+  captureConsole(t);
+  const { handler, dynamo, sqs } = load(t, {
+    env: DATA_CLOUD,
+    s3Error: (input) => (input.Key.endsWith('.csv') ? awsError('SlowDown') : null),
+  });
+  await assert.rejects(handler(queueBatch(dht11Message())), /SlowDown/);
+  assert.equal(dynamo.calls.length, 0);
+  assert.equal(sqs.calls.length, 0);
+});
+
+test('a reading pushed through by hand reaches the Data Cloud copy too', async (t) => {
+  captureConsole(t);
+  const { handler, s3 } = load(t, { env: DATA_CLOUD });
+  const response = await handler(dht11Message());
+  assert.equal(response.statusCode, 200);
+  const csv = s3.calls.find((call) => call.input.Key.endsWith('.csv'));
+  assert.match(csv.input.Key, /^datacloud\/room-readings\/room-readings-2025-10-27-16-direct-[0-9a-f-]+-1\.csv$/);
 });
 
 test('with KEEP_READINGS_IN_DYNAMODB false, DynamoDB holds only the state', async (t) => {

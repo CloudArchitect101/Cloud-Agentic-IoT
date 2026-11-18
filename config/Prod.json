@@ -6,6 +6,7 @@
       "KeepReadingsInDynamoDB": "false",
       "ReadingRetentionDays": 7,
       "ArchiveRetentionDays": 365,
+      "DataCloudExport": "false",
       "RealertIntervalMinutes": 60,
       "RoomTempAlert": "false",
       "RoomTempAlertCelsius": 30,
