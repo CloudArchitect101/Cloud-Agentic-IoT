@@ -227,7 +227,7 @@ up to a couple of hours with hourly schedules. They are for the ward's trends
 and daily review, not for alarms. The live signals stay where they are: a
 board's **Connection** on its Asset changes within seconds of it going offline
 ([LIVE-STATUS.md](LIVE-STATUS.md)), and a high reading opens a Case through the
-temperature alert rule (README, chapter 03).
+temperature alert rule (CHAPTERS.md, chapter 03).
 
 `Room_Device_Silence__cio` lists only devices with at least one reading in
 Data Cloud. A board that never sent a reading is not in it.

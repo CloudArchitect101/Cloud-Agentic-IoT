@@ -207,10 +207,10 @@ The deploy user and the Deploy app aren't needed until the pipelines.
 
 **Salesforce to AWS** (provisioning, the queue indicator, Wi-Fi pushes) signs
 with the `AWS_IoT_Relay` named credential:
-[README, Stage 2, step 1](../README.md#stage-2--connect-the-seams-ci-cannot-reach).
+[Install guide, Stage 2, step 1](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
 Make its IAM user as `<name>`, the profile you signed in with in step 2.
 
-Boards are provisioned as in the [README, Stage 3](../README.md#stage-3--hardware),
+Boards are provisioned as in the [Install guide, Stage 3](INSTALL-GUIDE.md#stage-3--hardware),
 against the `<name>` project's IoT endpoint, and
 [DEVELOPMENT.md, "On your laptop"](DEVELOPMENT.md#1-on-your-laptop) covers
 flashing and watching one.
@@ -252,11 +252,11 @@ To send a board a command, open its Asset and choose **Send Command**, then
 seconds and, from firmware 2.2.0, `Acked` once the board answers, or `Failed`
 with the reason (a board that is offline is not sent anything). The command is
 sent as you, so you need the `AWS_IoT_Relay` principal access from
-[README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach).
+[Install guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
 [DATA-MODEL.md](DATA-MODEL.md#device-command-lifecycle) explains each status.
 
 The card and Send Command both need a board provisioned from its Asset
-([README, chapter 13](../README.md#13--device-provisioning-automation)). An
+([Chapters, chapter 13](CHAPTERS.md#13--device-provisioning-automation)). An
 Asset made by hand, as in Stage 3, has no Thing ARN: its Connection stays *Not
 reported yet*, the card says it has no AWS IoT Thing, and a command fails as
 not provisioned.
@@ -287,7 +287,7 @@ it acts as you. Open it from the Lightning header, then:
 
 ## Warm the sensor, get a high temperature alert
 
-The temperature alert demo rule ([README, chapter 03](../README.md#temperature-alert-demo-rule)):
+The temperature alert demo rule ([Chapters, chapter 03](CHAPTERS.md#temperature-alert-demo-rule)):
 the monitored device's DHT11 can sit wherever the temperature matters, against
 a patient (the demo puts it under an arm), in a medication fridge, in a room.
 When it reads 30 C or more, the board itself sweeps its servo back and forth to
@@ -330,7 +330,7 @@ sets it to `"true"`.
   board runs patient-monitor 2.4.0 or later. Any such board follows
   Care_Team_Queue.
 - The integration user has the `AWS_IoT_Relay` principal access
-  ([README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach)):
+  ([Install guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach)):
   the Case moves the ward board through a callout made as that user.
 - `Room Temperature Rule` (labelled Temperature Alert Rule) and `Agentforce` are Case Origin values: the
   deploy adds them (`standardValueSets/CaseOrigin`). A value you added to

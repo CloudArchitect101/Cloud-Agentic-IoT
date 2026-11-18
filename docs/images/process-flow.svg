@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-label="How a high temperature reading becomes a Case, a spinning ward board and an agent answer"><title>Cloud-Agentic-IoT: from a warm sensor to an agent answer</title><style>
+.bg{fill:#ffffff;stroke:#d0d7de}
+.node rect{fill:#f6f8fa;stroke:#8c959f;stroke-width:1.5}
+.node text{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;fill:#1f2328}
+.node .t{font-size:16px;font-weight:600;text-anchor:middle}
+.node .s{font-size:13px;fill:#59636e;text-anchor:middle}
+.node .num{font-size:13px;font-weight:700;fill:#59636e}
+.edge{fill:none;stroke:#8c959f;stroke-width:2}
+#arrow path{fill:#8c959f}
+.node .hi{fill:#0969da;fill-opacity:.12;stroke:#0969da;stroke-width:3;opacity:0}
+.eh{fill:none;stroke:#0969da;stroke-width:3;opacity:0}
+#arrowon path{fill:#0969da}
+.on .hi,.eh.on{opacity:1}
+.cap{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:16px;fill:#1f2328}
+.cap .k{font-weight:700;fill:#0969da}
+.title{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:13px;fill:#59636e;letter-spacing:.08em}
+
+@keyframes cap{0%,12.49%{opacity:1}12.50%,100%{opacity:0}}
+.c,.hi,.eh{animation:cap 24s linear infinite}
+
+@media (prefers-color-scheme: dark){
+.bg{fill:#0d1117;stroke:#30363d}
+.node rect{fill:#161b22;stroke:#6e7681}
+.node text,.cap{fill:#e6edf3}
+.node .s,.node .num,.title{fill:#9198a1}
+.edge{stroke:#6e7681}#arrow path{fill:#6e7681}
+.node .hi{fill:#4493f8;fill-opacity:.18;stroke:#4493f8}.cap .k{fill:#4493f8}
+.eh{stroke:#4493f8}#arrowon path{fill:#4493f8}
+}
+.n0 .hi,.c0{animation-delay:-24s}
+.e0{animation-delay:-21s}
+.n1 .hi,.c1{animation-delay:-21s}
+.e1{animation-delay:-18s}
+.n2 .hi,.c2{animation-delay:-18s}
+.e2{animation-delay:-15s}
+.n3 .hi,.c3{animation-delay:-15s}
+.e3{animation-delay:-12s}
+.n4 .hi,.c4{animation-delay:-12s}
+.e4{animation-delay:-9s}
+.n5 .hi,.c5{animation-delay:-9s}
+.e5{animation-delay:-6s}
+.n6 .hi,.c6{animation-delay:-6s}
+.e6{animation-delay:-3s}
+.n7 .hi,.c7{animation-delay:-3s}
+</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker><marker id="arrowon" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z"/></marker></defs><rect class="bg" x="0.5" y="0.5" width="959" height="419" rx="14"/><text class="title" x="40" y="32">FROM A WARM SENSOR TO AN AGENT ANSWER</text><g class="node n0"><rect x="40" y="50" width="190" height="86" rx="12"/><rect class="hi" x="40" y="50" width="190" height="86" rx="12"/><text class="num" x="56" y="76">1</text><text class="t" x="135.0" y="92">ESP32 board</text><text class="s" x="135.0" y="114">DHT11 + servo</text></g>
+<g class="node n1"><rect x="270" y="50" width="190" height="86" rx="12"/><rect class="hi" x="270" y="50" width="190" height="86" rx="12"/><text class="num" x="286" y="76">2</text><text class="t" x="365.0" y="92">AWS IoT Core</text><text class="s" x="365.0" y="114">mutual TLS</text></g>
+<g class="node n2"><rect x="500" y="50" width="190" height="86" rx="12"/><rect class="hi" x="500" y="50" width="190" height="86" rx="12"/><text class="num" x="516" y="76">3</text><text class="t" x="595.0" y="92">patient-vitals</text><text class="s" x="595.0" y="114">Lambda</text></g>
+<g class="node n3"><rect x="730" y="50" width="190" height="86" rx="12"/><rect class="hi" x="730" y="50" width="190" height="86" rx="12"/><text class="num" x="746" y="76">4</text><text class="t" x="825.0" y="92">Salesforce Case</text><text class="s" x="825.0" y="114">Care_Team_Queue</text></g>
+<g class="node n4"><rect x="730" y="210" width="190" height="86" rx="12"/><rect class="hi" x="730" y="210" width="190" height="86" rx="12"/><text class="num" x="746" y="236">5</text><text class="t" x="825.0" y="252">Ward board</text><text class="s" x="825.0" y="274">queue indicator</text></g>
+<g class="node n5"><rect x="500" y="210" width="190" height="86" rx="12"/><rect class="hi" x="500" y="210" width="190" height="86" rx="12"/><text class="num" x="516" y="236">6</text><text class="t" x="595.0" y="252">Patient Care Agent</text><text class="s" x="595.0" y="274">Agentforce</text></g>
+<g class="node n6"><rect x="270" y="210" width="190" height="86" rx="12"/><rect class="hi" x="270" y="210" width="190" height="86" rx="12"/><text class="num" x="286" y="236">7</text><text class="t" x="365.0" y="252">SOP search</text><text class="s" x="365.0" y="274">Bedrock Titan V2</text></g>
+<g class="node n7"><rect x="40" y="210" width="190" height="86" rx="12"/><rect class="hi" x="40" y="210" width="190" height="86" rx="12"/><text class="num" x="56" y="236">8</text><text class="t" x="135.0" y="252">Escalate + measure</text><text class="s" x="135.0" y="274">Case, dashboard</text></g>
+<path class="edge" d="M230 93.0 H262" marker-end="url(#arrow)"/><path class="eh e0" d="M230 93.0 H262" marker-end="url(#arrowon)"/>
+<path class="edge" d="M460 93.0 H492" marker-end="url(#arrow)"/><path class="eh e1" d="M460 93.0 H492" marker-end="url(#arrowon)"/>
+<path class="edge" d="M690 93.0 H722" marker-end="url(#arrow)"/><path class="eh e2" d="M690 93.0 H722" marker-end="url(#arrowon)"/>
+<path class="edge" d="M825.0 136 V202" marker-end="url(#arrow)"/><path class="eh e3" d="M825.0 136 V202" marker-end="url(#arrowon)"/>
+<path class="edge" d="M730 253.0 H698" marker-end="url(#arrow)"/><path class="eh e4" d="M730 253.0 H698" marker-end="url(#arrowon)"/>
+<path class="edge" d="M500 253.0 H468" marker-end="url(#arrow)"/><path class="eh e5" d="M500 253.0 H468" marker-end="url(#arrowon)"/>
+<path class="edge" d="M270 253.0 H238" marker-end="url(#arrow)"/><path class="eh e6" d="M270 253.0 H238" marker-end="url(#arrowon)"/><line x1="40" x2="920" y1="315" y2="315" stroke="#d0d7de"/><g class="c c0"><text class="cap" x="40" y="342"><tspan class="k">Step 1 of 8</tspan><tspan dx="10">firmware/patient-monitor/</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">The board reads 31 C. Its own motor starts turning within about 5 s, decided on the board, so it</tspan><tspan x="40" dy="22">works offline too.</tspan></text></g><g class="c c1"><text class="cap" x="40" y="342"><tspan class="k">Step 2 of 8</tspan><tspan dx="10">firmware/libraries/CloudAgenticDevice/</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">The reading goes to AWS IoT Core over mutual TLS, with a certificate that lives only on the</tspan><tspan x="40" dy="22">board.</tspan></text></g><g class="c c2"><text class="cap" x="40" y="342"><tspan class="k">Step 3 of 8</tspan><tspan dx="10">lambda/patient-vitals/</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">The patient-vitals Lambda stores every reading in DynamoDB and S3, and flags the one that</tspan><tspan x="40" dy="22">crossed 30 C.</tspan></text></g><g class="c c3"><text class="cap" x="40" y="342"><tspan class="k">Step 4 of 8</tspan><tspan dx="10">force-app/main/default/classes/RoomTemperatureCaseService.cls</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">Salesforce saves the flagged reading and opens one Case for the device in the care team&#x27;s queue.</tspan></text></g><g class="c c4"><text class="cap" x="40" y="342"><tspan class="k">Step 5 of 8</tspan><tspan dx="10">lambda/queue-relay/</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">The queue depth goes back to AWS over a SigV4-signed call, and the ward board starts spinning.</tspan></text></g><g class="c c5"><text class="cap" x="40" y="342"><tspan class="k">Step 6 of 8</tspan><tspan dx="10">force-app/main/default/aiAuthoringBundles/</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">A nurse asks the Patient Care Agent what the device reports. It reads the device through its</tspan><tspan x="40" dy="22">actions.</tspan></text></g><g class="c c6"><text class="cap" x="40" y="342"><tspan class="k">Step 7 of 8</tspan><tspan dx="10">lambda/procedure-search/</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">Asked what to do, the agent finds the ward procedure with Bedrock embeddings and cites its SOP</tspan><tspan x="40" dy="22">ID.</tspan></text></g><g class="c c7"><text class="cap" x="40" y="342"><tspan class="k">Step 8 of 8</tspan><tspan dx="10">force-app/main/default/dashboards/</tspan></text><text class="cap" x="40" y="370"><tspan x="40" dy="0">After the nurse confirms, the agent escalates. The Business Value dashboard measures response</tspan><tspan x="40" dy="22">time and cost.</tspan></text></g></svg>

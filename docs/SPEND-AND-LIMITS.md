@@ -159,7 +159,7 @@ Full figures: [COST-MODEL.md §7](COST-MODEL.md#7-patient-portal-react-site-enha
   Configuration (from their profile or any permission set). The Apex checks
   both on every call; everyone else sees "Costs and limits are for admins".
 - The AWS half also needs the hand-made `AWS_IoT_Relay_Callers` permission set
-  (README, Stage 2 part d).
+  (INSTALL-GUIDE.md, Stage 2 part d).
 - `Device_Platform_Admin` gets neither the class nor the permission, so device
   operators never see costs.
 - `Aws_Spend_Snapshot__c` holds the last spend figure. Outside the card, only
@@ -217,9 +217,9 @@ it.
 | The card says | Cause | Fix |
 |---|---|---|
 | "Costs and limits are for admins" | No `Platform_Usage_Viewer`, or no View Setup and Configuration | Assign the permission set to an admin who has View Setup. |
-| "Salesforce could not reach AWS" (HTTP 0) | The credential, or STS | README, "If a callout fails". |
+| "Salesforce could not reach AWS" (HTTP 0) | The credential, or STS | INSTALL-GUIDE.md, "If a callout fails". |
 | "has no aws-spend route yet" (404) | The queue-relay stack predates this card | Deploy queue-relay: `scripts/deploy-aws.sh <env>`. |
-| "AWS refused the AWS_IoT_Relay credential" (401 or 403) | The Named Credential or its IAM role | README Stage 2, parts b and c. |
+| "AWS refused the AWS_IoT_Relay credential" (401 or 403) | The Named Credential or its IAM role | INSTALL-GUIDE.md Stage 2, parts b and c. |
 | "Check AwsSpendRole" | The function's role, or `aws-portal:ViewBilling` in an account created before 6 March 2023 | Look for the denied call in CloudTrail. |
 | "See the cloud-agentic-iot-aws-spend log" | Budgets refused for another reason | CloudWatch log group `/aws/lambda/cloud-agentic-iot-aws-spend`. |
 | "AWS Budgets is busy" | Throttling or an AWS fault | Reload in a minute. |
