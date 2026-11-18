@@ -19,6 +19,13 @@
  *     7 s a sweep at 1 Case of 5 to about 1 s at full speed, as on the retired
  *     queue-indicator firmware.
  *
+ * A board that has been sent QUEUE_DEPTH is an internal board, and from then
+ * on its own DHT11 no longer turns the servo: only the queue does (2.7.0).
+ * Salesforce sends the queue's depth to internal boards only, every time one
+ * connects, so after a restart an internal board with a warm sensor may turn
+ * for the few seconds until that first message arrives. A monitored board is
+ * never sent QUEUE_DEPTH, so its sensor keeps turning it. Moving a board
+ * between the two roles in Salesforce takes effect at its next restart.
  * The servo turns while either asks for it, at the faster of the two, and
  * stops only when neither does. A continuous-rotation servo spins instead,
  * at the larger of the two speeds.
@@ -62,14 +69,17 @@ inline uint32_t queueSweepPeriodMs(int intensity) {
 
 class ServoDemand {
  public:
-  ServoDemand() : _roomHot(false), _queueIntensity(0), _openCases(0) {}
+  ServoDemand() : _roomHot(false), _internal(false), _queueIntensity(0), _openCases(0) {}
 
   bool roomHot() const { return _roomHot; }
   int queueIntensity() const { return _queueIntensity; }
   int openCases() const { return _openCases; }
+  /** True once QUEUE_DEPTH has arrived: an internal board ignores its own sensor. */
+  bool internal() const { return _internal; }
 
-  /** False when it already was: nothing to change. */
+  /** False when it already was: nothing to change. Always off on an internal board. */
   bool setRoomHot(bool on) {
+    if (_internal) on = false;
     if (on == _roomHot) return false;
     _roomHot = on;
     return true;
@@ -79,7 +89,11 @@ class ServoDemand {
   bool setQueue(long intensity, long openCases) {
     int clamped = clampIntensity(intensity);
     int cases = openCases < 0 ? 0 : (openCases > 100000 ? 100000 : (int)openCases);
-    if (clamped == _queueIntensity && cases == _openCases) return false;
+    // The first QUEUE_DEPTH makes this an internal board: its own reading stops counting.
+    bool wasHot = _roomHot;
+    _internal = true;
+    _roomHot = false;
+    if (clamped == _queueIntensity && cases == _openCases) return wasHot;
     _queueIntensity = clamped;
     _openCases = cases;
     return true;
@@ -108,6 +122,7 @@ class ServoDemand {
 
  private:
   bool _roomHot;
+  bool _internal;
   int _queueIntensity;
   int _openCases;
 };

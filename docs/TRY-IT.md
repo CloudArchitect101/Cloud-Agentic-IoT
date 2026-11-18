@@ -310,7 +310,7 @@ scripts/check.sh
 scripts/deploy-salesforce.sh Dev --with-tests
 # verify in the org: the list below, and Device_Integration has Temperature Alert
 scripts/deploy-aws.sh Dev            # patient-vitals with RoomTempAlert "true" from config/Dev.json
-scripts/ota.sh try Dev patient-monitor   # firmware 2.6.0: the alert sweep, no dose
+scripts/ota.sh try Dev patient-monitor   # firmware 2.7.0: the alert sweep, no dose, ward boards ignore their own sensor
 ```
 
 The pipeline deploys AWS before Salesforce (`.github/workflows/deploy.yml`),
