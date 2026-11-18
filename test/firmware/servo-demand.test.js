@@ -1,8 +1,9 @@
 'use strict';
 
 // Compiles and runs servo_demand_test.cpp: why the one firmware every board
-// runs turns its servo (a patient board's own room at 30 C or more; the whole
-// queue on an internal board, QUEUE_DEPTH; or both, at the faster), and how a
+// runs turns its servo (a monitored board's own sensor at 30 C or more; the
+// whole queue on an internal board, QUEUE_DEPTH, which then ignores its own
+// sensor), and how a
 // board without a DHT11 stays quiet. The headers it tests are plain C++, so
 // any host compiler will do; without one (a bare laptop) the test is skipped,
 // and CI always has one.
@@ -23,7 +24,7 @@ function compiler() {
   return null;
 }
 
-test('firmware servo demand: hot room, queue depth, both; a board without a sensor', (t) => {
+test('firmware servo demand: hot sensor, queue depth, an internal board ignoring its sensor; a board without a sensor', (t) => {
   const cxx = compiler();
   if (!cxx) {
     t.skip('no C++ compiler on this machine');

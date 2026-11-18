@@ -3,8 +3,8 @@
 // needed: the headers are plain C++ on purpose.
 //
 // ServoDemand is why the one firmware every board runs turns its servo: a
-// patient board's own room at 30 C or more, the whole queue on an internal
-// board (QUEUE_DEPTH), or both. SensorPresence keeps a board without a DHT11
+// monitored board's own sensor at 30 C or more, or the whole queue on an
+// internal board (QUEUE_DEPTH), which then ignores its own sensor. SensorPresence keeps a board without a DHT11
 // quiet.
 
 #include <cstdio>
@@ -80,22 +80,34 @@ static void out_of_range_is_kept_in_range() {
   CHECK(pm::queueSweepPeriodMs(1000) == 1080);
 }
 
-static void either_turns_it_and_the_faster_wins() {
+static void an_internal_board_ignores_its_own_sensor() {
   ServoDemand demand;
-  demand.setRoomHot(true);
-  demand.setQueue(20, 1);   // slower than the room
-  CHECK(demand.sweepPeriodMs() == pm::SWEEP_PERIOD_MS);
-  CHECK(demand.continuousWrite() == pm::CONTINUOUS_ROOM_HOT);
-  demand.setQueue(100, 9);   // faster
+  demand.setRoomHot(true);   // warm before the first QUEUE_DEPTH arrives
+  CHECK(demand.active());
+  CHECK(!demand.internal());
+  CHECK(demand.setQueue(0, 0));   // the empty queue arrives: now an internal board, and it stops
+  CHECK(demand.internal());
+  CHECK(!demand.roomHot());
+  CHECK(!demand.active());
+  CHECK(!demand.setRoomHot(true));   // its own 30 C or more changes nothing
+  CHECK(!demand.active());
+  CHECK(demand.continuousWrite() == pm::CONTINUOUS_STOP);
+  demand.setQueue(100, 9);   // only the queue turns it
   CHECK(demand.sweepPeriodMs() == 1080);
   CHECK(demand.continuousWrite() == 180);
-  demand.setQueue(0, 0);   // the queue empties: the hot room still turns it
-  CHECK(demand.active());
-  CHECK(demand.sweepPeriodMs() == pm::SWEEP_PERIOD_MS);
   demand.setQueue(40, 2);
-  demand.setRoomHot(false);   // the room cools: the queue still turns it
-  CHECK(demand.active());
   CHECK(demand.sweepPeriodMs() == pm::queueSweepPeriodMs(40));
+  demand.setQueue(0, 0);
+  CHECK(!demand.active());
+}
+
+static void a_monitored_board_is_never_internal() {
+  ServoDemand demand;   // never sent QUEUE_DEPTH
+  for (int i = 0; i < 100; i++) {
+    demand.setRoomHot(i % 2 == 0);
+    CHECK(demand.active() == (i % 2 == 0));
+  }
+  CHECK(!demand.internal());
 }
 
 static void a_board_without_a_sensor_says_so_once() {
@@ -129,7 +141,8 @@ int main() {
   hot_means_30_or_more();
   the_queue_alone_turns_faster_as_it_fills();
   out_of_range_is_kept_in_range();
-  either_turns_it_and_the_faster_wins();
+  an_internal_board_ignores_its_own_sensor();
+  a_monitored_board_is_never_internal();
   a_board_without_a_sensor_says_so_once();
   a_sensor_that_stops_is_reported_then_quiet();
   if (failures) {
