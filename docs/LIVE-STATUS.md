@@ -34,7 +34,7 @@ or not anyone has the card open, and a list view or report can filter on them.
 
 (A fourth, Case Alert, is retired: since firmware 2.5.0 a monitored board's
 servo follows its own sensor's temperature, not Cases. See
-[README, chapter 03](../README.md#temperature-alert-demo-rule).)
+[Chapters, chapter 03](CHAPTERS.md#temperature-alert-demo-rule).)
 
 **On the card**, while it is on screen:
 
@@ -199,7 +199,7 @@ The pieces ship with the rest of the project; this is what to check.
 4. **Permissions.** People who use the card need the **Device Platform Admin**
    permission set and **External Credential Principal Access** to the
    AWS_IoT_Relay principal, the same access re-provisioning needs
-   ([README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach)).
+   ([Install guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach)).
    The integration user that the Lambdas sign in as needs **Device
    Integration**, which now includes `DeviceConnectionService` and edit
    access to the three fields.

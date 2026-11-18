@@ -36,10 +36,10 @@ per environment, in the order they come up below:
     confirm the alarm email, activate the agent and assign the permission sets
     (§6.4).
 12. Make the IAM user Salesforce signs its calls with and type its access key
-    into Salesforce (README, Stage 2, step 1). IAM Roles Anywhere could
+    into Salesforce (INSTALL-GUIDE.md, Stage 2, step 1). IAM Roles Anywhere could
     remove that key later.
 13. On the `AWS_IoT_Relay` external credential, set **Additional Status Codes
-    for Token Refresh** to `403` (README, Stage 2, part b). API Gateway
+    for Token Refresh** to `403` (INSTALL-GUIDE.md, Stage 2, part b). API Gateway
     answers an expired STS session with 403, and without this every call
     fails from an hour after the first one.
 14. Optional: connect an MCP client to the Smart Ward MCP server (§6.5). The
@@ -61,7 +61,7 @@ per environment, in the order they come up below:
     and activate the agent again, so its active version runs the new topic
     (§8, step 3).
 
-Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
+Not code yet, and still by hand in Stage 2 of the Install guide (INSTALL-GUIDE.md): the `AWS_IoT_Relay`
 named and external credentials, the `AWS_IoT_Relay_Callers` permission set
 and its assignments to people (the deploy assigns it to the integration user
 once it exists), queue members, and which boards are indicators (an Asset
@@ -408,7 +408,7 @@ The pipeline accounts are regular AWS accounts in `ca-central-1`. As root:
    policy attached. Create its access key for the CLI (§4).
 
 One more root step comes later: the IAM user Salesforce signs its calls with,
-in the README's Stage 2, step 1. `iot-operator` can't make it, because its
+in the Install guide's (INSTALL-GUIDE.md) Stage 2, step 1. `iot-operator` can't make it, because its
 policy denies creating users and access keys.
 
 ### 3.2 The deploy role and the budget: `scripts/bootstrap-aws.sh`
@@ -706,7 +706,7 @@ sf org assign permset --name Device_Integration \
 
 Admins who should see the app's Home page, with this month's AWS spend and
 the org's limits, need `Platform_Usage_Viewer`. Its AWS half also needs the
-`AWS_IoT_Relay_Callers` permission set (README, Stage 2 part d):
+`AWS_IoT_Relay_Callers` permission set (INSTALL-GUIDE.md, Stage 2 part d):
 
 ```bash
 sf org assign permset --name Platform_Usage_Viewer --target-org iot-dev-admin
@@ -952,7 +952,7 @@ each step. Almost all of it is the deploy's job:
    no index.
 2. **Who may ask.** The action calls AWS as the person talking to the
    agent, through the `AWS_IoT_Relay` Named Credential, so each care team
-   member needs `AWS_IoT_Relay_Callers` (README, Stage 2 part d) besides
+   member needs `AWS_IoT_Relay_Callers` (INSTALL-GUIDE.md, Stage 2 part d) besides
    `Patient_Care_Agent` (§6.4), which opens the action's class:
 
    ```bash

@@ -108,7 +108,7 @@ For boards made by the hundred thousand, provision on the factory line instead: 
 
 ## Salesforce at a million boards
 
-Salesforce receives state changes and reminders, never routine readings: about 82 million records a month out of 86.4 billion readings, a thousand times fewer. The API calls that carries are no concern (about 15,000 a day). The temperature alert demo rule (README, chapter 03), when it is on, adds at most one record per hot device per re-alert interval, plus one per crossing of 30 C: 96 a day for a device kept hot in Dev, 24 in Prod, where the rule is off anyway. Its 1 C hysteresis bounds the crossings.
+Salesforce receives state changes and reminders, never routine readings: about 82 million records a month out of 86.4 billion readings, a thousand times fewer. The API calls that carries are no concern (about 15,000 a day). The temperature alert demo rule (CHAPTERS.md, chapter 03), when it is on, adds at most one record per hot device per re-alert interval, plus one per crossing of 30 C: 96 a day for a device kept hot in Dev, 24 in Prod, where the rule is off anyway. Its 1 C hysteresis bounds the crossings.
 
 **Storage is the constraint.** Salesforce counts most records as 2 KB, so 82 million records a month is about 160 GB a month, against a base allocation measured in gigabytes. Three ways to handle it, which is your call:
 

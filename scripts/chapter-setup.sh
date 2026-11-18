@@ -3,8 +3,8 @@
 #
 # A chapter is a DIRECTORY under content/, not a branch. All code lives on Dev
 # in the one shared layout (force-app/, lambda/, firmware/); only the prose is
-# namespaced per chapter. There is no per-chapter README — the root README.md
-# carries every chapter's description and deploy steps in one place.
+# namespaced per chapter. There is no per-chapter README — docs/CHAPTERS.md
+# carries every chapter's description in one place, docs/INSTALL-GUIDE.md the deploy.
 #
 # The generated layout deliberately satisfies every convention documented in
 # docs/CI-CD-SECRETS.md — .cls-meta.xml alongside every class, a Lambda Code
@@ -102,7 +102,7 @@ interesting decision — not boilerplate.]
 [One honest note: a constraint you hit, or something that did not work first
 time. This is the part that reads as real.]
 
-Full implementation in the repo — see the "$TOPIC" chapter in the README.
+Full implementation in the repo — see the "$TOPIC" chapter in docs/CHAPTERS.md.
 
 #Salesforce #AWS #Agentforce #CloudAgenticIoT
 EOF
@@ -146,7 +146,7 @@ graph LR
 
 ## Resources
 
-- The "$TOPIC" chapter in the repo README
+- The "$TOPIC" chapter in the repo's docs/CHAPTERS.md
 - [Related chapters this builds on]
 EOF
 
@@ -191,8 +191,8 @@ Conventions the CI pipelines enforce (docs/CI-CD-SECRETS.md):
   - a sketch folder must contain a .ino named after the folder
 
 Next:
-  1. Add a "### $TOPIC" section to README.md under "The chapters" —
-     what it demonstrates, key files, and its deploy steps.
+  1. Add a "## $TOPIC" section to docs/CHAPTERS.md (and a row in the README's chapter table) —
+     what it demonstrates, key files, and how to see it work.
   2. Build it on Dev. Push; the pipelines deploy AWS and Salesforce.
   3. Once verified for real, promote Dev -> Prod.
 EOF
