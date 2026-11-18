@@ -7,7 +7,13 @@
 #
 # The pipeline runs this same script on every merge into Dev or Prod, so
 # running it yourself first is how you find out what the merge will do. From a
-# laptop it deploys Dev only; Prod is refused (see lib/common.sh).
+# laptop it deploys Dev only; Prod is refused (see lib/common.sh). It also
+# refuses uncommitted changes under lambda/, infra/, config/ and scripts/
+# (ALLOW_DIRTY=yes overrides), and records the commit it shipped in SSM,
+# /cloud-agentic-iot/deployed-commit/aws.
+#
+# scripts/seed-ssm.sh runs first: the stacks read the Salesforce settings it
+# writes.
 
 set -euo pipefail
 # shellcheck source=lib/common.sh
@@ -21,6 +27,7 @@ need npm "It installs each function's dependencies."
 need node "It reads config/$ENV.json."
 cd "$REPO_ROOT"
 
+require_committed
 aws_whoami
 assert_aws_environment "$ENV"
 
@@ -57,16 +64,31 @@ missing=""
 for p in $(grep -h "Default: /$PROJECT/" $templates /dev/null | grep -v /slack/ | sed 's/.*Default: //' | tr -d '\r' | sort -u); do
   aws ssm get-parameter --name "$p" > /dev/null 2>&1 || missing="$missing $p"
 done
-[ -z "$missing" ] || die "Missing from SSM in this account:$missing. The pipeline's seed step writes them from the $ENV environment's secrets (docs/SETUP.md, 'Secrets and variables'), so run Deploy once from GitHub, or put them by hand."
+[ -z "$missing" ] || die "Missing from SSM in this account:$missing. Run scripts/seed-ssm.sh $ENV first: the pipeline runs it from the $ENV environment's secrets, and on a laptop it asks for the values (a value you do not have yet is written as a placeholder)."
 
 # deploy_stack <template> - deploys it as cloud-agentic-iot-<its directory>-<env>,
 # sized by the stacks.<directory> section of config/<env>.json: batch sizes,
 # concurrency, retention, timeouts. Nothing environment-specific is written in
 # a template; its defaults are for a first Dev deploy.
+#
+# Two values come from the environment rather than the repository, so they are
+# passed to whichever template declares them: AlarmEmail, from ALARM_EMAIL (an
+# address does not belong in a public repo), and AlarmTopicArn, the topic of
+# the alarms stack, which sorts first and so is deployed before the rest.
+ALARM_TOPIC_ARN=""
+declares() { grep -q "^  $2:[[:space:]]*\$" "$1"; }   # declares <template> <parameter>
 deploy_stack() {
   local t="$1" name overrides line
   name=$(basename "$(dirname "$t")")
   overrides=$(node scripts/lib/stack-parameters.js "$ENV" "$t") || die "config/$ENV.json does not fit $t (above)."
+  if [ -n "${ALARM_EMAIL:-}" ] && declares "$t" AlarmEmail; then
+    overrides="${overrides:+$overrides
+}AlarmEmail=$ALARM_EMAIL"
+  fi
+  if [ -n "$ALARM_TOPIC_ARN" ] && declares "$t" AlarmTopicArn; then
+    overrides="${overrides:+$overrides
+}AlarmTopicArn=$ALARM_TOPIC_ARN"
+  fi
   local args=()
   if [ -n "$overrides" ]; then
     args=(--parameter-overrides)
@@ -80,6 +102,10 @@ deploy_stack() {
     --no-fail-on-empty-changeset \
     ${args[@]+"${args[@]}"}
   endstep
+  if [ "$name" = alarms ]; then
+    ALARM_TOPIC_ARN=$(stack_output "$(stack_name alarms "$ENV")" AlarmTopicArn)
+    [ "$ALARM_TOPIC_ARN" != "None" ] || ALARM_TOPIC_ARN=""
+  fi
 }
 
 # Slack is left out here: it is the one stack that needs a third-party app to
@@ -113,6 +139,19 @@ fi
 # several functions whose infrastructure is not written yet. If a template
 # declares a function and the source directory does not match its name, that
 # still fails loudly.
+# Lambda makes each function's log group, /aws/lambda/<name>, on its first
+# run, and keeps it forever. Making it here first, or finding it, and setting
+# its retention from config/<env>.json bounds what the logs cost.
+retention=$(node -p "require('./config/$ENV.json').lambdaLogRetentionDays") \
+  || die "config/$ENV.json has no lambdaLogRetentionDays."
+keep_logs() {   # keep_logs <function>
+  local group="/aws/lambda/$1" out
+  out=$(aws logs create-log-group --log-group-name "$group" 2>&1) \
+    || [[ "$out" == *ResourceAlreadyExistsException* ]] \
+    || die "Could not create $group: $out"
+  aws logs put-retention-policy --log-group-name "$group" --retention-in-days "$retention"
+}
+
 declared=$(grep -rh "FunctionName: $PROJECT" --include=cloudformation.yaml . \
              | sed 's/.*FunctionName: //' | tr -d '\r' | sort -u)
 
@@ -138,8 +177,11 @@ while IFS= read -r src; do
   aws lambda update-function-code --function-name "$fn" \
     --zip-file "fileb://$zipfile" --publish > /dev/null
   rm -f "$zipfile"
+  keep_logs "$fn"
+  echo "  logs kept $retention days"
   packaged=$((packaged + 1))
   endstep
 done < <(find lambda -name index.js -not -path "*/node_modules/*" | sort)
 
-note "AWS $ENV is deployed: $deployed stack(s), $packaged function(s) running the code in this commit."
+record_deployed_commit aws
+note "AWS $ENV is deployed: $deployed stack(s), $packaged function(s) running the code in $(deployed_commit)."

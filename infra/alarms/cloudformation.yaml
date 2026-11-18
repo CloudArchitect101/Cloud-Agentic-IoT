@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Where the alarms of one environment go: an SNS topic, and an email
+  subscription when the environment names an address.
+
+# Deployed by scripts/deploy-aws.sh as cloud-agentic-iot-alarms-<Dev|Prod>,
+# before the other stacks (it sorts first), which then get its topic as their
+# AlarmTopicArn parameter. The address comes from ALARM_EMAIL (on a laptop, an
+# export; in the pipeline, the GitHub Environment's ALARM_EMAIL variable),
+# never from config/<env>.json, so no address is written into the repository.
+# Left unset on a later deploy, the address the stack has is kept.
+#
+# AWS emails the address once to confirm the subscription. Nothing arrives
+# until someone clicks Confirm subscription in that email.
+
+Parameters:
+  AlarmEmail:
+    Type: String
+    Default: ''
+    Description: Who gets the alarms. Empty, the alarms show in CloudWatch only.
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+
+Resources:
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: cloud-agentic-iot-alarms
+      DisplayName: Cloud Agentic IoT alarms
+
+  # No topic policy: the default one lets this account's CloudWatch alarms
+  # publish, which is all this topic is for.
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+Outputs:
+  AlarmTopicArn:
+    Description: Passed by scripts/deploy-aws.sh to every stack that declares AlarmTopicArn.
+    Value: !Ref AlarmTopic

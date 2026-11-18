@@ -77,20 +77,20 @@ to leak.
 
 ## 3. Put the Salesforce settings in SSM
 
-In a regular account the pipeline writes these from GitHub secrets. Here you
-put them once, by hand. Type the values in your terminal, never into a chat
-or a file in the repo.
+In a regular account the pipeline runs `scripts/seed-ssm.sh` with the GitHub
+secrets. Here you run the same script once:
 
 ```bash
-aws ssm put-parameter --type String --name /cloud-agentic-iot/salesforce/login-url    --value https://login.salesforce.com
-aws ssm put-parameter --type String --name /cloud-agentic-iot/salesforce/username     --value '<integration username>'
-aws ssm put-parameter --type String --name /cloud-agentic-iot/salesforce/consumer-key --value '<integration consumer key>'
-aws ssm put-parameter --type SecureString --name /cloud-agentic-iot/salesforce/jwt-private-key --value file://scripts/server-integration.key
+scripts/seed-ssm.sh Dev
 ```
 
-The last three come from step 5, so you won't have them on a first deploy. Put
-`placeholder` as each of their values for now. The stacks deploy, and only the
-calls to Salesforce fail until step 5 replaces the values and deploys again.
+It checks that the project is labelled `Dev` (a fresh one gets the label),
+then asks for the integration username, consumer key and key file, and the
+Slack signing secret, hiding what you type. You won't have the integration
+values on a first deploy: press Enter at each. What you skip is written as
+`placeholder`, the login URL defaults to `https://login.salesforce.com`, and
+Slack is left out. The stacks then deploy, and only the calls to Salesforce
+fail until step 5 runs the script again with the real values.
 
 ## 4. Deploy and test
 
@@ -99,14 +99,36 @@ every stack and the real Lambda code, and `scripts/deploy-salesforce.sh Dev`
 deploys everything in `force-app/` and runs every local Apex test.
 
 ```bash
-scripts/check.sh
-scripts/deploy-aws.sh Dev
-scripts/deploy-salesforce.sh Dev
+scripts/check.sh && scripts/deploy-aws.sh Dev && scripts/deploy-salesforce.sh Dev
 ```
+
+Run them as one line joined by `&&`, so the first failure stops the rest.
+Pasted as separate lines, zsh and bash run every line even after one fails,
+so one environment can end up ahead of the other. Later deploys that add a
+field AWS writes go Salesforce first; see
+[Warm the sensor, get a Case and a dose](#warm-the-sensor-get-a-case-and-a-dose).
+
+Both refuse uncommitted changes under `lambda/`, `infra/`, `force-app/`,
+`config/` and `scripts/`, because a laptop deploy would otherwise ship what no
+commit holds. Commit first; for a throwaway try, `ALLOW_DIRTY=yes` deploys
+anyway. Each records the commit it shipped in SSM, so you can see what the
+project runs:
+
+```bash
+aws ssm get-parameters --names /cloud-agentic-iot/deployed-commit/aws /cloud-agentic-iot/deployed-commit/salesforce \
+  --query 'Parameters[].[Name,Value]' --output text
+```
+
+To have the alarms emailed to you, `export ALARM_EMAIL='<your email>'` before
+`deploy-aws.sh`, then confirm the subscription in the email AWS sends.
 
 The `<name>` project is your Dev environment. Its first deploy labels the
 account `Dev` in SSM (`/cloud-agentic-iot/environment`), and every later deploy
 checks that label, so a wrong `AWS_PROFILE` stops before it changes anything.
+The first Salesforce deploy pairs the org with the project
+(`/cloud-agentic-iot/salesforce/org-id`), and every later one stops if
+`SF_TARGET_ORG` names another org, such as the pipeline's Dev org: both are
+labelled `Dev`, so the label alone can't tell them apart.
 
 The Salesforce deploy goes to the org in `SF_TARGET_ORG`, as your admin, and the
 script warns that you aren't the deploy user. That is expected here. The deploy
@@ -148,14 +170,12 @@ boards' answers to commands) signs in as the integration user:
    then the `Device_Integration` permission set, which step 4 deployed.
    Without that license, Salesforce refuses the permission set: "The user
    license doesn't allow the permission: Create Assets".
-3. Replace the three placeholders, typing the values in your terminal, and
-   deploy again. The third command reads the key from
-   `scripts/server-integration.key`; change the path if yours is elsewhere.
+3. Replace the three placeholders and deploy again. Run the script, type the
+   username and consumer key when it asks, and give it the key file (it
+   offers `scripts/server-integration.key` when that exists):
 
 ```bash
-aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/username     --value '<integration username>'
-aws ssm put-parameter --overwrite --type String --name /cloud-agentic-iot/salesforce/consumer-key --value '<integration consumer key>'
-aws ssm put-parameter --overwrite --type SecureString --name /cloud-agentic-iot/salesforce/jwt-private-key --value file://scripts/server-integration.key
+scripts/seed-ssm.sh Dev
 scripts/deploy-aws.sh Dev
 ```
 
@@ -378,7 +398,16 @@ aws budgets describe-budgets --region us-east-1 --account-id "$ACCOUNT" --show-f
 Then create `cloud-agentic-iot-monthly` with its amount equal to the spend
 limit, with the command in
 [SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md#give-the-account-a-budget). Change
-both together from then on. A budget without actions is free, and the card
+both together from then on.
+
+The pipeline accounts get the same budget from the bootstrap stack. It also
+runs in a project, without the GitHub role, which a project can't hold; this
+has not been tried in a project yet, so if the stack fails with AccessDenied,
+use the command above instead:
+
+```bash
+GITHUB_OIDC=no BUDGET_USD=20 BUDGET_EMAIL='<your email>' scripts/bootstrap-aws.sh Dev
+``` A budget without actions is free, and the card
 reads it at no charge.
 
 ## What happens near the limit
@@ -401,9 +430,9 @@ When you want GitHub Actions to deploy for you, and later a Prod environment,
 move to regular AWS accounts:
 
 1. Set up a regular account for Dev as in [SETUP.md §3](SETUP.md#3-aws-dev-account)
-   (the OIDC deploy role) and [§5](SETUP.md#5-github) (environments, secrets
-   and variables). Create an AWS Budget alert before you deploy anything
-   ([COST-MODEL.md §6](COST-MODEL.md)).
+   (`scripts/bootstrap-aws.sh`: the OIDC deploy role and the budget) and
+   [§5](SETUP.md#5-github) (`scripts/setup-github-secrets.sh`: environments,
+   secrets and variables).
 2. Deploy through the pipeline. Stacks don't move between accounts: the regular
    account gets new resources, a new IoT endpoint and new certificates, so
    provision each board again against it.

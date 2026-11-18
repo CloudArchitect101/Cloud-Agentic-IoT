@@ -44,6 +44,37 @@ refuse_local_prod() {
   fi
 }
 
+# A laptop deploy ships what is on disk, so uncommitted changes would reach the
+# environment without being in any commit, and nobody could say later what it
+# runs. The pipeline always deploys a commit. So a laptop deploy refuses a tree
+# with changes under the deployed folders, unless you say ALLOW_DIRTY=yes; the
+# commit it records then ends in -dirty.
+DEPLOYED_PATHS="lambda infra force-app config scripts"
+tree_is_dirty() {
+  local changes
+  # shellcheck disable=SC2086  # the paths are words on purpose
+  changes=$(git -C "$REPO_ROOT" status --porcelain -- $DEPLOYED_PATHS) \
+    || die "Could not read git status in $REPO_ROOT. Deploys run from a git checkout."
+  [ -n "$changes" ]
+}
+require_committed() {
+  in_ci && return 0
+  tree_is_dirty || return 0
+  if [ "${ALLOW_DIRTY:-}" = "yes" ]; then
+    warn "Deploying uncommitted changes (ALLOW_DIRTY=yes). The deployed commit is recorded as $(deployed_commit)."
+    return 0
+  fi
+  # shellcheck disable=SC2086
+  git -C "$REPO_ROOT" status --short -- $DEPLOYED_PATHS >&2
+  die "These changes are not committed, so this deploy would ship what no commit holds. Commit or stash them, or rerun with ALLOW_DIRTY=yes for a throwaway try."
+}
+deployed_commit() {
+  local sha
+  sha=$(git -C "$REPO_ROOT" rev-parse HEAD)
+  if ! in_ci && tree_is_dirty; then sha="$sha-dirty"; fi
+  printf '%s' "$sha"
+}
+
 # detect_port - prints the first serial port with the usual name an ESP32's
 # USB-serial chip gets on macOS or Linux, or fails if none is plugged in. A
 # loop rather than `ls ... | head`: with pipefail, ls failing on the names
@@ -119,6 +150,41 @@ assert_aws_environment() {
     note "First deploy into AWS account $AWS_ACCOUNT_ID: labelled it $want ($ENV_PARAM)."
   else
     die "Could not read $ENV_PARAM: $have"
+  fi
+}
+
+# record_deployed_commit <aws|salesforce> - which commit this environment now
+# runs, in SSM, so a laptop-deployed test account and a pipeline-deployed Dev
+# can be compared by SHA.
+DEPLOYED_COMMIT_PARAM=/cloud-agentic-iot/deployed-commit
+record_deployed_commit() {
+  local sha
+  sha=$(deployed_commit)
+  aws ssm put-parameter --name "$DEPLOYED_COMMIT_PARAM/$1" --type String --overwrite --value "$sha" \
+    --description "The commit the last $1 deploy shipped. Written by scripts/deploy-$1.sh." > /dev/null
+  echo "Recorded $DEPLOYED_COMMIT_PARAM/$1 = $sha"
+}
+
+# Each Salesforce org is paired with one AWS account, the way the account is
+# labelled with its environment. A laptop can hold aliases for several orgs
+# labelled Dev (a test org and the pipeline's Dev org), and one stale
+# SF_TARGET_ORG would deploy into the wrong one. The account records the ID of
+# its org; every Salesforce deploy compares, and the first one pairs them.
+SF_ORG_PARAM=/cloud-agentic-iot/salesforce/org-id
+assert_sf_org() {   # assert_sf_org <alias> <org id> [--dry-run]
+  local org="$1" id="$2" have
+  if have=$(aws ssm get-parameter --name "$SF_ORG_PARAM" --query Parameter.Value --output text 2>&1); then
+    [ "$have" = "$id" ] || die "Org $org ($id) is not the org paired with AWS account $AWS_ACCOUNT_ID ($have). SF_TARGET_ORG points at another environment's org, or AWS_PROFILE at another environment's account."
+  elif [[ "$have" == *ParameterNotFound* ]]; then
+    if [ "${3:-}" = "--dry-run" ]; then
+      note "AWS account $AWS_ACCOUNT_ID has no paired org yet; the first real deploy pairs it with $org ($id)."
+      return 0
+    fi
+    aws ssm put-parameter --name "$SF_ORG_PARAM" --type String --value "$id" \
+      --description "The Salesforce org this account's environment deploys to. Every Salesforce deploy checks it." > /dev/null
+    note "First Salesforce deploy for AWS account $AWS_ACCOUNT_ID: paired it with org $org ($id) ($SF_ORG_PARAM)."
+  else
+    die "Could not read $SF_ORG_PARAM: $have"
   fi
 }
 

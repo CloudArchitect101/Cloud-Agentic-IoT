@@ -51,11 +51,11 @@ graph TB
 
 The physical device is an **ESP32 with a DHT11** — temperature and humidity only. The data model (`Patient_Vitals__c`, the alert thresholds in chapter `02`) also carries heart rate, SpO2 and blood pressure fields, because that is what a real patient monitor produces and the architecture should not have to change when the sensor does.
 
-Those additional fields are populated by simulation, not by the hardware. Any content or demo should say so — a viewer can see a DHT11 on the breadboard.
+Those additional fields are only filled by the tests and the load simulation (`test/load/fleet-simulation.js`); on real hardware they stay empty. Any content or demo should say so — a viewer can see a DHT11 on the breadboard.
 
 ## Data Flow
 
-1. **Edge**: Wearable IoT device collects patient vitals (heart rate, SpO2, temperature, blood pressure)
+1. **Edge**: The ESP32 patient monitor sends temperature and humidity (the data model also has heart rate, SpO2 and blood pressure, for a real monitor)
 2. **AWS Ingestion**: IoT Core receives telemetry, Lambda processes and stores in DynamoDB
 3. **Data Cloud Sync**: Patient data syncs into Data Cloud via External Objects
 4. **RAG Pipeline**: Data is chunked, embedded (Bedrock), and indexed in Vector Store

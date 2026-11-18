@@ -1,0 +1,341 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Once per AWS account: the identity GitHub Actions deploys as (the GitHub OIDC
+  provider, the github-actions-deploy role and its cloud-agentic-iot-deploy
+  policy), and the cloud-agentic-iot-monthly budget the Home page shows.
+
+# Deployed by scripts/bootstrap-aws.sh <Dev|Prod> as
+# cloud-agentic-iot-bootstrap-<Dev|Prod>, by a person (iot-operator), never by
+# the pipeline: the pipeline cannot create the role it signs in with.
+#
+# Named github-deploy.yaml, not cloudformation.yaml, so scripts/deploy-aws.sh
+# and the pipeline never pick it up. scripts/check.sh lints it all the same.
+#
+# The same template serves an AWS project with a spend limit (the laptop
+# setup in docs/TRY-IT.md): a project blocks IAM identity providers, so there
+# it is deployed with CreateGitHubDeploy=false and holds only the budget.
+#
+# The policy below is what scripts/deploy-aws.sh, scripts/seed-ssm.sh,
+# scripts/deploy-salesforce.sh (the org pairing and deployed commit in SSM)
+# and scripts/ota.sh call, plus what CloudFormation calls on the role's behalf
+# for every resource type the stacks declare. test/config/deploy-policy.test.js
+# fails the checks when a script starts calling something it does not allow.
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [Dev, Prod]
+    Description: The GitHub Environment the role trusts. It is also the branch and the account label.
+  CreateGitHubDeploy:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      false in an AWS project with a spend limit, which cannot hold an OIDC
+      provider: the stack then holds only the budget.
+  GitHubOwner:
+    Type: String
+    Default: ''
+    Description: The repository's owner, exactly as GitHub spells it (the OIDC subject is case-sensitive).
+  GitHubRepoName:
+    Type: String
+    Default: ''
+    Description: The repository's name, exactly as GitHub spells it.
+  GitHubOwnerId:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[0-9]*$'
+    Description: >-
+      The owner's numeric ID, for GitHub's immutable subject claim
+      (repo:owner@ID/name@ID:environment:Dev). Empty, only the plain form is trusted.
+  GitHubRepoId:
+    Type: String
+    Default: ''
+    AllowedPattern: '^[0-9]*$'
+    Description: The repository's numeric ID, for the immutable subject claim.
+  ExistingProviderArn:
+    Type: String
+    Default: ''
+    Description: >-
+      An account holds one token.actions.githubusercontent.com provider. If it
+      already has one that this stack did not create, give its ARN and the
+      stack uses it instead of creating another.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: >-
+      The monthly cost budget, in USD. 0 creates none. In an AWS project, make
+      it equal to the spend limit: no API returns the limit, and the Home page
+      reads it from this budget.
+  BudgetEmail:
+    Type: String
+    Default: ''
+    Description: >-
+      Who the budget emails at 80% of actual spend and 100% of forecast spend.
+      Empty, the budget sends nothing. Passed by scripts/bootstrap-aws.sh from
+      BUDGET_EMAIL, so no address is written into the repository.
+
+Conditions:
+  CreateGitHub: !Equals [!Ref CreateGitHubDeploy, 'true']
+  UseExistingProvider: !Not [!Equals [!Ref ExistingProviderArn, '']]
+  CreateProvider: !And
+    - !Condition CreateGitHub
+    - !Not [!Condition UseExistingProvider]
+  HasRepoIds: !And
+    - !Not [!Equals [!Ref GitHubOwnerId, '']]
+    - !Not [!Equals [!Ref GitHubRepoId, '']]
+  HasBudget: !Not [!Equals [!Ref MonthlyBudgetUsd, '0']]
+  HasBudgetEmail: !Not [!Equals [!Ref BudgetEmail, '']]
+
+Rules:
+  RepositoryNamed:
+    RuleCondition: !Equals [!Ref CreateGitHubDeploy, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref GitHubOwner, '']]
+        AssertDescription: GitHubOwner is required when CreateGitHubDeploy is true.
+      - Assert: !Not [!Equals [!Ref GitHubRepoName, '']]
+        AssertDescription: GitHubRepoName is required when CreateGitHubDeploy is true.
+
+Resources:
+  # Since July 2023 AWS trusts GitHub's certificate authority itself and no
+  # longer checks this thumbprint; it stays because older tooling expects one.
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  # Every deploy job declares environment: <branch>, so GitHub puts the
+  # environment, not the branch, in the token's subject. A trust policy on
+  # ref:refs/heads/Dev matches nothing. Which branch may use the environment is
+  # pinned on the GitHub side (scripts/setup-github-secrets.sh sets it).
+  DeployRole:
+    Type: AWS::IAM::Role
+    Condition: CreateGitHub
+    Properties:
+      RoleName: github-actions-deploy
+      Description: !Sub 'GitHub Actions deploys ${GitHubOwner}/${GitHubRepoName} to ${Environment} as this role, through OIDC. No access keys.'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [UseExistingProvider, !Ref ExistingProviderArn, !Ref GitHubOidcProvider]
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !If
+                  - HasRepoIds
+                  - - !Sub 'repo:${GitHubOwner}/${GitHubRepoName}:environment:${Environment}'
+                    - !Sub 'repo:${GitHubOwner}@${GitHubOwnerId}/${GitHubRepoName}@${GitHubRepoId}:environment:${Environment}'
+                  - - !Sub 'repo:${GitHubOwner}/${GitHubRepoName}:environment:${Environment}'
+
+  DeployPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: CreateGitHub
+    Properties:
+      ManagedPolicyName: cloud-agentic-iot-deploy
+      Description: What the deploy scripts and the stacks they deploy need. Nothing about users, billing or this stack.
+      Roles:
+        - !Ref DeployRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # The services the stacks are made of. CloudFormation runs with the
+          # caller's own rights (the scripts pass no service role), so the role
+          # needs what each resource type needs, and the scripts call Lambda,
+          # IoT Jobs and S3 directly.
+          - Sid: ProjectServices
+            Effect: Allow
+            Action:
+              - iot:*
+              - lambda:*
+              - s3:*
+              - dynamodb:*
+              - events:*
+              - sqs:*
+              - apigateway:*
+              - logs:*
+              - cloudwatch:*
+            Resource: '*'
+          - Sid: StacksOfThisProject
+            Effect: Allow
+            Action: cloudformation:*
+            Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/cloud-agentic-iot-*/*'
+          - Sid: CloudFormationReadAnywhere
+            Effect: Allow
+            Action:
+              - cloudformation:ValidateTemplate
+              - cloudformation:ListStacks
+              - cloudformation:DescribeStacks
+              - cloudformation:GetTemplateSummary
+            Resource: '*'
+          # A role may change the stacks it deploys, never the one that made it.
+          - Sid: NotTheBootstrapStack
+            Effect: Deny
+            Action: cloudformation:*
+            Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/cloud-agentic-iot-bootstrap-*/*'
+          # The alarm topic (infra/alarms).
+          - Sid: AlarmTopic
+            Effect: Allow
+            Action:
+              - sns:CreateTopic
+              - sns:DeleteTopic
+              - sns:GetTopicAttributes
+              - sns:SetTopicAttributes
+              - sns:Subscribe
+              - sns:Unsubscribe
+              - sns:GetSubscriptionAttributes
+              - sns:ListSubscriptionsByTopic
+              - sns:TagResource
+              - sns:UntagResource
+              - sns:ListTagsForResource
+            Resource: !Sub 'arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:cloud-agentic-iot-*'
+          # Settings and secrets under /cloud-agentic-iot/: seed-ssm.sh writes
+          # them (and replaces one whose type changed), deploy-aws.sh writes
+          # the bands and the deployed commit, CloudFormation resolves them.
+          - Sid: ProjectParameters
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:PutParameter
+              - ssm:DeleteParameter
+              - ssm:AddTagsToResource
+              - ssm:RemoveTagsFromResource
+              - ssm:ListTagsForResource
+            Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloud-agentic-iot/*'
+          - Sid: DescribeParameters
+            Effect: Allow
+            Action: ssm:DescribeParameters
+            Resource: '*'
+          # The roles the stacks create are all named after their stack, which
+          # starts cloud-agentic-iot-. Nothing else can be created or changed.
+          - Sid: StackRolesOnly
+            Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:DeleteRole
+              - iam:GetRole
+              - iam:UpdateRole
+              - iam:UpdateRoleDescription
+              - iam:UpdateAssumeRolePolicy
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+              - iam:GetRolePolicy
+              - iam:ListRolePolicies
+              - iam:ListAttachedRolePolicies
+              - iam:TagRole
+              - iam:UntagRole
+              - iam:ListRoleTags
+            Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cloud-agentic-iot-*'
+          # Only the AWS managed policies the templates attach.
+          - Sid: StackRolesManagedPolicies
+            Effect: Allow
+            Action:
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+            Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cloud-agentic-iot-*'
+            Condition:
+              ArnEquals:
+                iam:PolicyARN:
+                  - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+                  - !Sub 'arn:${AWS::Partition}:iam::aws:policy/AWSXRayDaemonWriteAccess'
+          # Lambda runs as the function roles, AWS IoT as the rule and OTA
+          # signing roles. No other service may be handed one.
+          - Sid: PassStackRoles
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cloud-agentic-iot-*'
+            Condition:
+              StringEquals:
+                iam:PassedToService:
+                  - lambda.amazonaws.com
+                  - iot.amazonaws.com
+          # Reading why a sign-in failed (docs/SETUP.md, "If a run still fails").
+          - Sid: ReadOnly
+            Effect: Allow
+            Action:
+              - sts:GetCallerIdentity
+              - cloudtrail:LookupEvents
+            Resource: '*'
+          - Sid: NoBillingNoUsers
+            Effect: Deny
+            Action:
+              - aws-portal:*
+              - account:*
+              - billing:*
+              - budgets:ModifyBudget
+              - organizations:*
+              - iam:CreateUser
+              - iam:DeleteUser
+              - iam:CreateAccessKey
+              - iam:CreatePolicy
+              - iam:CreatePolicyVersion
+              - iam:CreateOpenIDConnectProvider
+              - iam:UpdateOpenIDConnectProviderThumbprint
+              - iam:AddClientIDToOpenIDConnectProvider
+            Resource: '*'
+
+  # The Home page's usage card shows this month's spend against this budget
+  # (lambda/queue-relay, SpendLimitBudgetName). No service filter, so it
+  # counts everything the account spends, and before credits, refunds and tax,
+  # as a spend limit counts (lambda/aws-spend reads that as "pre-credit-pre-tax").
+  # The same budget as docs/SPEND-AND-LIMITS.md's create-budget command, which
+  # writes that exclusion as a FilterExpression. A budget without actions is free.
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasBudget
+    Properties:
+      Budget:
+        BudgetName: cloud-agentic-iot-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+        CostTypes:
+          IncludeCredit: false
+          IncludeRefund: false
+          IncludeTax: false
+      NotificationsWithSubscribers: !If
+        - HasBudgetEmail
+        - - Notification:
+              NotificationType: ACTUAL
+              ComparisonOperator: GREATER_THAN
+              Threshold: 80
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: !Ref BudgetEmail
+          - Notification:
+              NotificationType: FORECASTED
+              ComparisonOperator: GREATER_THAN
+              Threshold: 100
+              ThresholdType: PERCENTAGE
+            Subscribers:
+              - SubscriptionType: EMAIL
+                Address: !Ref BudgetEmail
+        - !Ref AWS::NoValue
+
+Outputs:
+  DeployRoleArn:
+    Condition: CreateGitHub
+    Description: The AWS_ROLE_ARN secret of this GitHub Environment.
+    Value: !GetAtt DeployRole.Arn
+  DeployPolicyArn:
+    Condition: CreateGitHub
+    Value: !Ref DeployPolicy
+  OidcProviderArn:
+    Condition: CreateGitHub
+    Value: !If [UseExistingProvider, !Ref ExistingProviderArn, !Ref GitHubOidcProvider]
+  BudgetName:
+    Condition: HasBudget
+    Value: !Ref MonthlyBudget

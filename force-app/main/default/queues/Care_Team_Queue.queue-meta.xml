@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Queue xmlns="http://soap.sforce.com/2006/04/metadata">
+    <!--
+      The care team's Case queue. The agent's escalations and the
+      room-temperature rule's Cases go here (Device_Platform_Setting.Default
+      names it), and the queue indicator shows its depth. Members are added
+      per org: Setup > Queues > Care Team Queue.
+    -->
+    <doesSendEmailToMembers>false</doesSendEmailToMembers>
+    <name>Care Team Queue</name>
+    <queueSobject>
+        <sobjectType>Case</sobjectType>
+    </queueSobject>
+</Queue>

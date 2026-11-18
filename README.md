@@ -178,7 +178,7 @@ The first `echo` must print the role's ARN before anything is created; an empty 
 
 *c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
 
-*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and every admin who views the Home page's usage card, and to the integration user the Slack app signs in as: a Device Command is sent as the user who created it, and `/dispense-medication` creates one as that user. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
+*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and every admin who views the Home page's usage card, to the integration user the Slack app signs in as, and to the integration user AWS writes readings as (`deploy-salesforce.sh` assigns it to that one once the set exists): a room-temperature dose is sent as whoever saved the reading, a Device Command is sent as the user who created it, and `/dispense-medication` creates one as that user. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
 
 ```bash
 sf apex run --target-org <your admin alias> <<'EOF'
@@ -213,7 +213,7 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 **4. Data Cloud ingestion.** Configure ingestion for the External Objects that carry patient vitals. Point-and-click only — there is no metadata API coverage for it.
 
-**5. Case queue + its binding.** Create a Case queue in Salesforce and note its Developer Name. Put that and your indicator's IoT Thing name into `force-app/main/default/customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml`, then push — the binding is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so name yours `Care_Team_Queue` or change those two values.
+**5. Case queue + its binding.** The deploy creates `Care_Team_Queue`, a Case queue (`force-app/main/default/queues/`); add its members in Setup → Queues. Put your indicator's IoT Thing name into `force-app/main/default/customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml`, then push — the binding is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so a queue of another name means changing those two values.
 
 **6. Activate the agent.** The deploy creates the **Patient Care Agent** (`force-app/main/default/bots/Patient_Care_Agent`), an employee agent whose version 1 uses `Patient_Care_Planner`, and leaves it inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). Activate it, as the admin:
 
@@ -388,13 +388,13 @@ The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and sto
 
 **Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`
 
-The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with only `Firmware_Version__c` and `Last_Telemetry_At__c`.
+The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`).
 
 ### 02 · Real-time Streams to Agents
 
 Patient vitals streaming in real time through **EventBridge** and **Platform Events** to trigger autonomous agent action within seconds.
 
-Telemetry hits IoT Core → an EventBridge rule fans out to Lambda and SQS → the alert dispatcher evaluates vitals against clinical thresholds → creates `Patient_Vitals__c` → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it.
+The design: telemetry hits IoT Core → an EventBridge rule routes it to the alert dispatcher → the dispatcher evaluates vitals against clinical thresholds → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it. What runs today: readings reach Salesforce through the patient-vitals stack (IoT rule → SQS → `salesforce-sync`, which upserts `Patient_Vitals__c`). The streaming stack deploys, but no IoT rule feeds its bus yet and nothing subscribes to `Patient_Vital_Alert__e`.
 
 **Key files:** `objects/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls` (+ test), `lambda/streaming/`
 
@@ -523,7 +523,7 @@ This chunker splits on paragraph boundaries first, falls back to sentence bounda
 
 **Key files:** `lambda/knowledge-indexer/index.js`
 
-**To see it work:** POST an article as `{ "id": "...", "title": "...", "content": "..." }` and persist the returned vectors to your store — Data Cloud vector index, OpenSearch, or pgvector. The Bedrock invoke permission for `amazon.titan-embed-text-v2:0` is in the template.
+**To see it work:** POST an article as `{ "id": "...", "title": "...", "content": "..." }` and persist the returned vectors to your store — Data Cloud vector index, OpenSearch, or pgvector. It has no CloudFormation template yet, so no environment deploys it: the function, its `bedrock:InvokeModel` permission on `amazon.titan-embed-text-v2:0`, an invoke path and a vector store are still to be written.
 
 ### 09 · Event-Driven Architecture (Saga Pattern)
 
@@ -546,7 +546,7 @@ Three decisions make it work:
 
 **Key files:** `lambda/ota-saga/index.js`
 
-**To see it work:** publish an OTA request onto the queue and watch CloudWatch for the step trace. Kill the device mid-update to see compensation run. The template sets the DLQ and a visibility timeout longer than a device ack realistically takes.
+**To see it work:** publish an OTA request onto the queue and watch CloudWatch for the step trace. Kill the device mid-update to see compensation run. It has no CloudFormation template yet and its step bodies are still simulated (`index.js`), so no environment deploys it. When it is built, it needs a queue with a DLQ and a visibility timeout longer than a device ack realistically takes.
 
 ### 10 · Einstein Trust Layer — PII Masking & Audit
 
@@ -682,6 +682,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 342 Node tests cover 15 of the 17 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, and the firmware's timing and command logic compiled for the host; 54 Python tests run the board and OTA scripts against a simulated board and AWS. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (21 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 370 Node tests cover 15 of the 17 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, and the firmware's timing and command logic compiled for the host; 80 Python tests run the board, OTA, setup and deploy scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (21 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
 PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.

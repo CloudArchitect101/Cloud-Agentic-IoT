@@ -91,4 +91,4 @@ Not numerical order. Strongest narrative first:
 
 ## Honest note on the current state
 
-Every chapter is written and locally verified — firmware compiles, Node handlers are tested, Apex is reviewed. **None of it has been deployed to a real AWS account or Salesforce org yet.** The connections described above are how the system is designed to fit together; proving they fit is the deploy-and-verify work still ahead.
+Every chapter is written and locally verified — firmware compiles, Node handlers are tested, Apex is reviewed. Chapters 00 and 03 and the live status card run in an AWS project and a Developer Edition org, deployed from a laptop; the agent, Slack, MCP and guardrails are not deployed end to end yet. The connections described above are how the system is designed to fit together; proving the rest fit is the deploy-and-verify work still ahead.
