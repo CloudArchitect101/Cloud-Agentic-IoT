@@ -21,7 +21,10 @@ const BUNDLE_BUCKET = process.env.BUNDLE_BUCKET;
  */
 exports.handler = async (event) => {
   const body = typeof event.body === 'string' ? JSON.parse(event.body) : event;
-  const { thingName, thingGroup = 'patient-monitors', ssid, passphrase, ttlMinutes = 15 } = body;
+  // OTA finds a board through this group. infra/ota/cloudformation.yaml creates
+  // fleet-<type> and canary-<type> for each device type, and adding a Thing to a
+  // group that does not exist fails, so the default is a group that does.
+  const { thingName, thingGroup = 'fleet-patient-monitor', ssid, passphrase, ttlMinutes = 15 } = body;
 
   if (!thingName || !ssid) {
     return respond(400, { error: 'thingName and ssid are required' });

@@ -8,7 +8,7 @@ Description: Cloud-Agentic-IoT Branch 01 - Data Cloud RAG Pipeline (Lambda + Dyn
 # version of this template and contradicted the rest of the repo.
 Parameters:
   # SSM-backed, matching lambda/slack-integration. The values are seeded from
-  # GitHub Environment secrets by deploy-aws.yml, so GitHub stays the single
+  # GitHub Environment secrets by .github/workflows/deploy.yml, so GitHub stays the single
   # source of truth and SSM is only the delivery path the templates read.
   SfInstanceParam:
     Type: 'AWS::SSM::Parameter::Value<String>'

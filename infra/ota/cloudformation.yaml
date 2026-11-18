@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Over-the-air update plumbing for one environment: the bucket that holds
+  published firmware, the role AWS IoT uses to sign each board's download link,
+  and the Thing Groups that decide which boards get a release.
+
+# Deployed by scripts/deploy-aws.sh as cloud-agentic-iot-ota-<Dev|Prod>, in
+# that environment's own AWS account (the group names are fixed, so one account
+# holds one environment). scripts/ota.sh reads the outputs, so the bucket name
+# and role ARN never have to be copied into GitHub by hand.
+
+Resources:
+  FirmwareBucket:
+    Type: AWS::S3::Bucket
+    # A published binary is the record that a version shipped - scripts/ota.sh
+    # checks for it before building anything - so the bucket and its history
+    # outlive the stack.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      # Every version gets its own key and the pipeline never overwrites one.
+      # Versioning means even a manual overwrite can be undone.
+      VersioningConfiguration:
+        Status: Enabled
+
+  FirmwareBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FirmwareBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: RefuseUnencryptedConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt FirmwareBucket.Arn
+              - !Sub '${FirmwareBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # AWS IoT assumes this role when a board fetches its job, to sign a fresh,
+  # one-hour download link for that board. No link is stored anywhere, and the
+  # role can read published firmware and nothing else. Only principals in this
+  # account can pass the role to a job (iam:PassRole), so no one else can make
+  # IoT sign links into this bucket.
+  OtaPresignRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Lets AWS IoT sign per-board firmware download links for OTA jobs.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: iot.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ReadPublishedFirmware
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${FirmwareBucket.Arn}/firmware/*'
+
+  # One hierarchy per device type, because each type runs its own binary: a
+  # patient monitor must never be offered queue-indicator firmware. Each sketch
+  # under firmware/ needs a pair here (scripts/check.sh fails without one).
+  #
+  # canary-<type> sits inside fleet-<type>. A job aimed at the fleet reaches
+  # the canary boards too; they already run that version and report "already
+  # current". AWS IoT allows a thing in only one group per hierarchy, so a
+  # board is in one or the other - scripts/ota.sh join moves it.
+  #
+  #   Dev   releases go to fleet-<type>: every Dev board.
+  #   Prod  releases go to canary-<type>; promotion sends them to fleet-<type>.
+  PatientMonitorFleet:
+    Type: AWS::IoT::ThingGroup
+    Properties:
+      ThingGroupName: fleet-patient-monitor
+      ThingGroupProperties:
+        ThingGroupDescription: Every patient monitor in this environment.
+
+  PatientMonitorCanary:
+    Type: AWS::IoT::ThingGroup
+    Properties:
+      ThingGroupName: canary-patient-monitor
+      ParentGroupName: !Ref PatientMonitorFleet
+      ThingGroupProperties:
+        ThingGroupDescription: Patient monitors that take a Prod release before the rest of the fleet.
+
+  QueueIndicatorFleet:
+    Type: AWS::IoT::ThingGroup
+    Properties:
+      ThingGroupName: fleet-queue-indicator
+      ThingGroupProperties:
+        ThingGroupDescription: Every queue indicator in this environment.
+
+  QueueIndicatorCanary:
+    Type: AWS::IoT::ThingGroup
+    Properties:
+      ThingGroupName: canary-queue-indicator
+      ParentGroupName: !Ref QueueIndicatorFleet
+      ThingGroupProperties:
+        ThingGroupDescription: Queue indicators that take a Prod release before the rest of the fleet.
+
+Outputs:
+  FirmwareBucketName:
+    Description: Where scripts/ota.sh publishes firmware/<sketch>/<version>.bin
+    Value: !Ref FirmwareBucket
+  OtaPresignRoleArn:
+    Description: Passed to every OTA job as its presigned-URL role
+    Value: !GetAtt OtaPresignRole.Arn

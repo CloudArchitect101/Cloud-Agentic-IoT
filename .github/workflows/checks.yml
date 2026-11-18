@@ -1,0 +1,84 @@
+name: Checks
+
+# Everything that can be caught before a deploy, on every pull request. Each
+# job runs one part of scripts/check.sh, the same script you run on your
+# laptop, so green there and green here mean the same thing.
+#
+# No secrets, no AWS account, no org, no board: every AWS and Salesforce call
+# in the tests is a fake, so this is safe on any branch. The Deploy workflow
+# calls this one first as well, so nothing reaches Dev or Prod without passing
+# it on the exact commit being deployed.
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lambda:
+    name: Lambda tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 22 for the test runner's glob support. The functions themselves run on
+      # nodejs20.x and use nothing newer.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: scripts/check.sh lambda
+
+  templates:
+    name: CloudFormation templates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Pinned, because a new release can add rules and turn a green build red
+      # with no change in this repo. Raise it on purpose.
+      - run: pip install cfn-lint==1.58.0
+      - run: scripts/check.sh templates
+
+  scripts:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck if the runner image lacks it
+        run: command -v shellcheck || sudo apt-get install -y shellcheck
+      - run: scripts/check.sh scripts
+
+  salesforce:
+    name: Salesforce metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Node 22: the Salesforce CLI depends on undici 8, which needs it. See
+      # docs/CI-CD-SECRETS.md, "Pipeline failures".
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global @salesforce/cli
+      - run: scripts/check.sh salesforce
+
+  firmware:
+    name: Firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the version check compares with the base branch
+      - uses: arduino/setup-arduino-cli@v2
+      - run: scripts/firmware.sh setup
+      - run: scripts/check.sh firmware
+      # A firmware change under an unchanged version would never reach a board:
+      # the pipeline publishes each version once, and a board skips a version
+      # it already runs.
+      - name: A firmware change must raise FIRMWARE_VERSION
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.base_ref }}
+        run: scripts/firmware.sh check-version "origin/$BASE"

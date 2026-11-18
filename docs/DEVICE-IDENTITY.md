@@ -151,7 +151,7 @@ Certificate  →  authenticates the connection (mTLS)
      ↓
 Thing name   →  the device's address  (ESP32-Patient-Monitor-01)
      ↓
-Thing Group  →  the audience          (patient-monitors, or canary-ring-1)
+Thing Group  →  the audience          (fleet-patient-monitor, or canary-patient-monitor)
      ↓
 IoT Job      →  the instruction       (job document: S3 URL + version)
 ```
@@ -161,7 +161,7 @@ IoT Job      →  the instruction       (job document: S3 URL + version)
 3. AWS pushes a notification to every targeted device on `$aws/things/{thingName}/jobs/notify-next`.
 4. The device downloads, verifies, applies with `Update.h`, reboots, and reports `SUCCEEDED` or `FAILED` back on `$aws/things/{thingName}/jobs/{jobId}/update`.
 
-**Targeting is group membership, not a device list in your code.** Put five devices in `canary-ring-1`, run the job against that group, watch, then run it against `patient-monitors`. That is the batching the migration runbook phase 4 describes.
+**Targeting is group membership, not a device list in your code.** Put five devices in `canary-patient-monitor`, run the job against that group, watch, then run it against `fleet-patient-monitor`. That is the batching the migration runbook phase 4 describes, and it is what the Prod pipeline does: see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 **Dynamic Thing Groups** make this better: a device reports its running version as a Thing attribute, and you define a group like *"devices where firmware_version < 1.2.0"*. Membership updates itself, so a device that was offline during the rollout gets the update whenever it next connects — without anyone re-running anything.
 

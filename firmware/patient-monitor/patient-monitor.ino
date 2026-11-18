@@ -16,10 +16,15 @@
 #include <DHT.h>
 #include <ESP32Servo.h>
 
+// Raise this to ship a change. The pipeline publishes each version once and a
+// board installs only a version it is not already running, so a change under
+// the same number never reaches a board; the pull request checks fail it.
+#define FIRMWARE_VERSION "2.0.1"
+
 // The sketch name MUST match this folder's name: it is sent in every OTA job
 // document and checked by the device, so a job aimed at the wrong device type
 // is refused rather than bricking the hardware.
-CloudAgenticDevice device("patient-monitor", "2.0.0");
+CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION);
 
 #define DHT_PIN   4
 #define SERVO_PIN 5
