@@ -2,9 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   The device API Salesforce calls through the AWS_IoT_Relay Named Credential
   (SigV4): queue depth, provisioning, re-provisioning, teardown and device
-  commands, each taking a batch of devices, and the live view of one device.
-  Also the IoT policy every device certificate gets, and the bucket its
-  one-time credential bundle waits in.
+  commands, each taking a batch of devices, the live view of one device, and
+  this month's AWS spend for the app's Home page. Also the IoT policy every
+  device certificate gets, and the bucket its one-time credential bundle
+  waits in.
 
 # Every number below comes from config/<env>.json ("queue-relay" section),
 # passed by scripts/deploy-aws.sh as parameter overrides.
@@ -101,6 +102,30 @@ Parameters:
     Description: >-
       The patient-vitals stack's table (its PatientVitalsTableName), which
       the live view reads the newest stored reading and patient state from.
+  # The Home page's AWS spend (POST /aws-spend). See docs/SPEND-AND-LIMITS.md.
+  SpendLimitBudgetName:
+    Type: String
+    Default: cloud-agentic-iot-monthly
+    Description: >-
+      The budget the card shows as the limit when it exists. In an AWS project,
+      keep its amount equal to the spend limit, which no API returns. Empty
+      means the largest monthly cost budget over $1.
+  SpendCostExplorer:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Whether an account with no budget reads its spend from Cost Explorer, at
+      $0.01 a request (at most about 40 cents a month). Off, such an account
+      shows "no budget found" and costs nothing.
+  SpendCacheHours:
+    Type: Number
+    Default: 24
+    MinValue: 1
+    MaxValue: 168
+    Description: >-
+      How long a Cost Explorer reading is kept. Zero reads, day-1 reads and
+      "no data yet" are kept for at most 3 hours. Budgets are read on every load.
 
 Conditions:
   ReserveProvisioningConcurrency: !Not [!Equals [!Ref ProvisioningMaxConcurrency, 0]]
@@ -496,6 +521,86 @@ Resources:
           LIVE_READING_SECONDS: !Ref LiveReadingSeconds
           LIVE_MINUTES: !Ref LiveMinutes
 
+  # ------------------------------------------------------------------ spend
+
+  # The aws-spend function's last Cost Explorer reading, or a claim on the
+  # next one. A stack resource so that deleting the stack deletes it; the
+  # function overwrites the value. Reset: put-parameter --value '{}'.
+  AwsSpendCache:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /cloud-agentic-iot/cache/aws-spend
+      Type: String
+      Value: '{}'
+      Description: aws-spend's last Cost Explorer reading. Put {} to ask again now.
+
+  # The aws-spend function: this month's AWS spend and its limit for the
+  # usage card on the app's Home page. test/lambda/aws-spend-role.test.js
+  # checks this role against the calls the function makes.
+  AwsSpendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ReadMonthlySpend
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Every budget in this account, read only: the function picks
+              # the one to show.
+              - Effect: Allow
+                Action: budgets:ViewBudget
+                Resource: !Sub 'arn:${AWS::Partition}:budgets::${AWS::AccountId}:budget/*'
+              # Accounts created before 6 March 2023 that have not moved to
+              # fine-grained billing actions also check this before
+              # DescribeBudgets. Elsewhere AWS does not evaluate it. It has no
+              # resource to scope to.
+              - Effect: Allow
+                Action: aws-portal:ViewBilling
+                Resource: '*'
+              # Asked only when SpendCostExplorer is true. No resource to scope to.
+              - Effect: Allow
+                Action: ce:GetCostAndUsage
+                Resource: '*'
+              # The one parameter that holds the kept reading.
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:PutParameter
+                Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloud-agentic-iot/cache/aws-spend'
+
+  AwsSpendFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-aws-spend
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref DeviceApiTimeoutSeconds
+      # The card waits on the answer, and three SDK packages load faster
+      # with the CPU that comes with more memory.
+      MemorySize: 256
+      Role: !GetAtt AwsSpendRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          ACCOUNT_ID: !Ref AWS::AccountId
+          SPEND_CACHE_PARAMETER: !Ref AwsSpendCache
+          SPEND_CACHE_HOURS: !Ref SpendCacheHours
+          SPEND_COST_EXPLORER: !Ref SpendCostExplorer
+          SPEND_LIMIT_BUDGET_NAME: !Ref SpendLimitBudgetName
+
   # ------------------------------------------------------------------ API
 
   QueueRelayApi:
@@ -598,6 +703,21 @@ Resources:
       AuthorizationType: AWS_IAM
       Target: !Sub 'integrations/${LiveIntegration}'
 
+  AwsSpendIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt AwsSpendFunction.Arn
+      PayloadFormatVersion: '2.0'
+  AwsSpendRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /aws-spend'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${AwsSpendIntegration}'
+
   QueueRelayStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -613,7 +733,7 @@ Resources:
   # The identity Salesforce signs with. Its external credential holds the
   # access key of SalesforceCallerUserName, a user made by hand that may only
   # assume this role through STS, and this role may only call this API. A
-  # leaked key reaches these six routes and nothing else, and every signed
+  # leaked key reaches these seven routes and nothing else, and every signed
   # request uses credentials that expire within the hour.
   SalesforceCallerRole:
     Type: AWS::IAM::Role
@@ -683,6 +803,13 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref DeviceLiveFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  AwsSpendPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref AwsSpendFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
 

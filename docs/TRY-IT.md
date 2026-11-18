@@ -113,9 +113,12 @@ no field access.
 
 ```bash
 sf org assign permset --name Device_Platform_Admin
+sf org assign permset --name Platform_Usage_Viewer
 ```
 
-That assigns the set to you, in the org `SF_TARGET_ORG` names. Open the app from
+That assigns the sets to you, in the org `SF_TARGET_ORG` names. The Home page
+shows the project's spend against its spend limit once Salesforce can call AWS
+(step 5) and the budget below exists. Open the app from
 the App Launcher. In an org without Person Accounts, any Account will do for a
 device's Account.
 
@@ -222,6 +225,25 @@ Asset made by hand, as in Stage 3, has no Thing ARN: its Connection stays *Not
 reported yet*, the card says it has no AWS IoT Thing, and a command fails as
 not provisioned.
 
+## See what it costs
+
+The app's Home page shows this month's AWS spend against the project's spend
+limit. No AWS API returns a spend limit, so the card reads it from a budget of
+the same amount, named `cloud-agentic-iot-monthly`. As the project owner, in the
+project's CloudShell, first see what budgets the project lists:
+
+```bash
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+aws budgets describe-budgets --region us-east-1 --account-id "$ACCOUNT" --show-filter-expression \
+  --query 'Budgets[].{name:BudgetName,type:BudgetType,unit:TimeUnit,limit:BudgetLimit.Amount,filter:FilterExpression,old:CostFilters}'
+```
+
+Then create `cloud-agentic-iot-monthly` with its amount equal to the spend
+limit, with the command in
+[SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md#give-the-account-a-budget). Change
+both together from then on. A budget without actions is free, and the card
+reads it at no charge.
+
 ## What happens near the limit
 
 - As spending nears the limit, AWS denies Lambda invocations, Bedrock calls and
@@ -230,6 +252,11 @@ not provisioned.
   that month. Your data is kept. To resume, raise the limit in AWS Settings;
   some resources may need a manual restart.
 - A paused project left untouched for 90 days is deleted, after reminder emails.
+- The Home page's AWS spend may stop answering, because it runs on Lambda. The
+  card says so, points to AWS Settings, and shows the last spend it read. Its
+  Salesforce half keeps working.
+- Deploy changes that add Lambda functions well before the limit: once AWS
+  stops new resource creation, a stack update that adds a function fails.
 
 ## Moving to the pipelines
 

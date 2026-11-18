@@ -14,6 +14,7 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 | `Patient_Daily_Summary__c` | Custom — deliberate | The aggregation unit that gets embedded for RAG. No standard equivalent. |
 | `Device_Command__c` | Custom — deliberate | Auditable command lifecycle (Pending→Sent→Acked/Failed) for physical devices, with the board's own answer: [below](#device-command-lifecycle). No standard object models this. |
 | `Device_Queue_Binding__mdt` | Custom Metadata | Configuration, not data: which queue drives which device. Admin-editable, deployable, no storage cost. |
+| `Aws_Spend_Snapshot__c` | Custom setting (hierarchy) | The last AWS spend the Home page's usage card read, for when AWS does not answer. One org-default row; Platform Cache would need storage Developer Edition does not have. |
 | `Queue_Depth_Change__e`, `Patient_Vital_Alert__e` | Platform Events | The platform's native pub/sub. One publisher, any number of subscribers (servo, LWC, agent) that cannot drift apart. |
 
 ## Code
@@ -22,7 +23,7 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 |---|---|---|
 | Triggers/Apex | Only where Flow can't: bulk aggregate recount, callouts with SigV4/JWT, saga logic | Sending a Device Command is Apex for that reason: a SigV4 callout from a Queueable, safe for a bulk insert. Everything else is Flow territory and documented as such. |
 | Agent Actions | `@InvocableMethod` | Platform-native tool surface for Agentforce — no custom dispatch layer. |
-| LWC | Three components: `queueDepthIndicator` (chapter 03), `reprovisionDevice` (the Re-provision action) and `deviceLiveCard` (live status) | The queue indicator subscribes via `empApi` to the same event the servo consumes. The live card takes readings from AWS IoT over MQTT, never through Salesforce. UI elsewhere is standard reports/dashboards/record pages. |
+| LWC | Four components: `queueDepthIndicator` (chapter 03), `reprovisionDevice` (the Re-provision action), `deviceLiveCard` (live status) and `platformUsageCard` (the app's Home page: AWS spend and Salesforce limits) | The queue indicator subscribes via `empApi` to the same event the servo consumes. The live card takes readings from AWS IoT over MQTT, never through Salesforce. The usage card reads AWS spend through the device API, once per page load. UI elsewhere is standard reports/dashboards/record pages. |
 | Auth | Named Credentials / JWT Bearer everywhere | No passwords, no keys in code, anywhere. |
 
 ## Device Command lifecycle

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Platform Usage Viewer</label>
+    <description>Home page usage card: this month's AWS spend and limit, and the org's Salesforce limits. For admins who have View Setup and Configuration; others see nothing. The AWS half also needs the AWS_IoT_Relay external credential principal.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <!-- The app, so its Home page, without the device fields
+         Device_Platform_Admin grants. -->
+    <applicationVisibilities>
+        <application>Cloud_Agentic_IoT</application>
+        <visible>true</visible>
+    </applicationVisibilities>
+    <classAccesses>
+        <apexClass>PlatformUsageController</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>View_Platform_Usage</name>
+    </customPermissions>
+</PermissionSet>

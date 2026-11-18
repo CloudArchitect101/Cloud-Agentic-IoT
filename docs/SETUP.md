@@ -305,7 +305,7 @@ Create and assign policy from `scripts/aws-project-policy.json`
 
 One more root step comes later: the IAM user Salesforce signs its calls with, in the README's Stage 2, step 1. `iot-operator` can't make it, because that policy denies creating users and access keys.
 
-Note: the AWS Free plan is only for new AWS customers. If you have, or ever had, an AWS account, this one starts on the paid plan, so create an AWS Budget with an email alert (Billing and Cost Management → Budgets) before you deploy anything.
+Note: the AWS Free plan is only for new AWS customers. If you have, or ever had, an AWS account, this one starts on the paid plan, so create an AWS Budget with an email alert (Billing and Cost Management → Budgets) before you deploy anything. Name it cloud-agentic-iot-monthly and make it a monthly cost budget with no service filter ([SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md#give-the-account-a-budget)): the app's Home page shows this month's spend against it.
 
 ### 3.2 GitHub Actions deploy role — OIDC, no keys
 
@@ -531,6 +531,14 @@ sf org assign permsetlicense --name SalesforceAPIIntegrationPsl \
   --on-behalf-of integration@iot-dev.<yourdomain> --target-org iot-dev-admin
 sf org assign permset --name Device_Integration \
   --on-behalf-of integration@iot-dev.<yourdomain> --target-org iot-dev-admin
+```
+
+Admins who should see the app's Home page, with this month's AWS spend and
+the org's limits, need `Platform_Usage_Viewer`. Its AWS half also needs the
+`AWS_IoT_Relay_Callers` permission set (README, Stage 2 part d):
+
+```bash
+sf org assign permset --name Platform_Usage_Viewer --target-org iot-dev-admin
 ```
 
 Also activate the Agentforce agent (Setup → Agentforce Agents → **Patient Care

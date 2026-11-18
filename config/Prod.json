@@ -35,7 +35,9 @@
       "ApiBurstLimit": 100,
       "SalesforceCallerUserName": "cloud-agentic-iot-salesforce-caller",
       "LiveReadingSeconds": 2,
-      "LiveMinutes": 15
+      "LiveMinutes": 15,
+      "SpendCacheHours": 24,
+      "SpendCostExplorer": "false"
     },
     "streaming": {
       "SalesforceApiVersion": "64.0",
