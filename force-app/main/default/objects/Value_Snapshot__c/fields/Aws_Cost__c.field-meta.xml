@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Aws_Cost__c</fullName>
+    <label>AWS Cost (window)</label>
+    <description>AWS month-to-date spend from the usage card, prorated to the window.</description>
+    <precision>12</precision>
+    <scale>2</scale>
+    <required>false</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

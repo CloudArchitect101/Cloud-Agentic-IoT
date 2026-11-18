@@ -654,8 +654,8 @@ sf project deploy start --dry-run --target-org iot-dev-deploy
 If that succeeds, the pipeline will too — it runs the same command with the
 same identity. If it fails on privileges, revisit §2.3.
 
-`scripts/deploy-salesforce.sh Dev --dry-run` runs the same check-only deploy
-with every local Apex test, and checks that `iot-dev-deploy` is the org paired
+`scripts/deploy-salesforce.sh Dev --dry-run --with-tests` runs the same check-only deploy
+with every local Apex test (without `--with-tests`, a laptop run to Dev skips them), and checks that `iot-dev-deploy` is the org paired
 with the AWS account `AWS_PROFILE` points at (nothing is paired yet on a first
 run, which it says).
 

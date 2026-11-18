@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Phase__c</fullName>
+    <label>Phase</label>
+    <description>Baseline while measuring the as-is process (Value_Assumption__mdt Phase = Baseline), After once the platform runs it. The dashboard compares the two.</description>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Baseline</fullName><default>false</default><label>Baseline</label></value>
+            <value><fullName>After</fullName><default>true</default><label>After</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
