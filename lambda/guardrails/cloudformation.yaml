@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  The guardrails as a function of their own: input, output, action and command
+  checks, and PII masking, for any caller in this account with
+  lambda:InvokeFunction on it. The same rules (lambda/shared/guardrails.js)
+  run inside device-command on every command, so nothing has to call this
+  function for them to hold; it is the place to ask what they would say.
+  No trigger and no URL. See docs/GUARDRAILS-AND-MCP.md.
+
+# Values below come from config/<env>.json ("guardrails"); none is needed.
+Parameters:
+  GuardrailsTimeoutSeconds:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 30
+    Description: >-
+      The checks are pattern matches in memory; five seconds is a cold start
+      with room to spare.
+
+Resources:
+  # Logs only: the checks read nothing and call nothing, so the role grants
+  # nothing beyond writing the function's own log lines.
+  GuardrailsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  GuardrailsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-guardrails
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref GuardrailsTimeoutSeconds
+      Role: !GetAtt GuardrailsRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+
+Outputs:
+  GuardrailsFunctionArn:
+    Description: >-
+      Invoke with a phase of command, input, output, mask or action
+      (lambda/guardrails/index.js).
+    Value: !GetAtt GuardrailsFunction.Arn

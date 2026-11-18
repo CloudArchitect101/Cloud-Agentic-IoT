@@ -40,6 +40,9 @@ per environment, in the order they come up below:
     for Token Refresh** to `403` (README, Stage 2, part b). API Gateway
     answers an expired STS session with 403, and without this every call
     fails from an hour after the first one.
+14. Optional: connect an MCP client to the Smart Ward MCP server (§6.5). The
+    deploy creates the server, its IAM-authenticated URL and its client role;
+    only your client's configuration is by hand.
 
 Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
 named and external credentials, the `AWS_IoT_Relay_Callers` permission set
@@ -709,6 +712,27 @@ switched on by a person, not by a deploy.
    ```
 
 That is the end of setup. Everything after this ships through GitHub.
+
+### 6.5 Optional: the guardrails and the MCP server
+
+Nothing to set up for either to work. Every deploy ships both stacks:
+`cloud-agentic-iot-guardrails-<env>` and `cloud-agentic-iot-mcp-server-<env>`.
+The guardrails then run inside device-command on every command, Salesforce's
+included. Check them once after the first deploy:
+
+```bash
+aws lambda invoke --function-name cloud-agentic-iot-guardrails --cli-binary-format raw-in-base64-out \
+  --payload '{"phase":"command","operation":"REBOOT"}' /dev/stdout
+```
+
+Expect `"allowed":false` with `unknown_operation`.
+
+The MCP server answers only SigV4-signed requests. `scripts/deploy-aws.sh`
+ends by printing its endpoint and the `McpClientRole` ARN. To use it from an
+MCP client (Claude Code, Claude Desktop, any client that runs a local stdio
+server), follow [GUARDRAILS-AND-MCP.md, Connect an MCP
+client](GUARDRAILS-AND-MCP.md#connect-an-mcp-client). Salesforce needs nothing:
+the Patient Care Agent keeps its Apex actions.
 
 ---
 

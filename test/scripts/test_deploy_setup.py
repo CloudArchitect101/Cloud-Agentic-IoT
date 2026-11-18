@@ -444,6 +444,22 @@ class DeployAws(SetupFixture):
         self.assertEqual(sorted(kept), sorted(f'/aws/lambda/{fn}' for fn in packaged))
         self.assertEqual(set(kept.values()), {str(self.retention)})
 
+    def test_the_guardrails_and_the_mcp_server_are_deployed_packaged_and_the_endpoint_printed(self):
+        url = 'https://abc123.lambda-url.ca-central-1.on.aws/'
+        role = f'arn:aws:iam::{ACCOUNT}:role/cloud-agentic-iot-mcp-server-Dev-McpClientRole-X'
+        self.state['outputs']['cloud-agentic-iot-mcp-server-Dev'] = {'McpServerEndpoint': url, 'McpClientRoleArn': role}
+        code, out = self.run_script('deploy-aws.sh', 'Dev')
+        self.assertEqual(code, 0, out)
+        stacks = [c['options']['stack-name'][0] for c in self.calls('cloudformation deploy')]
+        self.assertIn('cloud-agentic-iot-guardrails-Dev', stacks)
+        self.assertIn('cloud-agentic-iot-mcp-server-Dev', stacks)
+        self.assertIn('MaxRoomsScanned=500', self.overrides('cloud-agentic-iot-mcp-server-Dev'))
+        packaged = [c['options']['function-name'][0] for c in self.calls('lambda update-function-code')]
+        self.assertIn('cloud-agentic-iot-guardrails', packaged)
+        self.assertIn('cloud-agentic-iot-mcp-server', packaged)
+        self.assertIn(f'MCP server: {url}', out)
+        self.assertIn(role, out)
+
     def test_the_deployed_commit_is_recorded(self):
         code, out = self.run_script('deploy-aws.sh', 'Dev')
         self.assertEqual(code, 0, out)

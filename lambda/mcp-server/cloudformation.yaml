@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  The Smart Ward MCP server: room status, the rooms out of range, and one
+  command to one room, as Model Context Protocol tools behind a Lambda
+  function URL that only SigV4-signed requests from McpClientRole (or another
+  identity in this account given the same two actions) can call. It reads
+  the patient-vitals table and sends commands through the device-command
+  function, so the guardrails there apply. See docs/GUARDRAILS-AND-MCP.md.
+
+# Values below come from config/<env>.json ("mcp-server").
+Parameters:
+  PatientVitalsTableName:
+    Type: String
+    Default: patient-vitals
+    Description: >-
+      The patient-vitals stack's table (its PatientVitalsTableName): newest
+      readings and each room's STATE.
+  RoomTempAlertCelsius:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: >-
+      The room-temperature threshold, inclusive, in C. Keep it equal to the
+      patient-vitals stack's RoomTempAlertCelsius;
+      test/config/environments.test.js fails when config/<env>.json says otherwise.
+  OfflineAfterMinutes:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 1440
+    Description: >-
+      A room whose newest stored reading is older than this is reported as
+      stale. A board reads every devices.<sketch>.telemetrySeconds (30 s), so
+      5 minutes is ten missed readings.
+  MaxRoomsScanned:
+    Type: Number
+    Default: 500
+    MinValue: 1
+    MaxValue: 10000
+    Description: >-
+      The most rooms list_rooms_out_of_range reads in one call. It scans the
+      table, so this bounds what one call costs.
+  McpTimeoutSeconds:
+    Type: Number
+    Default: 20
+    MinValue: 5
+    MaxValue: 60
+    Description: >-
+      Below the 60-second limit Agentforce's MCP client allows a server, and
+      long enough for a cold start and a command through device-command.
+
+Resources:
+  McpServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ReadRoomsSendThroughDeviceCommand
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Read only, and only the one table.
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PatientVitalsTableName}'
+              # The only way this server reaches a board: the device-command
+              # function and its guardrails. No iot:Publish here, so it
+              # cannot publish around them.
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:cloud-agentic-iot-device-command'
+
+  McpServerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-mcp-server
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref McpTimeoutSeconds
+      # Three SDK packages load faster with the CPU that comes with more memory.
+      MemorySize: 256
+      Role: !GetAtt McpServerRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PatientVitalsTableName
+          DEVICE_COMMAND_FUNCTION: cloud-agentic-iot-device-command
+          ROOM_TEMP_ALERT_CELSIUS: !Ref RoomTempAlertCelsius
+          OFFLINE_AFTER_MINUTES: !Ref OfflineAfterMinutes
+          MAX_ROOMS_SCANNED: !Ref MaxRoomsScanned
+
+  # AWS_IAM: Lambda checks each request's SigV4 signature, and the signer
+  # must hold lambda:InvokeFunctionUrl and lambda:InvokeFunction on this
+  # function. No resource policy grants anyone else either, so an unsigned
+  # request, or one from another account, is refused before the code runs.
+  McpServerUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt McpServerFunction.Arn
+      AuthType: AWS_IAM
+      InvokeMode: BUFFERED
+
+  # What an MCP client signs as. Any identity in this account that may
+  # assume it can (an administrator, iot-operator); nothing outside the
+  # account can. Its sessions last at most an hour, and it may call this URL
+  # and nothing else: not the function directly, not the device API.
+  McpClientRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by an MCP client to call the Smart Ward MCP server's function URL.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: invoke-mcp-server-url
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunctionUrl
+                Resource: !GetAtt McpServerFunction.Arn
+                Condition:
+                  StringEquals:
+                    lambda:FunctionUrlAuthType: AWS_IAM
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt McpServerFunction.Arn
+                Condition:
+                  Bool:
+                    lambda:InvokedViaFunctionUrl: 'true'
+
+Outputs:
+  McpServerEndpoint:
+    Description: The MCP endpoint (Streamable HTTP). Requests must be SigV4-signed for the lambda service.
+    Value: !GetAtt McpServerUrl.FunctionUrl
+  McpClientRoleArn:
+    Description: Assume this role, then sign MCP requests with its credentials.
+    Value: !GetAtt McpClientRole.Arn
