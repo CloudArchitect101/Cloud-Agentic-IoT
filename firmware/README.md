@@ -36,7 +36,7 @@ compiles, flashes, and provisions in one interactive pass. See
 Each sketch declares its own name, which must match its folder:
 
 ```cpp
-#define FIRMWARE_VERSION "2.2.0"
+#define FIRMWARE_VERSION "2.3.0"
 CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY_SECONDS);
 ```
 
@@ -90,6 +90,7 @@ Commands arrive on `device/<thing>/command`: from the device-command API (Device
 | `LIVE` | library | Opens or ends live mode (above) | done `every 2 s for 15 min` or `off`; failed `seconds must be 1-60 and minutes 1-30, or minutes 0 to stop` |
 | `RESTART` | library | Restarts the board | done `restarting`, sent before it restarts |
 | `DISPENSE_MEDICATION` | patient-monitor | Turns the dispenser servo to 90°, holds it a second, brings it back to 0 | done, once the arm is home |
+| `CASE_ALERT` | patient-monitor (2.3.0) | `active` true: the servo sweeps 0 to 180° and back without stopping; false: it stops at 0 (below) | done, also for a repeat; refused when `active` is not true or false |
 | `QUEUE_DEPTH` | queue-indicator | Runs or parks the indicator servo | done |
 | anything else | | Nothing | refused `unknown operation <operation>`, or `no operation` when it names none |
 
@@ -108,6 +109,20 @@ Commands arrive on `device/<thing>/command`: from the device-command API (Device
 - **Older firmware** carries out what it knows and never answers, so a Device Command sent to a board older than 2.2.0 stays Sent, and RESTART does nothing there.
 
 `test/firmware/device_commands_test.cpp` checks the `commandId` rule and the memory of recent commands on the host, and `test/firmware/contract.test.js` checks that the answer topic, the rule and the device-command APIs agree with the firmware.
+
+## Case alert: the motor turns while a Case waits (patient-monitor 2.3.0)
+
+Salesforce sends `{"operation":"CASE_ALERT","active":true}` when the device's first open Case in the care team queue appears, and `"active":false` when the last one is closed, deleted, given to a person or moved to another device (`CaseAlertService`).
+
+- **The sweep** goes 0 to 180° and back once every 2 seconds (`CaseAlertSweep.h`). The angle comes from the clock, so `loop()` never waits for the servo and MQTT keeps running.
+- **A dose** (`DISPENSE_MEDICATION`) still swings 90° and back. The sweep then starts again from 0.
+- **Kept in NVS** (namespace `caseAlert`), so the motor turns again after a restart or an update while the Case still waits. A repeat changes nothing and writes nothing.
+- **Missed while offline?** When the board reconnects, Salesforce sends the state again: on while the Asset's Case Alert is checked, off when an off was sent while it was away.
+- **A continuous-rotation servo** (FS90R / SG90-360): uncomment `CONTINUOUS_ROTATION_SERVO` in the sketch, as on the queue indicator. It then spins at about half speed while the alert is on, and stands still at 90 when it is off.
+- **The console** says `case alert: on, motor turning`, `case alert: off, motor stopped` or `case alert: already on`.
+- **Older firmware** refuses `CASE_ALERT` as an unknown operation, so the Device Command shows Failed. Update the board first: `scripts/ota.sh try Dev patient-monitor`.
+
+`test/firmware/case_alert_sweep_test.cpp` checks the sweep on the host, and `test/firmware/contract.test.js` checks that Salesforce, the device-command Lambda and the sketch spell `CASE_ALERT` and `active` the same.
 
 ## Lifecycle: manual once, automatic thereafter
 

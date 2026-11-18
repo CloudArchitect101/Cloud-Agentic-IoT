@@ -114,6 +114,12 @@
         <field>Patient_Vitals__c.Timestamp__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <!-- Case_Alert_Active__c is set by CaseAlertService, which runs in the integration user's transaction when a room-temperature Case opens. -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Case_Alert_Active__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
         <field>Asset.Certificate_Id__c</field>
@@ -198,6 +204,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
+        <field>Device_Command__c.Case_Alert_On__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
         <field>Device_Command__c.Command__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -221,6 +232,19 @@
         <field>Device_Command__c.Status__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <objectPermissions>
+        <!-- Calling AWS through the AWS_IoT_Relay named credential also needs
+             Read here, besides principal access (AWS_IoT_Relay_Callers):
+             without it, a dose or a case alert this user's save sends fails
+             with "no read permissions on the User External Credential object". -->
+        <object>UserExternalCredential</object>
+        <allowCreate>false</allowCreate>
+        <allowRead>true</allowRead>
+        <allowEdit>false</allowEdit>
+        <allowDelete>false</allowDelete>
+        <viewAllRecords>false</viewAllRecords>
+        <modifyAllRecords>false</modifyAllRecords>
+    </objectPermissions>
     <objectPermissions>
         <object>Patient_Vitals__c</object>
         <allowCreate>true</allowCreate>

@@ -7,7 +7,7 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 | Object | Standard or custom | Why |
 |---|---|---|
 | **Person Account** | Standard | B2C patients. Free on EE+; customers never consume licenses. |
-| **Asset** | Standard | The device registry. SerialNumber = IoT Thing name, Account = the patient, Status/InstallDate out of the box. The added fields hold what AWS knows about the board: its Thing ARN, certificate, Thing Group and provisioning status, and, from AWS IoT's own connect and disconnect events, `Connection_Status__c`, `Connection_Since__c` and `Last_Disconnect_Reason__c` ([LIVE-STATUS.md](LIVE-STATUS.md)). Readings are never stored on it. Replaced an earlier custom `Patient_Device__c` that re-implemented all of this. |
+| **Asset** | Standard | The device registry. SerialNumber = IoT Thing name, Account = the patient, Status/InstallDate out of the box. The added fields hold what AWS knows about the board: its Thing ARN, certificate, Thing Group and provisioning status, and, from AWS IoT's own connect and disconnect events, `Connection_Status__c`, `Connection_Since__c` and `Last_Disconnect_Reason__c` ([LIVE-STATUS.md](LIVE-STATUS.md)), and `Case_Alert_Active__c`, the motor state last sent to its board (below). Readings are never stored on it. Replaced an earlier custom `Patient_Device__c` that re-implemented all of this. |
 | **Case** | Standard | All human-actionable work: queue depth (chapter 03), agent escalations (chapter 05, stamped `Origin=Agentforce`), and the room-temperature demo rule (chapter 03, `Origin=Room Temperature Rule`, at most one open per device's Asset). Standard queues, assignment, reports come free. |
 | **Group (Queue)** | Standard | Drives the physical indicator. No custom "work bucket". |
 | `Patient_Vitals__c` | Custom — deliberate | Alert-worthy readings only (state transitions, non-STABLE), plus room-temperature reports AWS flagged with `Room_Temperature_Alert__c` (on crossing 30 C, then at most once per re-alert interval). Health Cloud's `CareObservation` is the standard answer but Health Cloud is a paid SKU outside the free-tier build; raw telemetry belongs in DynamoDB + Data Cloud ingestion, not CRM rows. Documented tradeoff, not an oversight. |
@@ -28,7 +28,9 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 
 ## Device Command lifecycle
 
-A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**), by Slack's `/dispense-medication`, by the room-temperature demo rule (one `DISPENSE_MEDICATION` per new Case, Requested By `Room Temperature Rule`), or through the API.
+A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**), by Slack's `/dispense-medication`, by the room-temperature demo rule (one `DISPENSE_MEDICATION` per new Case, Requested By `Room Temperature Rule`), by `CaseAlertService` (below), or through the API.
+
+**Case alert.** A device's patient monitor turns its servo while the device has at least one open Case owned by Care_Team_Queue. `CaseAlertService`, from `CaseTrigger`, creates one `CASE_ALERT` Device Command with `Case_Alert_On__c` checked when the first such Case appears, and one unchecked when the last one is closed, deleted, given to a person or moved to another Asset. `Asset.Case_Alert_Active__c` keeps the state last sent, so nothing is sent while the state stays the same. It is sent as whoever saved the Case. When a board comes back online, `DeviceConnectionService` has it sent again: on while Case Alert is checked, off when an off was sent while the board was away.
 
 | Status | Set by | Means |
 |---|---|---|

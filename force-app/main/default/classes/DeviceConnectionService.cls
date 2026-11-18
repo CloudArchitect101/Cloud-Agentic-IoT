@@ -17,6 +17,10 @@
  * Connection_Since__c keeps whole seconds, so two events within one second
  * apply in the order they arrive.
  *
+ * A board that comes online is told its case alert again (CaseAlertService.
+ * resendAfterReconnect), since a CASE_ALERT sent while it was away never
+ * reached it.
+ *
  * Without sharing: a board's connection is a fact about its Thing, so every
  * Asset with that Thing ARN must show it, whoever owns the Asset and whatever
  * the integration user may see. Only Device_Integration may run this class.
@@ -74,6 +78,9 @@ public without sharing class DeviceConnectionService {
         // change keeps the Ids of the Assets it changed, to count what saved.
         Map<Id, Asset> changedAssets = new Map<Id, Asset>();
         List<List<Id>> assetIdsByChange = new List<List<Id>>();
+        // When each Asset that comes online in this batch went offline, as it
+        // showed before; CaseAlertService resends what was sent since then.
+        Map<Id, Datetime> offlineSinceById = new Map<Id, Datetime>();
 
         for (Change change : changes) {
             Outcome outcome = new Outcome();
@@ -100,6 +107,10 @@ public without sharing class DeviceConnectionService {
                     newerShown = device.Connection_Since__c;
                     continue;
                 }
+                if (ONLINE.equals(change.status) && OFFLINE.equals(device.Connection_Status__c)
+                        && device.Connection_Since__c != null && !offlineSinceById.containsKey(device.Id)) {
+                    offlineSinceById.put(device.Id, device.Connection_Since__c);
+                }
                 apply(change, changedAt, device);
                 changedAssets.put(device.Id, device);
                 assetIds.add(device.Id);
@@ -121,6 +132,14 @@ public without sharing class DeviceConnectionService {
                 }
             }
         }
+
+        List<Asset> cameOnline = new List<Asset>();
+        for (Asset device : changedAssets.values()) {
+            if (ONLINE.equals(device.Connection_Status__c) && !errorsById.containsKey(device.Id)) {
+                cameOnline.add(device);
+            }
+        }
+        CaseAlertService.resendAfterReconnect(cameOnline, offlineSinceById);
         return outcomes;
     }
 
@@ -167,7 +186,8 @@ public without sharing class DeviceConnectionService {
         // older change never lands last. A lock it cannot get in time fails
         // the call, and the Lambda sends the batch again.
         for (Asset device : [
-            SELECT Id, Thing_ARN__c, Connection_Status__c, Connection_Since__c, Last_Disconnect_Reason__c
+            SELECT Id, Thing_ARN__c, Connection_Status__c, Connection_Since__c, Last_Disconnect_Reason__c,
+                   Case_Alert_Active__c
             FROM Asset
             WHERE Thing_ARN__c IN :thingArns
             WITH SYSTEM_MODE

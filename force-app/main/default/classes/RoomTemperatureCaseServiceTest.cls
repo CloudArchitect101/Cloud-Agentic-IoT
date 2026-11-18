@@ -86,8 +86,11 @@ private class RoomTemperatureCaseServiceTest {
                 FROM Case WHERE Origin = :ORIGIN ORDER BY CreatedDate, Id];
     }
 
+    // Only the doses: each new Case in the queue also turns its device's
+    // motor on with a CASE_ALERT (CaseAlertServiceTest).
     private static List<Device_Command__c> doses() {
-        return [SELECT Device__c, Command__c, Requested_By__c FROM Device_Command__c ORDER BY CreatedDate, Id];
+        return [SELECT Device__c, Command__c, Requested_By__c FROM Device_Command__c
+                WHERE Command__c = 'DISPENSE_MEDICATION' ORDER BY CreatedDate, Id];
     }
 
     private static void close(Case roomCase) {
@@ -383,6 +386,11 @@ private class RoomTemperatureCaseServiceTest {
         Assert.areEqual(test8.Id, cases[0].AssetId, 'Linked to the device');
         Assert.areEqual(1, [SELECT COUNT() FROM Device_Command__c
                             WHERE Device__c = 'Test8' AND Command__c = 'DISPENSE_MEDICATION'], 'And the dose requested');
+        Assert.areEqual(1, [SELECT COUNT() FROM Device_Command__c
+                            WHERE Device__c = 'Test8' AND Command__c = 'CASE_ALERT' AND Case_Alert_On__c = true],
+            'And the motor turned on, since the Case waits in the queue');
+        Assert.isTrue([SELECT Case_Alert_Active__c FROM Asset WHERE Id = :test8.Id].Case_Alert_Active__c,
+            'The device shows its case alert on');
     }
 
     @IsTest
