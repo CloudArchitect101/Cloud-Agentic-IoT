@@ -177,6 +177,13 @@ The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are the next
 - **Edge:** ESP32, `arduino-cli`
 - **Languages:** Apex, JavaScript (Node.js), C++, Python, DataWeave
 
+## Contributing
+
+Issues and pull requests are welcome. This project was built with AI coding
+assistants and every change is reviewed by the maintainer before it merges.
+See [CONTRIBUTING.md](CONTRIBUTING.md), and report security problems privately
+as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
 [MIT](LICENSE)

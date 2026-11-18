@@ -68,6 +68,33 @@ These are not style preferences — break one and the build fails loudly (which 
 
 `scripts/chapter-setup.sh` generates scaffolding that already satisfies all of these — use it rather than hand-creating a new chapter.
 
+## Pull requests from outside contributors
+
+Once the repository is public, anyone can fork it and open a pull request into
+`Dev`. Their code never sees the project's credentials:
+
+- `checks.yml` is the only workflow a pull request triggers. It runs on
+  `pull_request` (never `pull_request_target`), with `contents: read`, no
+  secrets and no OIDC. GitHub also withholds secrets from fork pull requests.
+- Every workflow that uses AWS OIDC or Salesforce secrets runs only on a push
+  to `Dev` or `Prod`, or when the maintainer starts it by hand. A push to
+  those branches only happens through a merged pull request.
+- `test/config/contribution-safety.test.js` fails the checks if a workflow
+  change breaks either rule, so a pull request cannot quietly widen them.
+- `.github/CODEOWNERS` names the maintainer for every path.
+
+These repository settings complete it. They live in GitHub, not in the repo:
+
+| Setting | Where | Value |
+|---|---|---|
+| Fork pull request workflows | Settings > Actions > General | "Require approval for all external contributors" |
+| Workflow permissions | Settings > Actions > General | "Read repository contents and packages permissions" |
+| Branch protection for `Dev` and `Prod` | Settings > Rules > Rulesets | Require a pull request, 1 approval, review from Code Owners, dismiss stale approvals, all `Checks` jobs passing; block force pushes and deletion. Add the Repository admin role to the bypass list: GitHub never lets you approve your own pull request, so a solo maintainer needs it to merge their own changes |
+| `Prod` environment | Settings > Environments > Prod | Required reviewer: the maintainer; deployment branch `Prod` only |
+| `Dev` environment | Settings > Environments > Dev | Deployment branch `Dev` only |
+| Private vulnerability reporting | Settings > Security | Enabled (used by [SECURITY.md](../SECURITY.md)) |
+| Secret scanning and push protection | Settings > Security | Enabled (free on public repositories) |
+
 ## Pipeline failures and what they actually mean
 
 Every one of these was hit for real getting the pipeline green. The error text
