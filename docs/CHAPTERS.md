@@ -11,6 +11,7 @@
 | 04 | [Headless Slack Integration](#04--headless-slack-integration) | 11 | [Agentforce Guardrails](#11--agentforce-guardrails) |
 | 05 | [The Agent and Its Actions](#05--the-agent-and-its-actions) | 12 | [Capstone: The Complete System](#12--capstone--the-complete-system) |
 | 06 | [Multi-Agent Orchestration (MCP)](#06--multi-agent-orchestration-mcp--agent2agent) | 13 | [Device Provisioning Automation](#13--device-provisioning-automation) |
+|  |  | + | [Patient Portal: React + Enhanced Chat](#patient-portal--react-site-and-enhanced-chat) |
 
 Where a chapter needs something from [Stage 2 of the Install guide](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) it says so, and where you can watch it working there is a **To see it work** line.
 
@@ -324,3 +325,15 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 **Key files:** `objects/Wi_Fi_Network__c/`, `objects/Asset/fields/`, `classes/DeviceProvisioningService.cls`, `classes/DeviceReprovisionController.cls` and `lwc/reprovisionDevice/` (the Re-provision button), `classes/WiFiCredentialService.cls`, `triggers/AssetTrigger.trigger`, `lambda/device-provisioning/`, `lambda/device-reprovision/`, `lambda/device-teardown/`, `scripts/provision-device.sh` / `.ps1`
 
 **To see it work:** create a Wi-Fi Network record, then an Asset with a SerialNumber, and watch the Asset flip to **Provisioned** with a bundle link. The SigV4 Named Credential it uses is step 1 of [Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
+
+## Patient Portal · React site and Enhanced Chat
+
+The patients' side of the system: a **React site on Salesforce** (Multi-Framework: React 19, Vite, Tailwind, from the official `reactexternalapp` template) where a patient signs in, sees the readings of their own monitored device on **My monitor**, and talks to a care assistant in **Enhanced Chat v2**, by typing or, in an org licensed for it, by voice.
+
+**The idea worth defending:** the patient's identity comes from the platform, not from the conversation. The site signs a token for the verified chat, `PortalIdentityService` finds the patient from it, and every action is scoped to that one account. The **Patient Portal Agent** is a second Agentforce agent (Agent Script, new builder) with two actions, Get My Devices and Request a Nurse. It never sees another patient's devices or an internal board, and a visitor who says they are staff is sent to the Patient Care Agent in Salesforce or Slack.
+
+**Why two agents, not one:** staff and patients need different tools, different data and different licences. One agent with both sets of actions would rely on a prompt to keep them apart; two agents keep them apart by configuration.
+
+**Key files:** `uiBundles/patientPortal/` (`src/pages/Home.tsx`, `src/components/PatientChat.tsx`), `aiAuthoringBundles/Patient_Portal_Agent/`, `classes/PortalIdentityService.cls`, `classes/PatientDeviceService.cls`, `scripts/publish-portal-agent.sh`
+
+**To see it work:** sign in to the site as a patient, check My monitor shows their device, then ask the chat what the device reads and request a nurse. A Case appears in Care_Team_Queue. Setup steps and costs: [PATIENT-PORTAL.md](PATIENT-PORTAL.md) and [SETUP.md §9](SETUP.md#9-patient-portal).

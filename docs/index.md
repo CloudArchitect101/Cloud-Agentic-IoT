@@ -11,6 +11,16 @@ A healthcare IoT + Agentforce system, built from scratch and in public. A physic
 
 **[Step through the process →](process/)** · **[Quick install](INSTALL.md)** · **[Install guide](INSTALL-GUIDE.md)** · **[Code on GitHub](https://github.com/CloudArchitect101/Cloud-Agentic-IoT)**
 
+## What it does
+
+| | |
+|---|---|
+| **Sense** | An ESP32 with a DHT11 sends readings to AWS IoT Core over mutual TLS. No secrets are compiled into the firmware, and every update after the first USB flash goes over the air. |
+| **Alert** | At 30 C the board's own motor turns at once (it works offline), and AWS flags the reading so Salesforce opens one Case for the care team. A ward board spins while that queue has work. |
+| **Act** | The Patient Care Agent (Agentforce, new builder) reads the device, cites the ward's SOPs found with Bedrock embeddings, and escalates only after you confirm. Guardrails and PII masking run outside the model. |
+| **Reach** | Patients sign in to a **React site on Salesforce** (Multi-Framework, React 19) and chat with their own care assistant through **Enhanced Chat v2**: a second Agentforce agent that only ever sees the signed-in patient's devices and can send a nurse request. Staff use **Slack**: `/patient-status <device>` answers with no Salesforce login (JWT integration user), and the Patient Care Agent answers in Slack DMs. |
+| **Measure** | The app's Home tab shows the month's AWS spend against its limit, the org's limits, and a Business Value dashboard: alert response, chat deflection, hours avoided and cost per device. |
+
 ## How it works
 
 ![From a warm sensor to an agent answer: eight steps, animated](images/process-flow.svg)
@@ -41,8 +51,9 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | [How it connects](HOW-IT-CONNECTS.md) and [Architecture overview](ARCHITECTURE-OVERVIEW.md) | [Cost model](COST-MODEL.md): per device, per user, per customer |
 | [Device identity](DEVICE-IDENTITY.md): certificates and WiFi that survive OTA | [Spend and limits](SPEND-AND-LIMITS.md): the Home page's numbers |
 | [SOP grounding](SOP-GROUNDING.md) and [Guardrails and MCP](GUARDRAILS-AND-MCP.md) | [CI/CD and secrets](CI-CD-SECRETS.md): what is automated and the conventions |
-| [Patient portal](PATIENT-PORTAL.md), [Live status](LIVE-STATUS.md), [Data Cloud](DATA-CLOUD.md) | [Agent evals](AGENT-EVALS.md): Testing Center specs and retrieval scores |
-| [Scaling](SCALING.md): the same model at a million devices | [Business value](BUSINESS-VALUE.md): the KPI dashboard and its assumptions |
+| [Patient portal](PATIENT-PORTAL.md): the React site, Enhanced Chat and the patient agent | [Agent evals](AGENT-EVALS.md): Testing Center specs and retrieval scores |
+| [Slack](CHAPTERS.md#04--headless-slack-integration): `/patient-status` with no login, and [the agent in Slack](SETUP.md#talk-to-the-agent-from-slack-optional) | [Business value](BUSINESS-VALUE.md): the KPI dashboard and its assumptions |
+| [Live status](LIVE-STATUS.md), [Data Cloud](DATA-CLOUD.md), [Scaling](SCALING.md) | |
 
 ## KPIs and cost
 
