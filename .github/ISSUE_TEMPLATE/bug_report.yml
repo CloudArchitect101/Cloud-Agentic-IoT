@@ -1,0 +1,58 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Never paste keys, tokens, passwords, AWS account IDs,
+        Salesforce org IDs or personal data here. Security problems go to
+        SECURITY.md, not to an issue.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - AWS (IoT Core, Lambda, CloudFormation, Bedrock)
+        - Salesforce (Agentforce, Apex, LWC, Data Cloud)
+        - Patient portal (React)
+        - Firmware / ESP32 / OTA
+        - CI/CD and scripts
+        - Docs
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run scripts/...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Remove any secrets and identifiers first.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Commit or firmware version
+      placeholder: e.g. 0b403dd, firmware 2.7.0
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and docs/TROUBLESHOOTING.md.
+          required: true
+        - label: This report contains no secrets, account IDs or personal data.
+          required: true

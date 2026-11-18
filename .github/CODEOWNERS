@@ -1,0 +1,10 @@
+# Every change needs the maintainer's review. With branch protection's
+# "Require review from Code Owners" on, nothing merges into Dev or Prod
+# without it.
+*                   @CloudArchitect101
+
+# Called out on their own: changes here decide what runs with the project's
+# credentials and who can deploy.
+/.github/           @CloudArchitect101
+/infra/             @CloudArchitect101
+/scripts/           @CloudArchitect101
