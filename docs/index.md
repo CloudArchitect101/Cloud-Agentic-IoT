@@ -30,8 +30,8 @@ A healthcare IoT + Agentforce system, built from scratch and in public. A physic
 | | [Quick install](INSTALL.md) | [Install guide](INSTALL-GUIDE.md) |
 |---|---|---|
 | For | Getting it running | Understanding every step |
-| What you get | Commands in order, one line of context each | Each step, why it is done that way, and what to check when it fails |
-| Time | About an hour, plus 20 min per board | About a day for the full pipeline setup |
+| What you get | Every feature as execution steps in order, deployed in one run by `scripts/install.sh` | Each step, why it is done that way, and what to check when it fails |
+| Time | About two hours for every feature, plus 20 min per board | About a day for the full pipeline setup |
 
 ## Documentation
 
@@ -39,7 +39,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 
 | Learn by doing | Get a task done |
 |---|---|
-| [Quick install](INSTALL.md): the shortest path to a running system | [Install guide](INSTALL-GUIDE.md): every step, explained |
+| [Quick install](INSTALL.md): every feature, step by step | [Install guide](INSTALL-GUIDE.md): every step, explained |
 | [Try it](TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | [Setup](SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
 | [Platform primer](PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | [Development](DEVELOPMENT.md): laptop to Dev to Prod |
 | | [Migration runbook](MIGRATION-RUNBOOK.md): phased cutover with a rollback per phase |

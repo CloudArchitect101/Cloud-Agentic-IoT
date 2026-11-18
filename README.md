@@ -1,7 +1,7 @@
 # Cloud-Agentic-IoT
 
 [![Checks](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/actions/workflows/checks.yml/badge.svg?branch=Dev)](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/actions/workflows/checks.yml)
-![Tests](https://img.shields.io/badge/tests-516%20Node%20%C2%B7%20110%20Python%20%C2%B7%20Apex-brightgreen)
+![Tests](https://img.shields.io/badge/tests-531%20Node%20%C2%B7%20118%20Python%20%C2%B7%20Apex-brightgreen)
 ![AWS cost](https://img.shields.io/badge/AWS-%E2%89%88%240.08%20per%20device%2Fmonth-orange)
 ![Salesforce](https://img.shields.io/badge/Salesforce-Agentforce%20%C2%B7%20Data%20Cloud-00A1E0)
 ![AWS](https://img.shields.io/badge/AWS-IoT%20Core%20%C2%B7%20Lambda%20%C2%B7%20Bedrock-FF9900)
@@ -81,9 +81,9 @@ Pick one. Both end with the same running system.
 | | [**Quick install**](docs/INSTALL.md) | [**Install guide**](docs/INSTALL-GUIDE.md) |
 |---|---|---|
 | For | Getting it running | Understanding every step |
-| What you get | Commands in order, one line of context each | Each step, why it is done that way, and what to check when it fails |
-| Target | Your own AWS project with a spend limit and a free Developer Edition org, from your laptop | The same, or separate Dev and Prod accounts and orgs through GitHub Actions |
-| Time | About an hour, plus 20 min per board | About a day for the full pipeline setup |
+| What you get | Every feature as execution steps in order, deployed in one run by `scripts/install.sh` | Each step, why it is done that way, and what to check when it fails |
+| Target | Your own AWS project with a spend limit and a free Developer Edition org, from your laptop, then the Dev and Prod pipelines | The same, or separate Dev and Prod accounts and orgs through GitHub Actions |
+| Time | About two hours for every feature, plus 20 min per board | About a day for the full pipeline setup |
 
 The board is optional: everything except the motor runs without one.
 
@@ -100,7 +100,7 @@ The board is optional: everything except the motor runs without one.
 | [`config/`](config/) | Per-environment settings (`Dev.json`, `Prod.json`) and the vital thresholds | [DEVELOPMENT.md](docs/DEVELOPMENT.md) |
 | [`knowledge/sops/`](knowledge/sops/) | The ward's sample procedures the agent finds and cites | [SOP-GROUNDING.md](docs/SOP-GROUNDING.md) |
 | [`datacloud/`](datacloud/) | Columns of the readings feed and the calculated insights' SQL | [DATA-CLOUD.md](docs/DATA-CLOUD.md), [SETUP.md §7](docs/SETUP.md#7-data-cloud-room-readings-for-the-ward) |
-| [`scripts/`](scripts/) | Deploy, provisioning, OTA, agent publish, evals and checks, all runnable from a laptop | [INSTALL.md](docs/INSTALL.md) |
+| [`scripts/`](scripts/) | The one-run install (`install.sh`), deploy, provisioning, OTA, agent publish, evals and checks, all runnable from a laptop | [INSTALL.md](docs/INSTALL.md) |
 | [`test/`](test/) | Node and Python tests for the Lambdas, firmware logic, scripts, agents and templates | [Quality](#quality) |
 | [`.github/workflows/`](.github/workflows/) | Checks on every PR, deploys, OTA promotion, agent evals | [CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md) |
 | [`mulesoft/`](mulesoft/) | The iPaaS alternative to the ingestion Lambda (a design sketch) | [CHAPTERS.md §07](docs/CHAPTERS.md#07--cross-cloud-integrations-ipaas--mulesoft) |
@@ -112,7 +112,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 
 | Learn by doing | Get a task done |
 |---|---|
-| [Quick install](docs/INSTALL.md): the shortest path to a running system | [Install guide](docs/INSTALL-GUIDE.md): every step, explained |
+| [Quick install](docs/INSTALL.md): every feature, step by step | [Install guide](docs/INSTALL-GUIDE.md): every step, explained |
 | [Try it](docs/TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | [Setup](docs/SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
 | [Platform primer](docs/PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | [Development](docs/DEVELOPMENT.md): laptop to Dev to Prod |
 | | [Migration runbook](docs/MIGRATION-RUNBOOK.md): phased cutover with a rollback per phase |
@@ -143,7 +143,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 
 ## Quality
 
-- **Tests:** 516 Node tests cover all 18 Lambda functions, the guardrails, the MCP server, the SOP index and the firmware's logic compiled for the host. 110 Python tests run the board, OTA, deploy and setup scripts against a simulated board, AWS and org. Every Salesforce deploy to CI and Prod runs the org's Apex tests (38 test classes).
+- **Tests:** 531 Node tests cover all 18 Lambda functions, the guardrails, the MCP server, the SOP index and the firmware's logic compiled for the host. 118 Python tests run the board, OTA, install, deploy and setup scripts against a simulated board, AWS and org. Every Salesforce deploy to CI and Prod runs the org's Apex tests (38 test classes).
 - **On every pull request:** the tests, a CloudFormation lint, shellcheck, a Salesforce metadata check, the portal's React build and an ESP32 compile ([`checks.yml`](.github/workflows/checks.yml)).
 - **Security:** mutual TLS per device, least-privilege IAM, SigV4 on every Salesforce-to-AWS call, no private key ever stored in Salesforce, guardrails and PII masking outside the model.
 
