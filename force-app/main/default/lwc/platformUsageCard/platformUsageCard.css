@@ -1,8 +1,58 @@
-/* Bars coloured by the share used: green below 50%, amber to 80%, red from 80%. */
-.track { height: 0.5rem; border-radius: 0.25rem; background-color: #e5e5e5; overflow: hidden; }
-.fill { height: 100%; }
-.fill_ok { background-color: #2e844a; }
-.fill_warn { background-color: #dd7a01; }
-.fill_high { background-color: #ba0517; }
-.big { font-size: 1.75rem; font-weight: 700; line-height: 1.25; }
+/* Tones by the share used: green below 50%, amber to 80%, red from 80%. */
+:host {
+    --ok: #2e844a;
+    --warn: #dd7a01;
+    --high: #ba0517;
+    --none: #c9c9c9;
+    --track: #eef1f6;
+    --ink: #032d60;
+}
+.usage { overflow: hidden; }
+
+.hero { background: linear-gradient(120deg, #032d60 0%, #0b5cab 60%, #1b96ff 100%); color: #fff; }
+.hero-title { font-size: 1.125rem; font-weight: 700; color: #fff; }
+.hero-sub { font-size: 0.75rem; opacity: 0.85; color: #fff; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.75rem; }
+.tile { border: 1px solid #e5e9f0; border-radius: 0.75rem; padding: 0.875rem 1rem; background: #fff; box-shadow: 0 1px 3px rgba(3, 45, 96, 0.08); }
+.tile_aws { background: linear-gradient(180deg, #f3f8ff 0%, #ffffff 100%); }
+.tile-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #5c6b80; margin-bottom: 0.5rem; }
+.tile-body { display: flex; align-items: center; gap: 0.875rem; }
+.tile-note { font-size: 0.75rem; color: #5c6b80; }
+.big { font-size: 1.75rem; font-weight: 700; line-height: 1.2; color: var(--ink); }
+.of { font-size: 1rem; font-weight: 400; color: #5c6b80; }
+
+/* A ring gauge: --p is the share used, 0 to 100. */
+.ring {
+    --tone: var(--none);
+    flex: 0 0 auto; width: 4.25rem; height: 4.25rem; border-radius: 50%;
+    display: grid; place-items: center;
+    background: conic-gradient(var(--tone) calc(var(--p) * 1%), var(--track) 0);
+}
+.ring span {
+    width: 3.25rem; height: 3.25rem; border-radius: 50%; background: #fff;
+    display: grid; place-items: center; font-weight: 700; font-size: 0.875rem; color: var(--ink);
+}
+.ring_ok { --tone: var(--ok); }
+.ring_warn { --tone: var(--warn); }
+.ring_high { --tone: var(--high); }
+
+.section-title { font-size: 0.875rem; font-weight: 700; color: var(--ink); margin: 1.25rem 0 0.5rem; }
+.watch { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.5rem 1.5rem; }
+.watch-row { font-size: 0.8125rem; }
+.row-text { font-size: 0.6875rem; color: #5c6b80; margin-top: 0.125rem; }
+
+.pill { border-radius: 1rem; padding: 0 0.5rem; font-size: 0.6875rem; font-weight: 700; color: #fff; background: var(--none); }
+.pill_ok { background: var(--ok); }
+.pill_warn { background: var(--warn); }
+.pill_high { background: var(--high); }
+
+.track { height: 0.5rem; border-radius: 0.25rem; background-color: var(--track); overflow: hidden; margin-top: 0.25rem; }
+.fill { height: 100%; border-radius: 0.25rem; }
+.fill_ok { background-color: var(--ok); }
+.fill_warn { background-color: var(--warn); }
+.fill_high { background-color: var(--high); }
+
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0 1.5rem; }
+.group { margin-bottom: 1rem; }
 .loading { min-height: 3rem; }

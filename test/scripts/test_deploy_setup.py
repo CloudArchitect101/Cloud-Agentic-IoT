@@ -373,7 +373,7 @@ class DeploySalesforceGuards(SetupFixture):
         return [args for args in self.lines('sf.jsonl') if args[:2] == ['project', 'deploy']]
 
     def test_the_first_deploy_pairs_the_org_with_the_account_and_records_the_commit(self):
-        code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org')
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', '--with-tests', SF_TARGET_ORG='test-org')
         self.assertEqual(code, 0, out)
         self.assertEqual(self.value(f'{SF}/org-id'), ORG_ID)
         self.assertEqual(self.value('/cloud-agentic-iot/deployed-commit/salesforce'), self.head)
@@ -416,10 +416,46 @@ class DeploySalesforceGuards(SetupFixture):
         self.assertEqual(self.value('/cloud-agentic-iot/deployed-commit/salesforce'), self.head)
 
     def test_a_dry_run_checks_the_pairing_but_writes_nothing(self):
-        code, out = self.run_script('deploy-salesforce.sh', 'Dev', '--dry-run', SF_TARGET_ORG='test-org')
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', '--dry-run', '--with-tests', SF_TARGET_ORG='test-org')
         self.assertEqual(code, 0, out)
         self.assertEqual(self.puts(), [])
         self.assertEqual([d[2] for d in self.deploys()], ['validate', 'resume'])
+
+    def test_a_laptop_deploy_to_dev_skips_apex_tests_in_one_deploy(self):
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org')
+        self.assertEqual(code, 0, out)
+        self.assertIn('Skipping Apex tests', out)
+        (start,) = self.deploys()
+        self.assertEqual(start[2], 'start')
+        self.assertEqual(start[start.index('--test-level') + 1], 'NoTestRun')
+        self.assertEqual(start[start.index('--post-destructive-changes') + 1], 'manifest/destructiveChangesPost.xml')
+        self.assertEqual(self.value('/cloud-agentic-iot/deployed-commit/salesforce'), self.head)
+
+    def test_a_laptop_dry_run_without_tests_validates_only(self):
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', '--dry-run', SF_TARGET_ORG='test-org')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.puts(), [])
+        (validate,) = self.deploys()
+        self.assertEqual(validate[2], 'validate')
+        self.assertEqual(validate[validate.index('--test-level') + 1], 'NoTestRun')
+
+    def test_run_tests_yes_runs_them_like_with_tests(self):
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org', RUN_TESTS='yes')
+        self.assertEqual(code, 0, out)
+        self.assertEqual([d[2] for d in self.deploys()], ['validate', 'resume', 'quick'])
+
+    def test_the_pipeline_always_runs_apex_tests(self):
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', ci=True, SF_TARGET_ORG='target-org')
+        self.assertEqual(code, 0, out)
+        self.assertEqual([d[2] for d in self.deploys()], ['validate', 'resume', 'quick'])
+        validate = self.deploys()[0]
+        self.assertEqual(validate[validate.index('--test-level') + 1], 'RunLocalTests')
+
+    def test_an_unknown_option_is_refused_before_anything_deploys(self):
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', '--skip-tests', SF_TARGET_ORG='test-org')
+        self.assertNotEqual(code, 0)
+        self.assertIn('Unknown option', out)
+        self.assertEqual(self.deploys(), [])
 
     def test_an_org_with_no_aws_side_can_skip_the_pairing(self):
         code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='scratch', ALLOW_UNPAIRED_ORG='yes')
