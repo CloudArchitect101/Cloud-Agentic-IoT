@@ -1,0 +1,58 @@
+<!-- Loaded on every docs page by the Primer theme. Keeps the Markdown GitHub-first:
+     the fixes below happen only on the Pages site. -->
+<style>
+  .markdown-body .callout{border-left:4px solid #0969da;background:#ddf4ff33;padding:8px 16px;margin:16px 0;border-radius:6px;color:inherit}
+  .markdown-body .callout.warning{border-color:#9a6700;background:#fff8c533}
+  .markdown-body .callout .callout-title{font-weight:600;color:#0969da;margin-bottom:4px}
+  .markdown-body .callout.warning .callout-title{color:#9a6700}
+  .markdown-body .mermaid{background:#fff;text-align:center;margin:16px 0}
+  .site-nav{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid #d0d7de}
+  .markdown-body table{display:block;overflow-x:auto}
+</style>
+<script type="module">
+  const REPO = "https://github.com/CloudArchitect101/Cloud-Agentic-IoT/blob/Dev/";
+  const ready = new Promise(r => document.readyState !== "loading" ? r() : document.addEventListener("DOMContentLoaded", r));
+  await ready;
+  const body = document.querySelector(".markdown-body") || document.body;
+
+  // A short nav bar on every page.
+  const nav = document.createElement("nav");
+  nav.className = "site-nav";
+  nav.innerHTML = [["Home", ""], ["Walkthrough", "process/"], ["Quick install", "INSTALL"], ["Install guide", "INSTALL-GUIDE"],
+    ["Chapters", "CHAPTERS"], ["GitHub", "https://github.com/CloudArchitect101/Cloud-Agentic-IoT"]]
+    .map(([t, h]) => `<a href="${h.startsWith("http") ? h : "/Cloud-Agentic-IoT/" + h}">${t}</a>`).join("");
+  body.prepend(nav);
+
+  // Links to files outside docs/ (the README, firmware, scripts) go to GitHub.
+  for (const a of body.querySelectorAll('a[href^="../"]')) a.href = REPO + a.getAttribute("href").replace(/^\.\.\//, "");
+  // A .md link the plugin left alone (one that spans two lines) goes to the page.
+  for (const a of body.querySelectorAll('a[href]')) {
+    const h = a.getAttribute("href");
+    if (!/^[a-z]+:/i.test(h) && /\.md(#|$)/.test(h)) a.setAttribute("href", h.replace(/\.md(#|$)/, "$1"));
+  }
+
+  // GitHub callouts: > [!NOTE] and > [!WARNING].
+  for (const q of body.querySelectorAll("blockquote")) {
+    const p = q.querySelector("p");
+    const m = p && p.innerHTML.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/);
+    if (!m) continue;
+    p.innerHTML = p.innerHTML.slice(m[0].length);
+    const kind = m[1].toLowerCase();
+    q.classList.add("callout", kind === "warning" || kind === "caution" ? "warning" : "note");
+    q.insertAdjacentHTML("afterbegin", `<div class="callout-title">${m[1][0] + m[1].slice(1).toLowerCase()}</div>`);
+  }
+
+  // Mermaid diagrams, drawn the way GitHub draws them.
+  const blocks = body.querySelectorAll("pre code.language-mermaid, .language-mermaid pre code");
+  if (blocks.length) {
+    for (const code of blocks) {
+      const div = document.createElement("div");
+      div.className = "mermaid";
+      div.textContent = code.textContent;
+      (code.closest("div.language-mermaid") || code.closest("pre")).replaceWith(div);
+    }
+    const { default: mermaid } = await import("https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs");
+    mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" });
+    await mermaid.run({ querySelector: ".mermaid" });
+  }
+</script>

@@ -1,0 +1,8 @@
+title: Cloud-Agentic-IoT
+description: Healthcare IoT + Agentforce, built in public. ESP32, AWS IoT, Salesforce, Bedrock.
+theme: jekyll-theme-primer
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: false
