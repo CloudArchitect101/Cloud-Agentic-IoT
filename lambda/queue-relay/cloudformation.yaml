@@ -2,8 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   The device API Salesforce calls through the AWS_IoT_Relay Named Credential
   (SigV4): queue depth, provisioning, re-provisioning, teardown and device
-  commands, each taking a batch of devices, the live view of one device, and
-  this month's AWS spend for the app's Home page. Also the IoT policy every
+  commands, each taking a batch of devices, the live view of one device,
+  this month's AWS spend for the app's Home page, and the ward procedures
+  the Patient Care Agent cites (procedure-search, in the knowledge-indexer
+  stack). Also the IoT policy every
   device certificate gets, and the bucket its one-time credential bundle
   waits in.
 
@@ -718,6 +720,24 @@ Resources:
       AuthorizationType: AWS_IAM
       Target: !Sub 'integrations/${AwsSpendIntegration}'
 
+  # The Patient Care Agent's Find Procedure action. The function is the
+  # knowledge-indexer stack's, which deploys before this one (stacks deploy
+  # in name order), so it is named here rather than referenced.
+  ProcedureSearchIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:cloud-agentic-iot-procedure-search'
+      PayloadFormatVersion: '2.0'
+  ProcedureSearchRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /find-procedure'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${ProcedureSearchIntegration}'
+
   QueueRelayStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -733,7 +753,7 @@ Resources:
   # The identity Salesforce signs with. Its external credential holds the
   # access key of SalesforceCallerUserName, a user made by hand that may only
   # assume this role through STS, and this role may only call this API. A
-  # leaked key reaches these seven routes and nothing else, and every signed
+  # leaked key reaches these eight routes and nothing else, and every signed
   # request uses credentials that expire within the hour.
   SalesforceCallerRole:
     Type: AWS::IAM::Role
@@ -810,6 +830,13 @@ Resources:
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref AwsSpendFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  ProcedureSearchPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: cloud-agentic-iot-procedure-search
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
 

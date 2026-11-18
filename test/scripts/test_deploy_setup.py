@@ -4,7 +4,7 @@ scripts/seed-ssm.sh, scripts/bootstrap-aws.sh, scripts/deploy-salesforce.sh's
 org pairing and scripts/deploy-aws.sh's guards, alarm topic and log retention.
 
 Each test copies the files Git tracks (or would track) under scripts/,
-config/, infra/ and lambda/, plus one Salesforce file, into a fresh git
+config/, infra/, lambda/ and knowledge/, plus one Salesforce file, into a fresh git
 repository, so nothing is written into this checkout and no ignored file (a
 key, a .secrets file) is ever copied. It runs the real scripts there against
 fakes on PATH: an `aws` that keeps SSM parameters and stacks in a JSON file and
@@ -126,6 +126,20 @@ FAKE_AWS = textwrap.dedent(r'''
             fail('An error occurred (ResourceNotFoundException): Function not found')
     elif call in ('lambda wait', 'lambda update-function-code', 'logs put-retention-policy'):
         pass
+    elif call == 'lambda invoke':
+        # scripts/index-sops.sh: the payload is a file, the answer goes to the
+        # last argument. state['invoke_answer'] says what the function answers.
+        payload = one('payload')
+        with open(payload[len('fileb://'):]) as f:
+            entry_payload = json.load(f)
+        with open(os.path.join(state_dir, 'invoked.jsonl'), 'a') as f:
+            f.write(json.dumps({'function': one('function-name'), 'payload': entry_payload}) + '\n')
+        with open(sys.argv[-1], 'w') as f:
+            json.dump(state.get('invoke_answer', {'ok': True, 'unchanged': False, 'documents': 7, 'chunks': 24}), f)
+        status = {'StatusCode': 200, 'ExecutedVersion': '$LATEST'}
+        if state.get('invoke_error'):
+            status['FunctionError'] = 'Unhandled'
+        print(json.dumps(status))
     elif call == 'logs create-log-group':
         groups = state.setdefault('log_groups', [])
         if one('log-group-name') in groups:
@@ -181,7 +195,7 @@ class SetupFixture(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp)
         self.repo = os.path.join(self.tmp, 'repo')
         listed = subprocess.run(['git', '-C', REPO, 'ls-files', '-z', '--cached', '--others', '--exclude-standard',
-                                 '--', 'scripts', 'config', 'infra', 'lambda'],
+                                 '--', 'scripts', 'config', 'infra', 'lambda', 'knowledge'],
                                 capture_output=True, check=True).stdout.decode().split('\0')
         listed.append('sfdx-project.json')
         for name in filter(None, listed):
@@ -480,6 +494,45 @@ class DeployAws(SetupFixture):
         self.assertIn('cloud-agentic-iot-mcp-server', packaged)
         self.assertIn(f'MCP server: {url}', out)
         self.assertIn(role, out)
+
+    def test_every_sop_is_indexed_after_the_functions_are_packaged(self):
+        code, out = self.run_script('deploy-aws.sh', 'Dev')
+        self.assertEqual(code, 0, out)
+        invoked = self.lines('invoked.jsonl')
+        self.assertEqual([i['function'] for i in invoked], ['cloud-agentic-iot-knowledge-indexer'])
+        files = sorted(d['file'] for d in invoked[0]['payload']['documents'])
+        on_disk = sorted(f'knowledge/sops/{name}' for name in os.listdir(os.path.join(self.repo, 'knowledge', 'sops'))
+                         if name.endswith('.md'))
+        self.assertEqual(files, on_disk)
+        self.assertNotIn('force', invoked[0]['payload'])
+        order = [c['call'] for c in self.calls()]
+        self.assertLess(max(i for i, c in enumerate(order) if c == 'lambda update-function-code'),
+                        order.index('lambda invoke'))
+        self.assertIn('indexed: 7 SOP(s), 24 passage(s)', out)
+
+    def test_a_failed_index_fails_the_deploy_and_says_why(self):
+        self.state['invoke_answer'] = {'ok': False, 'problems': ['knowledge/sops/x.md: front matter has no owner']}
+        code, out = self.run_script('deploy-aws.sh', 'Dev')
+        self.assertNotEqual(code, 0)
+        self.assertIn('front matter has no owner', out)
+        self.state['invoke_answer'] = {'errorMessage': 'AccessDeniedException', 'errorType': 'AccessDeniedException'}
+        self.state['invoke_error'] = True
+        code, out = self.run_script('deploy-aws.sh', 'Dev')
+        self.assertNotEqual(code, 0)
+        self.assertIn('Titan Text Embeddings V2', out)
+
+    def test_a_bad_sop_stops_the_index_before_any_aws_call(self):
+        self.write('knowledge/sops/SOP-WARD-099-broken.md', '---\nid: SOP-WARD-099\ntitle: Broken\n---\n\n## Steps\n\n1. x\n')
+        code, out = self.run_script('index-sops.sh', 'Dev')
+        self.assertNotEqual(code, 0)
+        self.assertIn('SOP-WARD-099-broken.md: front matter has no version', out)
+        self.assertEqual(self.calls(), [])
+
+    def test_index_sops_on_its_own_checks_the_account_and_can_force_a_rebuild(self):
+        code, out = self.run_script('index-sops.sh', 'Dev', '--force')
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.calls()[0]['call'], 'sts get-caller-identity')
+        self.assertTrue(self.lines('invoked.jsonl')[0]['payload']['force'])
 
     def test_the_deployed_commit_is_recorded(self):
         code, out = self.run_script('deploy-aws.sh', 'Dev')

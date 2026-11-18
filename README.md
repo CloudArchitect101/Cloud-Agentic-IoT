@@ -31,6 +31,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | [DATA-CLOUD.md](docs/DATA-CLOUD.md) | Room readings into Data Cloud: the CSV copy of the S3 archive, how Data Cloud reads it (a role, or a key in an AWS project), the data stream and data model object, the two calculated insights, what is code and what is by hand, and how to check each step. |
 | [DEVICE-IDENTITY.md](docs/DEVICE-IDENTITY.md) | How WiFi credentials and AWS certificates get onto a device, why they survive every OTA update, and how a job finds the right device. |
 | [LIVE-STATUS.md](docs/LIVE-STATUS.md) | Whether a board is online, and its readings every 2 s while its card is open: how it works, the speeds, what it costs in AWS and in Salesforce limits, and what to check when the card waits. |
+| [SOP-GROUNDING.md](docs/SOP-GROUNDING.md) | The ward's sample procedures (SOPs) and how the Patient Care Agent finds and cites them: Bedrock embeddings in one S3 index, the Find Procedure action, the guardrails on the way, why not a Data Library or Knowledge, what it costs, and how to check each step. |
 | [GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md) | The rules every command to a room passes, where they run and why there; the Smart Ward MCP server's tools, its IAM authentication, and how to connect an MCP client. |
 | [SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md) | The app's Home page: this month's AWS spend against its limit and the Salesforce limits the org has used; where each number comes from, how fresh it is, what it costs, and what to check when one is missing. |
 | [CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md) | What is automated vs manual, and the conventions the pipelines enforce. |
@@ -55,6 +56,7 @@ graph TB
         G[SQS: Alerts]
         H[AWS IoT Jobs + S3: OTA Firmware]
         S[S3: readings archive + Data Cloud CSV]
+        P[Lambda: procedure-search + S3: SOP index]
     end
 
     subgraph "Salesforce — Dev / Prod orgs"
@@ -79,6 +81,8 @@ graph TB
     G --> L
     L --> M
     M --> K
+    M -- Find Procedure, SigV4 --> P
+    P -- embed the question --> F
     M --> N
     N -- Trigger OTA Job --> H
     H -. Push firmware .-> A
@@ -104,6 +108,7 @@ Cloud-Agentic-IoT/
 │   ├── patient-monitor/               # DHT11 vitals + medication servo
 │   └── queue-indicator/               # Servo driven by Case queue depth
 ├── datacloud/                         # Data Cloud: the room readings' columns, the calculated insights' SQL
+├── knowledge/sops/                    # The ward's sample SOPs the agent finds and cites (indexed on every AWS deploy)
 ├── mulesoft/                          # The iPaaS alternative to the ingestion Lambda (a design sketch)
 ├── docs/                              # see the Documentation table above
 ├── scripts/                           # Device setup, provisioning, chapter scaffolding
@@ -235,7 +240,7 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 sf agent activate --api-name Patient_Care_Agent --version 1 --target-org <your admin alias>
 ```
 
-or Setup → Agentforce Agents → **Patient Care Agent** → Activate. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its two actions (`DeviceReadingsAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. An employee agent acts as the person talking to it, so there is no separate agent user.
+or Setup → Agentforce Agents → **Patient Care Agent** → Activate. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its three actions (`DeviceReadingsAgentAction`, `ProcedureSearchAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. Find Procedure calls AWS as that person, so they also need `AWS_IoT_Relay_Callers` (part d of step 1). An employee agent acts as the person talking to it, so there is no separate agent user. After a deploy that changes the agent's topic or actions, deactivate and activate it again ([SETUP.md §8](docs/SETUP.md#8-ward-procedures-for-the-agent)).
 
 ```bash
 sf org assign permset --name Patient_Care_Agent --target-org <your admin alias>
@@ -247,7 +252,7 @@ It ships inactive on purpose: activating an agent that can create clinical Cases
 
 **8. Optional — MuleSoft.** Only if you want the iPaaS ingestion path instead of the Lambda. Open `mulesoft/` in Anypoint Studio, or `mvn package` and deploy to CloudHub; set the `sf.*` properties (consumer key, keystore, principal — JWT, no password); then point the AWS IoT rule at the flow's `/telemetry` endpoint. Chapter 07 explains when this is the right call and when it is not.
 
-Two pieces are written and tested but **not yet wired** into the agent's action path: `PiiMaskingService.mask`/`unmask` (chapter 10) and the guardrails Lambda with its `input`, `output` and `action` phases (chapter 11).
+Two pieces are written and tested but **not yet wired** into the agent's prompts: `PiiMaskingService.mask`/`unmask` (chapter 10; Find Procedure already masks the passages it returns with it) and the guardrails Lambda with its `input`, `output` and `action` phases (chapter 11).
 
 ### Why these stay manual
 
@@ -480,20 +485,21 @@ Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the ag
 |---|---|
 | `bots/Patient_Care_Agent/` | The **agent**: an employee agent (`InternalCopilot`), and its version 1, which names the planner. Deploys inactive |
 | `genAiPlannerBundles/Patient_Care_Planner/` | The planner. Decides which topic handles a request |
-| `genAiPlugins/Patient_Device_Monitoring.genAiPlugin` | The **topic** — scope plus four instructions. Where the agent's behaviour actually lives |
+| `genAiPlugins/Patient_Device_Monitoring.genAiPlugin` | The **topic** — scope plus five instructions. Where the agent's behaviour actually lives |
 | `genAiFunctions/Get_Device_Readings/` | The read action: a device's latest readings and connection state, from `DeviceReadingsAgentAction` |
+| `genAiFunctions/Find_Procedure/` | The procedure action: the ward SOP passages that answer a question, each with the SOP ID and version to cite, from `ProcedureSearchAgentAction` ([SOP-GROUNDING.md](docs/SOP-GROUNDING.md)) |
 | `genAiFunctions/Escalate_Patient_Device_Condition/` | The escalation action: a Case for the care team, from `PatientCareAgentActions` |
 | `permissionsets/Patient_Care_Agent` | Who may use the agent, and the access its actions run with |
 
-The four instructions are the interesting part: **ground every answer** (only from the readings the read action returns; say so when data is missing rather than estimating); **do not diagnose** (describe readings against thresholds, nothing more); **confirm before acting** (state which device and reading, then report the Case number); **be precise about device identity** (always the serial number; ask rather than guess when a patient has several).
+The five instructions are the interesting part: **ground every answer** (only from the readings and procedure passages the actions return; say so when data is missing rather than estimating); **cite the ward procedure** (call Find Procedure when asked what to do, give only the steps a passage holds, cite each by SOP ID and version, and say so when no procedure covers it); **do not diagnose** (describe readings against thresholds, nothing more); **confirm before acting** (state which device and reading, then report the Case number); **be precise about device identity** (always the serial number; ask rather than guess when a patient has several).
 
-`isConfirmationRequired` is `true` on the escalation action (and `false` on the read-only one), so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
+`isConfirmationRequired` is `true` on the escalation action (and `false` on the two read-only ones), so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
 
-**Key files:** `classes/PatientCareAgentActions.cls` (+ test, including a 200-record bulk invocation), `classes/DeviceReadingsAgentAction.cls` (+ test, run as a user with and without the permission set)
+**Key files:** `classes/PatientCareAgentActions.cls` (+ test, including a 200-record bulk invocation), `classes/DeviceReadingsAgentAction.cls` (+ test, run as a user with and without the permission set), `classes/ProcedureSearchAgentAction.cls` (+ test, every way the callout can fail)
 
 The read action works as the user: `with sharing` and `WITH USER_MODE`, so the agent sees only the Assets, readings and fields that person may see, and it returns no patient name.
 
-**To see it work:** with the agent active and `Patient_Care_Agent` assigned, open the agent from the Lightning header, ask what a device (by serial number) is reporting, then ask it to escalate, confirm when prompted, and check Cases filtered to `Origin = Agentforce`.
+**To see it work:** with the agent active and `Patient_Care_Agent` assigned, open the agent from the Lightning header, ask what a device (by serial number) is reporting, ask what to do about it and check the answer cites an SOP ID, then ask it to escalate, confirm when prompted, and check Cases filtered to `Origin = Agentforce`.
 
 > **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic and action have deployed to a real org; the Bot and BotVersion are written against the Metadata API reference and agents retrieved from other orgs, and checked offline, but not yet deployed. Expect to reconcile field names against your org's API version on first deploy — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
 
@@ -533,7 +539,7 @@ This is the one optional piece of the system — step 8 of [Stage 2](#stage-2--c
 
 ### 08 · Knowledge Base RAG
 
-Chunking and embedding care-team knowledge articles for semantic retrieval — the *unstructured* half of grounding, where chapter 01 covered structured telemetry.
+Chunking and embedding the ward's standard operating procedures for semantic retrieval, so the Patient Care Agent answers "what do I do?" from them and cites the SOP ID — the *unstructured* half of grounding, where chapter 01 covered structured telemetry.
 
 **The chunking strategy is the whole ballgame.** Everyone demos RAG with fixed-size chunks because it is three lines of code. Then retrieval starts mid-sentence, and in a clinical context the agent quotes half an instruction — worse than returning nothing.
 
@@ -541,9 +547,11 @@ This chunker splits on paragraph boundaries first, falls back to sentence bounda
 
 **A bug worth keeping in the write-up:** the first version handled long *paragraphs* but not long *sentences*. A 2000-character sentence — a dosage table, a long enumerated list — passed straight through and produced a chunk nearly twice the window. Nothing errored; the embedding model would have silently truncated it and dropped the tail. Found by testing the edge case rather than the happy path. Five cases now assert that no chunk ever exceeds the cap.
 
-**Key files:** `lambda/knowledge-indexer/index.js`
+**Grounded and cited.** Seven short sample SOPs live in `knowledge/sops/` (room temperature at or above 30.0 C, medication storage humidity, a monitor offline, a failed dose, the case alert motor, escalation and handover, using the agent), each with an ID, version and owner role. Every AWS deploy runs `scripts/index-sops.sh`: the indexer embeds each section with Titan Text Embeddings V2 and writes one index object to S3, and does nothing when no SOP changed. The agent's **Find Procedure** action (`ProcedureSearchAgentAction`) asks the device API's `POST /find-procedure`; procedure-search masks the question, embeds it, ranks the passages by cosine in the function and masks them on the way out. The topic tells the agent to cite each passage by SOP ID and version and to say so when no procedure covers a question. For a few dozen passages one S3 object beats any vector database, and nothing runs while idle: under a cent a month. [SOP-GROUNDING.md](docs/SOP-GROUNDING.md) has the design, the alternatives (Agentforce Data Library, Knowledge, Bedrock Knowledge Bases, S3 Vectors) and the cost.
 
-**To see it work:** POST an article as `{ "id": "...", "title": "...", "content": "..." }` and persist the returned vectors to your store — Data Cloud vector index, OpenSearch, or pgvector. It has no CloudFormation template yet, so no environment deploys it: the function, its `bedrock:InvokeModel` permission on `amazon.titan-embed-text-v2:0`, an invoke path and a vector store are still to be written.
+**Key files:** `knowledge/sops/`, `lambda/shared/sop-index.js`, `lambda/knowledge-indexer/`, `lambda/procedure-search/index.js`, `scripts/index-sops.sh`, `classes/ProcedureSearchAgentAction.cls`
+
+**To see it work:** deploy (the index is built on the way), then ask the agent what to do about a room reading 31 C, and check the answer cites `SOP-WARD-001 v1.2`. [SOP-GROUNDING.md, Check each step](docs/SOP-GROUNDING.md#check-each-step) checks the index, the function and the Apex action one at a time.
 
 ### 09 · Event-Driven Architecture (Saga Pattern)
 
@@ -582,7 +590,7 @@ Three details that matter:
 
 **Key files:** `classes/PiiMaskingService.cls` (+ test — six cases including the hallucinated-token one)
 
-**Where it would be wired:** `mask` before the agent's prompt and `unmask` after its response. It is not called yet (see [Current state](#current-state)): the Patient Care Agent's prompts are not masked today.
+**Where it would be wired:** `mask` before the agent's prompt and `unmask` after its response. That is not wired yet (see [Current state](#current-state)): the Patient Care Agent's prompts are not masked today. Its one caller so far is `ProcedureSearchAgentAction`, which masks every SOP passage it hands the agent, after AWS has masked them with the same patterns.
 
 ### 11 · Agentforce Guardrails
 
@@ -702,6 +710,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 431 Node tests cover 16 of the 17 Lambda functions (all but slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, and the firmware's timing and command logic compiled for the host; 88 Python tests run the board, OTA, setup, deploy and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (22 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)); and every room reading can reach Data Cloud, with two calculated insights per device ([DATA-CLOUD.md](docs/DATA-CLOUD.md)). The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 465 Node tests cover 17 of the 18 Lambda functions (all but slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, the ward SOPs, their index and their search, and the firmware's timing and command logic compiled for the host; 92 Python tests run the board, OTA, setup, deploy, SOP index and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (23 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)); and every room reading can reach Data Cloud, with two calculated insights per device ([DATA-CLOUD.md](docs/DATA-CLOUD.md)). The first deploys to a real AWS account and Salesforce org ran in August; [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists what broke, why, and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
-The guardrails (chapter 11) now check every command on its way to a room, and the MCP server (chapter 06) deploys behind an IAM-authenticated URL; neither has run against a real account yet. PII masking (chapter 10) is not yet called on the Patient Care Agent's prompts. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
+The guardrails (chapter 11) now check every command on its way to a room, and the MCP server (chapter 06) deploys behind an IAM-authenticated URL; neither has run against a real account yet. The same goes for the ward SOPs (chapter 08): the index, the search and the agent's Find Procedure action are written and tested, not yet deployed. PII masking (chapter 10) is not yet called on the Patient Care Agent's prompts. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.

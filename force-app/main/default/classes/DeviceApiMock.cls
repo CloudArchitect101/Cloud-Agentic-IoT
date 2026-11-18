@@ -6,7 +6,8 @@
  * asks for (429, 500, 403...) when a test wants the whole request to fail.
  * POST /device-live gets what the device-live Lambda answers for one device.
  * POST /aws-spend answers spendAnswer with spendStatus, or spendBody verbatim
- * when a test sets it.
+ * when a test sets it. POST /find-procedure answers procedurePassages the
+ * way procedure-search does, with procedureStatus, or procedureBody verbatim.
  */
 @IsTest
 public class DeviceApiMock implements HttpCalloutMock {
@@ -39,6 +40,21 @@ public class DeviceApiMock implements HttpCalloutMock {
     };
     public Integer spendStatus = 200;
     public String spendBody;
+    /** What POST /find-procedure answers: two passages of one SOP. */
+    public List<Object> procedurePassages = new List<Object>{
+        new Map<String, Object>{
+            'sopId' => 'SOP-WARD-001', 'title' => 'Room temperature excursion', 'version' => '1.2',
+            'owner' => 'Ward charge nurse', 'reviewed' => '2026-10-15', 'section' => 'Steps',
+            'score' => 0.62, 'matchedBy' => 'meaning', 'text' => '1. Take the Case from Care_Team_Queue.'
+        },
+        new Map<String, Object>{
+            'sopId' => 'SOP-WARD-001', 'title' => 'Room temperature excursion', 'version' => '1.2',
+            'owner' => 'Ward charge nurse', 'reviewed' => '2026-10-15', 'section' => 'When this applies',
+            'score' => 0.51, 'matchedBy' => 'meaning', 'text' => 'A patient room reads 30.0 C or higher.'
+        }
+    };
+    public Integer procedureStatus = 200;
+    public String procedureBody;
 
     public HttpResponse respond(HttpRequest request) {
         Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(request.getBody());
@@ -55,6 +71,15 @@ public class DeviceApiMock implements HttpCalloutMock {
         if (request.getEndpoint().endsWith('/device-live')) {
             response.setStatusCode(200);
             response.setBody(JSON.serialize(liveAnswer(body)));
+            return response;
+        }
+        if (request.getEndpoint().endsWith('/find-procedure')) {
+            response.setStatusCode(procedureStatus);
+            response.setBody(procedureBody != null ? procedureBody : JSON.serialize(new Map<String, Object>{
+                'passages' => procedurePassages, 'masked' => 0, 'blocked' => 0, 'inputFlagged' => false,
+                'indexBuiltAt' => '2026-11-06T17:20:05.000Z',
+                'notice' => 'Sample procedures for the Smart Ward demo: fictional, not clinical advice.'
+            }));
             return response;
         }
         if (request.getEndpoint().endsWith('/aws-spend')) {

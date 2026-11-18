@@ -25,6 +25,7 @@
         "ssm:RemoveTagsFromResource",
         "ssm:ListTagsForResource",
         "bedrock:InvokeModel",
+        "bedrock:GetFoundationModelAvailability",
         "cloudtrail:LookupEvents",
         "sts:GetCallerIdentity"
       ],

@@ -265,6 +265,7 @@ Resources:
             Action:
               - sts:GetCallerIdentity
               - cloudtrail:LookupEvents
+              - bedrock:GetFoundationModelAvailability
             Resource: '*'
           - Sid: NoBillingNoUsers
             Effect: Deny

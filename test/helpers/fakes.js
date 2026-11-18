@@ -377,8 +377,59 @@ function withEnv(t, vars) {
   });
 }
 
+/**
+ * A fake Bedrock that embeds text the way Titan Text Embeddings V2 is asked
+ * to (inputText, dimensions, normalize), as a normalised bag of words: each
+ * word of three letters or more adds to one of `dimensions` slots. Texts that
+ * share words score close, so ranking tests mean something without a model.
+ * options.fail(input) may throw, to fail a call as Bedrock does.
+ */
+function fakeBedrockEmbeddings({ fail = () => {} } = {}) {
+  const { sdk, calls } = fakeAwsSdk('BedrockRuntimeClient', ['InvokeModelCommand'], (command, input) => {
+    fail(input);
+    const { inputText, dimensions = 1024 } = JSON.parse(input.body);
+    return { body: new TextEncoder().encode(JSON.stringify({ embedding: bagOfWords(inputText, dimensions) })) };
+  });
+  return { sdk, calls };
+}
+
+function bagOfWords(text, dimensions) {
+  const vector = new Array(dimensions).fill(0);
+  for (const word of String(text).toLowerCase().match(/[a-z]{3,}/g) || []) {
+    let h = 0;
+    for (const c of word) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    vector[h % dimensions] += 1;
+  }
+  const norm = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0)) || 1;
+  return vector.map((v) => v / norm);
+}
+
+/**
+ * A fake S3 holding objects by "bucket/key": GetObject answers a Body with
+ * transformToString, as SDK v3 does, or NoSuchKey; PutObject stores the
+ * Body. options.fail(commandName, input) may throw.
+ */
+function fakeS3(objects = {}, { fail = () => {} } = {}) {
+  const store = new Map(Object.entries(objects));
+  const { sdk, calls } = fakeAwsSdk('S3Client', ['GetObjectCommand', 'PutObjectCommand'], (command, input) => {
+    fail(command, input);
+    const key = `${input.Bucket}/${input.Key}`;
+    if (command === 'PutObjectCommand') {
+      store.set(key, input.Body);
+      return { ETag: '"fake"' };
+    }
+    if (!store.has(key)) throw awsError('NoSuchKey', 'The specified key does not exist.');
+    const text = store.get(key);
+    return { Body: { transformToString: async () => text } };
+  });
+  return { sdk, calls, store };
+}
+
 module.exports = {
   loadWithFakes,
+  fakeBedrockEmbeddings,
+  fakeS3,
+  bagOfWords,
   fakeSsm,
   fakeDynamoDb,
   fakeSqs,

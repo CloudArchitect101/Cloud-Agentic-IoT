@@ -108,7 +108,7 @@ so one environment can end up ahead of the other. Later deploys that add a
 field AWS writes go Salesforce first; see
 [Warm the sensor, get a Case and a dose](#warm-the-sensor-get-a-case-and-a-dose).
 
-Both refuse uncommitted changes under `lambda/`, `infra/`, `force-app/`,
+Both refuse uncommitted changes under `lambda/`, `infra/`, `force-app/`, `knowledge/`,
 `config/` and `scripts/`, because a laptop deploy would otherwise ship what no
 commit holds. Commit first; for a throwaway try, `ALLOW_DIRTY=yes` deploys
 anyway. Each records the commit it shipped in SSM, so you can see what the

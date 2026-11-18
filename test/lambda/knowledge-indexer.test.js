@@ -3,18 +3,26 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { loadWithFakes, fakeAwsSdk, captureConsole } = require('../helpers/fakes');
+const {
+  loadWithFakes, fakeBedrockEmbeddings, fakeS3, captureConsole, withEnv, awsError,
+} = require('../helpers/fakes');
+const { payload } = require('../../scripts/lib/sop-payload');
 
 const HANDLER = path.join(__dirname, '../../lambda/knowledge-indexer/index.js');
 const MAX_CHARS = 1200;
 const OVERLAP = 200;
 
-function load() {
-  const bedrock = fakeAwsSdk('BedrockRuntimeClient', ['InvokeModelCommand'], () => ({
-    body: new TextEncoder().encode(JSON.stringify({ embedding: [0.1, 0.2, 0.3] })),
-  }));
-  const mod = loadWithFakes(HANDLER, { '@aws-sdk/client-bedrock-runtime': bedrock.sdk });
-  return { ...mod, calls: bedrock.calls };
+const BUCKET = 'index-bucket';
+const KEY = 'sops/index.json';
+
+function load({ objects = {}, bedrockFail, s3Fail } = {}) {
+  const bedrock = fakeBedrockEmbeddings({ fail: bedrockFail });
+  const s3 = fakeS3(objects, { fail: s3Fail });
+  const mod = loadWithFakes(HANDLER, {
+    '@aws-sdk/client-bedrock-runtime': bedrock.sdk,
+    '@aws-sdk/client-s3': s3.sdk,
+  });
+  return { ...mod, calls: bedrock.calls, s3 };
 }
 
 const { chunk } = load();
@@ -109,24 +117,135 @@ test('a sentence longer than the cap is split at whitespace', () => {
   for (const c of chunks) assert.match(c, /^dose( dose)*$/);
 });
 
-test('the handler embeds each chunk with the article title prepended', async (t) => {
-  captureConsole(t);
-  const { handler, calls } = load();
-  const res = await handler({
-    body: JSON.stringify({ id: 'KA-1', title: 'Insulin dosing', content: paragraphOf(40) }),
-  });
-
-  assert.equal(res.statusCode, 200);
-  const { chunks } = JSON.parse(res.body);
-  assert.equal(calls.length, chunks);
-  for (const call of calls) {
-    assert.ok(JSON.parse(call.input.body).inputText.startsWith('Insulin dosing\n\n'));
-  }
+const sop = (id, extra = '') => ({
+  file: `knowledge/sops/${id}.md`,
+  markdown: `---\nid: ${id}\ntitle: Title of ${id}\nversion: 1.0\nowner: Ward charge nurse\nreviewed: 2026-10-15\n---\n\n`
+    + `> Sample notice.\n\n## When this applies\n\nA room reads hot.${extra}\n\n## Steps\n\n1. Go to the room.\n2. Call facilities.\n`,
 });
 
-test('the handler requires a title and content', async (t) => {
+function setup(t) {
   captureConsole(t);
-  const { handler } = load();
-  const res = await handler({ body: JSON.stringify({ title: 'Empty' }) });
-  assert.equal(res.statusCode, 400);
+  withEnv(t, { INDEX_BUCKET: BUCKET, INDEX_KEY: KEY });
+}
+
+test('the handler embeds a passage per section, with the SOP ID, title and section, and writes one index', async (t) => {
+  setup(t);
+  const { handler, calls, s3 } = load();
+  const res = await handler({ documents: [sop('SOP-WARD-001'), sop('SOP-WARD-002')] });
+
+  assert.deepEqual({ ok: res.ok, unchanged: res.unchanged, documents: res.documents, chunks: res.chunks },
+    { ok: true, unchanged: false, documents: 2, chunks: 4 });
+  assert.equal(calls.length, 4);
+  const first = JSON.parse(calls[0].input.body);
+  assert.equal(calls[0].input.modelId, 'amazon.titan-embed-text-v2:0');
+  assert.deepEqual({ dimensions: first.dimensions, normalize: first.normalize }, { dimensions: 512, normalize: true });
+  assert.ok(first.inputText.startsWith('SOP-WARD-001 Title of SOP-WARD-001\nWhen this applies\n\n'), first.inputText);
+  // The sample notice is in every SOP, so it is never a passage.
+  for (const call of calls) assert.doesNotMatch(JSON.parse(call.input.body).inputText, /Sample notice/);
+
+  const puts = s3.calls.filter((c) => c.command === 'PutObjectCommand');
+  assert.equal(puts.length, 1);
+  assert.deepEqual([puts[0].input.Bucket, puts[0].input.Key, puts[0].input.ContentType], [BUCKET, KEY, 'application/json']);
+  const index = JSON.parse(s3.store.get(`${BUCKET}/${KEY}`));
+  assert.equal(index.format, 1);
+  assert.equal(index.model, 'amazon.titan-embed-text-v2:0');
+  assert.equal(index.dimensions, 512);
+  assert.deepEqual(index.documents.map((d) => d.id), ['SOP-WARD-001', 'SOP-WARD-002']);
+  assert.deepEqual(index.chunks.map((c) => `${c.sopId} ${c.section}`), [
+    'SOP-WARD-001 When this applies', 'SOP-WARD-001 Steps', 'SOP-WARD-002 When this applies', 'SOP-WARD-002 Steps',
+  ]);
+  for (const c of index.chunks) {
+    assert.equal(c.embedding.length, 512);
+    assert.deepEqual([c.version, c.owner, c.reviewed], ['1.0', 'Ward charge nurse', '2026-10-15']);
+  }
+  assert.equal(index.chunks[1].text, '1. Go to the room.\n2. Call facilities.');
+});
+
+test('an unchanged set of SOPs embeds nothing and writes nothing; force rebuilds it', async (t) => {
+  setup(t);
+  const first = load();
+  await first.handler({ documents: [sop('SOP-WARD-001')] });
+  const built = first.s3.store.get(`${BUCKET}/${KEY}`);
+
+  const again = load({ objects: { [`${BUCKET}/${KEY}`]: built } });
+  const res = await again.handler({ documents: [sop('SOP-WARD-001')] });
+  assert.equal(res.unchanged, true);
+  assert.equal(res.chunks, 2);
+  assert.equal(again.calls.length, 0);
+  assert.ok(!again.s3.calls.some((c) => c.command === 'PutObjectCommand'));
+
+  const forced = load({ objects: { [`${BUCKET}/${KEY}`]: built } });
+  assert.equal((await forced.handler({ documents: [sop('SOP-WARD-001')], force: true })).unchanged, false);
+  assert.equal(forced.calls.length, 2);
+
+  // A changed SOP, or one removed, is a different set.
+  const edited = load({ objects: { [`${BUCKET}/${KEY}`]: built } });
+  assert.equal((await edited.handler({ documents: [sop('SOP-WARD-001', ' Edited.')] })).unchanged, false);
+  const index = JSON.parse(edited.s3.store.get(`${BUCKET}/${KEY}`));
+  assert.match(index.chunks[0].text, /Edited\./);
+});
+
+test('an index in S3 that cannot be read is rebuilt; any other S3 failure fails the run', async (t) => {
+  setup(t);
+  const garbled = load({ objects: { [`${BUCKET}/${KEY}`]: 'not json' } });
+  assert.equal((await garbled.handler({ documents: [sop('SOP-WARD-001')] })).ok, true);
+
+  const denied = load({ s3Fail: () => { throw awsError('AccessDenied', 'Access Denied'); } });
+  await assert.rejects(denied.handler({ documents: [sop('SOP-WARD-001')] }), /Access Denied/);
+});
+
+test('a Bedrock failure fails the run and writes no index', async (t) => {
+  setup(t);
+  const { handler, s3 } = load({ bedrockFail: () => { throw awsError('AccessDeniedException', 'no access to the model'); } });
+  await assert.rejects(handler({ documents: [sop('SOP-WARD-001')] }), /no access to the model/);
+  assert.ok(!s3.calls.some((c) => c.command === 'PutObjectCommand'));
+});
+
+test('bad SOPs are refused together, by file, before anything is embedded', async (t) => {
+  setup(t);
+  const { handler, calls, s3 } = load();
+  const res = await handler({
+    documents: [
+      sop('SOP-WARD-001'),
+      { file: 'knowledge/sops/copy.md', markdown: sop('SOP-WARD-001').markdown },
+      { file: 'knowledge/sops/blank.md', markdown: '' },
+      { markdown: 'no front matter' },
+    ],
+  });
+  assert.equal(res.ok, false);
+  assert.deepEqual(res.problems, [
+    'knowledge/sops/copy.md: SOP-WARD-001 is also the id of knowledge/sops/SOP-WARD-001.md',
+    'knowledge/sops/blank.md: is empty',
+    '(unnamed): has no front matter: start the file with ---, the id, title, version, owner and reviewed lines, then ---',
+  ]);
+  assert.equal(calls.length, 0);
+  assert.equal(s3.calls.length, 0);
+
+  assert.equal((await handler({})).ok, false);
+  assert.equal((await handler({ documents: [] })).ok, false);
+  const many = Array.from({ length: 51 }, (_, i) => sop(`SOP-WARD-${String(i).padStart(3, '0')}`));
+  assert.match((await handler({ documents: many })).problems[0], /at most 50/);
+});
+
+test('a section over the cap is split into passages that each keep the section name', async (t) => {
+  setup(t);
+  const { handler, s3 } = load();
+  const long = sop('SOP-WARD-001', ` ${paragraphOf(40)}`);
+  const res = await handler({ documents: [long] });
+  assert.ok(res.chunks > 2);
+  const index = JSON.parse(s3.store.get(`${BUCKET}/${KEY}`));
+  const first = index.chunks.filter((c) => c.section === 'When this applies');
+  assert.ok(first.length > 1);
+  assert.deepEqual(first.map((c) => c.chunkIndex), first.map((_, i) => i));
+  for (const c of index.chunks) assert.ok(c.text.length <= MAX_CHARS);
+});
+
+test('the repository\'s own SOPs index, as scripts/index-sops.sh sends them', async (t) => {
+  setup(t);
+  const { handler, s3 } = load();
+  const res = await handler(payload());
+  assert.equal(res.ok, true, JSON.stringify(res.problems));
+  const index = JSON.parse(s3.store.get(`${BUCKET}/${KEY}`));
+  assert.ok(index.documents.length >= 5 && index.documents.length <= 8, `${index.documents.length} SOPs`);
+  assert.equal(JSON.stringify(index).length < 1024 * 1024, true, 'the index stays a small object');
 });

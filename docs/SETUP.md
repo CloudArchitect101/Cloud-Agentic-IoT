@@ -11,6 +11,8 @@ itself. What is left is billing identity, license allocation, terms only an
 admin may accept, and credentials that must never pass through an automated
 agent. About 90 minutes for the first run.
 
+When a step fails, [TROUBLESHOOTING.md](TROUBLESHOOTING.md) lists every problem hit so far, with its root cause and fix.
+
 ### What stays manual, in order
 
 Everything else is the pipeline's job. These are the steps a person does, once
@@ -51,6 +53,13 @@ per environment, in the order they come up below:
     readings data stream and its mapping to the `Room_Reading` data model
     object (§7, steps 2 and 4 to 6). The calculated insights are a script
     (§7, step 7).
+17. For the ward procedures: give each care team member who uses the agent
+    `AWS_IoT_Relay_Callers` as well as `Patient_Care_Agent`, because Find
+    Procedure calls AWS as them (§8, step 2). The SOP index itself is built
+    by every AWS deploy.
+18. After the first Salesforce deploy that adds Find Procedure, deactivate
+    and activate the agent again, so its active version runs the new topic
+    (§8, step 3).
 
 Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
 named and external credentials, the `AWS_IoT_Relay_Callers` permission set
@@ -710,8 +719,9 @@ switched on by a person, not by a deploy.
    Expect version 1 with Status `Active`.
 3. Assign the `Patient_Care_Agent` permission set to each care team member who
    will use the agent, yourself included. It opens the agent to them and gives
-   its two actions what they read and create: the device's readings and
-   connection fields, and a Case for Care_Team_Queue. An employee agent runs
+   its three actions what they read and create: the device's readings and
+   connection fields, the ward procedures (whose callout also needs
+   `AWS_IoT_Relay_Callers`, §8), and a Case for Care_Team_Queue. An employee agent runs
    as the person talking to it, so there is no agent user to set up.
 
    ```bash
@@ -893,6 +903,56 @@ there.
 
 ---
 
+## 8. Ward procedures for the agent
+
+The Patient Care Agent's **Find Procedure** action answers "what do I do?"
+from the ward's sample SOPs in `knowledge/sops/`, and the agent cites the
+SOP ID and version it used. [SOP-GROUNDING.md](SOP-GROUNDING.md) explains
+the design, the cost (under a cent a month for a demo) and how to check
+each step. Almost all of it is the deploy's job:
+
+1. **Nothing to do in AWS.** `scripts/deploy-aws.sh Dev` deploys the
+   `cloud-agentic-iot-knowledge-indexer-Dev` stack (the index bucket and two
+   functions) and the device API's `POST /find-procedure` route, then runs
+   `scripts/index-sops.sh Dev`, which embeds the SOPs with Titan Text
+   Embeddings V2 in the account's Region. Expect its last step to print
+   `indexed: 7 SOP(s), 24 passage(s)`. If it names Bedrock, check in the
+   Bedrock console that the model is available in that Region
+   ([SOP-GROUNDING.md, If a step fails](SOP-GROUNDING.md#if-a-step-fails)).
+   A new account may not be authorized for Bedrock yet (`Operation not
+   allowed`, `authorizationStatus` `NOT_AUTHORIZED`): that takes a free
+   Support case under Account and billing, and no IAM change fixes it.
+   Until then, `SKIP_SOP_INDEX=yes scripts/deploy-aws.sh Dev` deploys
+   everything else.
+2. **Who may ask.** The action calls AWS as the person talking to the
+   agent, through the `AWS_IoT_Relay` Named Credential, so each care team
+   member needs `AWS_IoT_Relay_Callers` (README, Stage 2 part d) besides
+   `Patient_Care_Agent` (§6.4), which opens the action's class:
+
+   ```bash
+   sf org assign permset --name AWS_IoT_Relay_Callers --target-org iot-dev-admin \
+     --on-behalf-of <care team member's username>
+   ```
+3. **Reactivate the agent once.** The deploy changes the topic and adds an
+   action to version 1, which an active agent may keep running as it was,
+   and an org may refuse to change an active agent at all. Deactivate it
+   before the Salesforce deploy that adds Find Procedure, and activate it
+   after:
+
+   ```bash
+   sf agent deactivate --api-name Patient_Care_Agent --target-org iot-dev-admin
+   scripts/deploy-salesforce.sh Dev
+   sf agent activate --api-name Patient_Care_Agent --version 1 --target-org iot-dev-admin
+   ```
+4. **Try it.** Ask the agent what to do about a room reading 31 C, and check
+   the answer cites `SOP-WARD-001 v1.2`.
+
+To change a procedure, edit its file in `knowledge/sops/`, raise its
+`version`, commit, and deploy AWS again (or run `scripts/index-sops.sh Dev`
+for an SOP-only change). Unchanged SOPs are not embedded again.
+
+---
+
 ## Doing it again for Prod
 
 **The same sequence**, with these differences:
@@ -904,6 +964,7 @@ there.
 | GitHub | `./scripts/setup-github-secrets.sh`, choosing `Prod`: same secret names, different values, and you as the required reviewer. |
 | Salesforce aliases | `iot-prod-admin`, `iot-prod-deploy`, `iot-prod-integration`. |
 | AWS Organizations | Only after the free-credit phase — see `MIGRATION-RUNBOOK.md` phase 1. |
+| Ward procedures (§8) | The same SOPs are indexed by the Prod deploy. Check Titan Text Embeddings V2 is available in `ca-central-1` before the first one: the index step fails, naming Bedrock, if it is not. |
 
 Reusing a Dev certificate or role ARN in Prod silently collapses the two
 environments into one and removes the entire point of having them.
