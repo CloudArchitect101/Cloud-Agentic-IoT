@@ -66,7 +66,7 @@ graph TB
     A -- MQTT over mTLS --> B
     B --> C
     C -- every reading --> E
-    C -- state changes only --> K
+    C -- state changes + room-temp reports --> K
     C --> D
     D --> G
     D -- Sync --> J
@@ -341,6 +341,7 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
 | The agent acts | Agent conversation preview | A Case with `Origin = Agentforce` |
+| Room-temp Case | Warm the DHT11 above 30 C (with `RoomTempAlert` on, [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose)) | A Case with Origin `Room Temperature Rule` in Care_Team_Queue, and one `DISPENSE_MEDICATION` Device Command |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
 
 The Asset's Connection field, its Live Status card and **Send Command** need a device provisioned from Salesforce (chapter 13), whose Asset carries its Thing ARN. On an Asset made by hand in Stage 3, Connection stays *Not reported yet*, the card says the device has no AWS IoT Thing, and a command fails as not provisioned. The by-hand publish works either way.
@@ -406,11 +407,25 @@ Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesf
 
 **To see it work:** create a Case, assign it to the bound queue, and watch the motor start. Close the Case and watch it stop.
 
+#### Room-temperature demo rule
+
+A demo rule, not a clinical one: warm the patient monitor's DHT11 to 30 C and a Case opens by itself, the indicator moves, and the dispenser's servo turns. Steps in [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose).
+
+- **Flow.** patient-vitals → sync queue → salesforce-sync → `Patient_Vitals__c` (flagged `Room_Temperature_Alert__c`) → `PatientVitalsTrigger` → `RoomTemperatureCaseService` → a Case in Care_Team_Queue (which moves the indicator through `CaseTrigger`) and one `DISPENSE_MEDICATION` Device Command (which the command trigger sends to the board).
+- **AWS decides when, Salesforce decides what.** The threshold lives once, as `RoomTempAlertCelsius` in `config/<env>.json` (30, inclusive). AWS reports a hot device on the crossing and then at most every `RealertIntervalMinutes` while it stays hot, never per reading. Salesforce never compares `Temperature__c` with 30: that field also holds body temperature, which is always above it. The clinical bands are unchanged.
+- **Hysteresis.** An episode ends only when a reading drops below 29 C (1 C under the threshold), so a sensor wobbling around 30 C is one report.
+- **Dedupe.** One open Case per device from this rule: a Case with Origin `Room Temperature Rule` on the device's Asset. While it is open, nothing new opens. Once it is closed, the next report opens a new one. A device without an Asset gets no Case, only a WARN log.
+- **Dose cooldown.** One dose per new Case, and at most one per device every `Room_Temp_Dispense_Cooldown_Minutes__c` (60). A Case closed and reopened inside that hour gets no second dose, and its Description says so.
+- **Switches.** `RoomTempAlert` in `config/<env>.json` decides whether AWS sends flagged readings at all: on in Dev, off in Prod. `Room_Temp_Dispense__c` on the Default `Device_Platform_Setting__mdt` record turns dosing off while keeping the Cases; change it in the repo, because a Setup edit is overwritten by the next deploy.
+- **Emergency stop.** Add `PatientVitalsTriggerHandler` to `Integration_Control__c` Bypass Handlers at org level. Instant, no deploy.
+
+**Key files:** `lambda/patient-vitals/index.js` (`planDevice`), `triggers/PatientVitalsTrigger.trigger`, `classes/RoomTemperatureCaseService.cls`, `customMetadata/Device_Platform_Setting.Default.md-meta.xml`
+
 ### 04 · Headless Slack Integration
 
 A Slack slash-command bot that reads and writes Salesforce data — `/patient-status <device-id>` and `/dispense-medication <device-id>` — without any Slack user ever logging into Salesforce. A dedicated integration user authenticates via the JWT Bearer Flow: the same pattern as the CI/CD pipeline, but as a runtime service call rather than a deploy-time one.
 
-**How it closes the loop:** `/dispense-medication` does not just update a record. It creates a `Device_Command__c`, and an Apex trigger sends it through the device API to the board on `device/<thing>/command`. The board moves the servo and answers on `device/<thing>/ack`; that answer comes back through AWS IoT and marks the record `Acked`, or `Failed` with the board's reason. A Slack message can, headlessly, move a physical servo, and Salesforce knows whether it did. The same record can be created from the device's Asset with **Send Command**. Nothing on this path limits doses yet: `checkBusinessRules` (chapter 11) is not called from it, so anyone who may create a Device Command can dispense.
+**How it closes the loop:** `/dispense-medication` does not just update a record. It creates a `Device_Command__c`, and an Apex trigger sends it through the device API to the board on `device/<thing>/command`. The board moves the servo and answers on `device/<thing>/ack`; that answer comes back through AWS IoT and marks the record `Acked`, or `Failed` with the board's reason. A Slack message can, headlessly, move a physical servo, and Salesforce knows whether it did. The same record can be created from the device's Asset with **Send Command**. Nothing on this path limits doses yet: `checkBusinessRules` (chapter 11) is not called from it, so anyone who may create a Device Command can dispense. The room-temperature demo rule (chapter 03) also dispenses, automatically: once per new Case, and at most once per device per cooldown (60 minutes). It is off in Prod, and a dose that fails is not retried.
 
 **Key files:** `lambda/slack-integration/index.js` (verifies the Slack signature — HMAC, replay-protected), `salesforce-client.js` (headless JWT auth), `cloudformation.yaml`
 

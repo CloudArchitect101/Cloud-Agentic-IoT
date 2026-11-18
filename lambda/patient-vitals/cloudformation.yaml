@@ -69,7 +69,24 @@ Parameters:
     Type: Number
     Default: 15
     MinValue: 1
-    Description: While a patient stays AT_RISK or CRITICAL, how often Salesforce is reminded.
+    Description: >-
+      While a patient stays AT_RISK or CRITICAL, how often Salesforce is
+      reminded and, with RoomTempAlert on, how often a device that stays at or
+      above RoomTempAlertCelsius is reported again.
+  RoomTempAlert:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+    Description: >-
+      Demo rule, not clinical: when 'true', a temperature at or above
+      RoomTempAlertCelsius is sent to Salesforce, flagged, on first crossing and
+      then at most every RealertIntervalMinutes while it stays there. Salesforce
+      opens one Case per episode from it. Deploy the Salesforce side first.
+  RoomTempAlertCelsius:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: Threshold for RoomTempAlert, inclusive, in C.
 
   IngestBatchSize:
     Type: Number
@@ -423,6 +440,8 @@ Resources:
           ARCHIVE_BUCKET: !Ref ArchiveBucket
           THRESHOLDS_PARAMETER: !Ref ThresholdsParameterName
           REALERT_INTERVAL_MINUTES: !Ref RealertIntervalMinutes
+          ROOM_TEMP_ALERT: !Ref RoomTempAlert
+          ROOM_TEMP_ALERT_CELSIUS: !Ref RoomTempAlertCelsius
           KEEP_READINGS_IN_DYNAMODB: !Ref KeepReadingsInDynamoDB
           READING_RETENTION_DAYS: !Ref ReadingRetentionDays
           CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds

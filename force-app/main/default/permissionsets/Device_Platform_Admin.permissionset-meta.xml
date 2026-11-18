@@ -172,6 +172,11 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>false</editable>
+        <field>Patient_Vitals__c.Room_Temperature_Alert__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
         <field>Patient_Vitals__c.Source_System__c</field>
         <readable>true</readable>
     </fieldPermissions>

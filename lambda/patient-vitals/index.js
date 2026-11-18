@@ -10,7 +10,8 @@
  *       -> S3 archive        every reading, one object per batch
  *       -> DynamoDB          one STATE item per device (and every reading, if
  *                            KEEP_READINGS_IN_DYNAMODB is true)
- *       -> sync queue (SQS)  state changes and due re-alerts only
+ *       -> sync queue (SQS)  state changes, due re-alerts and (demo rule)
+ *                            flagged room-temperature reports only
  *                            --> salesforce-sync --> Patient_Vitals__c
  *
  * Why it is shaped like this, at a million devices sending every 30 seconds
@@ -25,9 +26,14 @@
  *   - Salesforce never sees raw telemetry: 2,880 readings per device per day
  *     would exhaust any org's storage and API limits. It gets transitions,
  *     and a reminder every REALERT_INTERVAL_MINUTES while a patient stays
- *     AT_RISK or CRITICAL. The write itself happens in salesforce-sync, at a
- *     concurrency Salesforce can take, so a Salesforce outage backs up the
- *     sync queue instead of telemetry.
+ *     AT_RISK or CRITICAL. With the room-temperature demo rule on
+ *     (ROOM_TEMP_ALERT), it also gets a reading flagged
+ *     Room_Temperature_Alert__c when a device first reaches
+ *     ROOM_TEMP_ALERT_CELSIUS, and again at most every re-alert interval while
+ *     it stays there; Salesforce decides whether that opens a Case. The
+ *     write itself happens in salesforce-sync, at a concurrency Salesforce
+ *     can take, so a Salesforce outage backs up the sync queue instead of
+ *     telemetry.
  *   - Every number here (batch sizes, retention, re-alert interval, the
  *     clinical thresholds) comes from config/<env>.json through the template,
  *     or from SSM, not from this file.
@@ -64,6 +70,10 @@ const SQS_BATCH_LIMIT = 10;
 // and SQS retries it on its own schedule (maxReceiveCount, in the template).
 const UNPROCESSED_RETRIES = 4;
 const PARALLEL_REQUESTS = 8;
+// Room-temperature episodes end only 1 C below the threshold. Readings are
+// floats and a warming or cooling sensor wanders around the line; without
+// the margin each wobble would count as a new crossing and a new report.
+const ROOM_TEMP_REARM_MARGIN_C = 1;
 
 exports.handler = async (event) => {
   if (Array.isArray(event && event.Records)) {
@@ -78,6 +88,7 @@ exports.handler = async (event) => {
  */
 function settings() {
   const keepReadings = booleanEnv('KEEP_READINGS_IN_DYNAMODB');
+  const roomTempAlert = booleanEnv('ROOM_TEMP_ALERT');
   return {
     table: requiredEnv('DYNAMODB_TABLE'),
     queueUrl: requiredEnv('SYNC_QUEUE_URL'),
@@ -85,6 +96,8 @@ function settings() {
     realertMs: numberEnv('REALERT_INTERVAL_MINUTES') * 60_000,
     keepReadings,
     retentionSeconds: keepReadings ? numberEnv('READING_RETENTION_DAYS') * 86_400 : null,
+    roomTempAlert,
+    roomTempCelsius: roomTempAlert ? numberEnv('ROOM_TEMP_ALERT_CELSIUS') : null,
   };
 }
 
@@ -164,7 +177,7 @@ async function ingest(readings, config) {
 
   const plans = [];
   for (const [deviceId, deviceReadings] of byDevice) {
-    plans.push(planDevice(deviceId, deviceReadings, states.get(deviceId), config.realertMs));
+    plans.push(planDevice(deviceId, deviceReadings, states.get(deviceId), config));
   }
 
   if (config.keepReadings) {
@@ -202,16 +215,34 @@ function groupByDevice(readings) {
 
 /**
  * Walks one device's readings in time order against its STATE item and
- * decides which ones Salesforce gets: a change of state, or a reminder while
- * the patient is not STABLE and the last one went out REALERT_INTERVAL_MINUTES
- * ago or more. A reading no newer than the state already recorded is stored
- * but decides nothing: it is a retry, or it arrived late, and acting on it
- * would report a transition that is already history.
+ * decides which ones Salesforce gets, for one of three reasons:
+ *   - a change of state;
+ *   - a reminder while the patient is not STABLE and the last sync went out
+ *     REALERT_INTERVAL_MINUTES ago or more;
+ *   - (room-temperature demo rule, ROOM_TEMP_ALERT on) hotDue: the reading is
+ *     at or above ROOM_TEMP_ALERT_CELSIUS and either the device was not hot
+ *     before (a crossing) or the re-alert interval has passed. The record is
+ *     flagged Room_Temperature_Alert__c. An episode ends only when a reading
+ *     drops below the threshold minus ROOM_TEMP_REARM_MARGIN_C; readings in
+ *     between, and readings without a temperature, leave it as it is.
+ * Still at most one sync per reading: a hot reading synced for a clinical
+ * reason carries the flag too. All three share the LastSyncedAt clock, so any
+ * sync resets LastSyncedAt, and a clinical sync while the sensor is hot can
+ * delay the next room report by up to one interval.
+ *
+ * A reading no newer than the state already recorded is stored but decides
+ * nothing: it is a retry, or it arrived late, and acting on it would report a
+ * transition that is already history.
  */
-function planDevice(deviceId, readings, state, realertMs) {
+function planDevice(deviceId, readings, state, config) {
+  const { realertMs } = config;
+  const ruleOn = config.roomTempAlert === true;
   let patientState = state ? state.PatientState : null;
   let updatedAt = state ? state.UpdatedAt : null;
   let lastSyncedAt = state ? state.LastSyncedAt || null : null;
+  // A stored true with the rule off would keep re-syncing: force it off.
+  let hot = ruleOn && state ? state.RoomTempHot === true : false;
+  const wasHotAtStart = hot;
   let latest = null;
   const syncs = [];
 
@@ -219,23 +250,39 @@ function planDevice(deviceId, readings, state, realertMs) {
     const { vitals } = reading;
     if (updatedAt && vitals.timestamp <= updatedAt) continue;
 
+    const t = vitals.temperature;
+    const measured = ruleOn && Number.isFinite(t);
+    const isHot = measured && t >= config.roomTempCelsius;
+    const cooled = measured && t < config.roomTempCelsius - ROOM_TEMP_REARM_MARGIN_C;
+    const intervalPassed = !lastSyncedAt
+      || Date.parse(vitals.timestamp) - Date.parse(lastSyncedAt) >= realertMs;
+
     const changed = vitals.patientState !== patientState;
-    const reminderDue = vitals.patientState !== 'STABLE'
-      && (!lastSyncedAt || Date.parse(vitals.timestamp) - Date.parse(lastSyncedAt) >= realertMs);
-    if (changed || reminderDue) {
-      syncs.push(toSalesforceRecord(vitals, patientState));
+    const reminderDue = vitals.patientState !== 'STABLE' && intervalPassed;
+    const hotDue = isHot && (!hot || intervalPassed);
+    if (changed || reminderDue || hotDue) {
+      syncs.push(toSalesforceRecord(vitals, patientState, isHot));
       lastSyncedAt = vitals.timestamp;
     }
+    // A null temperature, or one inside the margin band, leaves it unchanged.
+    if (isHot) hot = true; else if (cooled) hot = false;
     patientState = vitals.patientState;
     updatedAt = vitals.timestamp;
     latest = vitals;
   }
 
   const stateChanged = latest !== null
-    && (!state || state.PatientState !== latest.patientState || syncs.length > 0);
+    && (!state || state.PatientState !== latest.patientState || syncs.length > 0
+      || hot !== wasHotAtStart || (state && state.RoomTempHot === true && !ruleOn));
   return {
     deviceId, readings, syncs, failed: false, stateChanged,
-    next: latest && { PatientState: latest.patientState, RiskScore: latest.riskScore, UpdatedAt: updatedAt, LastSyncedAt: lastSyncedAt },
+    next: latest && {
+      PatientState: latest.patientState,
+      RiskScore: latest.riskScore,
+      UpdatedAt: updatedAt,
+      LastSyncedAt: lastSyncedAt,
+      RoomTempHot: hot,
+    },
   };
 }
 
@@ -360,13 +407,16 @@ async function saveState(plan, table) {
     await dynamodb.send(new UpdateCommand({
       TableName: table,
       Key: { PK: `PATIENT#${plan.deviceId}`, SK: 'STATE' },
-      UpdateExpression: 'SET PatientState = :state, RiskScore = :score, UpdatedAt = :at, LastSyncedAt = :synced',
+      UpdateExpression: 'SET PatientState = :state, RiskScore = :score, UpdatedAt = :at, LastSyncedAt = :synced, RoomTempHot = :hot',
       ConditionExpression: 'attribute_not_exists(UpdatedAt) OR UpdatedAt < :at',
       ExpressionAttributeValues: {
         ':state': plan.next.PatientState,
         ':score': plan.next.RiskScore,
         ':at': plan.next.UpdatedAt,
         ':synced': plan.next.LastSyncedAt,
+        // Never undefined: removeUndefinedValues would drop it and DynamoDB
+        // would reject the expression.
+        ':hot': plan.next.RoomTempHot === true,
       },
     }));
   } catch (err) {
@@ -376,9 +426,13 @@ async function saveState(plan, table) {
   }
 }
 
-/** The Patient_Vitals__c record salesforce-sync upserts. */
-function toSalesforceRecord(vitals, previousState) {
-  return {
+/**
+ * The Patient_Vitals__c record salesforce-sync upserts. roomTempAlert adds
+ * Room_Temperature_Alert__c = true; otherwise the key is left out, so records
+ * from a stack with the rule off are exactly what they were before it.
+ */
+function toSalesforceRecord(vitals, previousState, roomTempAlert) {
+  const record = {
     // Upsert on a deterministic external ID (deviceId + timestamp), not
     // create: deliveries retry, and a retried create duplicates the record.
     // Apex DataIngestionService builds the same key.
@@ -396,6 +450,8 @@ function toSalesforceRecord(vitals, previousState) {
     Patient_State__c: vitals.patientState,
     Source_System__c: vitals.sourceSystem,
   };
+  if (roomTempAlert) record.Room_Temperature_Alert__c = true;
+  return record;
 }
 
 /**
@@ -494,5 +550,5 @@ function createResponse(statusCode, body) {
   };
 }
 
-// For the load simulation and the tests.
+// Exposed for direct unit tests; nothing imports it today.
 exports._internal = { parseVitals, planDevice, toSalesforceRecord };

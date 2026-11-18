@@ -108,20 +108,20 @@ For boards made by the hundred thousand, provision on the factory line instead: 
 
 ## Salesforce at a million boards
 
-Salesforce receives state changes and reminders, never routine readings: about 82 million records a month out of 86.4 billion readings, a thousand times fewer. The API calls that carries are no concern (about 15,000 a day).
+Salesforce receives state changes and reminders, never routine readings: about 82 million records a month out of 86.4 billion readings, a thousand times fewer. The API calls that carries are no concern (about 15,000 a day). The room-temperature demo rule (README, chapter 03), when it is on, adds at most one record per hot device per re-alert interval, plus one per crossing of 30 C: 96 a day for a device kept hot in Dev, 24 in Prod, where the rule is off anyway. Its 1 C hysteresis bounds the crossings.
 
 **Storage is the constraint.** Salesforce counts most records as 2 KB, so 82 million records a month is about 160 GB a month, against a base allocation measured in gigabytes. Three ways to handle it, which is your call:
 
 1. **One current-state record per patient, history in Data Cloud (recommended).** Upsert on the device instead of the reading, so Salesforce holds a million records (about 2 GB) for good, and point Data Cloud at the S3 archive for history and trends. Agents and flows still see every change as it happens.
 2. **A rolling window.** Keep transitions in `Patient_Vitals__c` and delete those older than, say, 30 days with a scheduled batch. Simple, but still about 160 GB at steady state.
-3. **Fewer records.** A longer re-alert interval (Prod is already 60 minutes; reminders are a quarter of the volume) and hysteresis, so a reading hovering at a threshold does not flip a patient's state every 30 seconds. Worth doing either way.
+3. **Fewer records.** A longer re-alert interval (Prod is already 60 minutes; reminders are a quarter of the volume) and hysteresis, so a reading hovering at a threshold does not flip a patient's state every 30 seconds. Worth doing either way. Only the room-temperature demo rule has hysteresis today (1 C); the clinical states do not.
 
 First contact writes one record per board, a million records once.
 
 ## Not done yet
 
 - Kinesis for telemetry (lever 2), when the bill justifies it.
-- Hysteresis on state changes, so a reading hovering at a threshold cannot create a Salesforce record every interval.
+- Hysteresis on clinical state changes, so a reading hovering at a threshold cannot create a Salesforce record every interval. (The room-temperature demo rule has its own, 1 C.)
 - The Salesforce storage decision above.
 - Fleet provisioning for factory-scale onboarding.
 - A load test against a real account. The simulation measures this code's requests exactly, but not AWS latency or throttling; a few thousand simulated MQTT clients against Dev would.

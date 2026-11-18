@@ -225,6 +225,108 @@ Asset made by hand, as in Stage 3, has no Thing ARN: its Connection stays *Not
 reported yet*, the card says it has no AWS IoT Thing, and a command fails as
 not provisioned.
 
+## Warm the sensor, get a Case and a dose
+
+The room-temperature demo rule ([README, chapter 03](../README.md#room-temperature-demo-rule)):
+when the patient monitor's DHT11 reads 30 C or more, Salesforce opens a Case
+for the device in Care_Team_Queue, the queue indicator moves, and the
+dispenser's servo turns. It is a demo rule, not a clinical alert: the sensor
+measures room air. It is on in Dev (`RoomTempAlert` in `config/Dev.json`) and
+off in Prod.
+
+**Deploy Salesforce first, then AWS.** A flagged record that reaches an org
+without the `Room_Temperature_Alert__c` field, or without its field access, is
+refused with `INVALID_FIELD`; the sync queue retries it 5 times over about 30
+minutes, then moves it to the dead-letter queue and `SyncDeadLetterAlarm`
+fires. So when you first bring this rule to a project and org:
+
+```bash
+scripts/check.sh
+scripts/deploy-salesforce.sh Dev     # the field, the trigger, the settings; runs every local Apex test
+# verify in the org: the list below, and Device_Integration has Room Temperature Alert
+scripts/deploy-aws.sh Dev            # patient-vitals with RoomTempAlert "true" from config/Dev.json
+```
+
+The pipeline deploys AWS before Salesforce (`.github/workflows/deploy.yml`),
+so through CI ship it in two pushes: first with `"RoomTempAlert": "false"` in
+`config/Dev.json`, and once the Salesforce side is verified, a second push that
+sets it to `"true"`.
+
+**Before you start**
+
+- The board's Asset (Test8 here) has a SerialNumber equal to its Thing name,
+  and is Provisioned and Online. Without a matching Asset there is no Case,
+  only a WARN in the debug log.
+- Care_Team_Queue lists Case as a supported object (Setup → Queues). If not,
+  the Case lands with the integration user, an ERROR is logged, and the
+  indicator does not count it.
+- `Device_Queue_Binding.Care_Team_Queue` names your queue indicator's Thing.
+  It ships as `ESP32-Patient-Monitor-01`; change the record if your indicator
+  board has another name, or step 2's indicator will not move.
+- The integration user has the `AWS_IoT_Relay` principal access
+  ([README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach)):
+  the dose is a Device Command sent as the user who created it.
+- Optional: add `Room Temperature Rule` to the Case Origin picklist, so it
+  shows as a label. An unlisted value works while the picklist is not
+  restricted, which is the default.
+
+**Steps**
+
+1. Cup your hand around the DHT11, or breathe on it, until it reads 30 C (its
+   maximum is 50 C). Allow 1 to 3 readings, about 30 s each.
+2. A Case appears in Care_Team_Queue, the indicator board moves, and the
+   servo turns.
+3. Keep it warm: no new Case. AWS reports the device again every re-alert
+   interval (15 minutes in Dev), and Salesforce sees the open Case and stops.
+4. Close the Case while it is still warm: within 15 minutes a new Case
+   appears. No dose this time: the 60-minute cooldown is running, and the
+   Case Description says so.
+5. Let it cool below 29 C, then warm it again while a Case is open: no new
+   Case.
+6. If the servo did not turn, look for a `DISPENSE_MEDICATION` Device Command
+   for Test8. If there is none, send it from the Asset with **Send Command**:
+   a failed dose is not retried.
+
+**For a live talk**, step 4 waits up to `RealertIntervalMinutes`. To shorten
+it, deploy Dev with `"RealertIntervalMinutes": 2` for the session and set it
+back after. That also speeds up the clinical reminders for devices that are
+not STABLE; Test8 on a desk is always STABLE.
+
+**Check it**
+
+```sql
+SELECT CaseNumber, Owner.Name, Asset.SerialNumber, Status, CreatedDate
+FROM Case WHERE Origin = 'Room Temperature Rule' ORDER BY CreatedDate DESC
+```
+
+```sql
+SELECT Name, Device__c, Status__c, Status_Detail__c, CreatedDate
+FROM Device_Command__c WHERE Requested_By__c = 'Room Temperature Rule' ORDER BY CreatedDate DESC
+```
+
+A flagged reading is a `Patient_Vitals__c` row with Room Temperature Alert
+checked. In AWS, the salesforce-sync function logs each batch it writes (use
+your project's Region):
+
+```bash
+aws logs tail /aws/lambda/cloud-agentic-iot-salesforce-sync --since 15m --region us-east-2 \
+  --filter-pattern '"Synced to Salesforce"'
+# ... Synced to Salesforce { records: 1, returned: 0 }
+```
+
+That line counts every synced record, flagged or not. A record Salesforce
+refused (for example `INVALID_FIELD` on `Room_Temperature_Alert__c`, when AWS
+was switched on before the Salesforce deploy) logs `Salesforce refused a
+record` instead.
+
+**Emergency stop**: in Setup → Custom Settings → Integration Control, at org
+level, add `PatientVitalsTriggerHandler` to Bypass Handlers. It takes effect
+at once, with no deploy. To stop AWS sending flagged readings, set
+`RoomTempAlert` to `"false"` in `config/Dev.json` and deploy AWS. To keep the
+Cases but stop the doses, set `Room_Temp_Dispense__c` to false in
+`force-app/main/default/customMetadata/Device_Platform_Setting.Default.md-meta.xml`
+and deploy Salesforce; a Setup edit is overwritten by the next deploy.
+
 ## See what it costs
 
 The app's Home page shows this month's AWS spend against the project's spend

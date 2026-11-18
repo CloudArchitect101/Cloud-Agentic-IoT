@@ -97,7 +97,17 @@ function counters() {
             }
             case 'UpdateCommand': {
               count.stateUpdates++;
-              const values = input.ExpressionAttributeValues;
+              const values = input.ExpressionAttributeValues || {};
+              // As DynamoDB (and test/helpers/fakes.js) does: a placeholder
+              // with no value, or an undefined one, is refused.
+              const used = [input.UpdateExpression, input.ConditionExpression]
+                .filter(Boolean).flatMap((expression) => expression.match(/:\w+/g) || []);
+              const missing = used.find((p) => !Object.hasOwn(values, p) || values[p] === undefined);
+              if (missing) {
+                const err = new Error(`An expression attribute value used in expression is not defined; attribute value: ${missing}`);
+                err.name = 'ValidationException';
+                throw err;
+              }
               const next = { ...input.Key };
               for (const assignment of input.UpdateExpression.replace(/^SET\s+/, '').split(',')) {
                 const [attribute, placeholder] = assignment.split('=').map((part) => part.trim());
@@ -196,6 +206,9 @@ async function simulate({ devices = 1_000_000, env = 'Prod', atRisk = 0.02, crit
     KEEP_READINGS_IN_DYNAMODB: String(settings.keepReadings),
     READING_RETENTION_DAYS: String(stack.ReadingRetentionDays || 7),
     CONFIG_CACHE_SECONDS: '300',
+    // The room-temperature demo rule stays off: every simulated body
+    // temperature is above 30 C, so with it on every board would be "hot".
+    ROOM_TEMP_ALERT: 'false',
   });
 
   const { count, syncQueue, fakes } = counters();

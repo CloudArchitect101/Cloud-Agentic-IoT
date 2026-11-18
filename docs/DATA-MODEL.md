@@ -8,9 +8,9 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 |---|---|---|
 | **Person Account** | Standard | B2C patients. Free on EE+; customers never consume licenses. |
 | **Asset** | Standard | The device registry. SerialNumber = IoT Thing name, Account = the patient, Status/InstallDate out of the box. The added fields hold what AWS knows about the board: its Thing ARN, certificate, Thing Group and provisioning status, and, from AWS IoT's own connect and disconnect events, `Connection_Status__c`, `Connection_Since__c` and `Last_Disconnect_Reason__c` ([LIVE-STATUS.md](LIVE-STATUS.md)). Readings are never stored on it. Replaced an earlier custom `Patient_Device__c` that re-implemented all of this. |
-| **Case** | Standard | All human-actionable work: queue depth (chapter 03), agent escalations (chapter 05, stamped `Origin=Agentforce`). Standard queues, assignment, reports come free. |
+| **Case** | Standard | All human-actionable work: queue depth (chapter 03), agent escalations (chapter 05, stamped `Origin=Agentforce`), and the room-temperature demo rule (chapter 03, `Origin=Room Temperature Rule`, at most one open per device's Asset). Standard queues, assignment, reports come free. |
 | **Group (Queue)** | Standard | Drives the physical indicator. No custom "work bucket". |
-| `Patient_Vitals__c` | Custom — deliberate | Alert-worthy readings only (state transitions, non-STABLE). Health Cloud's `CareObservation` is the standard answer but Health Cloud is a paid SKU outside the free-tier build; raw telemetry belongs in DynamoDB + Data Cloud ingestion, not CRM rows. Documented tradeoff, not an oversight. |
+| `Patient_Vitals__c` | Custom — deliberate | Alert-worthy readings only (state transitions, non-STABLE), plus room-temperature reports AWS flagged with `Room_Temperature_Alert__c` (on crossing 30 C, then at most once per re-alert interval). Health Cloud's `CareObservation` is the standard answer but Health Cloud is a paid SKU outside the free-tier build; raw telemetry belongs in DynamoDB + Data Cloud ingestion, not CRM rows. Documented tradeoff, not an oversight. |
 | `Patient_Daily_Summary__c` | Custom — deliberate | The aggregation unit that gets embedded for RAG. No standard equivalent. |
 | `Device_Command__c` | Custom — deliberate | Auditable command lifecycle (Pending→Sent→Acked/Failed) for physical devices, with the board's own answer: [below](#device-command-lifecycle). No standard object models this. |
 | `Device_Queue_Binding__mdt` | Custom Metadata | Configuration, not data: which queue drives which device. Admin-editable, deployable, no storage cost. |
@@ -21,14 +21,14 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 
 | Layer | Choice | Why |
 |---|---|---|
-| Triggers/Apex | Only where Flow can't: bulk aggregate recount, callouts with SigV4/JWT, saga logic | Sending a Device Command is Apex for that reason: a SigV4 callout from a Queueable, safe for a bulk insert. Everything else is Flow territory and documented as such. |
+| Triggers/Apex | Only where Flow can't: bulk aggregate recount, callouts with SigV4/JWT, saga logic, bulk dedupe | Sending a Device Command is Apex for that reason: a SigV4 callout from a Queueable, safe for a bulk insert. The room-temperature rule's `PatientVitalsTrigger` is Apex because Flow cannot dedupe a 200-row batch against open Cases while holding a lock on the Assets. Everything else is Flow territory and documented as such. |
 | Agent Actions | `@InvocableMethod` | Platform-native tool surface for Agentforce — no custom dispatch layer. |
 | LWC | Four components: `queueDepthIndicator` (chapter 03), `reprovisionDevice` (the Re-provision action), `deviceLiveCard` (live status) and `platformUsageCard` (the app's Home page: AWS spend and Salesforce limits) | The queue indicator subscribes via `empApi` to the same event the servo consumes. The live card takes readings from AWS IoT over MQTT, never through Salesforce. The usage card reads AWS spend through the device API, once per page load. UI elsewhere is standard reports/dashboards/record pages. |
 | Auth | Named Credentials / JWT Bearer everywhere | No passwords, no keys in code, anywhere. |
 
 ## Device Command lifecycle
 
-A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**), by Slack's `/dispense-medication`, or through the API.
+A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**), by Slack's `/dispense-medication`, by the room-temperature demo rule (one `DISPENSE_MEDICATION` per new Case, Requested By `Room Temperature Rule`), or through the API.
 
 | Status | Set by | Means |
 |---|---|---|
@@ -37,7 +37,7 @@ A Device Command is one instruction to one board, kept as a record so there is a
 | `Acked` | The board's answer, with `Answered_At__c` | The board carried it out. |
 | `Failed` | The send job, or the board's answer | Not sent (the device is not provisioned, its board is offline, AWS refused, or Salesforce would not start another job to send it), or the board could not carry it out or does not know the command. `Status_Detail__c` says which, in the board's own words where it gave some. A board's answer still applies to a command Salesforce marked Failed itself, since a send that timed out may have reached the board. |
 
-The board's answer travels back through AWS IoT (`device/<thing>/ack`), a queue and a Lambda into one Salesforce call per batch of up to 10 answers; it is accepted only from the board the command was for. A command reaches the board at most once: the send job never sends a record twice, and a board that receives one `commandId` twice carries it out once. Nothing on this path limits doses yet: the guardrails Lambda's `checkBusinessRules` is not called from it. [firmware/README.md](../firmware/README.md#commands-what-a-board-takes-and-how-it-answers-from-220) lists the commands a board takes and its answers.
+The board's answer travels back through AWS IoT (`device/<thing>/ack`), a queue and a Lambda into one Salesforce call per batch of up to 10 answers; it is accepted only from the board the command was for. A command reaches the board at most once: the send job never sends a record twice, and a board that receives one `commandId` twice carries it out once. Nothing on this path limits doses yet: the guardrails Lambda's `checkBusinessRules` is not called from it. The room-temperature rule has its own per-device cooldown (`Room_Temp_Dispense_Cooldown_Minutes__c`, 60); the other ways to create a command still have no dose limit. [firmware/README.md](../firmware/README.md#commands-what-a-board-takes-and-how-it-answers-from-220) lists the commands a board takes and its answers.
 
 ## The one-line answers
 
