@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Cost_Per_Agent_Action__c</fullName>
+    <label>Cost per Agent Action</label>
+    <description>Agentforce price per action (20 Flex Credits at $0.005 = $0.10, docs/COST-MODEL.md).</description>
+    <precision>6</precision>
+    <scale>3</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

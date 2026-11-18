@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Latest__c</fullName>
+    <label>Is Latest</label>
+    <description>True on the newest snapshot only, so the dashboard's headline tiles show today's numbers and not a sum of days. ValueSnapshotService moves it on each run.</description>
+    <defaultValue>false</defaultValue>
+    <type>Checkbox</type>
+</CustomField>

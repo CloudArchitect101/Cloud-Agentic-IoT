@@ -203,3 +203,42 @@ test('every permission set that reads Account also reads Contact', () => {
     if (reads(xml, 'Account')) assert.ok(reads(xml, 'Contact'), `${path.relative(root, file)} reads Account but not Contact`);
   }
 });
+
+// Rules Salesforce enforced on the first Business Value deploy (Nov 11).
+test('custom objects enable Sharing, Bulk API and Streaming API together', () => {
+  for (const file of filesUnder(path.join(metadata, 'objects'), '.object-meta.xml')) {
+    const xml = fs.readFileSync(file, 'utf8');
+    const flags = ['enableSharing', 'enableBulkApi', 'enableStreamingApi']
+      .map((tag) => (xml.match(new RegExp(`<${tag}>(\\w+)</${tag}>`)) || [])[1])
+      .filter(Boolean);
+    if (flags.length === 0) continue;
+    assert.equal(new Set(flags).size, 1, `${path.basename(file)}: ${flags.join(', ')}`);
+  }
+});
+
+test('metric and gauge dashboard components set indicator colours and no chart-only attributes', () => {
+  for (const file of filesUnder(path.join(metadata, 'dashboards'), '.dashboard-meta.xml')) {
+    const xml = fs.readFileSync(file, 'utf8');
+    const components = xml.split('<dashboardComponent>').slice(1);
+    for (const c of components) {
+      if (!/<componentType>(Metric|Gauge)<\/componentType>/.test(c)) continue;
+      const name = `${path.basename(file)}: ${(c.match(/<header>([^<]*)/) || [])[1]}`;
+      assert.match(c, /<indicatorLowColor>/, name);
+      for (const tag of ['sortBy', 'chartAxisRange', 'showPercentage', 'showValues', 'useReportChart', 'axisBinding']) {
+        assert.doesNotMatch(c.split('</dashboardComponent>')[0], new RegExp(`<${tag}>`), `${name} uses ${tag}`);
+      }
+    }
+  }
+});
+
+test('embedded dashboards use only the properties Salesforce accepts', () => {
+  const allowed = new Set(['dashboardName', 'height', 'hideOnError']);
+  for (const file of filesUnder(path.join(metadata, 'flexipages'), '.flexipage-meta.xml')) {
+    const xml = fs.readFileSync(file, 'utf8');
+    for (const inst of xml.split('<componentInstance>').slice(1)) {
+      if (!inst.includes('desktopDashboards:embeddedDashboard')) continue;
+      const names = [...inst.matchAll(/<name>(\w+)<\/name>/g)].map((m) => m[1]);
+      for (const n of names) assert.ok(allowed.has(n), `${path.basename(file)}: ${n}`);
+    }
+  }
+});

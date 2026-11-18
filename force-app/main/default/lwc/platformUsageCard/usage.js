@@ -266,3 +266,49 @@ function timeOf(iso, locale, timeZone) {
         return new Date(time).toLocaleString();   // a locale or time zone this browser does not know
     }
 }
+
+/**
+ * The card's headline: the few limits worth a glance, so the full list can
+ * stay folded. Rings for data storage and daily API requests (the two a
+ * Developer Edition runs out of first), a watch list of the most used limits
+ * across every group, and how many are at or past the amber line.
+ */
+export function highlightsOf(view, watchSize = 6) {
+    const rows = ((view && view.groups) || []).flatMap((group) => group.rows);
+    const find = (key) => rows.find((row) => row.key === key) || null;
+    const ring = (row, title) => (row ? {
+        key: row.key,
+        title,
+        shown: row.shown,
+        text: row.text,
+        ringClass: 'ring ring_' + toneOf(row.percent),
+        ringStyle: '--p: ' + (row.ariaNow === null ? 0 : row.ariaNow)
+    } : null);
+    const watch = [...rows]
+        .sort((a, b) => b.percent - a.percent || a.label.localeCompare(b.label))
+        .slice(0, watchSize)
+        .map((row) => ({ ...row, pillClass: 'pill pill_' + toneOf(row.percent) }));
+    const nearEdge = rows.filter((row) => row.percent !== null && row.percent >= WARN_PERCENT).length;
+    return {
+        storage: ring(find('DataStorageMB'), 'Data storage'),
+        api: ring(find('DailyApiRequests'), 'API requests today'),
+        watch,
+        nearEdge,
+        total: rows.length,
+        nearEdgeText: nearEdge === 0
+            ? 'All ' + rows.length + ' limits are under half used.'
+            : nearEdge + ' of ' + rows.length + ' limits are at least half used.'
+    };
+}
+
+/** The AWS headline ring: spend against the limit, or a plain figure when there is none. */
+export function awsRingOf(view) {
+    if (!view || !view.bar) {
+        return null;
+    }
+    return {
+        shown: view.bar.shown,
+        ringClass: 'ring ring_' + toneOf(view.bar.percent),
+        ringStyle: '--p: ' + (view.bar.ariaNow === null ? 0 : view.bar.ariaNow)
+    };
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Staff_Hourly_Rate__c</fullName>
+    <label>Staff Hourly Rate</label>
+    <description>Loaded cost of one staff hour, in the dashboard currency.</description>
+    <precision>7</precision>
+    <scale>2</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

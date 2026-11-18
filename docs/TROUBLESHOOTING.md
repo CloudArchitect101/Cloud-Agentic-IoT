@@ -122,6 +122,16 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | Nov 10 (design) | Each eval run would leave open Cases in Care_Team_Queue | The confirmed escalation and nurse request cases call the real actions | The script closes Cases with those subjects created since the run started | `close_eval_cases` in the script |
 | Nov 10 (design) | The CLI docs do not say whether `sf agent test run` exits non-zero when cases fail | Undocumented | The script reads pass or fail from the JUnit XML | Same |
 
+## Business Value dashboard
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+|---|---|---|---|---|
+| Nov 11 | First deploy failed with 74 component errors, most of them `Invalid type: Value_Snapshot__c` in the Apex and `no CustomObject named Value_Snapshot__c found` in the reports and permission set | One error on the object itself: `Allow Sharing, Allow Bulk API Access, and Allow Streaming API Access must be enabled together or disabled together`. The object had Streaming off, so it never deployed, and everything that names it failed after it | `enableStreamingApi` set to true, to match Sharing and Bulk API | `salesforce-metadata-limits.test.js` checks the three flags match on every custom object |
+| Nov 11 | Same deploy: `Metric, gauge, or table dashboard component missing indicatorLowColor attribute` | Salesforce requires the indicator colours on metric components, even with no breakpoints set; hand-written dashboard XML left them out | Low, middle and high indicator colours on the four metric tiles | The same test file checks every Metric and Gauge component |
+| Nov 11 | Same deploy: `Invalid property [showHeader] in component [desktopDashboards:embeddedDashboard]` on the app's Home page | The standard Dashboard component takes fewer properties than the Lightning App Builder panel suggests | Kept `dashboardName`, `height` and `hideOnError`; removed `showHeader`, `showSharing`, and on the second deploy `showTitle` (Salesforce reports one bad property per component per deploy) | The same test file allows only those three properties |
+| Nov 11 | Second deploy: `The dashboard componentType Metric cannot use the sortBy attribute` | Metric tiles were written with chart attributes (`sortBy`, `chartAxisRange`, `showValues`, `useReportChart`, `axisBinding`) that only charts take | Metric tiles now carry only what a retrieved metric has: summary, header, footer, label, indicator colours, `showRange` | The test file refuses chart-only attributes on Metric and Gauge components |
+| Nov 11 | After a clean deploy, every dashboard tile said `This report cannot be used as the source for this component. If it is a summary or matrix report, add one or more groupings in the report.`, even for the admin | Fields deployed as metadata are hidden from every profile, admins included, until a permission set grants them. The reports could not see their grouping fields (Phase, Snapshot Date), so they lost their groupings. It was not missing data | Assign `Business_Value_Viewer`; all tiles showed at once | BUSINESS-VALUE.md lists the assignment right after the deploy; the deploy prints it as a next step |
+
 ## Patient portal (React site, Enhanced Chat, patient agent)
 
 | When | Symptom | Root cause | Fix | What prevents it now |

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Baseline_Minutes_To_Respond__c</fullName>
+    <label>Baseline Minutes to Respond</label>
+    <description>As is: minutes a high reading goes unnoticed before someone acts, on average (about half the time between checks).</description>
+    <precision>7</precision>
+    <scale>1</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>
