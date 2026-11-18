@@ -1,7 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>The Cloud Agentic IoT app's Home page: the usage card alone, with this month's AWS spend against its limit and the Salesforce limits the org has used. The app makes it its Home page on desktop; other apps and the org keep theirs.</description>
+    <description>The Cloud Agentic IoT app's Home page: the Business Value KPI dashboard (before vs after, Agentforce cost vs value), then the usage card with this month's AWS spend and the Salesforce limits. Desktop only; other apps keep theirs.</description>
     <flexiPageRegions>
+        <itemInstances>
+            <componentInstance>
+                <componentInstanceProperties>
+                    <name>dashboardName</name>
+                    <value>Business_Value</value>
+                </componentInstanceProperties>
+                <componentInstanceProperties>
+                    <name>height</name>
+                    <value>620</value>
+                </componentInstanceProperties>
+                <componentInstanceProperties>
+                    <name>hideOnError</name>
+                    <value>true</value>
+                </componentInstanceProperties>
+                <componentName>desktopDashboards:embeddedDashboard</componentName>
+                <identifier>businessValueDashboard</identifier>
+            </componentInstance>
+        </itemInstances>
         <itemInstances>
             <componentInstance>
                 <componentName>platformUsageCard</componentName>

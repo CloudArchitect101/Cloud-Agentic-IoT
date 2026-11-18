@@ -78,7 +78,7 @@ The loop:
 | Try over the air | `scripts/ota.sh try Dev patient-monitor` | Your working copy runs on every Dev board of that type, sent as a Dev release is, with each board's answer printed as it comes. |
 | Watch | `scripts/firmware.sh monitor` | What the board prints on its serial console |
 | Deploy AWS | `scripts/deploy-aws.sh Dev` | Every stack and the real Lambda code, in the Dev account |
-| Deploy Salesforce | `scripts/deploy-salesforce.sh Dev` | A check-only deploy with every Apex test, then the deploy. Add `--dry-run` to validate only. |
+| Deploy Salesforce | `scripts/deploy-salesforce.sh Dev` | From a laptop to Dev: one deploy, no Apex tests, for fast iteration. Add `--with-tests` for a check-only deploy with every local Apex test, then the deploy (do this before a feature counts as done, and before Prod or a recorded deploy). The pipeline and Prod always run the tests. Add `--dry-run` to validate only. |
 
 Two things happen only in the pipeline, on purpose:
 
