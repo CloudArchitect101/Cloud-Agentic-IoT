@@ -50,7 +50,7 @@ export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
 
 ## 4. Seed settings and deploy everything
 
-Press Enter at each question of `seed-ssm.sh` on the first run; step 6 fills them in.
+Press Enter at each question of `seed-ssm.sh` on the first run; step 5 fills them in.
 
 ```bash
 scripts/seed-ssm.sh Dev
@@ -61,27 +61,101 @@ sf org assign permset --name Platform_Usage_Viewer
 
 What each script does: [TRY-IT.md §3 and §4](TRY-IT.md#4-deploy-and-test).
 
-## 5. Let Salesforce call AWS
+## 5. Let AWS call Salesforce
 
-One named credential, `AWS_IoT_Relay`, signs every call from Salesforce to AWS. Follow the [Install guide, Stage 2, step 1](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach):
+AWS writes readings, alerts and board answers into Salesforce as a dedicated integration user. It signs in with a certificate (JWT), never a password.
 
-1. **a.** Run the commands that create the caller IAM user and print its access key.
-2. **b.** Setup → Named Credentials → External Credentials: AWS Signature Version 4, the key from a, `403` as a token-refresh status code, and the role ARN as the principal.
-3. **c.** Named Credential `AWS_IoT_Relay`, URL = the `QueueDepthEndpoint` stack output.
-4. **d.** Permission set `AWS_IoT_Relay_Callers` with access to that principal and Read on User External Credentials. Assign it to yourself, the integration user and the Automated Process user.
+**a. Create the certificate** in your own terminal, inside the repo (`.gitignore` keeps `*.key` and `*.crt` out of Git):
 
-## 6. Let AWS call Salesforce
+```bash
+openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
+  -keyout scripts/server-integration.key -out scripts/server-integration.crt \
+  -subj "/CN=CloudAgenticIoT-Integration/O=Personal/C=CA"
+```
 
-1. Create the integration user and its External App with a certificate: [SETUP.md §2.2](SETUP.md#22-create-the-two-service-users) and [§2.4](SETUP.md#24-two-external-apps-not-one).
-2. Give it the **Salesforce API Integration** permission set license and the `Device_Integration` permission set.
-3. Store its values and deploy AWS again:
+**b. Create the user.** Setup → **Users** → **New User**:
+
+| Field | Value |
+|---|---|
+| Last name | `Integration` |
+| Email | Your own plus address, for example `you+integration@…` (never the admin's address) |
+| Username | `integration@iot-dev.<yourdomain>` |
+| User License | **Salesforce Integration** |
+| Profile | **Salesforce API Only System Integrations** |
+
+Then, on the user's page: **Permission Set License Assignments** → Edit Assignments → **Salesforce API Integration**, and **Permission Set Assignments** → `Device_Integration` (step 4 deployed it).
+
+**c. Create the External Client App.** Setup → **External Client App Manager** → **New External Client App**:
+
+| Setting | Value |
+|---|---|
+| Name | `Cloud Agentic IoT Integration` |
+| OAuth | **Enable OAuth**, scopes `api` and `refresh_token, offline_access` |
+| JWT | **Enable JWT Bearer Flow**, upload `scripts/server-integration.crt` |
+| Policies (after saving) | **Admin approved users are pre-authorized**, permission set `Device_Integration` |
+
+Copy the app's **Consumer Key** for the next command.
+
+**d. Store the values and deploy AWS again.** `seed-ssm.sh` asks for the username and the consumer key, and offers `scripts/server-integration.key`. Type the values in your terminal, never in a file or a chat:
 
 ```bash
 scripts/seed-ssm.sh Dev
 scripts/deploy-aws.sh Dev
+aws lambda get-function-configuration --function-name cloud-agentic-iot-salesforce-sync \
+  --query Environment.Variables.SALESFORCE_USERNAME --output text   # prints the integration username
 ```
 
-Details: [TRY-IT.md §5](TRY-IT.md#5-connect-the-org-and-the-project).
+More detail: [TRY-IT.md §5](TRY-IT.md#5-connect-the-org-and-the-project), [SETUP.md §2.2](SETUP.md#22-create-the-two-service-users) and [§2.4](SETUP.md#24-two-external-apps-not-one).
+
+## 6. Let Salesforce call AWS
+
+One named credential, `AWS_IoT_Relay`, signs every call from Salesforce to AWS (provisioning, commands, the live card, the Home page's spend) with AWS Signature Version 4.
+
+**a. Create the caller IAM user and its key** in your own terminal, signed in as `$NAME`:
+
+```bash
+STACK=cloud-agentic-iot-queue-relay-Dev
+CALLER=cloud-agentic-iot-salesforce-caller
+ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+  --query "Stacks[0].Outputs[?OutputKey=='SalesforceCallerRoleArn'].OutputValue" --output text)
+echo "$ROLE_ARN"   # must print an ARN; an empty line means a wrong stack name or Region
+aws iam create-user --user-name "$CALLER" > /dev/null
+aws iam put-user-policy --user-name "$CALLER" --policy-name assume-salesforce-caller-role \
+  --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Resource\":\"$ROLE_ARN\"}]}"
+aws iam create-access-key --user-name "$CALLER"
+aws cloudformation describe-stacks --stack-name "$STACK" \
+  --query "Stacks[0].Outputs[?OutputKey=='QueueDepthEndpoint'].OutputValue" --output text   # the URL for c
+echo "IAM Role ARN for b: $ROLE_ARN"
+```
+
+`create-access-key` prints the key once. Type it into Salesforce in b and nowhere else.
+
+**b. External credential.** Setup → **Named Credentials** → **External Credentials** → **New**:
+
+| Setting | Value |
+|---|---|
+| Authentication Protocol | **AWS Signature Version 4** |
+| Service | `execute-api` |
+| Region | Your project's Region |
+| Obtain Temporary IAM Credentials via STS | On, **IAM User Identified by Access Key** |
+| STS Access Key / STS Access Secret | The key from a |
+| STS Duration | Empty, or 3600 or less |
+| Additional Status Codes for Token Refresh | `403` |
+| Principal → IAM Role ARN | The role ARN that a printed last (it has `:role/`, not `:user/`) |
+
+**c. Named credential.** **Named Credentials** → **New**: Name `AWS_IoT_Relay`, URL = the `QueueDepthEndpoint` that a printed, the external credential from b, and **Enabled for Callouts** and **Generate Authorization Header** both on.
+
+**d. Who may use it.** Create a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal from b, and **Read** on **User External Credentials** (Object Settings). Assign it to yourself, to the integration user from step 5, and to the hidden Automated Process user:
+
+```bash
+sf org assign permset --name AWS_IoT_Relay_Callers
+sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of integration@iot-dev.<yourdomain>
+echo "insert new PermissionSetAssignment(
+    AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' AND Username LIKE 'autoproc@%' LIMIT 1].Id,
+    PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'].Id);" | sf apex run
+```
+
+If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) lists each cause and its fix under "If a callout fails".
 
 ## 7. Turn on the agent
 
@@ -90,7 +164,7 @@ scripts/publish-agent.sh Dev
 sf org assign permset --name Patient_Care_Agent
 ```
 
-Why it ships inactive: [Install guide, step 6](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
+Why it ships inactive: [Install guide, Stage 2 step 6](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
 
 ## 8. Add a board (optional)
 
