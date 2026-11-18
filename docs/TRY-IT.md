@@ -36,9 +36,12 @@ deploys from your laptop, and GitHub comes in only with the regular account.
 1. Sign up through the new AWS experience, or add a project in
    [AWS Settings](https://settings.aws.com).
 2. Upgrade to the paid plan, then set a monthly spend limit. The lowest is $20.
+   Do not activate the project's advanced features: that removes the spend limit
+   for good ([why](#why-a-project-and-what-it-costs-you)).
 3. Note the project's Region: AWS Settings, **Projects**, your project,
    **Overview**, **Additional Info**.
-4. Sign up for a Developer Edition org, as in
+4. Sign up for a Developer Edition org at
+   [developer.salesforce.com/signup](https://developer.salesforce.com/signup), as in
    [SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin). It is free.
 5. In the org, Setup → **Einstein Setup** → **Turn on Einstein**.
 6. Then Setup → **Agentforce Agents** → turn on **Agentforce**. If it is not

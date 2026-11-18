@@ -26,9 +26,12 @@ Linux and Windows: [SETUP.md §0](SETUP.md#0-prerequisites--install-the-tooling)
 
 ## 2. Create the AWS project and the Salesforce org
 
-1. Create an AWS **project** on the paid plan and set a monthly spend limit (the lowest is $20). Note its Region.
-2. Sign up for a free **Developer Edition** org.
+1. Create an AWS **project** in [AWS Settings](https://settings.aws.com) on the paid plan, and set a monthly spend limit (the lowest is $20). Note its Region.
+2. Sign up for a free **Developer Edition** org at [developer.salesforce.com/signup](https://developer.salesforce.com/signup).
 3. In the org, turn on **Person Accounts** and make Person Account the default Account record type ([SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin), step 5), then Setup → **Einstein Setup** → **Turn on Einstein**, then Setup → **Agentforce Agents** → turn on **Agentforce**.
+
+> [!WARNING]
+> Use a plain AWS project and **do not activate its advanced features**. Activating them removes the spend limit for good and can't be undone. You don't need them here: they only matter for GitHub OIDC, which the pipelines path uses with regular AWS accounts instead.
 
 Why a project, and what it costs: [TRY-IT.md §1](TRY-IT.md#1-create-the-project-and-the-org).
 
