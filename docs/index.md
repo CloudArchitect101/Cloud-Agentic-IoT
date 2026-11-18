@@ -13,7 +13,7 @@ A healthcare IoT + Agentforce system, built from scratch and in public. A physic
 
 ## What it does
 
-| | |
+| Part | What happens |
 |---|---|
 | **Sense** | An ESP32 with a DHT11 sends readings to AWS IoT Core over mutual TLS. No secrets are compiled into the firmware, and every update after the first USB flash goes over the air. |
 | **Alert** | At 30 C the board's own motor turns at once (it works offline), and AWS flags the reading so Salesforce opens one Case for the care team. A ward board spins while that queue has work. |
