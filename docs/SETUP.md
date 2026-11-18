@@ -194,8 +194,18 @@ In a real org, both should be Integration Users.
 4. Setup → **Agentforce Agents** → turn on **Agentforce**. If the page or
    the switch is missing, wait a few minutes after step 3 and reload. This
    also accepts terms, and is the admin's decision too.
+5. Setup → **Account Settings** → **Enable Person Accounts** (it needs at
+   least one Account record type first, and it **cannot be turned off**).
+   Each patient is a Person Account, and the validation rule
+   `Asset.Patient_Device_Needs_Person_Account` refers to `IsPersonAccount`,
+   so the deploy fails without it. Then make **Person Account** the default
+   Account record type on every profile that creates devices (Profiles →
+   Object Settings → Accounts → Record Types), keeping Business available.
+   **New Account** inside a lookup, such as an Asset's Account field, never
+   asks for a record type: it always uses the default. A ward's business
+   account is created from the Accounts tab instead.
 
-Do 3 and 4 before the first deploy (§2.3, phase 2). The repo ships the
+Do 3, 4 and 5 before the first deploy (§2.3, phase 2). The repo ships the
 Patient Care Agent as Agent Script (`aiAuthoringBundles/`) and its actions
 (`genAiFunctions/`). Expect an org
 without Agentforce to refuse the agent, and one refused component fails
@@ -644,8 +654,8 @@ sf project deploy start --dry-run --target-org iot-dev-deploy
 If that succeeds, the pipeline will too — it runs the same command with the
 same identity. If it fails on privileges, revisit §2.3.
 
-`scripts/deploy-salesforce.sh Dev --dry-run` runs the same check-only deploy
-with every local Apex test, and checks that `iot-dev-deploy` is the org paired
+`scripts/deploy-salesforce.sh Dev --dry-run --with-tests` runs the same check-only deploy
+with every local Apex test (without `--with-tests`, a laptop run to Dev skips them), and checks that `iot-dev-deploy` is the org paired
 with the AWS account `AWS_PROFILE` points at (nothing is paired yet on a first
 run, which it says).
 
@@ -1020,6 +1030,45 @@ Slack side, as the workspace owner:
 5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
 6. DM the agent, or mention it in a channel: "What is Test8 reading?"
 
+## 9. Patient portal
+
+The patient portal is a React site on Salesforce, with Enhanced Chat v2 and
+Agentforce Voice, connected to a patient-facing agent that sees only the
+signed-in patient's devices. [PATIENT-PORTAL.md](PATIENT-PORTAL.md) explains
+the design and the costs. The deploy brings the site, the React app, the Apex,
+the agent's topic and actions, and the permission sets. These clicks remain,
+in this order (details and checks in
+[PATIENT-PORTAL.md, Setting it up](PATIENT-PORTAL.md#setting-it-up-in-an-org)):
+
+1. Check the org has Customer Community licences (a `UserLicense` query).
+2. Enable Digital Experiences, and turn on "Allow using standard external profiles for self-registration, user creation, and login" (Setup > Digital Experiences > Settings). The portal Apex tests fail without it.
+3. Create the self-signed certificate `Patient_Portal_Chat` (private key not
+   exportable), download its `.crt`, and run
+   `node scripts/portal-chat-jwk.mjs <file> patient-portal-chat-1`.
+4. Deploy: `scripts/deploy-salesforce.sh Dev` builds the React app first.
+5. Create the Messaging for In-App and Web channel and the Enhanced Chat
+   deployment `Patient_Portal_Chat`, switch it to V2, publish, and allow
+   Agentforce Voice calls in Messaging Settings.
+6. Add the JWK and a keyset (issuer `cloud-agentic-iot-patient-portal`) under
+   User Verification, and put the keyset on the channel.
+7. Publish the agent, which is Agent Script (new Agentforce Builder): create
+   an Einstein Agent user with `Patient_Portal_Agent` and the Agentforce
+   Service Agent permission sets, run
+   `PORTAL_AGENT_USER=<username> scripts/publish-portal-agent.sh <org>`, then
+   activate it and connect Enhanced Chat v2 with voice on.
+8. Set `Chat_Site_Url__c` in `Patient_Portal_Setting.Default` from the
+   deployment's code snippet, and deploy again.
+9. Allow the chat hosts in the site's CSP, and the site in CORS.
+10. Give the site's guest user `Patient_Portal_Guest_Api`.
+11. Give the user who owns the patients' Person Accounts (usually you) the
+    role **Care Team Administrator**, which the deploy ships: Setup > Users >
+    Edit > Role. Without it, enabling a portal user fails with "portal account
+    owner must have a role". Then, for each patient: enable a Customer
+    Community user on the Person Account, assign `Patient_Portal_User`, and put the
+    patient's device on that account.
+
+---
+
 ## Doing it again for Prod
 
 **The same sequence**, with these differences:
@@ -1031,6 +1080,7 @@ Slack side, as the workspace owner:
 | GitHub | `./scripts/setup-github-secrets.sh`, choosing `Prod`: same secret names, different values, and you as the required reviewer. |
 | Salesforce aliases | `iot-prod-admin`, `iot-prod-deploy`, `iot-prod-integration`. |
 | AWS Organizations | Only after the free-credit phase — see `MIGRATION-RUNBOOK.md` phase 1. |
+| Patient portal (§9) | A new signing certificate and keyset in the Prod org, never Dev's. `Chat_Site_Url__c` comes from Prod's own deployment, set in Prod's copy of `Patient_Portal_Setting.Default`. |
 | Ward procedures (§8) | The same SOPs are indexed by the Prod deploy. Check Titan Text Embeddings V2 is available in `ca-central-1` before the first one: the index step fails, naming Bedrock, if it is not. |
 
 Reusing a Dev certificate or role ARN in Prod silently collapses the two

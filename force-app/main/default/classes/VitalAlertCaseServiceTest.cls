@@ -27,7 +27,7 @@ private class VitalAlertCaseServiceTest {
     }
 
     private static Asset device(String serial, Id recordTypeId) {
-        Account patient = new Account(Name = 'Vital Alert Patient ' + serial);
+        Account patient = TestAccounts.patient('Vital Alert Patient ' + serial);
         insert patient;
         Asset device = new Asset(Name = 'Device ' + serial, SerialNumber = serial, AccountId = patient.Id, Status = 'Installed');
         if (recordTypeId != null) {

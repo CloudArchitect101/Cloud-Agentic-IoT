@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DigitalExperienceConfig xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>patientPortal</label>
+    <site>
+        <urlPathPrefix>patientPortal</urlPathPrefix>
+    </site>
+    <space>site/patientPortal1</space>
+</DigitalExperienceConfig>

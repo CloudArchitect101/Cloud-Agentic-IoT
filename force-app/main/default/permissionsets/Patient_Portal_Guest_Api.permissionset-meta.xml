@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Patient Portal Guest API</label>
+    <description>For the patient portal site's guest user: the API access and the login and password-reset Apex the React sign-in pages call before a patient is signed in. No patient data.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <userPermissions>
+        <enabled>true</enabled>
+        <name>ApiEnabled</name>
+    </userPermissions>
+    <classAccesses>
+        <apexClass>UIBundleLogin</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>UIBundleForgotPassword</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>UIBundleRegistration</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>UIBundleSocialLoginConfig</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+</PermissionSet>

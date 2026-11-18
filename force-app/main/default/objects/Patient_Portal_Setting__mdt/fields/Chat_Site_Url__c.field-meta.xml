@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Chat_Site_Url__c</fullName>
+    <label>Chat Site URL</label>
+    <description>The deployment's site URL from its code snippet (it holds ESW and the deployment name); bootstrap.js is loaded from it. Blank: the chat stays off.</description>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

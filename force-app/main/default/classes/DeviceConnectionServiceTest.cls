@@ -8,7 +8,7 @@ private class DeviceConnectionServiceTest {
 
     /** Provisioned devices, saved without firing the Asset trigger. */
     private static List<Asset> devices(List<String> thingNames) {
-        Account patient = new Account(Name = 'Presence Patient');
+        Account patient = TestAccounts.patient('Presence Patient');
         insert patient;
         List<Asset> devices = new List<Asset>();
         for (String thingName : thingNames) {

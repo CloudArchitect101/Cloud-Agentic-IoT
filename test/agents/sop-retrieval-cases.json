@@ -1,0 +1,22 @@
+{
+  "description": "Golden questions for the SOP index: each names the SOP a care team member would need. Questions are phrased the way staff talk, often without the SOP's own words, so they test meaning, not keyword overlap. scripts/eval-agents.sh retrieval sends each one to the live procedure-search function (real Titan V2 embeddings) and scores the answers.",
+  "maxResults": 3,
+  "thresholds": { "hitAt1": 0.75, "hitAt3": 0.9 },
+  "cases": [
+    { "id": "temp-high-number", "query": "The sensor on bed 4 says 31.5 degrees, what are the steps?", "expect": "SOP-WARD-001" },
+    { "id": "temp-fridge-warm", "query": "The vaccine fridge is reading warm, over thirty", "expect": "SOP-WARD-001" },
+    { "id": "temp-case-opened", "query": "A temperature alert case just opened for my device", "expect": "SOP-WARD-001" },
+    { "id": "humidity-high", "query": "The drug cupboard feels damp, humidity is 68 percent", "expect": "SOP-WARD-002" },
+    { "id": "humidity-low", "query": "Relative humidity in medication storage dropped to 22%", "expect": "SOP-WARD-002" },
+    { "id": "offline-no-data", "query": "We have had no readings from room 12 for ten minutes", "expect": "SOP-WARD-003" },
+    { "id": "offline-status", "query": "The Asset shows Connection Status Offline", "expect": "SOP-WARD-003" },
+    { "id": "motor-stuck", "query": "The little motor on the board will not stop spinning even though it is cool now", "expect": "SOP-WARD-004" },
+    { "id": "motor-silent", "query": "Temperature is 32 but the device motor is not moving", "expect": "SOP-WARD-004" },
+    { "id": "ack-sweep", "query": "How do I acknowledge the alert so the sweeping stops?", "expect": "SOP-WARD-005" },
+    { "id": "escalate-level", "query": "Nobody picked up the case after 10 minutes, who do I call?", "expect": "SOP-WARD-006" },
+    { "id": "handover", "query": "What do I need to tell the next shift at handover?", "expect": "SOP-WARD-006" },
+    { "id": "agent-howto", "query": "How should I ask the agent about a device?", "expect": "SOP-WARD-007" },
+    { "id": "by-id", "query": "What does SOP-WARD-003 say?", "expect": "SOP-WARD-003" },
+    { "id": "out-of-scope", "query": "What is the cafeteria menu today?", "expect": null }
+  ]
+}

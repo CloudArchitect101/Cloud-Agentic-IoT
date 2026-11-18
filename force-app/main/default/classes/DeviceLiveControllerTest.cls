@@ -37,7 +37,7 @@ private class DeviceLiveControllerTest {
         );
 
         System.runAs(viewer) {
-            Account patient = new Account(Name = 'Live Patient');
+            Account patient = TestAccounts.patient('Live Patient');
             insert patient;
             TriggerHandler.bypass('AssetTriggerHandler');
             insert new Asset(

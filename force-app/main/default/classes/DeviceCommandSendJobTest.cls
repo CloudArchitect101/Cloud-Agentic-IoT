@@ -15,7 +15,7 @@ private class DeviceCommandSendJobTest {
 
     /** A device, saved without firing the Asset trigger. */
     private static Asset device(String thingName, String provisioningStatus, String connectionStatus) {
-        Account patient = new Account(Name = 'Command Patient');
+        Account patient = TestAccounts.patient('Command Patient');
         insert patient;
         Asset device = new Asset(
             Name = thingName, SerialNumber = thingName, AccountId = patient.Id, Status = 'Installed',

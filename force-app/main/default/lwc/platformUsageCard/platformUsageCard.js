@@ -16,7 +16,7 @@ import TIME_ZONE from '@salesforce/i18n/timeZone';
 import CAN_VIEW from '@salesforce/customPermission/View_Platform_Usage';
 import readAwsSpend from '@salesforce/apex/PlatformUsageController.awsSpend';
 import readSalesforceLimits from '@salesforce/apex/PlatformUsageController.salesforceLimits';
-import { awsView, salesforceView, ENTITLEMENTS_CAPTION, NOT_ALLOWED, ORG_CPU_NOTE, TOKENS_NOTE } from './usage';
+import { awsView, awsRingOf, highlightsOf, salesforceView, ENTITLEMENTS_CAPTION, NOT_ALLOWED, ORG_CPU_NOTE, TOKENS_NOTE } from './usage';
 
 export default class PlatformUsageCard extends LightningElement {
     allowed = CAN_VIEW === true;
@@ -55,6 +55,15 @@ export default class PlatformUsageCard extends LightningElement {
 
     get salesforceLoading() {
         return !this.salesforce && !this.salesforceError;
+    }
+
+    /** The headline tiles and the watch list, from the Salesforce half. */
+    get highlights() {
+        return this.salesforce ? highlightsOf(this.salesforce) : null;
+    }
+
+    get awsRing() {
+        return awsRingOf(this.aws);
     }
 }
 

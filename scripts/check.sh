@@ -5,7 +5,7 @@
 #   scripts/check.sh                  every part
 #   scripts/check.sh lambda firmware  only the parts named
 #
-# Parts: lambda, templates, scripts, salesforce, firmware. The pull request
+# Parts: lambda, templates, scripts, salesforce, portal, firmware. The pull request
 # checks (.github/workflows/checks.yml) run these same parts, so green here
 # means green on the PR. Nothing here needs credentials: no AWS account, no
 # org, no board.
@@ -19,7 +19,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 cd "$REPO_ROOT"
 
-PARTS="lambda templates scripts salesforce firmware"
+PARTS="lambda templates scripts salesforce portal firmware"
 SKIPPED=""
 
 has() { command -v "$1" > /dev/null 2>&1; }
@@ -90,6 +90,15 @@ check_salesforce() {
   # Converting to Metadata API format resolves each file's type the way a
   # deploy does, so a misplaced file, a missing -meta.xml or a wrong bundle
   # layout fails here, with no org involved.
+  # A UI bundle (the patient portal's React app) converts from its build,
+  # dist/, which Git does not hold: build it first, as the deploy does.
+  local bundle
+  for bundle in force-app/main/default/uiBundles/*/; do
+    [ -f "$bundle/package.json" ] || continue
+    [ -d "$bundle/dist" ] && continue
+    has npm || die "Building $bundle needs npm (Node.js 22)."
+    (cd "$bundle" && npm ci --no-audit --no-fund > /dev/null && npm run build > /dev/null)
+  done
   local out
   out=$(mktemp -d)
   sf project convert source --output-dir "$out/mdapi" > /dev/null
@@ -102,6 +111,14 @@ check_salesforce() {
   local unnamed
   unnamed=$(find force-app -path '*/objects/*/*/*-meta.xml' -exec grep -L '<fullName>' {} + || true)
   [ -z "$unnamed" ] || die "Each of these needs a <fullName> with its own name, or the deploy rejects it: $unnamed"
+  endstep
+}
+
+check_portal() {
+  has npm || { skip npm portal "install Node.js 22"; return 0; }
+  local bundle=force-app/main/default/uiBundles/patientPortal
+  step "Patient portal: type-check and build the React app, then its unit tests"
+  (cd "$bundle" && npm ci --no-audit --no-fund > /dev/null && npm run build > /dev/null && npx vitest run)
   endstep
 }
 

@@ -8,7 +8,7 @@ private class DeviceProvisioningBatchTest {
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
 
-        Account patient = new Account(Name = 'Bulk Load');
+        Account patient = TestAccounts.patient('Bulk Load');
         insert patient;
         Wi_Fi_Network__c network = new Wi_Fi_Network__c(Name = 'Clinic', SSID__c = 'clinic-wifi');
         insert network;
@@ -45,7 +45,7 @@ private class DeviceProvisioningBatchTest {
         DeviceTestSettings.use();   // Sweep_Delay_Minutes__c = 15
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        Account patient = new Account(Name = 'Recent');
+        Account patient = TestAccounts.patient('Recent');
         insert patient;
         Wi_Fi_Network__c network = new Wi_Fi_Network__c(Name = 'Clinic', SSID__c = 'clinic-wifi');
         insert network;

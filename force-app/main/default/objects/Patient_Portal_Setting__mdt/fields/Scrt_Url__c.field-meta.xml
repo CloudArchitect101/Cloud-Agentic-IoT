@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Scrt_Url__c</fullName>
+    <label>SCRT URL</label>
+    <description>Messaging (SCRT2) host the chat connects to, for example https://yourdomain.my.salesforce-scrt.com. Blank: derived from the org My Domain.</description>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

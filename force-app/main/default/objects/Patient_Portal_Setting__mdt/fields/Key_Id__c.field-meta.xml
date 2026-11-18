@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Key_Id__c</fullName>
+    <label>Key Id</label>
+    <description>The kid the chat token carries. Must match the kid of the key in the Messaging user verification keyset.</description>
+    <length>80</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

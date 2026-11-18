@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Nurse_Request_Origin__c</fullName>
+    <label>Nurse Request Case Origin</label>
+    <description>Origin set on the Case a patient's nurse request opens. Must be a Case Origin value.</description>
+    <length>40</length>
+    <required>true</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

@@ -3,7 +3,7 @@ private class DeviceProvisioningJobTest {
 
     /** Devices ready to provision, saved without firing the Asset trigger. */
     private static List<Asset> readyDevices(Integer count, String prefix) {
-        Account patient = new Account(Name = 'Fleet Patient');
+        Account patient = TestAccounts.patient('Fleet Patient');
         insert patient;
         Wi_Fi_Network__c network = new Wi_Fi_Network__c(Name = 'Clinic', SSID__c = 'clinic-wifi');
         insert network;

@@ -33,6 +33,9 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | [LIVE-STATUS.md](docs/LIVE-STATUS.md) | Whether a board is online, and its readings every 2 s while its card is open: how it works, the speeds, what it costs in AWS and in Salesforce limits, and what to check when the card waits. |
 | [SOP-GROUNDING.md](docs/SOP-GROUNDING.md) | The ward's sample procedures (SOPs) and how the Patient Care Agent finds and cites them: Bedrock embeddings in one S3 index, the Find Procedure action, the guardrails on the way, why not a Data Library or Knowledge, what it costs, and how to check each step. |
 | [GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md) | The rules every command to a room passes, where they run and why there; the Smart Ward MCP server's tools, its IAM authentication, and how to connect an MCP client. |
+| [PATIENT-PORTAL.md](docs/PATIENT-PORTAL.md) | The patients' React site on Salesforce (Multi-Framework) with Enhanced Chat v2 and Agentforce Voice: how the patient agent knows who is chatting and sees only their devices, the licences, the costs, and the setup clicks. |
+| [AGENT-EVALS.md](docs/AGENT-EVALS.md) | How both agents and the Bedrock SOP index are tested: Agentforce Testing Center specs (routing, actions, LLM-judged replies, confirmation before any Case, refusals) and a live retrieval eval scored by hit@1, hit@3 and MRR, run by `scripts/eval-agents.sh` or the Agent evals workflow. |
+| [BUSINESS-VALUE.md](docs/BUSINESS-VALUE.md) | The Business Value dashboard: nightly Value Snapshots measure alert response, chat deflection, staff hours avoided and cost per device, compared with an as-is baseline, with Agentforce cost against the nurse time it saves and the break-even deflection rate. |
 | [SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md) | The app's Home page: this month's AWS spend against its limit and the Salesforce limits the org has used; where each number comes from, how fresh it is, what it costs, and what to check when one is missing. |
 | [CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md) | What is automated vs manual, and the conventions the pipelines enforce. |
 | [MIGRATION-RUNBOOK.md](docs/MIGRATION-RUNBOOK.md) | Phased cutover to a governed Dev/Prod estate, with a rollback per phase. |
@@ -328,7 +331,7 @@ Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a poli
 
 **3. Download and attach.** Download the certificate, the private key, and Amazon Root CA 1 into one folder. Attach the policy to the certificate.
 
-**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. In the Cloud Agentic IoT app, Assets → New: Serial Number = the IoT Thing name, Account = the patient's Person Account (any Account, in an org without Person Accounts), Status = `Installed`.
+**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. In the Cloud Agentic IoT app, Assets → New: Serial Number = the IoT Thing name, Account = the patient's Person Account (required for a Patient Device: the validation rule `Patient_Device_Needs_Person_Account` refuses a business account; make Person Account your default Account record type so New Account from this form creates one), Status = `Installed`.
 
 #### Getting a device online
 
@@ -411,7 +414,7 @@ The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and sto
 
 **Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`, `datacloud/`
 
-The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`).
+The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`). A Patient Device must belong to a Person Account (`objects/Asset/validationRules/`); an Internal Device sits on a ward's business account.
 
 ### 02 · Real-time Streams to Agents
 
@@ -733,5 +736,6 @@ As of November 9, 2026, in the test setup (one AWS project and one Salesforce De
 | 09 · OTA saga | Written and tested, with its template; deployed by the next AWS deploy |
 | 10 · PII masking | In the agent's readings and procedure actions |
 | 11 · Guardrails | Deployed; a refused command tested |
+| Patient portal | Written and tested offline (Apex tests with two patients, the React build and its unit tests); deployed to test-cloudarchitect101 on Nov 9 (site live); its agent is Agent Script, published separately with `scripts/publish-portal-agent.sh`. Setup steps in [SETUP.md §9](docs/SETUP.md#9-patient-portal) |
 
-499 Node tests cover all 18 Lambda functions, the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, the ward SOPs, their index and their search, and the firmware's timing and command logic compiled for the host; 105 Python tests run the board, OTA, setup, deploy, stream test, SOP index and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (24 test classes). [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists what broke on the way, why, and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are the next step: the same code, deployed by the pipeline into a second org and account.
+501 Node tests cover all 18 Lambda functions, the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, the ward SOPs, their index and their search, and the firmware's timing and command logic compiled for the host; 105 Python tests run the board, OTA, setup, deploy, stream test, SOP index and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check, a build of the patient portal's React app and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (35 test classes). [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists what broke on the way, why, and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are the next step: the same code, deployed by the pipeline into a second org and account.

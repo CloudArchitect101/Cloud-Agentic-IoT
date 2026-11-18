@@ -8,7 +8,16 @@
     -->
     <doesSendEmailToMembers>false</doesSendEmailToMembers>
     <name>Care Team Queue</name>
+    <!-- Omni-Channel routing, needed for the portal chat's fallback
+         (queueRoutingConfigs/Care_Team_Chat). -->
+    <queueRoutingConfig>Care_Team_Chat</queueRoutingConfig>
     <queueSobject>
         <sobjectType>Case</sobjectType>
+    </queueSobject>
+    <!-- The patient portal chat's fallback: a conversation the Patient
+         Portal Agent cannot take (Route_Patient_Portal_Chat) waits here for
+         the care team. The ward board counts only Cases, so it is not moved. -->
+    <queueSobject>
+        <sobjectType>MessagingSession</sobjectType>
     </queueSobject>
 </Queue>

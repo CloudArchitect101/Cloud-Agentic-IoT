@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Nurse_Hours_Avoided__c</fullName>
+    <label>Nurse Hours Avoided (chat)</label>
+    <description>Nurse hours the agent-handled chats would have taken.</description>
+    <precision>10</precision>
+    <scale>1</scale>
+    <required>false</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

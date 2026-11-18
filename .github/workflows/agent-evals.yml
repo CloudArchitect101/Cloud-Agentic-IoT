@@ -1,0 +1,102 @@
+name: Agent evals
+
+# Runs the agent evals against a deployed environment: the Bedrock SOP
+# retrieval eval (real Titan V2 embeddings against the real index) and the
+# Agentforce Testing Center tests for both agents. Results are JUnit XML,
+# uploaded as an artifact and summarised on the run page.
+#
+# By hand only (Actions -> Agent evals -> Run workflow), and after a deploy,
+# because evals cost a little: Bedrock embeddings, Agentforce requests, and
+# two test Cases that the script closes again. The pull request checks
+# (checks.yml) keep the eval inputs honest without an org, through
+# test/scripts/agent-evals.test.js. docs/AGENT-EVALS.md has the details.
+#
+# Uses the same GitHub Environment secrets as deploy.yml. An AWS project such
+# as test-cloudarchitect101 cannot use OIDC, so run scripts/eval-agents.sh
+# from a laptop there.
+run-name: Agent evals ${{ inputs.environment }} (${{ inputs.part }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to evaluate
+        type: choice
+        options: [Dev, Prod]
+        default: Dev
+      part:
+        description: What to run
+        type: choice
+        options: [all, retrieval, agents]
+        default: all
+
+concurrency:
+  group: agent-evals-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      PART: ${{ inputs.part }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: AWS credentials (OIDC, no stored keys)
+        if: env.PART != 'agents'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Salesforce - install the CLI
+        if: env.PART != 'retrieval'
+        run: npm install --global @salesforce/cli
+
+      - name: Salesforce - log in as the deploy user (JWT bearer flow, no password)
+        if: env.PART != 'retrieval'
+        env:
+          SF_JWT_KEY:      ${{ secrets.SF_JWT_KEY }}
+          SF_CONSUMER_KEY: ${{ secrets.SF_CONSUMER_KEY }}
+          SF_USERNAME:     ${{ secrets.SF_USERNAME }}
+          SF_LOGIN_URL:    ${{ vars.SF_LOGIN_URL || 'https://login.salesforce.com' }}
+        run: |
+          set -euo pipefail
+          for name in SF_JWT_KEY SF_CONSUMER_KEY SF_USERNAME; do
+            [ -n "${!name:-}" ] || { echo "::error::Missing secret $name in the $ENVIRONMENT environment. See docs/SETUP.md."; exit 1; }
+          done
+          printf '%s' "$SF_JWT_KEY" | base64 --decode > server.key
+          chmod 600 server.key
+          sf org login jwt --client-id "$SF_CONSUMER_KEY" --jwt-key-file server.key \
+            --username "$SF_USERNAME" --instance-url "$SF_LOGIN_URL" --alias target-org
+          rm -f server.key
+
+      - name: Run the evals
+        env:
+          SF_TARGET_ORG: target-org
+          EVAL_DEVICE:           ${{ vars.EVAL_DEVICE }}
+          EVAL_OTHER_DEVICE:     ${{ vars.EVAL_OTHER_DEVICE }}
+          EVAL_PATIENT_USERNAME: ${{ vars.EVAL_PATIENT_USERNAME }}
+        run: scripts/eval-agents.sh "$ENVIRONMENT" "$PART"
+
+      - name: Upload the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-evals-${{ inputs.environment }}
+          path: test-results/evals
+          if-no-files-found: ignore
+
+      - name: Remove key material
+        if: always()
+        run: rm -f server.key

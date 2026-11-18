@@ -151,8 +151,14 @@ sf org assign permset --name Platform_Usage_Viewer
 That assigns the sets to you, in the org `SF_TARGET_ORG` names. The Home page
 shows the project's spend against its spend limit once Salesforce can call AWS
 (step 5) and the budget below exists. Open the app from
-the App Launcher. In an org without Person Accounts, any Account will do for a
-device's Account.
+the App Launcher. A **Patient Device** must belong to a **Person Account**: the
+validation rule `Patient_Device_Needs_Person_Account` refuses a business
+account. Person Accounts must be on before the deploy, and Person Account
+should be your profile's default Account record type, because **New Account**
+from the Asset form never asks which type
+([SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin), step 5). A
+ward board (**Internal Device**) sits on the ward's business account, created
+from the Accounts tab.
 
 ## 5. Connect the org and the project
 
@@ -301,7 +307,7 @@ fires. So when you first bring this rule to a project and org:
 
 ```bash
 scripts/check.sh
-scripts/deploy-salesforce.sh Dev     # the field, the trigger, the settings; runs every local Apex test
+scripts/deploy-salesforce.sh Dev --with-tests
 # verify in the org: the list below, and Device_Integration has Temperature Alert
 scripts/deploy-aws.sh Dev            # patient-vitals with RoomTempAlert "true" from config/Dev.json
 scripts/ota.sh try Dev patient-monitor   # firmware 2.7.0: the alert sweep, no dose, ward boards ignore their own sensor

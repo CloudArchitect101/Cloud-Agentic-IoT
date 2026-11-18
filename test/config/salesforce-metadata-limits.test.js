@@ -37,6 +37,17 @@ test('every permission set description fits in 255 characters', () => {
   }
 });
 
+test('every Trusted URL description fits in 255 characters', () => {
+  const files = filesUnder(path.join(metadata, 'cspTrustedSites'), '.cspTrustedSite-meta.xml');
+  assert.ok(files.length > 0, 'no Trusted URLs found');
+  for (const file of files) {
+    const match = fs.readFileSync(file, 'utf8').match(/<description>([\s\S]*?)<\/description>/);
+    if (!match) continue;
+    const length = unescapeXml(match[1]).length;
+    assert.ok(length <= 255, `${path.relative(root, file)}: description is ${length} characters, the maximum is 255`);
+  }
+});
+
 test('every record type description fits in 255 characters, and both device roles are visible where Assets are made', () => {
   const files = filesUnder(path.join(metadata, 'objects'), '.recordType-meta.xml');
   assert.ok(files.length >= 2, 'no record types found');
@@ -190,5 +201,44 @@ test('every permission set that reads Account also reads Contact', () => {
   for (const file of filesUnder(path.join(metadata, 'permissionsets'), '.permissionset-meta.xml')) {
     const xml = fs.readFileSync(file, 'utf8');
     if (reads(xml, 'Account')) assert.ok(reads(xml, 'Contact'), `${path.relative(root, file)} reads Account but not Contact`);
+  }
+});
+
+// Rules Salesforce enforced on the first Business Value deploy (Nov 11).
+test('custom objects enable Sharing, Bulk API and Streaming API together', () => {
+  for (const file of filesUnder(path.join(metadata, 'objects'), '.object-meta.xml')) {
+    const xml = fs.readFileSync(file, 'utf8');
+    const flags = ['enableSharing', 'enableBulkApi', 'enableStreamingApi']
+      .map((tag) => (xml.match(new RegExp(`<${tag}>(\\w+)</${tag}>`)) || [])[1])
+      .filter(Boolean);
+    if (flags.length === 0) continue;
+    assert.equal(new Set(flags).size, 1, `${path.basename(file)}: ${flags.join(', ')}`);
+  }
+});
+
+test('metric and gauge dashboard components set indicator colours and no chart-only attributes', () => {
+  for (const file of filesUnder(path.join(metadata, 'dashboards'), '.dashboard-meta.xml')) {
+    const xml = fs.readFileSync(file, 'utf8');
+    const components = xml.split('<dashboardComponent>').slice(1);
+    for (const c of components) {
+      if (!/<componentType>(Metric|Gauge)<\/componentType>/.test(c)) continue;
+      const name = `${path.basename(file)}: ${(c.match(/<header>([^<]*)/) || [])[1]}`;
+      assert.match(c, /<indicatorLowColor>/, name);
+      for (const tag of ['sortBy', 'chartAxisRange', 'showPercentage', 'showValues', 'useReportChart', 'axisBinding']) {
+        assert.doesNotMatch(c.split('</dashboardComponent>')[0], new RegExp(`<${tag}>`), `${name} uses ${tag}`);
+      }
+    }
+  }
+});
+
+test('embedded dashboards use only the properties Salesforce accepts', () => {
+  const allowed = new Set(['dashboardName', 'height', 'hideOnError']);
+  for (const file of filesUnder(path.join(metadata, 'flexipages'), '.flexipage-meta.xml')) {
+    const xml = fs.readFileSync(file, 'utf8');
+    for (const inst of xml.split('<componentInstance>').slice(1)) {
+      if (!inst.includes('desktopDashboards:embeddedDashboard')) continue;
+      const names = [...inst.matchAll(/<name>(\w+)<\/name>/g)].map((m) => m[1]);
+      for (const n of names) assert.ok(allowed.has(n), `${path.basename(file)}: ${n}`);
+    }
   }
 });

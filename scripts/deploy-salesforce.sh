@@ -3,8 +3,15 @@
 # deploy-salesforce.sh - validate, then deploy, everything in force-app/ to one
 # environment's org.
 #
-#   scripts/deploy-salesforce.sh Dev             # validate with tests, then deploy
-#   scripts/deploy-salesforce.sh Dev --dry-run   # validate with tests, change nothing
+#   scripts/deploy-salesforce.sh Dev                # laptop: deploy, no Apex tests
+#   scripts/deploy-salesforce.sh Dev --with-tests   # validate with tests, then deploy
+#   scripts/deploy-salesforce.sh Dev --dry-run      # validate, change nothing
+#
+# Apex tests: a laptop deploy to Dev skips them, to keep iterating fast
+# (Salesforce allows NoTestRun only in non-production orgs: Developer Edition,
+# sandbox, scratch). They always run in the pipeline (CI), on Prod, and with
+# --with-tests or RUN_TESTS=yes. Before a feature counts as done, and before
+# anything heads to Prod or a recorded deploy, run once with --with-tests.
 #
 # On a laptop it deploys as the deploy user (alias iot-dev-deploy, set up in
 # docs/SETUP.md, "The deploy user can actually deploy"), not as you. That is
@@ -31,7 +38,17 @@ ENV="${1:-}"
 check_environment "$ENV"
 refuse_local_prod "$ENV"
 DRY_RUN=false
-[ "${2:-}" = "--dry-run" ] && DRY_RUN=true
+RUN_TESTS="${RUN_TESTS:-}"
+for arg in "${@:2}"; do
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    --with-tests) RUN_TESTS=yes ;;
+    *) die "Unknown option $arg. Use --dry-run and/or --with-tests." ;;
+  esac
+done
+# Tests are never optional where it matters: in the pipeline and on Prod.
+if in_ci || [ "$ENV" = "Prod" ]; then RUN_TESTS=yes; fi
+[ "$RUN_TESTS" = "yes" ] || RUN_TESTS=no
 need sf "Install the Salesforce CLI - see docs/SETUP.md."
 need jq "It reads the CLI's JSON output."
 cd "$REPO_ROOT"
@@ -70,13 +87,55 @@ fi
 # By manifest, so the deploy can also remove what left force-app/
 # (manifest/destructiveChangesPost.xml). A component the org never had only
 # warns, hence --ignore-warnings.
+# The patient portal's React app deploys as its build (ui-bundle.json,
+# outputDir dist), which Git does not hold, so build it first.
+for bundle in force-app/main/default/uiBundles/*/; do
+  [ -f "$bundle/package.json" ] || continue
+  step "Build the React app in $bundle"
+  (cd "$bundle" && npm ci --no-audit --no-fund && npm run build)
+  endstep
+done
+
 manifest_dir=$(mktemp -d)
 sf project generate manifest --source-dir force-app --output-dir "$manifest_dir" --name package >/dev/null
-deploy_args=(--manifest "$manifest_dir/package.xml" --post-destructive-changes manifest/destructiveChangesPost.xml
-  --ignore-warnings --test-level RunLocalTests --target-org "$org" --wait 30)
+# Agent Script agents (aiAuthoringBundles/) are published, not deployed:
+# `sf agent publish authoring-bundle` compiles the script, creates the agent
+# and its version, then deploys the bundle (scripts/publish-portal-agent.sh).
+node -e '
+  const fs = require("fs"); const f = process.argv[1];
+  fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/\s*<types>(?:(?!<\/types>)[\s\S])*<name>AiAuthoringBundle<\/name>\s*<\/types>/, ""));
+' "$manifest_dir/package.xml"
+deploy_flags=(--manifest "$manifest_dir/package.xml"
+  --post-destructive-changes manifest/destructiveChangesPost.xml --ignore-warnings
+  --target-org "$org")
 
+if [ "$RUN_TESTS" = "no" ]; then
+  # Fast path for iterating: one deploy, no Apex tests. Compile and metadata
+  # errors still stop it, before anything changes (the deploy is atomic).
+  warn "Skipping Apex tests (laptop deploy to $ENV). Before calling a feature done, run with --with-tests."
+  if [ "$DRY_RUN" = true ]; then
+    step "Validate: check-only deploy, no Apex tests"
+    sf project deploy validate "${deploy_flags[@]}" --test-level NoTestRun --wait 30
+    endstep
+    rm -rf "$manifest_dir"
+    note "Dry run: $org validated without tests, nothing changed."
+    exit 0
+  fi
+  step "Deploy to $org, no Apex tests"
+  sf project deploy start "${deploy_flags[@]}" --test-level NoTestRun --wait 30
+  endstep
+else
+# Validate once, then quick-deploy that validation: Salesforce applies the
+# package it already compiled and tested, without running the Apex tests a
+# second time. It refuses the quick deploy if the org changed since, so it is
+# as safe as a second full deploy, in seconds instead of minutes.
 step "Validate: check-only deploy, running every local Apex test"
-sf project deploy start --dry-run "${deploy_args[@]}"
+validation=$(sf project deploy validate "${deploy_flags[@]}" \
+  --test-level RunLocalTests --async --json | jq -r '.result.id // empty')
+[ -n "$validation" ] || die "Salesforce did not start the validation."
+note "Validation $validation"
+# Readable progress and, on a failure, every component and test that failed.
+sf project deploy resume --job-id "$validation" --wait 30
 endstep
 
 if [ "$DRY_RUN" = true ]; then
@@ -85,9 +144,10 @@ if [ "$DRY_RUN" = true ]; then
   exit 0
 fi
 
-step "Deploy to $org"
-sf project deploy start "${deploy_args[@]}"
+step "Deploy to $org: quick deploy of validation $validation (tests already passed)"
+sf project deploy quick --job-id "$validation" --target-org "$org" --wait 30
 endstep
+fi
 rm -rf "$manifest_dir"
 if [ "$paired" = true ]; then record_deployed_commit salesforce; fi
 
@@ -116,3 +176,4 @@ if [ "$paired" = true ]; then
   endstep
 fi
 note "Salesforce $ENV is deployed from $(deployed_commit)."
+note "New objects or fields stay hidden, even from admins, until a permission set grants them: assign the feature's permission set (e.g. Business_Value_Viewer, docs/BUSINESS-VALUE.md)."

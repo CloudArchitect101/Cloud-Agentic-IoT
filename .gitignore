@@ -161,3 +161,13 @@ animations/
 * 2
 * 2.*
 *\ 2/
+
+# ---------------------------------------------------------------------------
+# Patient portal React app (force-app/main/default/uiBundles/patientPortal):
+# build output. scripts/deploy-salesforce.sh builds dist/.
+# ---------------------------------------------------------------------------
+force-app/main/default/uiBundles/*/dist/
+force-app/main/default/uiBundles/*/coverage/
+force-app/main/default/uiBundles/*/test-results/
+force-app/main/default/uiBundles/*/playwright-report/
+*.tsbuildinfo

@@ -1,2 +1,8 @@
 **/jsconfig.json
 **/.eslintrc.json
+# The patient portal React app: dependencies and local build caches are not
+# metadata. Its dist/ (the build) is what the UIBundle deploys.
+**/uiBundles/*/node_modules/
+**/uiBundles/*/coverage/
+**/uiBundles/*/test-results/
+**/uiBundles/*/playwright-report/
