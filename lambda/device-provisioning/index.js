@@ -1,7 +1,7 @@
 const { IoTClient, CreateThingCommand, CreateKeysAndCertificateCommand,
         AttachPolicyCommand, AttachThingPrincipalCommand,
         AddThingToThingGroupCommand, DescribeEndpointCommand } = require('@aws-sdk/client-iot');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const iot = new IoTClient({});
@@ -69,9 +69,12 @@ exports.handler = async (event) => {
       ServerSideEncryption: 'AES256',
     }));
 
+    // Signed for GetObject: the technician downloads this file. A link
+    // signed for PutObject cannot download it, and lets whoever holds it
+    // overwrite the bundle until it expires.
     const bundleUrl = await getSignedUrl(
       s3,
-      new PutObjectCommand({ Bucket: BUNDLE_BUCKET, Key: key }),
+      new GetObjectCommand({ Bucket: BUNDLE_BUCKET, Key: key }),
       { expiresIn: ttlMinutes * 60 }
     );
 

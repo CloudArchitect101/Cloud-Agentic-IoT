@@ -20,6 +20,9 @@ const STEPS = [
  * handler must tolerate being run twice with the same input. This is the
  * single most common thing people get wrong with queue-driven sagas - the
  * retry is not the exception, it is routine.
+ *
+ * The step bodies are still simulated: each returns what the real AWS call
+ * would, without making it.
  */
 async function runStep(step, context) {
   console.log(`step ${step.name}`, { deviceId: context.deviceId, attempt: context.attempt });
@@ -60,8 +63,7 @@ async function compensate(step, context) {
   return { compensated: step.compensate };
 }
 
-exports.handler = async (event) => {
-  const context = typeof event.body === 'string' ? JSON.parse(event.body) : event;
+async function runSaga(context) {
   const completed = [];
 
   for (const step of STEPS) {
@@ -71,15 +73,14 @@ exports.handler = async (event) => {
       Object.assign(context, result);
     } catch (err) {
       if (err.retryable) {
-        // Leave the message on the queue; visibility timeout brings it back.
         // Do NOT compensate - the saga has not failed, it is still in flight.
         console.log(`step ${step.name} not ready, will retry`);
-        return { statusCode: 202, body: JSON.stringify({ status: 'IN_PROGRESS', step: step.name }) };
+        return { status: 'IN_PROGRESS', step: step.name };
       }
 
       console.error(`step ${step.name} failed, compensating ${completed.length} completed step(s)`);
       // Reverse order: undo the most recent side effect first.
-      for (const done of completed.reverse) {
+      for (const done of [...completed].reverse()) {
         try {
           await compensate(done, context);
         } catch (compErr) {
@@ -88,14 +89,45 @@ exports.handler = async (event) => {
           console.error(`COMPENSATION FAILED for ${done.compensate}: ${compErr.message}`);
         }
       }
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ status: 'ROLLED_BACK', failedStep: step.name, error: err.message }),
-      };
+      return { status: 'ROLLED_BACK', failedStep: step.name, error: err.message };
     }
   }
 
-  return { statusCode: 200, body: JSON.stringify({ status: 'COMPLETE', deviceId: context.deviceId }) };
+  return { status: 'COMPLETE', deviceId: context.deviceId };
+}
+
+const STATUS_CODES = { COMPLETE: 200, IN_PROGRESS: 202, ROLLED_BACK: 500 };
+
+exports.handler = async (event) => {
+  // From SQS, the only way to leave a message on the queue is to report it as
+  // a batch item failure; the visibility timeout then brings it back. Any
+  // successful return deletes the whole batch, so a saga that is still waiting
+  // must be reported, not returned as a 202. The event source mapping needs
+  // FunctionResponseTypes: [ReportBatchItemFailures] for this to apply.
+  if (Array.isArray(event.Records)) {
+    const batchItemFailures = [];
+    for (const record of event.Records) {
+      try {
+        const context = JSON.parse(record.body);
+        context.attempt = Number(record.attributes?.ApproximateReceiveCount) || 1;
+        const outcome = await runSaga(context);
+        if (outcome.status === 'IN_PROGRESS') {
+          batchItemFailures.push({ itemIdentifier: record.messageId });
+        }
+      } catch (err) {
+        // A malformed message is kept, not dropped, so that it reaches the
+        // dead-letter queue where someone can see it.
+        console.error('saga message failed', { messageId: record.messageId, error: err.message });
+        batchItemFailures.push({ itemIdentifier: record.messageId });
+      }
+    }
+    return { batchItemFailures };
+  }
+
+  // Direct invocation (console, tests, API Gateway).
+  const context = typeof event.body === 'string' ? JSON.parse(event.body) : event;
+  const outcome = await runSaga(context);
+  return { statusCode: STATUS_CODES[outcome.status], body: JSON.stringify(outcome) };
 };
 
 exports.STEPS = STEPS;

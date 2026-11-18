@@ -121,7 +121,11 @@ Resources:
     Properties:
       RuleName: cloud_agentic_iot_patient_vitals
       TopicRulePayload:
-        Sql: "SELECT * FROM 'device/+/telemetry'"
+        # timestamp() is when IoT Core received the message. The device sends
+        # no clock of its own, and this value - unlike the Lambda's clock - is
+        # identical on every retry, so the Salesforce upsert key built from it
+        # really is idempotent.
+        Sql: "SELECT *, timestamp() AS receivedAt FROM 'device/+/telemetry'"
         AwsIotSqlVersion: '2016-03-23'
         RuleDisabled: false
         Actions:

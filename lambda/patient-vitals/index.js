@@ -40,8 +40,10 @@ exports.handler = async (event, context) => {
     console.log('Received event:', JSON.stringify(event));
 
     try {
-        // Extract patient vitals from IoT telemetry payload
-        const payload = event.detail || event.payload;
+        // Extract patient vitals from IoT telemetry payload. The IoT rule's
+        // Lambda action passes the device's message itself as the event;
+        // detail (EventBridge) and payload are the other shapes accepted.
+        const payload = event.detail || event.payload || event;
         const vitals = parseVitals(payload);
 
         if (!vitals) {
@@ -60,13 +62,17 @@ exports.handler = async (event, context) => {
         // fills a Developer Edition org (~5 MB) in under a day and is noise
         // at any scale. Salesforce receives only transitions worth acting on.
         const previousState = await getPreviousState(vitals.deviceId);
-        await storeInDynamoDB(vitals);
+        await storeReading(vitals);
 
         const stateChanged = previousState !== vitals.patientState;
         const isAlertable = vitals.patientState !== 'STABLE';
         if (stateChanged || isAlertable) {
             await syncToSalesforce(vitals, { previousState });
         }
+        // Saved only once Salesforce has the reading. Saved first, a failed
+        // sync would be retried against a state that already looks
+        // unchanged, and the transition would never reach Salesforce.
+        await saveState(vitals);
 
         return createResponse(200, {
             message: 'Patient vitals processed successfully',
@@ -78,10 +84,11 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Error processing vitals:', error);
-        return createResponse(500, {
-            message: 'Failed to process vitals',
-            error: error.message
-        });
+        // Rethrown rather than returned as a 500. The IoT rule invokes this
+        // function asynchronously, where any return value counts as success
+        // and the reading is dropped; a thrown error is retried and shows up
+        // in the function's Errors metric.
+        throw error;
     }
 };
 
@@ -95,21 +102,58 @@ exports.handler = async (event, context) => {
 function parseVitals(rawPayload) {
     try {
         const data = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+        const deviceId = data && (data.deviceId || data.device_id);
+        if (!deviceId) return null;
 
+        // A value the device did not send stays null. Defaulting it to a
+        // normal reading wrote measurements no sensor took (SpO2 98, BP
+        // 120/80) into the patient's record: the patient monitor's DHT11
+        // sends only temperature and humidity.
         return {
-            deviceId: data.deviceId || data.device_id,
-            heartRate: parseFloat(data.heartRate || data.hr || 0),
-            spo2: parseFloat(data.spo2 || data.o2_saturation || 98),
-            temperature: parseFloat(data.temperature || data.temp || 36.8),
-            bloodPressureSystolic: parseFloat(data.bpSystolic || data.bp_sys || 120),
-            bloodPressureDiastolic: parseFloat(data.bpDiastolic || data.bp_dia || 80),
-            timestamp: data.timestamp || new Date().toISOString(),
+            deviceId,
+            heartRate: firstNumber(data.heartRate, data.hr),
+            spo2: firstNumber(data.spo2, data.o2_saturation),
+            temperature: firstNumber(data.temperature, data.temp),
+            humidity: firstNumber(data.humidity),
+            bloodPressureSystolic: firstNumber(data.bpSystolic, data.bp_sys),
+            bloodPressureDiastolic: firstNumber(data.bpDiastolic, data.bp_dia),
+            // receivedAt is the IoT rule's timestamp(). Unlike this Lambda's
+            // clock it is the same on every retry of the invocation, which is
+            // what keeps the upsert key below stable.
+            timestamp: toIsoTimestamp(data.timestamp)
+                || toIsoTimestamp(data.receivedAt)
+                || new Date().toISOString(),
             sourceSystem: 'AWS_IoT'
         };
     } catch (error) {
         console.error('Failed to parse vitals:', error);
         return null;
     }
+}
+
+/**
+ * The first value that parses as a finite number, or null. Zero counts as a
+ * reading; only absent values are skipped.
+ */
+function firstNumber(...values) {
+    for (const value of values) {
+        if (value === null || value === undefined || value === '') continue;
+        const n = typeof value === 'number' ? value : parseFloat(value);
+        if (Number.isFinite(n)) return n;
+    }
+    return null;
+}
+
+/**
+ * ISO 8601 from an ISO string or an epoch time in seconds or milliseconds;
+ * null when absent or unparseable.
+ */
+function toIsoTimestamp(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const date = typeof value === 'number'
+        ? new Date(value < 1e12 ? value * 1000 : value)
+        : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 /**
@@ -180,21 +224,11 @@ async function getPreviousState(deviceId) {
 /**
  * Store vitals in DynamoDB for time-series queries
  * Uses deviceId as partition key, timestamp as sort key.
- * Also maintains the per-device STATE item that getPreviousState reads.
  *
  * @param {Object} vitals - Structured patient vitals
  * @returns {Promise} DynamoDB put operation
  */
-async function storeInDynamoDB(vitals) {
-    await docClient.send(new PutCommand({
-        TableName: DYNAMODB_TABLE,
-        Item: {
-            PK: `PATIENT#${vitals.deviceId}`,
-            SK: 'STATE',
-            PatientState: vitals.patientState,
-            UpdatedAt: vitals.timestamp,
-        },
-    }));
+async function storeReading(vitals) {
     const params = {
         TableName: DYNAMODB_TABLE,
         Item: {
@@ -203,6 +237,7 @@ async function storeInDynamoDB(vitals) {
             HeartRate: vitals.heartRate,
             SpO2: vitals.spo2,
             Temperature: vitals.temperature,
+            Humidity: vitals.humidity,
             BP_Systolic: vitals.bloodPressureSystolic,
             BP_Diastolic: vitals.bloodPressureDiastolic,
             RiskScore: vitals.riskScore,
@@ -213,6 +248,21 @@ async function storeInDynamoDB(vitals) {
     };
 
     await docClient.send(new PutCommand(params));
+}
+
+/**
+ * Maintains the per-device STATE item that getPreviousState reads.
+ */
+async function saveState(vitals) {
+    await docClient.send(new PutCommand({
+        TableName: DYNAMODB_TABLE,
+        Item: {
+            PK: `PATIENT#${vitals.deviceId}`,
+            SK: 'STATE',
+            PatientState: vitals.patientState,
+            UpdatedAt: vitals.timestamp,
+        },
+    }));
 }
 
 /**
@@ -253,9 +303,10 @@ async function syncToSalesforce(vitals, { previousState } = {}) {
             })
         });
 
+        // Thrown, not just logged: a rejected upsert has to fail the
+        // invocation, or the reading is silently missing from Salesforce.
         if (!response.ok) {
-            const error = await response.text();
-            console.error('Salesforce sync error:', error);
+            throw new Error(`Salesforce upsert failed (${response.status}): ${await response.text()}`);
         }
 
         return response;

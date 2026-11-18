@@ -36,7 +36,7 @@ exports.handler = async (event) => {
       const { principals = [] } = await iot.send(new ListThingPrincipalsCommand({ thingName }));
 
       for (const principal of principals) {
-        const certificateId = principal.split('/').pop;
+        const certificateId = principal.split('/').pop();
         // Detaching a policy that is not attached is not an error worth
         // failing the teardown over - the goal is that it ends up detached.
         await iot.send(new DetachPolicyCommand({ policyName: POLICY_NAME, target: principal }))
