@@ -1,0 +1,14 @@
+{
+  "name": "device-live",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.665.0",
+    "@aws-sdk/client-iot": "^3.665.0",
+    "@aws-sdk/client-iot-data-plane": "^3.665.0",
+    "@aws-sdk/client-sts": "^3.665.0",
+    "@aws-sdk/lib-dynamodb": "^3.665.0",
+    "@cloud-agentic-iot/shared": "file:../shared"
+  }
+}

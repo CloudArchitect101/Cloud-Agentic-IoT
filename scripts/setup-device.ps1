@@ -11,6 +11,12 @@
 # idea that AWS exists. Its ROM bootloader speaks serial and nothing else, so
 # it cannot fetch its own firmware. OTA only works once our firmware is already
 # running - see docs/DEVICE-IDENTITY.md.
+#
+# NOT SAFE YET for the credentials step: unlike setup-device.sh, this sends
+# them in one burst after a fixed wait, without waiting for the board to ask.
+# A burst that arrives while the board is asking can lose characters from
+# inside the certificate or key and still be stored, once. Run setup-device.sh
+# on macOS or Linux until this waits and paces the same way.
 param(
     [string]$CertDir = "",
     [string]$Port    = ""

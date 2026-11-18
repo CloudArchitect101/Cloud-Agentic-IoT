@@ -1,0 +1,5 @@
+/* Digits of equal width, so a reading that changes every two seconds does not
+   make the line beside it jitter. */
+.reading {
+    font-variant-numeric: tabular-nums;
+}

@@ -1,559 +1,3 @@
-# Setup: Accounts, Identities, and Credentials
-
-A comprehensive, step-by-step guide to building a secure, automated development environment from absolute scratch. 
-
-## 🛠️ 1. Prerequisites & Tooling Installation
-
-Install the required command-line utilities. The versions listed below represent verified baselines; any newer stable release is safe to use.
-
-### Salesforce CLI (`sf`) — v2.136+
-The modern `sf` utility is a Node.js-based application runner. Do not use the legacy, deprecated `sfdx` binary.
-```bash
-# Install Node.js runtime (v18+ required, v26 recommended)
-brew install node                          
-
-# Install the modern unified Salesforce CLI globally
-npm install --global @salesforce/cli
-
-# Verify successful installation
-sf --version                               # Expected output: @salesforce/cli/2.x.x
-```
-*Tip: Run `sf update` regularly to keep your CLI framework current.*
-
-### AWS CLI — v2
-```bash
-brew install awscli
-aws --version                              # Expected output: aws-cli/2.x.x
-```
-*Important: If your terminal returns `aws-cli/1.x`, immediately run a full package uninstallation first. Having both versions installed simultaneously causes broken routing paths.*
-
-### GitHub CLI (`gh`)
-Enables direct management of repository infrastructure and securely injects environments secrets directly via the command line.
-```bash
-brew install gh
-gh --version                               # Expected output: gh version 2.x.x
-```
-
-### Arduino CLI (`arduino-cli`) — Firmware Compilations Only
-*Skip this section if you are not flashing physical edge devices.*
-```bash
-brew install arduino-cli
-arduino-cli version                        # Expected output: 1.5.1 or newer
-
-# Initialize structural configurations
-arduino-cli config init
-arduino-cli config set board_manager.additional_urls \
-  https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-
-# Download framework indices and device cores
-arduino-cli core update-index
-arduino-cli core install esp32:esp32
-
-# Install dependencies identical to your automated pipeline environment
-arduino-cli lib install "PubSubClient" "ArduinoJson" "DHT sensor library" "ESP32Servo"
-```
-
-### Direct Tooling Verification
-Verify your machine's entire system paths configuration array simultaneously before moving forward:
-```bash
-sf --version && aws --version && gh --version && arduino-cli version
-```
-
----
-
-## 🔑 2. Architectural Paradigm: The Five Core Identities
-
-**Deployment actions and active system runtime require distinct separation.** A security credential assigned to deploy apex code or modify configuration files must never handle data transactions or process edge telemetry logs, and vice versa.
-
-| # | Target Identity | Native Engine | Core Operational Scope | Security Boundaries |
-|---|---|---|---|---|
-| **1** | **Signup Administrator** | Salesforce | Configuration changes, license auditing, break-glass access only. | Requires MFA; should not be used for daily developer terminal access. |
-| **2** | **`deploy@...`** | Salesforce | CI/CD automation only: deploys metadata configurations and runs unit tests. | **No data object permissions.** Cannot read database records. |
-| **3** | **`integration@...`** | Salesforce | Active application runtime: orchestrates two-way AWS ↔ Salesforce data traffic. | **No structural metadata permissions.** Cannot modify code. |
-| **4** | **`iot-operator`** | AWS | Dedicated developer identity for administrative console and local CLI actions. | Limited least-privilege role; cannot touch billing systems or identity creation. |
-| **5** | **`github-actions-deploy`** | AWS | CI/CD infrastructure processing via OIDC federation. | **No permanent access keys exist.** Strictly bound to a single repository branch. |
-
----
-
-## ☁️ 3. Salesforce Environment Provisioning
-
-### 3.1 Provisioning the Org
-1. Sign up for a free, permanent developer workspace environment at: [developer.salesforce.com/signup](https://developer.salesforce.com/signup).
-2. Use a distinct email address routing alias that you fully control (e.g., `yourname+iot-dev@yourcompany.com`).
-3. Navigate to **Setup** ➡️ **Company Information** to evaluate your baseline license allocations. Ensure you see 2 Salesforce licenses and 1 Integration license.
-
-### 3.2 Secure Local Workspace Authentication
-For local development, use an interactive web session authentication routine. This registers an explicitly named workspace moniker inside your VS Code interface.
-```bash
-sf org login web --set-default --alias iot-dev
-```
-*Result: Your terminal automatically bridges a secure login window via your browser. Once completed, your VS Code environment status bar will track paths directly to `iot-dev`.*
-
-### 3.3 Provisioning Service Accounts
-Navigate to **Setup** ➡️ **Users** ➡️ **Users** ➡️ **New User**. You must build two distinct structural identities.
-
-#### Identity A: The Automation Engine (`deploy@...`)
-* **User License:** `Salesforce`
-* **Profile:** `Minimum Access – Salesforce`
-* **Username:** `deploy@iot-dev.<yourdomain.com>`
-* **Email:** Use your primary email account address.
-
-#### Identity B: The Live Runtime Engine (`integration@...`)
-* **User License:** `Integration`
-* **Profile:** `Salesforce API Only System Integrations`
-* **Username:** `integration@iot-dev.<yourdomain.com>`
-* **Email:** Use your primary email account address.
-
----
-
-## 🚀 4. Automated Architecture Bootstrap Order
-
-Our entire repository deployment model is executed via remote continuous integration. This creates a bootstrap paradox: the functional permission sets that govern our operational runtime user data layer (`Device_Integration`) live directly inside our project source code repository. They cannot exist in Salesforce until GitHub deploys them.
-
-To break this loop, we execute a brief manual bootstrap phase exactly once:
-
-Use code with caution.[Phase 1: Bootstrap] ➡️ Manually give 'deploy@...' rights to touch structural code.⬇️[Phase 2: First Deploy] ➡️ GitHub processes everything, creating objects and runtime profiles.⬇️[Phase 3: Activation] ➡️ Securely attach the fresh runtime profile to 'integration@...'.
-### Phase 1: Manual Deployment Authorization
-
-> **The deploy user is a System Administrator, deliberately.** The rest of this
-> section documents which permission each metadata type needs, and that mapping is
-> still worth understanding — but least-privilege does not survive contact with
-> `RunLocalTests`.
->
-> Apex tests execute as whoever is deploying, and two of ours create a **Queue**
-> as fixture data. Creating a `Group` of `Type='Queue'` cannot be granted by
-> permission: `ManageUsers` (which forces twelve more permissions along with it)
-> does not unlock it, nor does assigning a role, nor Case object access. The only
-> remaining route is `ModifyAllData`, which demands a further **thirty-three**
-> permissions — System Administrator reassembled by hand. Verified directly:
-> identical Apex creating a queue succeeds as an admin and fails as the
-> least-privilege deploy user, in the same org, seconds apart.
->
-> The narrower alternative is to rework those tests so they inject queues instead
-> of inserting setup objects — `CaseQueueMonitorService` already has a
-> `testBindingOverride` seam for exactly that. Worth doing before this pipeline
-> ever points at an org holding real data. Until then, the admin profile is what
-> makes the pipeline work, and this note is the record of that choice.
-
-The permission set is source-controlled at
-[`scripts/Metadata_Deploy.permissionset-meta.xml`](../scripts/Metadata_Deploy.permissionset-meta.xml),
-so you do not have to build it by hand. It sits in `scripts/` rather than
-`force-app/` deliberately: the deploy user needs it *before* the pipeline can
-deploy anything, so it cannot ship inside the package the pipeline deploys.
-
-Apply it once per org, as an administrator:
-
-```bash
-sf project deploy start \
-  --source-dir scripts/Metadata_Deploy.permissionset-meta.xml \
-  --target-org iot-dev
-
-sf org assign permset --name Metadata_Deploy \
-  --target-org iot-dev --on-behalf-of deploy@iot-dev.<yourdomain>
-```
-
-Doing it through the UI instead — or checking what an existing set already grants:
-
-1. Navigate to **Setup** ➡️ **Permission Sets** ➡️ **New**.
-2. Label the set `Metadata_Deploy`.
-3. Select **System Permissions** ➡️ **Edit**. Which flags you need is decided by
-   **what the package contains**, not by a generic "deploy" role. `Modify Metadata
-   Through Metadata API Functions` only opens the door — each metadata type still
-   demands its own permission behind it.
-
-| Metadata type in this repo | Count | System permission required |
-|---|---|---|
-| — | — | **API Enabled** (JWT token exchange; needed regardless) |
-| — | — | **Modify Metadata Through Metadata API Functions** (Metadata API access at all) |
-| `ApexClass`, `ApexTrigger` | 20 + 4 | **Author Apex** |
-| `LightningComponentBundle` | 1 | **Author Apex** *and* **Customize Application** — Author Apex alone still fails with `insufficient access rights on entity: LightningComponentResource` |
-| `CustomObject`, `CustomField`, `CustomMetadata` | 7 + 44 + 1 | **Customize Application** |
-| `PermissionSet` | 1 | **Manage Profiles and Permission Sets** |
-| `Bot`, `BotVersion`, `GenAiFunction`, `GenAiPlannerBundle`, `GenAiPlugin` | 5 | An Agentforce builder permission set — assigned separately, not a System Permission checkbox (see below) |
-
-4. Click **Save**, then select **Manage Assignments** to assign this set directly to your `deploy@...` identity.
-
-For the Agentforce components, assign a builder permission set to the deploy user
-as well — `AgentPlatformBuilder` ("Agent Platform Builder") is the narrower choice,
-`CopilotSalesforceAdmin` ("Agentforce Default Admin") the broader one:
-
-```bash
-sf org assign permset --name AgentPlatformBuilder \
-  --target-org iot-dev --on-behalf-of deploy@iot-dev.<yourdomain>
-```
-
-> **This is the permission gap that hides longest.** Everything an admin runs
-> locally succeeds, because a System Administrator holds all of these implicitly.
-> Only the pipeline — running as the least-privilege deploy user — ever sees the
-> failure, so it reads as a CI problem rather than a permissions one. Do not
-> debug it by re-running the workflow; check the user's *effective* permissions,
-> which is the union across the profile and every assigned permission set:
->
-> ```bash
-> sf data query -o iot-dev -q "SELECT PermissionSet.Label, \
->   PermissionSet.PermissionsApiEnabled, PermissionSet.PermissionsModifyMetadata, \
->   PermissionSet.PermissionsAuthorApex, PermissionSet.PermissionsCustomizeApplication, \
->   PermissionSet.PermissionsManageProfilesPermissionsets \
->   FROM PermissionSetAssignment WHERE Assignee.Username = 'deploy@iot-dev.<yourdomain>'"
-> ```
->
-> Querying `Metadata_Deploy` alone is not enough — a permission granted by the
-> profile still counts, and one granted by a *different* permission set still counts.
-
-**Deliberately not granted:** `Modify All Data`, `View All Data`, `Manage Users`.
-The deploy identity writes structure, never records. If a deploy ever fails for
-want of one of those, the metadata is reaching somewhere it should not.
-
-> **A passing deploy does not prove the permissions are right.** Salesforce only
-> checks permissions for components it actually has to *write* — anything
-> byte-identical to what is already in the org is skipped, permission or not. So
-> if an admin has already deployed by hand, the pipeline can go green while the
-> deploy user is missing permissions for half the package, and only break later
-> when someone edits one of those files. The honest test is a **fresh org**, or
-> at minimum reading the effective permissions above rather than trusting a green
-> run. This is exactly the trap Prod walks into: nothing has been hand-deployed
-> there, so every component needs its permission on the very first run.
-
----
-
-## 🔒 5. Modern Salesforce Inbound Auth: External Client Apps (ECA)
-
-*Note: As of Spring '26, legacy Connected Apps are disabled by default for fresh setups. We utilize the next-generation External Client Apps framework.*
-
-```
-+--------------------+                                +-----------------------+
-|   GitHub Actions   | --(JWT signed with PrivKey)--> | External Client App   |
-| (Secret: Username) |                                | (Matches PubCert)     |
-+--------------------+                                +-----------------------+
-                                                                 |
-                                                    (Assumes User Context)
-                                                                 v
-                                                      +-----------------------+
-                                                      |    deploy@... User    |
-                                                      +-----------------------+
-```
-
-### Step 1: Isolate Cryptographic Certificate Keypairs
-Run the following local openssl utility calls to establish completely separate cryptographic identities for both your deployment processing and live data operations.
-```bash
-# Generate Keypair Array for CI/CD Pipelines
-openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
-  -keyout server-deploy.key -out server-deploy.crt \
-  -subj "/CN=CloudAgenticIoT-Deploy/O=Personal/C=CA"
-
-# Generate Keypair Array for AWS Data Sync Processing
-openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
-  -keyout server-integration.key -out server-integration.crt \
-  -subj "/CN=CloudAgenticIoT-Integration/O=Personal/C=CA"
-```
-
-### Step 2: Establish the Pipeline Identity Gate
-1. Navigate to **Setup** ➡️ **External Client Apps** ➡️ **External Client App Manager**.
-2. Select **New External Client App**.
-3. Set the application name to `Cloud Agentic IoT Deploy` and configure its Distribution State explicitly to **Local**.
-4. Scroll to **API (Enable OAuth Settings)**, activate **Enable OAuth**, and fill out the fields:
-   * **Callback URL**: Enter `http://localhost:1717/OauthRedirect` (Required structure).
-   * **OAuth Scopes**: Choose and add:
-     * `Manage user data via APIs (api)`
-     * `Perform requests at any time (refresh_token, offline_access)`
-   * **Flow Enablement**: Select **Enable JWT Bearer Flow**.
-   * **Upload Files**: Choose and upload your local `server-deploy.crt` file.
-5. Save the configuration and copy the resulting **Consumer Key** string.
-
-> **Do not confuse "Enable JWT Bearer Flow" with "Issue JSON Web Token (JWT)-based
-> access tokens for named users".** They sit near each other, both say JWT, and they
-> do opposite jobs:
->
-> | Setting | What it controls | You want |
-> |---|---|---|
-> | **Enable JWT Bearer Flow** + certificate upload | Whether Salesforce *accepts* a signed JWT assertion as a login grant | **On** — this is how CI authenticates |
-> | **Issue JSON Web Token (JWT)-based access tokens for named users** (`isNamedUserJwtEnabled`) | Whether the *access token handed back* is a JWT instead of an opaque session ID | **Off** — turning it on breaks the Salesforce CLI, which needs a session ID for the Metadata API |
->
-> Enabling the second one is an easy mistake when hunting the first, and it produces
-> failures that look like an auth problem rather than a token-format problem.
-
-To verify from the terminal rather than trusting the screen — a working deploy app
-has a certificate present and named-user JWT **off**:
-
-```bash
-tmp=$(mktemp -d)
-sf project retrieve start -o iot-dev \
-  -m "ExtlClntAppGlobalOauthSettings:Cloud_Agentic_IoT_Deploy_glbloauth" \
-  --target-metadata-dir "$tmp" --unzip
-grep -c "<certificate>"          "$tmp"/unpackaged/unpackaged/extlClntAppGlobalOauthSets/*  # want: 1
-grep -rh isNamedUserJwtEnabled   "$tmp"   # want: false
-rm -rf "$tmp"
-```
-
-There is no `enableJwtBearerFlow` element to check — the JWT bearer flow is
-considered configured when a `<certificate>` is present, so the certificate's
-existence *is* the assertion that the flow is on.
-
-**Retrieve to a temp directory, never into `force-app/`.** That metadata carries
-the app's `<consumerKey>` and `<certificate>` inline, and a plain
-`sf project retrieve start` writes them into your package directory — one
-`git add .` away from publishing the consumer key of your deploy app. Hence
-`--target-metadata-dir` (which accepts a path outside the project) rather than
-`--output-dir` (which refuses one).
-
-The same file also carries `<certificate>`. To confirm the uploaded certificate
-actually pairs with the private key GitHub Actions signs with, compare moduli —
-a mismatch here fails as `invalid_grant`, which looks nothing like the error above:
-
-```bash
-openssl x509 -in server-deploy.crt -noout -modulus
-openssl rsa  -in server-deploy.key -noout -modulus   # the two must be identical
-```
-
-#### Changing a flag when the UI will not cooperate
-
-Any boolean on these objects can be set as metadata instead. Build the package
-**from a fresh retrieve** rather than writing the XML by hand — that way the
-consumer key and certificate already on the app are carried through byte-for-byte
-and only the flag you name changes:
-
-```bash
-work=$(mktemp -d); tmp=$(mktemp -d)
-sf project retrieve start -o iot-dev \
-  -m "ExtlClntAppGlobalOauthSettings:Cloud_Agentic_IoT_Deploy_glbloauth" \
-  --target-metadata-dir "$tmp" --unzip
-cp -R "$tmp"/unpackaged/unpackaged/. "$work"; rm -rf "$tmp"
-
-# edit the one flag you mean, e.g. turning named-user JWT back off:
-sed -i '' 's|<isNamedUserJwtEnabled>true<|<isNamedUserJwtEnabled>false<|' \
-  "$work"/extlClntAppGlobalOauthSets/*.ecaGlblOauth
-
-sf project deploy start -o iot-dev --metadata-dir "$work" --wait 10
-rm -rf "$work"
-```
-
-Diff it against a fresh retrieve first if you want certainty that exactly one line
-moved. This is a real deploy and shows in Deployment Status; reverse it by flipping
-the line back and redeploying.
-
-The certificate is the exception — it can only be uploaded through Setup.
-`certificate` is not a valid element on `ExtlClntAppOauthSettings` or on
-`ExtlClntAppOauthConfigurablePolicies`; the Metadata API rejects it with
-*"Element certificate invalid at this location"*, so there is no scripted path
-for that half.
-
-### Step 3: Enforce Access Policies
-1. Back inside the External Client App Manager listing, select the dropdown indicator next to your newly created application and click **Manage Policies**.
-2. Modify **Permitted Users** from its default layout to: **Admin approved users are pre-authorized**.
-3. **OAuth Start URL** is marked required on this page. Nothing in the JWT flow ever
-   reads it — the field is `nillable` at the platform level, and a working app can
-   hold `null` — but the form will not save while it is blank, which can look
-   exactly like a setting that refuses to persist. Put your My Domain in and move on:
-   `https://<your-my-domain>.my.salesforce.com/lightning/page/home`
-4. Set **Relax IP restrictions** to **Relax IP restrictions** (metadata:
-   `ipRelaxationPolicyType` = `Bypass`). GitHub-hosted runners have no stable egress
-   IP, so leaving this at `Enforce` means the login is judged against an IP range you
-   cannot predict or allowlist. This is a genuine loosening — it is acceptable here
-   only because the app is pinned to pre-authorized users holding one narrow
-   permission set, and the private key never leaves GitHub Environment secrets.
-5. Scroll down to the **Permission Sets** and **Profiles** sections at the bottom.
-6. Attach the `Metadata_Deploy` permission set, and add the deploy user's profile
-   (`Minimum Access - Salesforce`) under Profiles. With **Admin approved users are
-   pre-authorized**, a user who matches neither list is refused at login.
-
-Leave the rest of that page alone. **Custom Scopes** are unnecessary — `api` and
-`refresh_token` from Step 2 already cover the Metadata API. **Apex Plugin Class**
-injects custom logic into the token exchange and has no business in a deploy path.
-
-#### The known-good configuration
-
-For comparison when something breaks, this is a deploy app that authenticates
-successfully, with the secrets stripped:
-
-```xml
-<!-- ExtlClntAppGlobalOauthSettings -->
-<certificate>…</certificate>                      <!-- present = JWT bearer flow on -->
-<isNamedUserJwtEnabled>false</isNamedUserJwtEnabled>   <!-- MUST be false -->
-<isClientCredentialsFlowEnabled>false</isClientCredentialsFlowEnabled>
-
-<!-- ExtlClntAppOauthConfigurablePolicies -->
-<permittedUsersPolicyType>AdminApprovedPreAuthorized</permittedUsersPolicyType>
-<commaSeparatedPermissionSet>Metadata_Deploy</commaSeparatedPermissionSet>
-<commaSeparatedProfile>Minimum Access - Salesforce</commaSeparatedProfile>
-<ipRelaxationPolicyType>Bypass</ipRelaxationPolicyType>
-<isNamedUserJwtEnabled>false</isNamedUserJwtEnabled>
-```
-
-*Your automation identity layer is now linked. Repeat these exact parameters for your second AWS inbound application configuration (`Cloud Agentic IoT — Integration`) using your separate `server-integration.crt` credential.*
-
----
-
-## 🔒 6. AWS Passwordless Inbound Auth: IAM OIDC Federation
-
-We eliminate the use of permanent, long-lived AWS IAM Access Keys inside GitHub. Instead, we register GitHub as a federated identity provider via OpenID Connect (OIDC) to safely hand out short-lived, 1-hour session credentials.
-
-### Step 0: Provision the Developer Identity (AWS Console UI)
-Before setting up passwordless pipelines, you must create a standard programmatic identity for your local terminal and VS Code work. 
-
-Navigate to the **AWS Console** ➡️ **IAM** ➡️ **Users** ➡️ **Create User**:
-
-* **Console Access**: Enable
-* **Attached Policies**: 
-  * `AdministratorAccess`
-* **Username**: `iot-operator`
-
-#### Step 1: Generate Access Keys
-1. Click on the newly created `iot-operator` user profile link.
-2. Select the **Security credentials** tab ➡️ **Create access key**.
-3. Choose **Command Line Interface (CLI)**, accept the terms, and click **Next**.
-4. Save the **Access key ID** and **Secret access key** safely.
-
-#### Step 2: Authorize in VS Code
-Open your VS Code terminal and register these credentials under a dedicated development profile:
-```bash
-aws configure --profile iot-dev
-```
-*Provide your Access Key, Secret Key, default region (e.g., `us-east-1`), and `json` output format when prompted.*
-
-
-### Step 1: Register GitHub with AWS IAM
-1.  Navigate to the **AWS Console** ➡️ **IAM** ➡️ **Identity providers**.
-2.  Click **Add provider**.
-3.  Select the **OpenID Connect** provider type.
-4.  For **Provider URL**, enter `https://token.actions.githubusercontent.com`.
-5.  For **Audience**, enter `sts.amazonaws.com`.
-6.  Click **Add provider**.
-
-### Step 2: Formulate the Trust Rule Matrix
-Create a local configuration mapping document named `trust-policy.json` to act as your platform security bouncer.
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": { "Federated": "arn:aws:iam::YOUR_AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com" },
-    "Action": "sts:AssumeRoleWithWebIdentity",
-    "Condition": {
-      "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike": {
-        "token.actions.githubusercontent.com:sub": [
-          "repo:YOUR_GH_USERNAME/Cloud-Agentic-IoT:environment:Dev",
-          "repo:YOUR_GH_USERNAME@YOUR_OWNER_ID/Cloud-Agentic-IoT@YOUR_REPO_ID:environment:Dev"
-        ]
-      }
-    }
-  }]
-}
-```
-*Note: Make sure to replace `YOUR_AWS_ACCOUNT_ID` with your actual 12-digit AWS account number, and update `YOUR_GH_USERNAME` to match your exact GitHub handle configuration.*
-
-> **`environment:Dev`, not `ref:refs/heads/Dev`.** Every AWS workflow here declares
-> `environment: ${{ github.ref_name }}` so that Prod can carry a required-reviewer
-> rule. The moment a job references an environment, GitHub swaps the branch out of
-> the OIDC subject claim and puts the environment in its place — a trust policy
-> written against `ref:refs/heads/Dev` then matches nothing, and every run fails
-> with `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
-
-Both `sub` patterns are listed because GitHub is mid-migration to **immutable
-subject claims**, which append numeric owner and repository IDs that survive a
-rename (`repo:owner@98764954/repo@1317761754:environment:Dev`). New repositories
-already emit the ID form. Listing both means the policy works either way. Get your
-two IDs with:
-
-```bash
-gh api repos/YOUR_GH_USERNAME/Cloud-Agentic-IoT --jq '"owner: \(.owner.id)  repo: \(.id)"'
-```
-
-Because the environment replaced the branch in the claim, branch pinning now has
-to be enforced on the GitHub side instead: **Settings → Environments → Dev →
-Deployment branches**, limited to `Dev`. Do this — without it, any branch that can
-reach the `Dev` environment can assume the role.
-
-If a run still fails, read the claim AWS actually received rather than guessing:
-
-```bash
-aws cloudtrail lookup-events --region us-east-1 \
-  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
-  --max-results 3 --query 'Events[].CloudTrailEvent' --output text \
-  | python3 -c "import sys,json;[print(json.loads(c)['userIdentity'].get('principalId')) for c in sys.stdin.read().split(chr(9)) if c.strip()]"
-```
-
-That prints the exact `sub` string; the trust policy simply has to match it.
-
-### Step 3: Materialize the Dedicated IAM Workspace Role
-Bind your tracking file criteria directly into a new active execution role workspace, then anchor full system engineering rights to it:
-```bash
-# Instantiate the structural identity role
-aws iam create-role --role-name github-actions-deploy \
-  --assume-role-policy-document trust-policy.json \
-  --profile iot-dev
-
-# Inject infrastructure management entitlements
-aws iam attach-role-policy --role-name github-actions-deploy \
-  --policy-arn arn:aws:iam::aws:policy/AWSCloudFormationFullAccess \
-  --profile iot-dev
-```
-
----
-
-## 🔒 7. Hydrating GitHub Actions Pipeline Context
-
-Your GitHub Actions workflows need secrets (like API keys) and variables (like an AWS region) to run. Storing these securely in GitHub is critical.
-
-While you can add these manually in the GitHub UI (**Settings** ➡️ **Secrets and variables** ➡️ **Actions**), this involves copy-pasting sensitive credentials. A better way is to use the GitHub CLI, which is more secure and less error-prone.
-
-### Using the Interactive Setup Script
-
-This repository includes a script to guide you through setting up all required secrets and variables for an environment. It will prompt you for each value and set them securely using the GitHub CLI.
-
-Before running, make sure you have the required values handy:
-- Your Salesforce **Deploy** External Client App's Consumer Key.
-- The username for your Salesforce deploy user (e.g., `deploy@iot-dev.example.com`).
-- The file path to your `server-deploy.key` private key.
-- The ARN for your `github-actions-deploy` AWS IAM role.
-
-To run the script for your `Dev` environment:
-```bash
-./scripts/setup-github-secrets.sh
-```
-The script will ask for the environment and then prompt for each value. For secrets, your typing will be hidden.
-
-### Required Secrets and Variables
-
-The script will set up the following. Note that secrets are encrypted and can't be read after being set, while variables are stored in plain text.
-
-| Name | Type | Description |
-|---|---|---|
-| `SF_CONSUMER_KEY` | Secret | The Consumer Key from your **Deploy** Salesforce External Client App. |
-| `SF_USERNAME` | Secret | The username of the Salesforce user for deployments (e.g., `deploy@iot-dev...`). |
-| `SF_JWT_KEY` | Secret | The **base64-encoded** private key (`server-deploy.key`) for JWT authentication. |
-| `AWS_ROLE_ARN` | Secret | The ARN of the IAM role that GitHub Actions assumes to deploy to AWS. |
-| `AWS_REGION` | Variable | The AWS region for all deployments (e.g., `us-east-1`). |
-| `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` for a Developer Edition or production org, `https://test.salesforce.com` for a sandbox. |
-
----
-
-## 🔄 Production Environment Adjustments
-
-When constructing your mirroring production staging pipelines later, repeat the exact sequencing tracks detailed across this guide with the following explicit updates:
-* **Branch Pinnings**: Modify your AWS `trust-policy.json` so the `sub` condition ends `:environment:Prod` instead of `:environment:Dev`. The deploy job declares `environment:`, so GitHub sends the environment claim, not `:ref:refs/heads/Prod`.
-* **Licensing Optimization**: In real production Salesforce workspaces, apply real **Integration User Licenses** for both your deployment identity profiles and live running operational nodes.
-* **Target Routing Paths**: Swap the internal Salesforce metadata command structures within your automated continuous deployment configuration actions file from using `https://login.salesforce.com` paths directly over to sandbox targeting environments via `https://test.salesforce.com` where necessary.
-EOF
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Setup: Accounts, Identities, Credentials
 
 Everything needed to go from nothing to a working Dev environment, in order.
@@ -694,9 +138,9 @@ Setup → **Users** → New User, twice:
 | Field | `integration@…` (runtime) | `deploy@…` (CI/CD) |
 |---|---|---|
 | User License | **Integration** | **Salesforce** |
-| Profile | Salesforce API Only System Integrations | Minimum Access – Salesforce |
+| Profile | Salesforce API Only System Integrations | System Administrator (why: §2.3) |
 | Username | `integration@iot-dev.<yourdomain>` | `deploy@iot-dev.<yourdomain>` |
-| Gets permissions from | `Device_Integration` permission set (from the repo) | `Metadata_Deploy` permission set (created by hand — see §2.3) |
+| Gets permissions from | The `Salesforce API Integration` permission set license, then the `Device_Integration` permission set (from the repo) | Its profile, plus the `Metadata_Deploy` permission set from `scripts/` (§2.3) |
 
 Note: For the last name, you can use "Integration" / "Deploy" and reuse your original email address for that ORG.
 
@@ -725,73 +169,133 @@ That gives three phases, and only the first is manual:
 |---|---|---|
 | **1. Bootstrap** | You, in Setup UI | Grant `deploy@…` the two permissions below. Nothing else. |
 | **2. First deploy** | GitHub Actions | Deploys the entire repo — objects, Apex, LWC, the agent, and the `Device_Integration` permission set |
-| **3. Activation** | You, once | Assign `Device_Integration` to `integration@…`; activate the agent |
+| **3. Activation** | You, once | Give `integration@…` the Salesforce API Integration permission set license, then `Device_Integration`; activate the agent |
 
 Phases 1 and 3 are one-time. From then on, every change ships through GitHub.
 
-**Phase 1 — grant `deploy@…` exactly two permissions.** 
-Setup → Permission Setsm→ New (call it `Metadata_Deploy`), then System Permissions:
+**Phase 1 — make `deploy@…` able to deploy.**
 
-| Permission | Why |
+> **The deploy user is a System Administrator, deliberately.** Apex tests run as
+> whoever deploys, and two of ours create a **Queue** as fixture data. Creating a
+> `Group` of `Type='Queue'` cannot be granted by permission: `ManageUsers` (which
+> drags twelve more permissions with it) does not unlock it, nor does a role, nor
+> Case access. The only route left is `ModifyAllData`, which demands thirty-three
+> more permissions: System Administrator rebuilt by hand. Verified directly: the
+> same Apex creating a queue succeeds as an admin and fails as a least-privilege
+> deploy user, in the same org, seconds apart.
+>
+> The narrower fix is to rework those tests to inject queues instead of inserting
+> setup objects (`CaseQueueMonitorService` already has a `testBindingOverride`
+> seam for it). Worth doing before this pipeline ever points at an org with real
+> data. Until then, the admin profile is what makes the pipeline work.
+
+The `Metadata_Deploy` permission set is source-controlled at
+[`scripts/Metadata_Deploy.permissionset-meta.xml`](../scripts/Metadata_Deploy.permissionset-meta.xml).
+It sits in `scripts/`, not `force-app/`, on purpose: the deploy user needs it
+*before* the pipeline can deploy anything, so it can't ship in the package the
+pipeline deploys. Apply it once per org, as the admin:
+
+```bash
+sf project deploy start \
+  --source-dir scripts/Metadata_Deploy.permissionset-meta.xml \
+  --target-org iot-dev
+
+sf org assign permset --name Metadata_Deploy \
+  --target-org iot-dev --on-behalf-of deploy@iot-dev.<yourdomain>
+```
+
+Which system permissions it needs is decided by what the package contains.
+`Modify Metadata Through Metadata API Functions` only opens the door; each
+metadata type still demands its own permission behind it:
+
+| Metadata type in this repo | System permission required |
 |---|---|
-| **API Enabled** | JWT login and the Metadata API both require it |
-| **Modify Metadata Through Metadata API Functions** | Deploy metadata *without* granting data access — this is the least-privilege option, and the reason the deploy user cannot read a single patient record |
+| any | **API Enabled** (JWT login) and **Modify Metadata Through Metadata API Functions** |
+| `ApexClass`, `ApexTrigger` | **Author Apex** |
+| `LightningComponentBundle` | **Author Apex** *and* **Customize Application**. Author Apex alone fails with `insufficient access rights on entity: LightningComponentResource` |
+| `CustomObject`, `CustomField`, `CustomMetadata`, `CustomApplication`, `CustomTab`, `FlexiPage`, `Layout`, `CompactLayout`, `QuickAction` | **Customize Application** |
+| `PermissionSet`, `CustomPermission` | **Manage Profiles and Permission Sets**, **Manage Custom Permissions** |
+| `GenAiFunction`, `GenAiPlannerBundle`, `GenAiPlugin` | An Agentforce permission set, not a checkbox: `CopilotSalesforceAdmin` ("Agentforce Default Admin"). `AgentPlatformBuilder` is narrower but not every org has it |
 
-Assign it to `deploy@…` user.
-
-> **If a deploy later fails with an insufficient-privileges error**, the cause
-> is almost always that a specific metadata type still demands **Modify All
-> Data**, which `Modify Metadata` deliberately does not cover. Salesforce's own
-> documentation lists the exceptions and they shift between releases. Prefer
-> adding `Modify All Data` only if you hit that wall — it is far broader, and
-> starting narrow means you find out precisely what the pipeline needs.
-
-
-
+> **This gap hides longest.** Everything an admin runs locally succeeds, because
+> a System Administrator holds all of these implicitly. Only a least-privilege
+> deploy user sees the failure, so it reads as a CI problem rather than a
+> permissions one. If you ever move the deploy user off System Administrator,
+> check its effective permissions (profile plus every permission set) first.
 
 ### 2.4 Two External Apps, not one
 
-Step 1: Generate your certificates
-Run your OpenSSL commands exactly as planned to generate your separate keys and certificates.
+One app per service user, each with its own certificate, so a leaked key
+reaches one identity only.
 
-For Deploy user:
+**Step 1: Generate the certificates.** One key pair per app.
+
+For the Deploy user:
+
+```bash
 openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
   -keyout server-deploy.key -out server-deploy.crt \
   -subj "/CN=CloudAgenticIoT-Deploy/O=Personal/C=CA"
+```
 
-For Integration user:
+For the Integration user:
+
+```bash
 openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
   -keyout server-integration.key -out server-integration.crt \
   -subj "/CN=CloudAgenticIoT-Integration/O=Personal/C=CA"
+```
 
-Step 2: Configure the External Client Apps
-Go to Setup in Salesforce.
-In the Quick Find box, type External Client Apps.
-Click External Client App Manager (or click New External Client App if available in your view).
-Fill out the basic details for Cloud Agentic IoT Deploy
-Under the OAuth Settings, check the box to Enable OAuth.
-Select scopes: 
-- Manage User data via APIs (api) 
-- Perfrom requests at any time (refresh_token, offline_access)
-Enable Enable JWT Bearer Flow and upload server-integration.crt
-Save the app.
+`.gitignore` keeps `*.key` and `*.crt` out of Git anywhere in the repo.
 
-Repeat for the Integration user.
+**Step 2: Create the External Client Apps.**
 
-Step 3: Authorize via Policies
-In the External Client App Manager list, locate your newly created app.
-Click the dropdown arrow next to it and select Manage Policies (or edit OAuth policies).
-Set "Admin approved users are pre-authorized"
-Associate your dedicated Salesforce Integration User via the designated Permission Set [Meatadate_Deploy]
+1. Setup → Quick Find → **External Client Apps** → **External Client App
+   Manager** → **New External Client App** (if your view shows it).
+2. Fill in the basic details for the first app, `Cloud Agentic IoT Deploy`.
+3. Under **OAuth Settings**, check **Enable OAuth** and select these scopes:
+   - Manage user data via APIs (`api`)
+   - Perform requests at any time (`refresh_token`, `offline_access`)
+4. Check **Enable JWT Bearer Flow** and upload the app's certificate from the
+   table below.
+5. Save the app.
 
-Repeat for the Integration user.
+Then repeat for the second app:
+
+| App | Certificate to upload | Its user | Permission set in its policy |
+|---|---|---|---|
+| `Cloud Agentic IoT Deploy` | `server-deploy.crt` | `deploy@…` | `Metadata_Deploy` (§2.3) |
+| `Cloud Agentic IoT Integration` | `server-integration.crt` | `integration@…` | `Device_Integration`, which the first deploy creates |
+
+**Step 3: Authorize through the policies.** In the External Client App Manager
+list, open each app's dropdown → **Manage Policies** (or edit its OAuth
+policies). Set **Admin approved users are pre-authorized**, and add the app's
+permission set from the table. Only users who hold that permission set can sign
+in through the app.
 
 Note: The app defines what mechanisms are technically open, but a user identity dictates who owns the data and which records they have the permission to modify.
+
+**The known-good configuration.** For comparison when a JWT login breaks, this is
+a deploy app that authenticates, with the secrets stripped:
+
+```xml
+<!-- ExtlClntAppGlobalOauthSettings -->
+<certificate>…</certificate>                      <!-- present = JWT bearer flow on -->
+<isNamedUserJwtEnabled>false</isNamedUserJwtEnabled>   <!-- MUST be false -->
+<isClientCredentialsFlowEnabled>false</isClientCredentialsFlowEnabled>
+
+<!-- ExtlClntAppOauthConfigurablePolicies -->
+<permittedUsersPolicyType>AdminApprovedPreAuthorized</permittedUsersPolicyType>
+<commaSeparatedPermissionSet>Metadata_Deploy</commaSeparatedPermissionSet>
+<ipRelaxationPolicyType>Bypass</ipRelaxationPolicyType>
+```
 
 
 ---
 
 ## 3. AWS Dev account
+
+> **Just trying it out?** [TRY-IT.md](TRY-IT.md) runs it on your own AWS project with a spend limit and a Developer Edition org, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
 
 ### 3.1 Root: three actions, then never again
 
@@ -799,7 +303,9 @@ Sign in as root, then:
 IAM → Users → Create `iot-operator`, console access on, MFA on.
 Create and assign policy from `scripts/aws-project-policy.json`
 
-Note: you might be not qualify for the FREE AWS Account.
+One more root step comes later: the IAM user Salesforce signs its calls with, in the README's Stage 2, step 1. `iot-operator` can't make it, because that policy denies creating users and access keys.
+
+Note: the AWS Free plan is only for new AWS customers. If you have, or ever had, an AWS account, this one starts on the paid plan, so create an AWS Budget with an email alert (Billing and Cost Management → Budgets) before you deploy anything.
 
 ### 3.2 GitHub Actions deploy role — OIDC, no keys
 
@@ -811,29 +317,44 @@ aws iam create-open-id-connect-provider \
   --client-id-list sts.amazonaws.com \
   --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 
-cat > trust-policy.json <<'EOF'
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": { "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com" },
-    "Action": "sts:AssumeRoleWithWebIdentity",
-    "Condition": {
-      "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike": { "token.actions.githubusercontent.com:sub": "repo:YOUR_GH_USERNAME/Cloud-Agentic-IoT:ref:refs/heads/Dev" }
-    }
-  }]
-}
-EOF
+# Fill in scripts/trust-policy.json: your account ID, GitHub owner, and the
+# two numeric IDs printed by:
+gh api repos/YOUR_GH_USERNAME/Cloud-Agentic-IoT --jq '"owner: \(.owner.id)  repo: \(.id)"'
 
 aws iam create-role --role-name github-actions-deploy \
-  --assume-role-policy-document file://trust-policy.json
+  --assume-role-policy-document file://scripts/trust-policy.json
 aws iam attach-role-policy --role-name github-actions-deploy \
   --policy-arn arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
 ```
 
-The `sub` condition pins the role to **this repo on this branch**. For Prod,
-create the same role in the Prod account with `refs/heads/Prod`.
+> **`environment:Dev`, not `ref:refs/heads/Dev`.** Every AWS workflow here declares
+> `environment: ${{ github.ref_name }}` so that Prod can carry a required-reviewer
+> rule. Once a job references an environment, GitHub puts the environment in the
+> OIDC subject claim instead of the branch, so a trust policy written against
+> `ref:refs/heads/Dev` matches nothing and every run fails with `Not authorized to
+> perform sts:AssumeRoleWithWebIdentity`. For Prod, create the same role in the
+> Prod account with `environment:Prod`.
+
+`scripts/trust-policy.json` lists two `sub` patterns because GitHub is moving to
+**immutable subject claims**, which add numeric owner and repository IDs that
+survive a rename (`repo:owner@98764954/repo@1317761754:environment:Dev`). Listing
+both works either way.
+
+Because the environment replaced the branch in the claim, pin the branch on the
+GitHub side: **Settings → Environments → Dev → Deployment branches**, limited to
+`Dev`. Without it, any branch that can reach the `Dev` environment can assume the
+role.
+
+If a run still fails, read the claim AWS actually received:
+
+```bash
+aws cloudtrail lookup-events --region <your region> \
+  --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity \
+  --max-results 3 --query 'Events[].CloudTrailEvent' --output text \
+  | python3 -c "import sys,json;[print(json.loads(c)['userIdentity'].get('principalId')) for c in sys.stdin.read().split(chr(9)) if c.strip()]"
+```
+
+That prints the exact `sub` string; the trust policy has to match it.
 
 Save the role ARN — it becomes the `AWS_ROLE_ARN` secret.
 
@@ -935,7 +456,6 @@ credential in one.
 | `SF_INTEGRATION_CONSUMER_KEY` | Secret | **Integration** app consumer key | copied to SSM for the Lambdas |
 | `SF_INTEGRATION_JWT_KEY` | Secret | `base64 -i server-integration.key` | copied to SSM for the Lambdas |
 | `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` | copied to SSM for the Lambdas |
-| `SF_INSTANCE` | Variable | Your org's My Domain host without `.salesforce.com`, e.g. `acme-dev-ed.develop.my` | copied to SSM for the Lambdas |
 | `SLACK_SIGNING_SECRET` | Secret | Optional, from the Slack app | the Slack stack, skipped without it |
 
 The pipeline deploys as the **deploy** app and user. The integration values are
@@ -948,8 +468,9 @@ One more value is a **repository** variable rather than an environment one,
 because it decides whether a push deploys at all: `AUTO_DEPLOY`, set to `Dev`
 and later `Dev Prod`.
 
-Enter values yourself — via the GitHub UI, or from your own terminal so they
-never appear in any transcript:
+Enter values yourself — via the GitHub UI, from your own terminal so they
+never appear in any transcript, or with `./scripts/setup-github-secrets.sh`,
+which asks for each value and hides what you type:
 
 ```bash
 gh secret set AWS_ROLE_ARN --env Dev
@@ -1001,7 +522,13 @@ what creates the `Device_Integration` permission set in the org.
 
 ### 6.4 Then finish the bootstrap
 
+The permission set license comes first: the Integration user license alone
+doesn't allow `Device_Integration`'s object permissions, such as Create on
+Assets.
+
 ```bash
+sf org assign permsetlicense --name SalesforceAPIIntegrationPsl \
+  --on-behalf-of integration@iot-dev.<yourdomain> --target-org iot-dev-admin
 sf org assign permset --name Device_Integration \
   --on-behalf-of integration@iot-dev.<yourdomain> --target-org iot-dev-admin
 ```

@@ -1,31 +1,41 @@
 #!/bin/bash
-# Sends a provisioning bundle to an ESP32 in provisioning mode. (macOS / Linux)
+# Sends a provisioning bundle to an ESP32 over USB. (macOS / Linux)
 #
 # Usage: ./scripts/provision-device.sh <bundle.json> [serial-port]
+#
+# Close any serial monitor first: only one program can hold the port. This
+# restarts the board, waits for it to ask for the bundle, sends the bundle in
+# pieces the board can keep up with, then shows what the board says until it
+# is online. scripts/lib/board_serial.py does the talking, and says why that
+# takes more than writing the bundle to the port.
 #
 # Deliberately does NOT run `esptool erase_flash`: that wipes the NVS partition
 # where a device's identity lives, which is exactly what we are trying to keep
 # across firmware updates.
 set -euo pipefail
+# shellcheck source=lib/common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 BUNDLE="${1:-}"
-PORT="${2:-$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/cu.wchusbserial* 2>/dev/null | head -1)}"
+PORT="${2:-}"
 
-[ -f "$BUNDLE" ] || { echo "Usage: $0 <bundle.json> [port]"; exit 1; }
-[ -n "$PORT" ] || { echo "No ESP32 serial port found. Pass one explicitly."; exit 1; }
+[ -f "$BUNDLE" ] || die "Usage: $0 <bundle.json> [serial-port]"
+need python3 "It comes with the Xcode command line tools: xcode-select --install"
+if [ -z "$PORT" ]; then
+  PORT=$(detect_port) || die "No ESP32 found on USB. Plug it in, or name the port: $0 $BUNDLE /dev/cu.usbserial-0001"
+fi
 
-# The bundle is a downloaded credential file. Collapse to one line, since the
-# firmware reads a single line terminated by newline.
-PAYLOAD=$(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))))" "$BUNDLE")
+status=0
+python3 "$REPO_ROOT/scripts/lib/board_serial.py" provision "$PORT" "$BUNDLE" || status=$?
 
-echo "Port:   $PORT"
-echo "Thing:  $(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['thingName'])" "$BUNDLE")"
-echo "Sending bundle..."
-
-stty -f "$PORT" 115200 raw 2>/dev/null || stty -F "$PORT" 115200 raw
-printf '%s\n' "$PAYLOAD" > "$PORT"
-sleep 2
-echo "Sent. Watch the serial monitor: the device stores it in NVS and reboots."
 echo
-echo "Delete the bundle now - it contains the device private key:"
-echo "  rm $BUNDLE"
+case "$status" in
+  0) echo "Delete the bundle now: it holds the device's private key, and the board no longer needs it."
+     printf '  rm %q\n' "$BUNDLE" ;;
+  3) echo "Keep the bundle until the board says \"aws: connected\" (scripts/firmware.sh monitor), then delete it." ;;
+  2) echo "Nothing was sent, so the bundle is unused. Keep it until the board it is for has it." ;;
+  4) echo "Nothing was sent. Keep the bundle: the board may hold this same identity, and until it" \
+          "says \"aws: connected\" the bundle is the copy to fall back on." ;;
+  *) echo "Nothing was stored. Keep the bundle and run this again once the problem above is fixed." ;;
+esac
+exit "$status"

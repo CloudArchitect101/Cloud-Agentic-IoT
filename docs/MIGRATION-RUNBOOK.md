@@ -13,7 +13,7 @@ Two AWS accounts under an Organization (`iot-dev`, `iot-prod`) with IAM Identity
 ## Phases
 
 ### Phase 1 — Establish the target, change nothing
-Create the Organization, member accounts, and the second Salesforce org. **Free-tier note:** joining an AWS Organization instantly voids free-plan credits and converts the account to paid — so during the free build phase, Dev and Prod run as standalone free-plan accounts, and *this phase is deliberately deferred until go-live funding exists.* That makes this runbook's starting state literal, not hypothetical. Deploy nothing into them yet. The point is that the target exists and is reachable before anything depends on it.
+Create the Organization, member accounts, and the second Salesforce org. **Free-tier note:** only your first AWS account gets the free plan, and joining an AWS Organization converts a free-plan account to paid — so during the build phase, Dev runs as a standalone free-plan account and Prod as a standalone paid account (under $1 a month), and *this phase is deliberately deferred until go-live funding exists.* That makes this runbook's starting state literal, not hypothetical. Deploy nothing into them yet. The point is that the target exists and is reachable before anything depends on it.
 
 **Rollback:** delete the accounts. Nothing references them.
 

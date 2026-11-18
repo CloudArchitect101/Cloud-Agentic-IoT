@@ -16,7 +16,6 @@
 const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
 
 const ebClient = new EventBridgeClient({ region: process.env.AWS_REGION });
-const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'patient-vitals-event-bus';
 
 /**
  * Main Lambda handler - receives IoT telemetry and routes via EventBridge
@@ -138,7 +137,8 @@ async function routeToEventBus(enrichedEvent) {
         Source: enrichedEvent.source,
         DetailType: enrichedEvent.detailType,
         Detail: JSON.stringify(enrichedEvent.detail),
-        EventBusName: EVENT_BUS_NAME
+        // Set by lambda/streaming/cloudformation.yaml from the bus it creates.
+        EventBusName: requiredEnv('EVENT_BUS_NAME')
     };
 
     // The SDK's field is Entries; under any other name the request carries
@@ -152,6 +152,12 @@ async function routeToEventBus(enrichedEvent) {
         throw new Error(`EventBridge rejected the event: ${failed.ErrorCode} ${failed.ErrorMessage}`);
     }
     return result;
+}
+
+function requiredEnv(name) {
+    const value = process.env[name];
+    if (!value) throw new Error(`${name} is not set. It comes from this function's CloudFormation template.`);
+    return value;
 }
 
 /**

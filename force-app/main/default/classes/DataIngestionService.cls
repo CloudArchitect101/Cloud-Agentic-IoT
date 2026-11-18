@@ -5,6 +5,9 @@
  * This service is invoked by Agentforce agents to process incoming patient vitals
  * and prepare them for Data Cloud RAG pipeline ingestion.
  *
+ * The clinical bands are not in this class: they are Vital_Sign_Threshold__mdt
+ * records, read through VitalSignEvaluator.
+ *
  * Demonstrates: Data Cloud, RAG pipeline, ETL/ELT, data engineering
  */
 public with sharing class DataIngestionService {
@@ -17,6 +20,7 @@ public with sharing class DataIngestionService {
         @AuraEnabled @InvocableVariable public Decimal heartRate;
         @AuraEnabled @InvocableVariable public Decimal spo2;
         @AuraEnabled @InvocableVariable public Decimal temperature;
+        @AuraEnabled @InvocableVariable public Decimal humidity;
         @AuraEnabled @InvocableVariable public Decimal bloodPressureSystolic;
         @AuraEnabled @InvocableVariable public Decimal bloodPressureDiastolic;
         @AuraEnabled @InvocableVariable public DateTime timestamp;
@@ -35,100 +39,103 @@ public with sharing class DataIngestionService {
 
     /**
      * Ingest a batch of patient vitals from external data sources.
-     * Creates Patient_Vitals__c records and calculates clinical risk scores.
+     * Upserts one Patient_Vitals__c record per device - its latest reading in
+     * the batch - and scores it against Vital_Sign_Threshold__mdt.
+     *
+     * One upsert for the whole batch, whatever its size. The previous version
+     * upserted inside the per-device loop, so the 151st device in one call
+     * hit the DML statement limit and the whole batch failed.
      *
      * @param vitals List of vital records to ingest
-     * @return IngestionResult with success status and risk score
+     * @return One IngestionResult per device, in the order devices first appear
      */
     @InvocableMethod(label='Ingest Patient Vitals' description='Ingests patient vitals from external data sources and calculates risk scores')
     public static List<IngestionResult> ingestVitals(List<VitalRecord> vitals) {
         List<IngestionResult> results = new List<IngestionResult>();
-
-        // Group vitals by device for batch processing
-        Map<String, List<VitalRecord>> vitalsByDevice = new Map<String, List<VitalRecord>>();
-        for (VitalRecord v : vitals) {
-            if (!vitalsByDevice.containsKey(v.deviceId)) {
-                vitalsByDevice.put(v.deviceId, new List<VitalRecord>());
-            }
-            vitalsByDevice.get(v.deviceId).add(v);
+        if (vitals == null || vitals.isEmpty()) {
+            return results;
         }
 
-        // Process each device's vitals
-        for (String deviceId : vitalsByDevice.keySet()) {
-            List<VitalRecord> deviceVitals = vitalsByDevice.get(deviceId);
-            VitalRecord latest = deviceVitals[0]; // Most recent (assorted by caller)
+        // The latest reading per device. Callers are not trusted to sort:
+        // "the first one" was only the latest when the caller happened to send
+        // newest first.
+        Map<String, VitalRecord> latestByDevice = new Map<String, VitalRecord>();
+        for (VitalRecord v : vitals) {
+            if (v == null || String.isBlank(v.deviceId)) {
+                continue;
+            }
+            VitalRecord current = latestByDevice.get(v.deviceId);
+            if (current == null || isLater(v.timestamp, current.timestamp)) {
+                latestByDevice.put(v.deviceId, v);
+            }
+        }
 
-            // Calculate clinical risk score (0-100, higher = more critical)
-            Integer riskScore = calculateRiskScore(latest);
-
-            // Create Patient_Vitals__c record
-            Patient_Vitals__c vitalsRecord = new Patient_Vitals__c(
-                Device__c = deviceId,
-                Heart_Rate__c = latest.heartRate,
-                SpO2__c = latest.spo2,
-                Temperature__c = latest.temperature,
-                BP_Systolic__c = latest.bloodPressureSystolic,
-                BP_Diastolic__c = latest.bloodPressureDiastolic,
-                Timestamp__c = latest.timestamp,
+        List<Patient_Vitals__c> records = new List<Patient_Vitals__c>();
+        List<VitalSignEvaluator.Assessment> assessments = new List<VitalSignEvaluator.Assessment>();
+        for (String deviceId : latestByDevice.keySet()) {
+            VitalRecord latest = latestByDevice.get(deviceId);
+            VitalSignEvaluator.Assessment assessment = VitalSignEvaluator.assess(new Map<String, Decimal>{
+                'heartRate'   => latest.heartRate,
+                'spo2'        => latest.spo2,
+                'temperature' => latest.temperature,
+                'bpSystolic'  => latest.bloodPressureSystolic
+            });
+            Datetime readingTime = latest.timestamp != null ? latest.timestamp : System.now();
+            records.add(new Patient_Vitals__c(
+                Device__c        = deviceId,
+                Heart_Rate__c    = latest.heartRate,
+                SpO2__c          = latest.spo2,
+                Temperature__c   = latest.temperature,
+                Humidity__c      = latest.humidity,
+                BP_Systolic__c   = latest.bloodPressureSystolic,
+                BP_Diastolic__c  = latest.bloodPressureDiastolic,
+                Timestamp__c     = readingTime,
                 Source_System__c = latest.sourceSystem,
-                Risk_Score__c = riskScore,
-                // Required, unique external ID. Same deviceId-timestamp key the
-                // patient-vitals Lambda upserts on, so a reading that arrives via
-                // both paths lands on one record instead of duplicating.
-                Device_Reading_Id__c = deviceId + '-' +
-                    String.valueOf(latest.timestamp != null ? latest.timestamp : System.now())
-            );
+                Risk_Score__c    = assessment.riskScore,
+                Patient_State__c = assessment.patientState,
+                Device_Reading_Id__c = readingIdFor(deviceId, readingTime)
+            ));
+            assessments.add(assessment);
+        }
 
-            // Upsert, not insert: IoT deliveries retry, and a retried insert
-            // would violate the unique constraint rather than being a no-op.
-            upsert vitalsRecord Device_Reading_Id__c;
-
+        // Upsert, not insert: IoT deliveries retry, and a retried insert
+        // would violate the unique constraint rather than being a no-op.
+        // allOrNone=false: one bad reading must not reject the other devices'.
+        List<Database.UpsertResult> saves = Database.upsert(records, Patient_Vitals__c.Device_Reading_Id__c, false);
+        for (Integer i = 0; i < saves.size(); i++) {
             IngestionResult result = new IngestionResult();
-            result.success = true;
-            result.message = 'Vitals ingested successfully for device ' + deviceId;
-            result.recordId = vitalsRecord.Id;
-            result.riskScore = riskScore;
+            result.riskScore = assessments[i].riskScore;
+            if (saves[i].isSuccess()) {
+                result.success = true;
+                result.recordId = saves[i].getId();
+                result.message = 'Vitals ingested successfully for device ' + records[i].Device__c;
+            } else {
+                result.success = false;
+                result.message = 'Vitals for device ' + records[i].Device__c + ' were not saved: '
+                    + saves[i].getErrors()[0].getMessage();
+            }
             results.add(result);
         }
-
         return results;
     }
 
     /**
-     * Calculate clinical risk score (0-100) based on vital thresholds.
-     * Mirrors clinical triage logic used in healthcare settings.
-     *
-     * @param vital The latest vital record
-     * @return Risk score from 0 (stable) to 100 (critical)
+     * The external ID of one reading: deviceId-<ISO 8601 UTC with milliseconds>,
+     * exactly what the AWS sync writes (JavaScript's toISOString()), so a
+     * reading that arrives by both paths lands on one record. The previous
+     * key used String.valueOf(Datetime), which is neither ISO nor UTC, so the
+     * two paths never matched and every such reading was stored twice.
      */
-    private static Integer calculateRiskScore(VitalRecord vital) {
-        Integer score = 0;
+    @TestVisible
+    private static String readingIdFor(String deviceId, Datetime readingTime) {
+        return deviceId + '-' + readingTime.formatGmt('yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z\'');
+    }
 
-        // Heart rate assessment (normal: 60-100 bpm)
-        if (vital.heartRate != null) {
-            if (vital.heartRate < 50 || vital.heartRate > 120) score += 30;
-            else if (vital.heartRate < 60 || vital.heartRate > 100) score += 15;
+    private static Boolean isLater(Datetime candidate, Datetime current) {
+        if (candidate == null) {
+            return false;
         }
-
-        // SpO2 assessment (normal: 95-100%)
-        if (vital.spo2 != null) {
-            if (vital.spo2 < 90) score += 35;
-            else if (vital.spo2 < 95) score += 20;
-        }
-
-        // Temperature assessment (normal: 36.1-37.2°C)
-        if (vital.temperature != null) {
-            if (vital.temperature > 39.0 || vital.temperature < 35.0) score += 25;
-            else if (vital.temperature > 38.5 || vital.temperature < 36.5) score += 15;
-        }
-
-        // Blood pressure assessment
-        if (vital.bloodPressureSystolic != null) {
-            if (vital.bloodPressureSystolic > 160) score += 20;
-            else if (vital.bloodPressureSystolic > 140) score += 10;
-        }
-
-        return Math.min(100, score);
+        return current == null || candidate > current;
     }
 
     /**

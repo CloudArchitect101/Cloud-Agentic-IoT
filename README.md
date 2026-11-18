@@ -11,7 +11,7 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 ## Start here
 
 1. **Clone:** `git clone https://github.com/<username>/Cloud-Agentic-IoT.git`
-2. **Work through [`docs/SETUP.md`](docs/SETUP.md)** — CLI installs (`sf`, `aws`, `gh`, `arduino-cli`), then accounts, identities, and credentials. Everything below assumes it is done.
+2. **Work through [`docs/SETUP.md`](docs/SETUP.md)** — CLI installs (`sf`, `aws`, `gh`, `arduino-cli`), then accounts, identities, and credentials. Everything below assumes it is done. Just trying it out? [`docs/TRY-IT.md`](docs/TRY-IT.md) runs it on your own AWS project with a spend limit and a free Developer Edition org, both under one name and deployed from your laptop, and shows how to move to regular accounts for the pipelines later.
 3. **Read [How the pieces connect](docs/HOW-IT-CONNECTS.md)** for the shape of the system before you stand it up.
 4. **Deploy the whole system once** — [Deployment](#deployment) below. It is one sequence, not fourteen.
 5. **Read [The chapters](#the-chapters)** to understand what you just deployed and why each piece is built the way it is.
@@ -23,11 +23,13 @@ Built from scratch and in public — no environment, no accounts, no hardware wi
 | Doc | What it answers |
 |---|---|
 | [SETUP.md](docs/SETUP.md) | Accounts, the five identities, licenses, Connected Apps, IAM roles, VS Code auth, GitHub secrets. Dev end-to-end; Prod is the same sequence. |
+| [TRY-IT.md](docs/TRY-IT.md) | Trying it out: your own AWS project with a spend limit and a free Developer Edition org, one name for the AWS profile and the Salesforce alias, deployed from your laptop. Then the move to regular accounts and the pipelines. |
 | [PLATFORM-PRIMER.md](docs/PLATFORM-PRIMER.md) | Apex, SOQL, governor limits, LWC and triggers explained via their Python equivalents. Read this if Salesforce is new to you. |
 | [ARCHITECTURE-OVERVIEW.md](docs/ARCHITECTURE-OVERVIEW.md) | The whole system in one diagram, and what each component is for. |
 | [HOW-IT-CONNECTS.md](docs/HOW-IT-CONNECTS.md) | How the chapters form one system, the three shared integration seams, and the order to demo them in. |
 | [DATA-MODEL.md](docs/DATA-MODEL.md) | Why each object is standard or custom — the "why didn't you just use X" answers. |
 | [DEVICE-IDENTITY.md](docs/DEVICE-IDENTITY.md) | How WiFi credentials and AWS certificates get onto a device, why they survive every OTA update, and how a job finds the right device. |
+| [LIVE-STATUS.md](docs/LIVE-STATUS.md) | Whether a board is online, and its readings every 2 s while its card is open: how it works, the speeds, what it costs in AWS and in Salesforce limits, and what to check when the card waits. |
 | [CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md) | What is automated vs manual, and the conventions the pipelines enforce. |
 | [MIGRATION-RUNBOOK.md](docs/MIGRATION-RUNBOOK.md) | Phased cutover to a governed Dev/Prod estate, with a rollback per phase. |
 | [COST-MODEL.md](docs/COST-MODEL.md) | Real per-device, per-user and per-customer costs — and how to run the whole build on free tiers. |
@@ -135,11 +137,67 @@ Three conventions the pipelines enforce, because each would otherwise fail at de
 - A sketch folder must contain a `.ino` named after the folder, or `arduino-cli` reports "main file missing from sketch".
 - A sketch must declare `#define FIRMWARE_VERSION`, and raise it to ship a change. A board installs only a version it is not already running.
 
+**Then give yourself the interface.** The Salesforce deploy adds a Lightning app, **Cloud Agentic IoT**, with tabs, record pages and page layouts for devices (Assets), patient vitals, device commands and Wi-Fi networks, and the Re-provision button on a device. The app and the device fields stay hidden until a person holds the `Device_Platform_Admin` permission set, System Administrators included: fields deployed through the Metadata API come with no field access for any profile. Assign it to each person who runs the devices, then open the app from the App Launcher:
+
+```bash
+sf org assign permset --name Device_Platform_Admin --target-org <your admin alias>
+```
+
 ### Stage 2 — Connect the seams CI cannot reach
 
 Everything below is manual for a structural reason, not an oversight: it stores a secret, lives in another vendor's console, or is a deliberate human checkpoint. Do it once, in this order — later steps consume outputs from earlier ones.
 
-**1. Named Credential `AWS_IoT_Relay`.** Setup → Named Credentials → New. Type **AWS Signature Version 4**, service `execute-api`, URL = the `QueueDepthEndpoint` output of the `cloud-agentic-iot-queue-relay-Dev` stack. This one credential carries every Salesforce → AWS callout in the system — the queue indicator, device provisioning, re-provisioning, teardown, and the Wi-Fi credential push.
+**1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown, the Wi-Fi credential push, Device Commands and the live status card. The device API accepts only requests signed by an AWS identity, so it takes four parts.
+
+*a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in an [AWS project](docs/TRY-IT.md), root in a regular account. In your own terminal, with the `-Prod` stack in Prod and `CALLER` set to `SalesforceCallerUserName` from `config/<env>.json`:
+
+```bash
+STACK=cloud-agentic-iot-queue-relay-Dev
+CALLER=cloud-agentic-iot-salesforce-caller
+ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "$STACK" \
+  --query "Stacks[0].Outputs[?OutputKey=='SalesforceCallerRoleArn'].OutputValue" --output text)
+echo "$ROLE_ARN"
+aws iam create-user --user-name "$CALLER" > /dev/null
+aws iam put-user-policy --user-name "$CALLER" --policy-name assume-salesforce-caller-role \
+  --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Resource\":\"$ROLE_ARN\"}]}"
+aws iam create-access-key --user-name "$CALLER"
+echo "IAM Role ARN for part b: $ROLE_ARN"
+```
+
+The first `echo` must print the role's ARN before anything is created; an empty line means the stack name or the profile's Region is wrong. `create-access-key` prints the key once. Type it into Salesforce in part b and nowhere else: not a file, not the repo, not a chat. The last line repeats the role ARN for part b.
+
+*b. The external credential.* Setup → Named Credentials → External Credentials → New. Authentication Protocol **AWS Signature Version 4**, Service `execute-api`, Region = the stack's Region. Check **Obtain Temporary IAM Credentials via STS**, choose **IAM User Identified by Access Key**, and enter the key as the **STS Access Key** and **STS Access Secret**. Leave **STS Duration** empty, or at 3600 seconds or less, the role's maximum. Set **Additional Status Codes for Token Refresh** to `403`. Salesforce asks STS for a new session only when a call comes back 401 or with one of these codes, and API Gateway answers an expired session with 403. Without it, every call fails from the moment the first session expires, an hour after it was issued. Then add a principal whose **IAM Role ARN** is the stack's `SalesforceCallerRoleArn` output, the line part a printed last. That is the role, with `:role/` in it. The caller user's ARN, with `:user/`, looks much the same, and STS refuses it.
+
+*c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
+
+*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and to the integration user the Slack app signs in as: a Device Command is sent as the user who created it, and `/dispense-medication` creates one as that user. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
+
+```bash
+sf apex run --target-org <your admin alias> <<'EOF'
+insert new PermissionSetAssignment(
+    AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' AND Username LIKE 'autoproc@%' LIMIT 1].Id,
+    PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'].Id);
+EOF
+```
+
+*If a callout fails.* `HTTP 0` with *We couldn't get credentials from Amazon Session Token Service* means STS refused the AssumeRole call. CloudTrail's record of it, in the stack's Region, names the cause:
+
+```bash
+aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRole \
+  --max-results 5 --query 'Events[].CloudTrailEvent' --output text \
+  | grep -oE '"(eventTime|errorCode|errorMessage)":"[^"]*"'
+```
+
+- `AccessDenied` on the caller user's own ARN (`…:user/cloud-agentic-iot-salesforce-caller`): the principal's **IAM Role ARN** holds the user's ARN. Put the role's there (part b).
+- `AccessDenied` on the role's ARN: the user's policy is missing or names another role (part a).
+- An error about `DurationSeconds`: **STS Duration** is over 3600 (part b).
+- No AssumeRole event within a few minutes: usually a mistyped **STS Access Key** or **STS Access Secret** (part b).
+
+`HTTP 0` with *We couldn't access the credential(s)* means the user making the callout lacks the part d permission set.
+
+`HTTP 403: {"message":"Forbidden"}` means API Gateway refused the signed request. If calls worked and then stopped about an hour later, Salesforce is still signing with an expired STS session: CloudTrail shows no AssumeRole since the last call that worked. Add `403` to **Additional Status Codes for Token Refresh** (part b), and the next call gets a new session. Otherwise check the Region and Service in part b, and the URL in part c.
+
+A keyless alternative is the external credential's **Roles Anywhere** option, which replaces the access key with a certificate and an AWS trust anchor. This repo doesn't set that up yet.
 
 **2. SSM Parameter Store.** Store `SLACK_SIGNING_SECRET` and the Salesforce JWT credentials the Slack Lambda uses at runtime. Use a **separate, least-privilege integration user** from the CI/CD deploy user — see [`docs/CI-CD-SECRETS.md`](docs/CI-CD-SECRETS.md). Never reuse deploy credentials for runtime access, and never put either in code.
 
@@ -165,6 +223,7 @@ Two pieces are written and tested but **not yet wired** into the agent's action 
 | First-time device credentials | The AWS private key is issued once and must never transit CI |
 | Creating the AWS IoT Thing + policy | One-time per device; the automated path is chapter 13 |
 | Named Credentials in Salesforce | Store secrets; created in Setup, not in metadata |
+| The Salesforce caller's IAM user and access key | The deploy identities may not create users or keys, and the key should exist only in Salesforce |
 | Slack app creation + signing secret | Lives in Slack's console |
 | Data Cloud ingestion config | Point-and-click configuration, no metadata API coverage |
 | Activating the Agentforce agent | A deliberate human checkpoint, not a deploy step |
@@ -201,8 +260,11 @@ Do this once per device, before it first connects. Chapter 13 automates all of i
       "Resource": "arn:aws:iot:REGION:ACCOUNT_ID:client/${iot:ClientId}" },
     { "Effect": "Allow", "Action": "iot:Publish",
       "Resource": [
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/rules/cloud_agentic_iot_patient_vitals/device/${iot:Connection.Thing.ThingName}/telemetry",
         "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/telemetry",
         "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/status",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/live",
+        "arn:aws:iot:REGION:ACCOUNT_ID:topic/device/${iot:Connection.Thing.ThingName}/ack",
         "arn:aws:iot:REGION:ACCOUNT_ID:topic/$aws/things/${iot:Connection.Thing.ThingName}/jobs/*"
       ] },
     { "Effect": "Allow", "Action": "iot:Subscribe",
@@ -219,11 +281,11 @@ Do this once per device, before it first connects. Chapter 13 automates all of i
 }
 ```
 
-Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a policy variable resolved per connection, so **one policy serves every device and each is scoped to its own topics** — a device physically cannot subscribe to another's commands. The `status` topic is where the queue indicator reports back, and the `$aws/things/.../jobs/*` lines are OTA. They are not optional: the firmware asks for pending OTA jobs every time it connects, and IoT Core disconnects a client that publishes to a topic its policy doesn't allow, so without them the device reconnects in a loop.
+Replace `REGION` and `ACCOUNT_ID`. `${iot:Connection.Thing.ThingName}` is a policy variable resolved per connection, so **one policy serves every device and each is scoped to its own topics** — a device physically cannot subscribe to another's commands. From firmware 2.1.0 readings go to the `$aws/rules/cloud_agentic_iot_patient_vitals/...` topic, AWS IoT Basic Ingest, which hands them straight to the rule (older firmware publishes to `telemetry`). The `status` topic is where the queue indicator reports back; from firmware 2.2.0 the board sends live readings on `live` while someone has its card open, and answers commands on `ack`. The `$aws/things/.../jobs/*` lines are OTA. None of them is optional: IoT Core disconnects a client that publishes to a topic its policy doesn't allow. Without the jobs lines the device reconnects in a loop, since the firmware asks for pending OTA jobs every time it connects; without any other line it is dropped each time it publishes there. A device provisioned from Salesforce (chapter 13) gets the same topics from the stack's own `cloud-agentic-iot-device` policy, which also lets it connect only as the Thing its certificate is attached to.
 
 **3. Download and attach.** Download the certificate, the private key, and Amazon Root CA 1 into one folder. Attach the policy to the certificate.
 
-**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. SerialNumber = the IoT Thing name, Account = the patient's Person Account, Status = `Installed`.
+**4. Create the Salesforce Asset.** Devices use the **standard Asset object** — no custom object. In the Cloud Agentic IoT app, Assets → New: Serial Number = the IoT Thing name, Account = the patient's Person Account (any Account, in an org without Person Accounts), Status = `Installed`.
 
 #### Getting a device online
 
@@ -233,15 +295,17 @@ Plug the ESP32 in and run the wizard:
 
 ```bash
 ./scripts/setup-device.sh          # macOS / Linux
-.\scripts\setup-device.ps1         # Windows
+.\scripts\setup-device.ps1         # Windows: not safe yet, see below
 ```
+
+The Windows wizard still sends the credentials in one burst without waiting for the board to ask for them, and a burst that arrives while the board is asking can lose characters from inside the certificate or key and still be stored, once. Run the macOS / Linux one until it works the same way.
 
 It asks for the folder holding your downloaded certificates, which file is which, the Thing name, the endpoint, and the WiFi network — filling in a default wherever it can work one out. Then it compiles, flashes over USB, sends the credentials, and prints what the device says back.
 
 **Add your phone hotspot as the second network right after:**
 
 ```bash
-./scripts/update-wifi.sh "<hotspot-SSID>" "<hotspot-passphrase>"
+./scripts/update-wifi.sh "<hotspot-SSID>"      # asks for the passphrase without showing it
 ```
 
 NVS holds three networks and only the third ever rotates, so the first two are permanent anchors. A hotspot in slot 1 means the device can reach AWS from almost anywhere — which is what lets the third slot be updated remotely later, with no USB and no rebuild.
@@ -258,17 +322,20 @@ Start at the device and walk outward; a break is easiest to find at the first ho
 arduino-cli monitor -p <port> -c baudrate=115200
 ```
 
-Expect the WiFi and AWS IoT connection lines, then telemetry every 30s. Then work outward:
+Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 s (or at the interval the fleet set). Then work outward:
 
 | Check | Where | Expect |
 |---|---|---|
-| Device is publishing | IoT Core → MQTT test client, subscribe `device/<thing>/telemetry` | JSON every 30s |
-| Device accepts commands | Publish `{ "operation": "DISPENSE_MEDICATION" }` to `device/<thing>/command` | The servo moves |
+| Device is publishing | S3 → the patient-vitals archive bucket, `readings/date=<today>/`. Readings go through Basic Ingest, straight to the rule, so the MQTT test client does not see them | A new `.ndjson.gz` object for each batch |
+| Device is online | The device's Asset in the Cloud Agentic IoT app ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) | Connection `Online`, and on the Live Status card a reading every 2 s (firmware 2.2.0) |
+| Device accepts commands | On the Asset, **Send Command** with `DISPENSE_MEDICATION`. By hand: publish `{ "operation": "DISPENSE_MEDICATION", "commandId": "by-hand-1" }` to `device/<thing>/command` | The servo moves. From the Asset, the Device Command goes `Sent`, then `Acked` within seconds. By hand, the board's answer shows on `device/<thing>/ack` in the MQTT test client; it answers only a command that carries a `commandId` |
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
 | The agent acts | Agent conversation preview | A Case with `Origin = Agentforce` |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
+
+The Asset's Connection field, its Live Status card and **Send Command** need a device provisioned from Salesforce (chapter 13), whose Asset carries its Thing ARN. On an Asset made by hand in Stage 3, Connection stays *Not reported yet*, the card says the device has no AWS IoT Thing, and a command fails as not provisioned. The by-hand publish works either way.
 
 ### Stage 5 — Promote to `Prod`
 
@@ -335,7 +402,7 @@ Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesf
 
 A Slack slash-command bot that reads and writes Salesforce data — `/patient-status <device-id>` and `/dispense-medication <device-id>` — without any Slack user ever logging into Salesforce. A dedicated integration user authenticates via the JWT Bearer Flow: the same pattern as the CI/CD pipeline, but as a runtime service call rather than a deploy-time one.
 
-**How it closes the loop:** `/dispense-medication` does not just update a record. It creates a `Device_Command__c` that a Flow/Apex trigger turns into the same Platform Event the ESP32 already listens for via IoT Core. A Slack message can, headlessly, move a physical servo.
+**How it closes the loop:** `/dispense-medication` does not just update a record. It creates a `Device_Command__c`, and an Apex trigger sends it through the device API to the board on `device/<thing>/command`. The board moves the servo and answers on `device/<thing>/ack`; that answer comes back through AWS IoT and marks the record `Acked`, or `Failed` with the board's reason. A Slack message can, headlessly, move a physical servo, and Salesforce knows whether it did. The same record can be created from the device's Asset with **Send Command**. Nothing on this path limits doses yet: `checkBusinessRules` (chapter 11) is not called from it, so anyone who may create a Device Command can dispense.
 
 **Key files:** `lambda/slack-integration/index.js` (verifies the Slack signature — HMAC, replay-protected), `salesforce-client.js` (headless JWT auth), `cloudformation.yaml`
 
@@ -515,39 +582,49 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 1. Create a **Wi-Fi Network** record — SSID plus passphrase in an **Encrypted Text** field, available in every edition, no Shield needed
 2. Create an **Asset**: SerialNumber = intended IoT Thing name, set the Wi-Fi Network, optionally a Thing Group
 3. `AssetTrigger` fires → `DeviceProvisioningService` calls AWS via a SigV4 Named Credential
-4. The Lambda creates the Thing and certificate, attaches the least-privilege policy, adds it to the Thing Group, writes the bundle to S3, returns the pre-signed URL
-5. The Asset updates to **Provisioned** with the link and expiry
-6. The technician downloads the bundle and runs `./scripts/provision-device.sh bundle.json` (or `.\scripts\provision-device.ps1 -Bundle bundle.json -Port COM5`)
-7. The device stores it in NVS, reboots, connects, and subscribes to its Jobs topic
-8. Delete the bundle — it contains the private key
+4. The Lambda creates the Thing and certificate, attaches the least-privilege policy, adds it to the Thing Group, writes the bundle to S3, returns the pre-signed URL. If a step fails, it undoes the group membership it added and deletes the certificate again, so a failed attempt leaves only an empty Thing
+5. The Asset updates to **Provisioned** with the link and its expiry. The link is in **Provisioning Bundle Link**, a long text field: signed with the Lambda's temporary credentials, it carries their session token and runs far past the 255 characters a URL field holds. If AWS finished but Salesforce cannot save the result, the Asset turns **Failed** with the reason and keeps the Thing ARN, so **Re-provision** issues a new link once the cause is fixed. If even that update fails, for example because the device was deleted meanwhile, only the job's debug log says so
+6. The technician downloads the bundle, closes any serial monitor (only one program can hold the port), and runs `./scripts/provision-device.sh bundle.json`. The board asks for its bundle only in the two minutes after it starts, and the ESP32 holds only a few hundred bytes between the firmware's reads, so the script restarts the board, waits for it to ask, and sends the bundle in small paced pieces. A bundle sent in one burst can lose characters, and a loss inside the certificate or key would still be stored, once. If the board cannot be restarted from USB, the script asks you to press EN. The Windows script, `.\scripts\provision-device.ps1`, still sends the bundle in one burst without waiting for the board to ask, which can store a damaged identity: provision from macOS or Linux until it works the same way
+7. The device stores it in NVS, reboots, connects, and subscribes to its Jobs topic. The script shows what the board says until it reports `aws: connected`
+8. Delete the bundle — it contains the private key. The script prints the `rm` command once the board is online, and says to keep the bundle if it is not
 
 **Changing a Wi-Fi password is a message, not a rebuild.** Credentials live in their own NVS namespace, so the binary and the certificate are untouched:
 
 | Situation | What happens |
 |---|---|
 | Password changes while the device is **online** | Editing `Wi_Fi_Network__c` fires a trigger → `WiFiCredentialService` → per-device MQTT command → the device stores the new network **alongside** the old. No reboot, no outage |
-| Deliberate update **from a terminal** (USB attached) | `./scripts/update-wifi.sh "SSID" "pass"`. Writes the `wifi` namespace only. Works whether the device is online or not, and does not reboot it |
+| Deliberate update **from a terminal** (USB attached) | `./scripts/update-wifi.sh "SSID"`, which asks for the passphrase rather than leaving it in your shell history. Writes the `wifi` namespace only. Works whether the device is online or not, and needs no reboot. The script waits for the board to confirm |
 | Password already changed, device **offline** | It cannot be messaged. It tries each stored network, fails, and drops into **Wi-Fi recovery mode** on serial, which updates credentials without touching identity |
 | Migrating to a new access point | Add the new network while the old still works. Devices roll over on their own; the old AP can then be switched off |
 
 The two NVS namespaces (`identity`, `wifi`) make this structural rather than careful: updating Wi-Fi is *incapable* of touching the certificate, not merely unlikely to.
 
-**If NVS is erased: rotate the certificate, keep the device.** An erased NVS loses the private key, and AWS issues it exactly once — but that is recoverable and **no historical data is lost.** The Thing is preserved (the Thing *name* is the identity; the certificate is only how it proves that identity, so rotating one is like changing a password). Every row keyed on the device name survives — DynamoDB, `Patient_Vitals__c.Device__c`, Data Cloud, the Asset itself. Thing Group membership survives, so OTA keeps targeting it. Deleting and recreating the Thing is what would break all of this, which is why the rotation Lambda never does. Trigger it from a **Re-provision** button on the Asset: it revokes and deletes every attached certificate — so a copied key stops working — issues a new one, attaches it to the same Thing, and returns a fresh 15-minute bundle link.
+**If NVS is erased: rotate the certificate, keep the device.** An erased NVS loses the private key, and AWS issues it exactly once — but that is recoverable and **no historical data is lost.** The Thing is preserved (the Thing *name* is the identity; the certificate is only how it proves that identity, so rotating one is like changing a password). Every row keyed on the device name survives — DynamoDB, `Patient_Vitals__c.Device__c`, Data Cloud, the Asset itself. Thing Group membership survives, so OTA keeps targeting it. Deleting and recreating the Thing is what would break all of this, which is why the rotation Lambda never does. Trigger it from a **Re-provision** button on the Asset: it revokes and deletes every attached certificate — so a copied key stops working — issues a new one, attaches it to the same Thing, and returns a fresh 15-minute bundle link. It refuses a device whose Thing ARN names a different Thing than its serial number, since one of the two is wrong and going ahead would replace another Thing's certificate.
 
-**Deleting a device cleans up AWS,** so the serial number is immediately reusable. Without this, AWS refuses to create a Thing whose name already exists — and refuses to delete a Thing that still has principals attached — so an orphaned Thing permanently blocks that name. Order is not optional: **detach policy → detach principal → deactivate → delete certificate → delete Thing.**
+**Deleting a device cleans up AWS,** so its serial number can be used again. Without this, a Thing that keeps its certificate blocks that name: provisioning refuses to give one Thing a second credential, and AWS refuses to delete a Thing that still has principals attached. Order is not optional: **detach policy → detach principal → deactivate → delete certificate → delete Thing.** A Thing that a remaining Asset's Thing ARN names, as a copy of a record's does, is never torn down. For a device that never got a Thing ARN, a remaining Asset with the same serial number keeps that Thing too: nothing stops two records sharing one, and its provisioning may be using that Thing.
 
 | Action | Effect |
 |---|---|
-| Delete the Asset | Certificates revoked and deleted, Thing deleted, name free to reuse |
+| Delete a device that has a Thing ARN | Certificates revoked and deleted, then the Thing its Thing ARN names (the one it was provisioned as, even if its serial number was edited since), so the name is free to reuse |
 | **Telemetry history** | **Preserved.** DynamoDB rows and `Patient_Vitals__c` are keyed on the device name and are usually needed for audit long after the hardware is retired. Destroying clinical history as a side effect of deleting a CRM record would be the wrong default |
 | Restore from Recycle Bin | The record returns; the AWS resources do not. The trigger clears the stale Thing ARN and certificate id and sets status to `Not Provisioned`, so the record re-provisions cleanly instead of *looking* provisioned while pointing at nothing |
-| Delete a device that was never provisioned | No callout — there is nothing in AWS to remove |
+| Delete a device with no Thing ARN that had a Wi-Fi Network or a status other than `Not Provisioned` | Its provisioning failed or hadn't finished, so it may have left a Thing named after its serial number. That Thing is deleted only while it has no certificate and is in no Thing Group, which is what a failed attempt leaves: provisioning adds a Thing to its group only after attaching its certificate, and takes both away again when a later step fails. Any other is kept, and the teardown function's log says why. It may be another device's, or this device's own identity that Salesforce never recorded (below) |
+| Delete a device that never had a Wi-Fi Network | No callout: it never reached AWS |
+
+**A device AWS provisioned but Salesforce never recorded** has no Thing ARN, and provisioning it again answers that its Thing already has a certificate. If that Thing is this device's, copy its ARN onto the Asset, then press **Re-provision**: it replaces the certificate, keeps the Thing and its group, and issues a new link. Setting a Thing ARN starts no provisioning.
+
+```bash
+ARN=$(aws iot describe-thing --thing-name <serial number> --query thingArn --output text)
+sf data update record --sobject Asset --record-id <Asset Id> --values "Thing_ARN__c='$ARN'"
+```
+
+If the Thing is not this device's, give this device another serial number, which starts provisioning again. Remove the Thing in AWS IoT only once you have checked that no other Asset has that serial number or Thing ARN, since it may be another device's identity.
 
 All four Asset contexts live in **one `AssetTrigger`** rather than several, so execution order is explicit rather than left to whichever trigger the platform runs first.
 
 **Scalability, honestly stated:** this is the **one-device-at-a-time** pattern, automated. It scales to hundreds because nothing is manual except plugging in a USB cable. Beyond that, **Fleet Provisioning by claim** is the answer — firmware ships with a shared claim certificate, the device generates its own keypair and receives a unique certificate on first connect, and no key transits anything at all. Same data model, same Thing Groups, same OTA; only step 6 disappears. Documented as the next step rather than implied to be already done.
 
-**Key files:** `objects/Wi_Fi_Network__c/`, `objects/Asset/fields/`, `classes/DeviceProvisioningService.cls`, `classes/WiFiCredentialService.cls`, `triggers/AssetTrigger.trigger`, `lambda/device-provisioning/`, `lambda/device-reprovision/`, `lambda/device-teardown/`, `scripts/provision-device.sh` / `.ps1`
+**Key files:** `objects/Wi_Fi_Network__c/`, `objects/Asset/fields/`, `classes/DeviceProvisioningService.cls`, `classes/DeviceReprovisionController.cls` and `lwc/reprovisionDevice/` (the Re-provision button), `classes/WiFiCredentialService.cls`, `triggers/AssetTrigger.trigger`, `lambda/device-provisioning/`, `lambda/device-reprovision/`, `lambda/device-teardown/`, `scripts/provision-device.sh` / `.ps1`
 
 **To see it work:** create a Wi-Fi Network record, then an Asset with a SerialNumber, and watch the Asset flip to **Provisioned** with a bundle link. The SigV4 Named Credential it uses is step 1 of [Stage 2](#stage-2--connect-the-seams-ci-cannot-reach).
 
@@ -563,6 +640,6 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 57 Node tests cover 10 of the Lambda functions, and every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+The design, the Apex, the firmware and the Lambdas are written. 302 Node tests cover 14 of the 16 Lambda functions (all but mcp-server and slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, and the firmware's timing and command logic compiled for the host; 54 Python tests run the board and OTA scripts against a simulated board and AWS. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (20 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it. The first deploys to a real AWS account and Salesforce org ran in August; the commit history shows what broke and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
 
 PII masking (chapter 10) and the guardrails Lambda (chapter 11) are written and tested, but not yet called from the agent's action path. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.

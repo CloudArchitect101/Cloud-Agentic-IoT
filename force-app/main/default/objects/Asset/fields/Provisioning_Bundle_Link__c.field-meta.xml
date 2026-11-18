@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Provisioning_Bundle_Link__c</fullName>
+    <label>Provisioning Bundle Link</label>
+    <description>Short-lived pre-signed S3 link to the credential bundle. Expires at Bundle Expires At; the key never rests in Salesforce. Long text, because a link signed with a Lambda's temporary AWS credentials carries their session token and runs to well over a thousand characters, and a URL field holds 255.</description>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

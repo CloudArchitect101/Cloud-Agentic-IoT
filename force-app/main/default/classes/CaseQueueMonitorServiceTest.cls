@@ -135,4 +135,30 @@ private class CaseQueueMonitorServiceTest {
         Integer open = [SELECT COUNT() FROM Case WHERE OwnerId = :queue.Id AND IsClosed = false];
         Assert.areEqual(200, open, 'All 200 cases should be open in the queue');
     }
+
+    @IsTest
+    static void relaySendsCommandsInBatches() {
+        DeviceTestSettings.use();
+        DeviceApiMock aws = new DeviceApiMock();
+        Test.setMock(HttpCalloutMock.class, aws);
+        List<QueueDepthRelayQueueable.DeviceQueueCommand> commands = new List<QueueDepthRelayQueueable.DeviceQueueCommand>();
+        for (Integer i = 0; i < 450; i++) {
+            QueueDepthRelayQueueable.DeviceQueueCommand command = new QueueDepthRelayQueueable.DeviceQueueCommand();
+            command.deviceId = 'QI-' + i;
+            command.queueDeveloperName = QUEUE_DEV_NAME;
+            command.openCaseCount = 1;
+            command.intensity = 20;
+            command.motorState = 'ACTIVE';
+            commands.add(command);
+        }
+
+        Test.startTest();
+        new QueueDepthRelayQueueable(commands).execute(null);
+        Test.stopTest();
+
+        // One callout per device used to stop at 100 devices.
+        Assert.areEqual(3, aws.bodies.size(), '450 commands at Commands_Per_Callout__c = 200');
+        Assert.areEqual(450, aws.devicesSent(), 'Every device gets its command');
+        Assert.areEqual('queue-depth', aws.paths[0], 'The queue-depth route');
+    }
 }

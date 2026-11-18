@@ -61,10 +61,24 @@ check_templates() {
 }
 
 check_scripts() {
-  has shellcheck || { skip shellcheck scripts "brew install shellcheck"; return 0; }
-  step "Shell scripts: shellcheck"
-  shellcheck --external-sources --severity=warning scripts/*.sh scripts/lib/*.sh
-  endstep
+  if has shellcheck; then
+    step "Shell scripts: shellcheck"
+    shellcheck --external-sources --severity=warning scripts/*.sh scripts/lib/*.sh
+    endstep
+  else
+    skip shellcheck scripts "brew install shellcheck"
+  fi
+  # The serial helper the board scripts share, against a simulated board, and
+  # ota.sh try against a fake AWS CLI (it builds its job documents with jq).
+  if ! has python3; then
+    skip python3 scripts "it comes with the Xcode command line tools: xcode-select --install"
+  elif ! has jq; then
+    skip jq scripts "macOS 15 and later have it; otherwise brew install jq"
+  else
+    step "Script tests: the board serial helper and ota.sh try, against a simulated board and AWS"
+    python3 -m unittest discover -s test/scripts
+    endstep
+  fi
 }
 
 check_salesforce() {
@@ -77,6 +91,14 @@ check_salesforce() {
   out=$(mktemp -d)
   sf project convert source --output-dir "$out/mdapi" > /dev/null
   rm -rf "$out"
+
+  # An object's child files (fields, compact layouts, list views...) are
+  # merged into the object on deploy, and the org names each child by its
+  # <fullName>. The conversion above accepts a child without one; the deploy
+  # then rejects it with "element fullName missing", and the object with it.
+  local unnamed
+  unnamed=$(find force-app -path '*/objects/*/*/*-meta.xml' -exec grep -L '<fullName>' {} + || true)
+  [ -z "$unnamed" ] || die "Each of these needs a <fullName> with its own name, or the deploy rejects it: $unnamed"
   endstep
 }
 

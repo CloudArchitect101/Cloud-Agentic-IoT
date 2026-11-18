@@ -2,12 +2,13 @@
 #
 # firmware.sh - build, flash and watch the ESP32 sketches.
 #
-#   scripts/firmware.sh setup                      once per machine: ESP32 core and libraries
-#   scripts/firmware.sh build [sketch...]          compile; every sketch by default
-#   scripts/firmware.sh flash <sketch> [port]      compile, then write it over USB
-#   scripts/firmware.sh monitor [port]             the board's serial console, 115200 baud
-#   scripts/firmware.sh version <sketch>           the FIRMWARE_VERSION a sketch declares
-#   scripts/firmware.sh check-version <git ref>    fail if firmware changed without a bump
+#   scripts/firmware.sh setup                        once per machine: ESP32 core and libraries
+#   scripts/firmware.sh build [sketch...]            compile; every sketch by default
+#   scripts/firmware.sh build-as <sketch> <version>  compile one sketch as another version (ota.sh try)
+#   scripts/firmware.sh flash <sketch> [port]        compile, then write it over USB
+#   scripts/firmware.sh monitor [port]               the board's serial console, 115200 baud
+#   scripts/firmware.sh version <sketch>             the FIRMWARE_VERSION a sketch declares
+#   scripts/firmware.sh check-version <git ref>      fail if firmware changed without a bump
 #
 # The OTA pipeline builds with this same script, so the binary you flash over
 # USB and the one the pipeline sends over the air come from the same command.
@@ -22,17 +23,8 @@ ESP32_INDEX=https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/p
 BUILD_DIR="$REPO_ROOT/build/firmware"
 
 usage() {
-  sed -n '3,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit 1
-}
-
-# The usual names an ESP32's USB-serial chip gets on macOS and Linux.
-detect_port() {
-  local p
-  for p in /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/cu.wchusbserial* /dev/ttyUSB* /dev/ttyACM*; do
-    if [ -e "$p" ]; then printf '%s' "$p"; return 0; fi
-  done
-  return 1
 }
 
 cmd_setup() {
@@ -44,8 +36,8 @@ cmd_setup() {
   arduino-cli lib install "PubSubClient" "ArduinoJson" "DHT sensor library" "ESP32Servo"
 }
 
-build_one() {
-  local sketch="$1" dir="$REPO_ROOT/firmware/$1" version
+build_one() {   # build_one <sketch> [folder to compile, firmware/<sketch> by default]
+  local sketch="$1" dir="${2:-$REPO_ROOT/firmware/$1}" version
   [ -f "$dir/$sketch.ino" ] || die "firmware/$sketch/$sketch.ino not found. A sketch folder must hold a .ino named after the folder."
   version=$(version_of < "$dir/$sketch.ino")
   # The version is what OTA keys on: no version, no way to ever release it.
@@ -75,6 +67,29 @@ cmd_build() {
   fi
   [ -n "$targets" ] || die "No sketches under firmware/."
   for sketch in $targets; do build_one "$sketch"; done
+}
+
+# build-as compiles a sketch under another FIRMWARE_VERSION, from a copy of its
+# folder, so the checkout stays exactly as it is. scripts/ota.sh try uses it: a
+# try runs on the boards as <version>-try.<n>, a version the pipeline never
+# publishes. The binary lands where build puts it.
+cmd_build_as() {
+  local sketch="${1:-}" version="${2:-}" copy
+  { [ -n "$sketch" ] && [ -f "$REPO_ROOT/firmware/$sketch/$sketch.ino" ] && [ -n "$version" ]; } \
+    || die "Usage: scripts/firmware.sh build-as <sketch> <version>"
+  # The version ends up in a C string and in a file name.
+  [[ "$version" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]] \
+    || die "A version holds letters, digits, dots, dashes and plus signs only (got '$version')."
+  need arduino-cli "Install it with: brew install arduino-cli, then run: scripts/firmware.sh setup"
+  copy=$(mktemp -d)
+  # shellcheck disable=SC2064  # expand $copy now: the trap runs after this function returns
+  trap "rm -rf '$copy'" EXIT
+  cp -R "$REPO_ROOT/firmware/$sketch" "$copy/$sketch"
+  sed -E "s/^([[:space:]]*#define[[:space:]]+FIRMWARE_VERSION[[:space:]]+)\"[^\"]*\"/\\1\"$version\"/" \
+    "$REPO_ROOT/firmware/$sketch/$sketch.ino" > "$copy/$sketch/$sketch.ino"
+  [ "$(version_of < "$copy/$sketch/$sketch.ino")" = "$version" ] \
+    || die "Could not set FIRMWARE_VERSION in the copy of $sketch.ino."
+  build_one "$sketch" "$copy/$sketch"
 }
 
 cmd_flash() {
@@ -155,6 +170,7 @@ if [ $# -gt 0 ]; then shift; fi
 case "$cmd" in
   setup)         cmd_setup ;;
   build)         cmd_build "$@" ;;
+  build-as)      cmd_build_as "$@" ;;
   flash)         cmd_flash "$@" ;;
   monitor)       cmd_monitor "$@" ;;
   version)       cmd_version "$@" ;;

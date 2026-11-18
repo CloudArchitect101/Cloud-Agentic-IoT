@@ -7,6 +7,10 @@
  * certificate. Credentials live in their own NVS namespace on the device, so a
  * password change is a message, not a reflash and not a re-provision.
  *
+ * The push itself runs in WiFiCredentialPushJob, which pages through the
+ * devices on the network and sends them in batches, so a network shared by a
+ * million devices works the same as one shared by three.
+ *
  * Demonstrates: workflow automation from business records, secure
  * credential handling, async integration.
  */
@@ -37,62 +41,14 @@ public with sharing class WiFiCredentialService {
             }
         }
 
-        if (!networkIdsWithChangedCredentials.isEmpty() && !System.isFuture()) {
-            pushAsync(networkIdsWithChangedCredentials);
+        if (networkIdsWithChangedCredentials.isEmpty()) {
+            return;
         }
-    }
-
-    @future(callout=true)
-    public static void pushAsync(Set<Id> networkIds) {
-        List<Wi_Fi_Network__c> networks = [
-            SELECT Id, SSID__c, Passphrase__c FROM Wi_Fi_Network__c WHERE Id IN :networkIds
-        ];
-        Map<Id, Wi_Fi_Network__c> byId = new Map<Id, Wi_Fi_Network__c>(networks);
-
-        // Only provisioned devices can receive an MQTT command. Devices still
-        // awaiting provisioning will pick the new credentials up in their
-        // bundle, so pushing to them would fail for no reason.
-        List<Asset> devices = [
-            SELECT Id, SerialNumber, Wi_Fi_Network__c
-            FROM Asset
-            WHERE Wi_Fi_Network__c IN :networkIds
-              AND Provisioning_Status__c = 'Provisioned'
-              AND SerialNumber != null
-        ];
-
-        for (Asset device : devices) {
-            Wi_Fi_Network__c network = byId.get(device.Wi_Fi_Network__c);
-            if (network == null) {
-                continue;
-            }
-            try {
-                send(device.SerialNumber, network);
-            } catch (Exception e) {
-                // A device that is currently offline simply misses the message.
-                // It recovers via the serial path in the firmware, so this must
-                // not fail the whole batch.
-                System.debug(LoggingLevel.ERROR,
-                    'Wi-Fi push failed for ' + device.SerialNumber + ': ' + e.getMessage());
-            }
+        if (Limits.getQueueableJobs() >= Limits.getLimitQueueableJobs()) {
+            System.debug(LoggingLevel.ERROR, 'No background job left in this transaction to push Wi-Fi credentials for '
+                + networkIdsWithChangedCredentials);
+            return;
         }
-    }
-
-    private static void send(String thingName, Wi_Fi_Network__c network) {
-        HttpRequest req = new HttpRequest();
-        req.setEndpoint('callout:AWS_IoT_Relay/device-command');
-        req.setMethod('POST');
-        req.setHeader('Content-Type', 'application/json');
-        req.setTimeout(15000);
-        req.setBody(JSON.serialize(new Map<String, Object>{
-            'thingName'  => thingName,
-            'operation'  => 'WIFI_UPDATE',
-            'ssid'       => network.SSID__c,
-            'passphrase' => network.Passphrase__c
-        }));
-
-        HttpResponse res = new Http().send(req);
-        if (res.getStatusCode() < 200 || res.getStatusCode() >= 300) {
-            throw new CalloutException('HTTP ' + res.getStatusCode() + ': ' + res.getBody());
-        }
+        System.enqueueJob(new WiFiCredentialPushJob(networkIdsWithChangedCredentials));
     }
 }

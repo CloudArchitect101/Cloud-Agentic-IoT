@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Devices_Per_Callout__c</fullName>
+    <label>Devices per Provisioning Callout</label>
+    <description>Devices provisioned, re-provisioned or torn down in one request. AWS issues certificates at about 10 a second per account, and API Gateway allows 30 seconds, so keep this small.</description>
+    <precision>3</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

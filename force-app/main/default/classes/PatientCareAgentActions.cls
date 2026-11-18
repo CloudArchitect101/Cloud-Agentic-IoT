@@ -55,6 +55,9 @@ public with sharing class PatientCareAgentActions {
         List<EscalationResult> results = new List<EscalationResult>();
         List<Case> toInsert = new List<Case>();
         List<Integer> indexOfCase = new List<Integer>();
+        // Device_Platform_Setting__mdt, so the Case Origin a support team
+        // reports on is theirs to choose.
+        String origin = DevicePlatformSettings.escalationCaseOrigin();
 
         for (Integer i = 0; i < requests.size(); i++) {
             EscalationRequest req = requests[i];
@@ -71,7 +74,7 @@ public with sharing class PatientCareAgentActions {
                 Subject     = 'Device escalation: ' + req.deviceId,
                 Description = req.reason,
                 Priority    = normalisePriority(req.severity),
-                Origin      = 'Agentforce'
+                Origin      = origin
             ));
             indexOfCase.add(i);
         }

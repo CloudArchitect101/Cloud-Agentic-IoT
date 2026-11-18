@@ -26,8 +26,10 @@ GitHub secrets are the wrong home for any of this: the firmware build in CI is a
 
    ```bash
    ./scripts/setup-device.sh          # macOS / Linux
-   .\scripts\setup-device.ps1         # Windows
+   .\scripts\setup-device.ps1         # Windows: not safe yet, see below
    ```
+
+   The Windows wizard still sends the credentials in one burst without waiting for the board to ask, which can store a damaged identity. Use the macOS / Linux one until it works the same way.
 
 It asks, one line at a time, and fills in a sensible default wherever it can work one out:
 
@@ -49,7 +51,7 @@ The credential bundle is assembled in a temp file with owner-only permissions an
 **One step after the wizard:** it provisions a single network, which lands in slot 0. Add your phone hotspot as slot 1 straight away —
 
 ```bash
-./scripts/update-wifi.sh "<hotspot-SSID>" "<hotspot-passphrase>"
+./scripts/update-wifi.sh "<hotspot-SSID>"      # asks for the passphrase without showing it
 ```
 
 — because that anchor is what makes the third slot remotely updatable. See [what the 3 slots actually do](#what-the-3-slots-actually-do).
@@ -82,7 +84,7 @@ The one thing that destroys this is `esptool erase_flash`, which wipes NVS inclu
 
 **No recompile and no reflash.** The `wifi` namespace is separate from `identity`, so credentials can be replaced on their own:
 
-- **Over USB, no rebuild** — `./scripts/update-wifi.sh "<SSID>" "<passphrase>"` sends just `{"ssid":…,"passphrase":…}`. `checkSerialWifiUpdate()` accepts this at any time while the device is running, and the certificate is untouched.
+- **Over USB, no rebuild** — `./scripts/update-wifi.sh "<SSID>"` asks for the passphrase and sends just `{"ssid":…,"passphrase":…}`. `checkSerialWifiUpdate()` accepts this at any time while the device is running, and the certificate is untouched.
 - **Remotely, while the device is still online** — updating a `Wi_Fi_Network__c` record in Salesforce makes `WiFiCredentialService` push the credentials through the `device-command` Lambda to `device/<thing>/command`, where the library stores them. The device is by definition still on the *old* network to have received this, so it keeps that connection and only falls back to the new entry once the old one is gone. **Send it before the network changes, not after.**
 - **Automatically** — NVS holds up to 3 networks and `connectWiFi()` tries each in turn with a 15-second timeout. Add the venue's WiFi before you travel and the device connects to whichever it finds, with no intervention at all.
 
@@ -159,7 +161,7 @@ IoT Job      →  the instruction       (job document: S3 URL + version)
 1. You upload `firmware-1.2.0.bin` to S3.
 2. You create an **IoT Job** targeting a **Thing** or a **Thing Group**, with a job document containing the firmware URL and version.
 3. AWS pushes a notification to every targeted device on `$aws/things/{thingName}/jobs/notify-next`.
-4. The device downloads, verifies, applies with `Update.h`, reboots, and reports `SUCCEEDED` or `FAILED` back on `$aws/things/{thingName}/jobs/{jobId}/update`.
+4. The device downloads, verifies and applies the build with `Update.h`, reports `IN_PROGRESS` (`rebooting`) and restarts. Back on the new build, it asks for its next job, gets the same one, and reports `SUCCEEDED` (`running <version>`) on `$aws/things/{thingName}/jobs/{jobId}/update`, or `FAILED` (`came back on <version>`) when the new build did not start. Firmware older than 2.2.0 reported `SUCCEEDED` just before restarting. [firmware/README.md](../firmware/README.md#what-a-board-reports-on-an-update-from-220) lists every status.
 
 **Targeting is group membership, not a device list in your code.** Put five devices in `canary-patient-monitor`, run the job against that group, watch, then run it against `fleet-patient-monitor`. That is the batching the migration runbook phase 4 describes, and it is what the Prod pipeline does: see [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
@@ -167,7 +169,7 @@ IoT Job      →  the instruction       (job document: S3 URL + version)
 
 ### Practical gotcha
 
-`PubSubClient`'s default MQTT buffer is 256 bytes. AWS Jobs documents are larger, so the callback silently never fires. The firmware calls `client.setBufferSize(2048)` for this reason — it is the kind of failure that looks like "AWS isn't sending anything."
+`PubSubClient`'s default MQTT buffer is 256 bytes, and it drops a larger message without a word. A job message carries a pre-signed download link with a session token in it, about 1.9 KB, so the callback silently never fires. The firmware calls `client.setBufferSize(4096)` for this reason: it is the kind of failure that looks like "AWS isn't sending anything."
 
 ## Summary
 

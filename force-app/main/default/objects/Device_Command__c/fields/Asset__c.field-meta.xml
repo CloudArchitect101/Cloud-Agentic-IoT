@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Asset__c</fullName>
+    <label>Device</label>
+    <description>The device's Asset. Set from Device ID when one Asset has that serial number.</description>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <referenceTo>Asset</referenceTo>
+    <relationshipLabel>Device Commands</relationshipLabel>
+    <relationshipName>Device_Commands</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

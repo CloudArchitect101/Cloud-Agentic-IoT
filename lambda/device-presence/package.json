@@ -1,0 +1,10 @@
+{
+  "name": "device-presence",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sets each device's connection fields on its Asset from AWS IoT's connect and disconnect events: one Salesforce call per batch, up to 200 boards per call.",
+  "main": "index.js",
+  "dependencies": {
+    "@cloud-agentic-iot/shared": "file:../shared"
+  }
+}

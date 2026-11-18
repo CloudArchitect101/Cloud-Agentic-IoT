@@ -4,6 +4,7 @@
     <pluralLabel>Wi-Fi Networks</pluralLabel>
     <description>A network devices at a site connect to. Custom because no standard object models site connectivity; one record serves every device at that location.</description>
     <nameField><label>Network Name</label><type>Text</type></nameField>
+    <compactLayoutAssignment>Wi_Fi_Network_Compact</compactLayoutAssignment>
     <deploymentStatus>Deployed</deploymentStatus>
     <sharingModel>Private</sharingModel>
 </CustomObject>

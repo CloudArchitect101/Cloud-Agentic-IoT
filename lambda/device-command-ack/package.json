@@ -1,0 +1,10 @@
+{
+  "name": "device-command-ack",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Records on each Device Command what its board answered on device/<thing>/ack (Acked, or Failed with why): one Salesforce call per batch of at most 10 answers, one answer per command.",
+  "main": "index.js",
+  "dependencies": {
+    "@cloud-agentic-iot/shared": "file:../shared"
+  }
+}

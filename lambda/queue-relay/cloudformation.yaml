@@ -1,10 +1,211 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Relays Salesforce Case queue depth changes to a physical ESP32 indicator.
-  Salesforce Apex calls API Gateway (SigV4-signed via a Named Credential),
-  which invokes a Lambda that republishes the message to AWS IoT Core.
+Description: >-
+  The device API Salesforce calls through the AWS_IoT_Relay Named Credential
+  (SigV4): queue depth, provisioning, re-provisioning, teardown and device
+  commands, each taking a batch of devices, and the live view of one device.
+  Also the IoT policy every device certificate gets, and the bucket its
+  one-time credential bundle waits in.
+
+# Every number below comes from config/<env>.json ("queue-relay" section),
+# passed by scripts/deploy-aws.sh as parameter overrides.
+Parameters:
+  DeviceApiTimeoutSeconds:
+    Type: Number
+    Default: 20
+    MinValue: 5
+    MaxValue: 29
+    Description: >-
+      Must stay below Callout_Timeout_Seconds__c in Salesforce
+      (Device_Platform_Setting__mdt, 25), so every request is answered before
+      Salesforce stops waiting, and below API Gateway's 30-second limit.
+  IotParallelRequests:
+    Type: Number
+    Default: 4
+    MinValue: 1
+    MaxValue: 50
+    Description: >-
+      IoT control-plane calls in flight per request (provisioning, rotation,
+      teardown). The account allows about 10 new certificates a second.
+  PublishParallelRequests:
+    Type: Number
+    Default: 16
+    MinValue: 1
+    MaxValue: 200
+    Description: Publishes in flight per request (queue depth, commands).
+  ProvisioningMaxConcurrency:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    Description: >-
+      Reserved concurrency for the provisioning and re-provisioning functions,
+      which caps their combined pressure on the IoT control plane. 0 leaves
+      them unreserved: a new account's whole concurrency quota can be 10.
+  DefaultBundleTtlMinutes:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    MaxValue: 10080
+    Description: >-
+      Link lifetime when a request names none. Salesforce always names one
+      (Bundle_TTL_Minutes__c).
+  BundleRetentionDays:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: Bundles hold private keys; S3 deletes them after this many days.
+  DefaultThingGroup:
+    Type: String
+    Default: fleet-patient-monitor
+    Description: Used when a request names no group. infra/ota creates the groups.
+  ApiRateLimit:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    Description: Requests per second the API accepts, across all routes.
+  ApiBurstLimit:
+    Type: Number
+    Default: 100
+    MinValue: 1
+  SalesforceCallerUserName:
+    Type: String
+    Default: cloud-agentic-iot-salesforce-caller
+    AllowedPattern: '[\w+=,.@-]{1,64}'
+    Description: >-
+      The IAM user whose access key the AWS_IoT_Relay external credential in
+      Salesforce holds. It is made by hand (README, Stage 2), because the
+      deploy identities may not create users, and it may only assume
+      SalesforceCallerRole.
+  # The live view (POST /device-live): how often a board sends a reading,
+  # and for how long, while someone has its card open in Salesforce.
+  LiveReadingSeconds:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 60
+    Description: >-
+      Seconds between live readings; the board accepts 1 to 60
+      (DeviceTiming.h). 2 is the patient monitor's fastest useful pace: its
+      DHT11 gives a new value at most every 2 seconds.
+  LiveMinutes:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    MaxValue: 30
+    Description: >-
+      How long a board stays in live mode after the card last asked; the
+      board accepts 1 to 30. The card asks again every 10 minutes while it is
+      open, so 10 or less leaves gaps in the stream.
+  PatientVitalsTableName:
+    Type: String
+    Default: patient-vitals
+    Description: >-
+      The patient-vitals stack's table (its PatientVitalsTableName), which
+      the live view reads the newest stored reading and patient state from.
+
+Conditions:
+  ReserveProvisioningConcurrency: !Not [!Equals [!Ref ProvisioningMaxConcurrency, 0]]
 
 Resources:
+  # ------------------------------------------------------------------ devices
+
+  # One policy for every device. ${iot:Connection.Thing.ThingName} resolves per
+  # connection to the Thing the certificate is attached to, so each device
+  # can connect only as itself and reach only its own topics: it cannot read
+  # another device's commands (which carry Wi-Fi passphrases) or publish as
+  # another patient. The README's hand-made ESP32-Patient-Monitor-Policy keys
+  # Connect on the client id instead; certificates made under it keep it until
+  # they are re-provisioned.
+  DevicePolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName: cloud-agentic-iot-device
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: iot:Connect
+            Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:client/${!iot:Connection.Thing.ThingName}'
+            Condition:
+              Bool:
+                iot:Connection.Thing.IsAttached: 'true'
+          # Firmware 2.1.0 sends readings through Basic Ingest, straight to the
+          # patient-vitals rule (TELEMETRY_RULE in CloudAgenticDevice.h; its
+          # RuleName in lambda/patient-vitals/cloudformation.yaml). Older
+          # firmware still publishes to device/<thing>/telemetry, so both stay
+          # allowed until every board runs 2.1.0 or later.
+          - Effect: Allow
+            Action: iot:Publish
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/rules/cloud_agentic_iot_patient_vitals/device/${!iot:Connection.Thing.ThingName}/telemetry'
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/telemetry'
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/status'
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/jobs/*'
+              # Firmware 2.2.0 live mode: a reading every few seconds while
+              # someone has the board's card open in Salesforce. The browser
+              # card subscribes to this topic itself, through LiveViewerRole.
+              # No rule reads it, so nothing stores these readings.
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/live'
+              # Firmware 2.2.0 answers each command that carries a commandId
+              # here: done, failed or refused. The rule
+              # cloud_agentic_iot_device_command_ack (patient-vitals stack)
+              # reads it and records the answer on the Device Command.
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/ack'
+          - Effect: Allow
+            Action: iot:Subscribe
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/device/${!iot:Connection.Thing.ThingName}/command'
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/$aws/things/${!iot:Connection.Thing.ThingName}/jobs/*'
+          - Effect: Allow
+            Action: iot:Receive
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/command'
+              - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/jobs/*'
+
+  # Credential bundles: written once by provisioning, downloaded once through
+  # a pre-signed link, deleted by S3 after BundleRetentionDays.
+  BundleBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cloud-agentic-iot-bundles-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-bundles
+            Status: Enabled
+            Prefix: provisioning/
+            ExpirationInDays: !Ref BundleRetentionDays
+
+  BundleBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BundleBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: TlsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt BundleBucket.Arn
+              - !Sub '${BundleBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  # ------------------------------------------------------------------ functions
+
   QueueRelayRole:
     Type: AWS::IAM::Role
     Properties:
@@ -26,22 +227,276 @@ Resources:
               # publishes to whichever device the queue is bound to.
               - Effect: Allow
                 Action: iot:Publish
-                Resource: !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/device/*/command'
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/*/command'
 
   QueueRelayFunction:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: cloud-agentic-iot-queue-relay
-      Runtime: nodejs20.x
+      Runtime: nodejs22.x
       Handler: index.handler
-      Timeout: 10
+      Timeout: !Ref DeviceApiTimeoutSeconds
       Role: !GetAtt QueueRelayRole.Arn
       Code:
         ZipFile: |
           exports.handler = async () => ({
-            statusCode: 200,
+            statusCode: 503,
             body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
           });
+      Environment:
+        Variables:
+          IOT_PARALLEL_REQUESTS: !Ref PublishParallelRequests
+
+  # The command function publishes the same way, so it shares the role.
+  DeviceCommandFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-device-command
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref DeviceApiTimeoutSeconds
+      Role: !GetAtt QueueRelayRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          IOT_PARALLEL_REQUESTS: !Ref PublishParallelRequests
+
+  # Provisioning, re-provisioning and teardown manage Things and certificates.
+  # The IoT control plane scopes most of these actions by resource type, not
+  # by name, so the IoT statements group the actions by what AWS checks them
+  # against: Things and Thing groups, certificates, and no resource at all.
+  # test/lambda/device-lifecycle-role.test.js checks this policy against the
+  # calls the three functions make.
+  DeviceLifecycleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ManageDeviceIdentities
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iot:CreateThing
+                  - iot:DeleteThing
+                  - iot:ListThingPrincipals
+                  - iot:ListThingGroupsForThing
+                  - iot:AddThingToThingGroup
+                  - iot:RemoveThingFromThingGroup
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thing/*'
+                  - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thinggroup/*'
+              # Attaching a certificate to a Thing, and detaching it, is checked
+              # against the certificate. The Thing is only a condition key.
+              - Effect: Allow
+                Action:
+                  - iot:AttachPolicy
+                  - iot:DetachPolicy
+                  - iot:AttachThingPrincipal
+                  - iot:DetachThingPrincipal
+                  - iot:UpdateCertificate
+                  - iot:DeleteCertificate
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:cert/*'
+              # These cannot be scoped to a resource.
+              - Effect: Allow
+                Action:
+                  - iot:CreateKeysAndCertificate
+                  - iot:DescribeEndpoint
+                  - iot:ListAttachedPolicies
+                Resource: '*'
+              # GetObject is what the pre-signed link exercises: it is signed
+              # with this role's credentials.
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${BundleBucket.Arn}/provisioning/*'
+
+  DeviceProvisioningFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-device-provisioning
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref DeviceApiTimeoutSeconds
+      MemorySize: 256
+      Role: !GetAtt DeviceLifecycleRole.Arn
+      ReservedConcurrentExecutions: !If [ReserveProvisioningConcurrency, !Ref ProvisioningMaxConcurrency, !Ref AWS::NoValue]
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          IOT_POLICY_NAME: !Ref DevicePolicy
+          BUNDLE_BUCKET: !Ref BundleBucket
+          DEFAULT_THING_GROUP: !Ref DefaultThingGroup
+          DEFAULT_BUNDLE_TTL_MINUTES: !Ref DefaultBundleTtlMinutes
+          IOT_PARALLEL_REQUESTS: !Ref IotParallelRequests
+
+  DeviceReprovisionFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-device-reprovision
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref DeviceApiTimeoutSeconds
+      MemorySize: 256
+      Role: !GetAtt DeviceLifecycleRole.Arn
+      ReservedConcurrentExecutions: !If [ReserveProvisioningConcurrency, !Ref ProvisioningMaxConcurrency, !Ref AWS::NoValue]
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          IOT_POLICY_NAME: !Ref DevicePolicy
+          BUNDLE_BUCKET: !Ref BundleBucket
+          DEFAULT_BUNDLE_TTL_MINUTES: !Ref DefaultBundleTtlMinutes
+          IOT_PARALLEL_REQUESTS: !Ref IotParallelRequests
+
+  DeviceTeardownFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-device-teardown
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref DeviceApiTimeoutSeconds
+      Role: !GetAtt DeviceLifecycleRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          IOT_PARALLEL_REQUESTS: !Ref IotParallelRequests
+
+  # The live view of one board. A role of its own, because it can do what no
+  # other function here may: hand a browser credentials, through
+  # LiveViewerRole. test/lambda/live-viewer-role.test.js checks it against
+  # the calls the function makes.
+  DeviceLiveRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StartLiveView
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # The LIVE command, on the board's own command topic.
+              - Effect: Allow
+                Action: iot:Publish
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/*/command'
+              # This cannot be scoped to a resource.
+              - Effect: Allow
+                Action: iot:DescribeEndpoint
+                Resource: '*'
+              # The newest stored reading and the patient's state, read only.
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PatientVitalsTableName}'
+
+  # What a browser watching a board may do: connect as a live-* client and
+  # receive boards' live topics, and nothing else. The function narrows each
+  # 15-minute session further, with a session policy, to one client id and
+  # one board. Only DeviceLiveRole may assume it.
+  # test/lambda/live-viewer-role.test.js pins all of this.
+  LiveViewerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by the device-live function only, to let a browser watch one board's live readings.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt DeviceLiveRole.Arn
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WatchLiveReadings
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: iot:Connect
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:client/live-*'
+              - Effect: Allow
+                Action: iot:Subscribe
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/device/*/live'
+              - Effect: Allow
+                Action: iot:Receive
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/*/live'
+
+  # A policy of its own rather than a statement in DeviceLiveRole:
+  # LiveViewerRole's trust names DeviceLiveRole, so DeviceLiveRole naming
+  # LiveViewerRole would make each role wait for the other.
+  DeviceLiveAssumesViewer:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: AssumeLiveViewerRole
+      Roles:
+        - !Ref DeviceLiveRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Resource: !GetAtt LiveViewerRole.Arn
+
+  DeviceLiveFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-device-live
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Timeout: !Ref DeviceApiTimeoutSeconds
+      # The card waits on the first answer, and five SDK packages load
+      # faster with the CPU that comes with more memory.
+      MemorySize: 256
+      Role: !GetAtt DeviceLiveRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 503,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref PatientVitalsTableName
+          LIVE_VIEWER_ROLE_ARN: !GetAtt LiveViewerRole.Arn
+          LIVE_READING_SECONDS: !Ref LiveReadingSeconds
+          LIVE_MINUTES: !Ref LiveMinutes
+
+  # ------------------------------------------------------------------ API
 
   QueueRelayApi:
     Type: AWS::ApiGatewayV2::Api
@@ -57,15 +512,91 @@ Resources:
       IntegrationUri: !GetAtt QueueRelayFunction.Arn
       PayloadFormatVersion: '2.0'
 
+  # Salesforce signs every request with SigV4 through the Named Credential,
+  # so API Gateway authorises each route as IAM rather than accepting
+  # anonymous POSTs.
   QueueRelayRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
       ApiId: !Ref QueueRelayApi
       RouteKey: 'POST /queue-depth'
-      # Salesforce signs the request with SigV4 through the Named Credential,
-      # so API Gateway authorises it as IAM rather than accepting anonymous POSTs.
       AuthorizationType: AWS_IAM
       Target: !Sub 'integrations/${QueueRelayIntegration}'
+
+  ProvisionIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DeviceProvisioningFunction.Arn
+      PayloadFormatVersion: '2.0'
+  ProvisionRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /provision-device'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${ProvisionIntegration}'
+
+  ReprovisionIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DeviceReprovisionFunction.Arn
+      PayloadFormatVersion: '2.0'
+  ReprovisionRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /reprovision-device'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${ReprovisionIntegration}'
+
+  TeardownIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DeviceTeardownFunction.Arn
+      PayloadFormatVersion: '2.0'
+  TeardownRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /teardown-device'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${TeardownIntegration}'
+
+  CommandIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DeviceCommandFunction.Arn
+      PayloadFormatVersion: '2.0'
+  CommandRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /device-command'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${CommandIntegration}'
+
+  LiveIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt DeviceLiveFunction.Arn
+      PayloadFormatVersion: '2.0'
+  LiveRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref QueueRelayApi
+      RouteKey: 'POST /device-live'
+      AuthorizationType: AWS_IAM
+      Target: !Sub 'integrations/${LiveIntegration}'
 
   QueueRelayStage:
     Type: AWS::ApiGatewayV2::Stage
@@ -73,18 +604,97 @@ Resources:
       ApiId: !Ref QueueRelayApi
       StageName: '$default'
       AutoDeploy: true
+      # What the account's Lambda concurrency and IoT quotas can take, not
+      # API Gateway's own 10,000 a second. Salesforce retries a 429.
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ApiRateLimit
+        ThrottlingBurstLimit: !Ref ApiBurstLimit
 
+  # The identity Salesforce signs with. Its external credential holds the
+  # access key of SalesforceCallerUserName, a user made by hand that may only
+  # assume this role through STS, and this role may only call this API. A
+  # leaked key reaches these six routes and nothing else, and every signed
+  # request uses credentials that expire within the hour.
+  SalesforceCallerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Assumed by Salesforce, through STS, to call the device API.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # The account, narrowed to one user. Naming the user as the
+          # principal would fail until the user exists; the condition does not.
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+            Condition:
+              ArnEquals:
+                aws:PrincipalArn: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${SalesforceCallerUserName}'
+      Policies:
+        - PolicyName: invoke-device-api
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: execute-api:Invoke
+                Resource: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*/POST/*'
+
+  # Without SourceArn any API Gateway API, in any account, that learns a
+  # function's ARN may invoke it. These limit each to this API.
   QueueRelayPermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref QueueRelayFunction
       Principal: apigateway.amazonaws.com
-      # Without SourceArn any API Gateway API, in any account, that learns
-      # this function's ARN may invoke it. This limits it to the API above.
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  ProvisionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DeviceProvisioningFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  ReprovisionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DeviceReprovisionFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  TeardownPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DeviceTeardownFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  CommandPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DeviceCommandFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
+  LivePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DeviceLiveFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${QueueRelayApi}/*'
 
 Outputs:
   QueueDepthEndpoint:
     Description: Use as the URL of the AWS_IoT_Relay Named Credential in Salesforce.
     Value: !Sub 'https://${QueueRelayApi}.execute-api.${AWS::Region}.amazonaws.com'
+  SalesforceCallerRoleArn:
+    Description: Use as the IAM Role ARN of the AWS_IoT_Relay external credential's principal in Salesforce.
+    Value: !GetAtt SalesforceCallerRole.Arn
+  DevicePolicyName:
+    Description: The IoT policy every new device certificate gets.
+    Value: !Ref DevicePolicy
+  BundleBucketName:
+    Value: !Ref BundleBucket

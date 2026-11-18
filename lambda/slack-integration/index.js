@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const { getSalesforceConnection } = require('./salesforce-client');
-
-const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
+const { getParameter } = require('@cloud-agentic-iot/shared/config');
+const { requiredEnv } = require('@cloud-agentic-iot/shared/env');
 
 /**
  * Verifies the request actually came from Slack (HMAC over the raw body +
@@ -9,7 +9,7 @@ const SLACK_SIGNING_SECRET = process.env.SLACK_SIGNING_SECRET;
  * This is the only "identity" check in the whole flow — there is no
  * Salesforce login involved anywhere in this request path.
  */
-function verifySlackSignature(event) {
+function verifySlackSignature(event, signingSecret) {
   const headers = Object.fromEntries(
     Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v])
   );
@@ -19,9 +19,13 @@ function verifySlackSignature(event) {
   if (Math.abs(Date.now() / 1000 - timestamp) > 300) return false;
 
   const baseString = `v0:${timestamp}:${event.body}`;
-  const computed = `v0=${crypto.createHmac('sha256', SLACK_SIGNING_SECRET).update(baseString).digest('hex')}`;
+  const computed = `v0=${crypto.createHmac('sha256', signingSecret).update(baseString).digest('hex')}`;
 
-  return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature));
+  // timingSafeEqual throws on buffers of different lengths, which turned a
+  // malformed signature into a 500 instead of a 401.
+  const expected = Buffer.from(computed);
+  const received = Buffer.from(String(signature));
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
 function slackResponse(text) {
@@ -33,7 +37,10 @@ function slackResponse(text) {
 }
 
 exports.handler = async (event) => {
-  if (!verifySlackSignature(event)) {
+  // A SecureString read at runtime and kept for CONFIG_CACHE_SECONDS, not an
+  // environment variable anyone who can read the function's configuration sees.
+  const signingSecret = await getParameter(requiredEnv('SLACK_SIGNING_SECRET_PARAMETER'), { decrypt: true });
+  if (!verifySlackSignature(event, signingSecret)) {
     return { statusCode: 401, body: 'Invalid Slack signature' };
   }
 
@@ -62,11 +69,18 @@ exports.handler = async (event) => {
   }
 
   if (command === '/dispense-medication') {
-    // Headless write-back: this creates a command record. A Salesforce
-    // Flow/Apex trigger on Device_Command__c publishes a Platform Event
-    // that the 00-iot-device-provisioning branch's ESP32 device is already
-    // listening for via AWS IoT Core — closing the loop from Slack all the
-    // way to the physical servo motor.
+    // Headless write-back: this creates a Pending Device Command, and
+    // Salesforce sends it on. DeviceCommandTrigger queues
+    // DeviceCommandSendJob, which posts it to the device API (POST
+    // /device-command, with the record's Id as its commandId); the
+    // device-command function publishes it on the board's
+    // device/<thing>/command, and the patient monitor turns its servo. The
+    // board's answer on device/<thing>/ack comes back through the
+    // device-command-ack function, which moves the record from Sent to
+    // Acked, or to Failed with why. The job runs as the integration user
+    // this function signs in as, so that user needs the External Credential
+    // principal permission set too (README, Stage 2 d). The reply below says
+    // the command was queued, not carried out: the record's Status says that.
     await conn.sobject('Device_Command__c').create({
       Device__c: deviceId,
       Command__c: 'DISPENSE_MEDICATION',

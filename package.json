@@ -3,7 +3,8 @@
   "private": true,
   "description": "Tests for the Lambda functions. Each function under lambda/ is packaged and deployed on its own; this file only runs the test suite.",
   "scripts": {
-    "test": "node --test \"test/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\"",
+    "simulate": "node test/load/fleet-simulation.js"
   },
   "engines": {
     "node": ">=22"

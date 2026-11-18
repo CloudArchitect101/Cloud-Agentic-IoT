@@ -69,4 +69,28 @@ private class TriggerHandlerTest {
         Assert.areEqual(1, [SELECT COUNT() FROM Case WHERE Subject = 'Loaded with integrations bypassed'],
             'The record still saves; only the integration is skipped');
     }
+
+    @IsTest
+    static void theCustomSettingSwitchesNamedHandlersOff() {
+        // What an admin sets for a data migration user, without a deploy.
+        insert new Integration_Control__c(
+            SetupOwnerId = UserInfo.getOrganizationId(),
+            Bypass_Handlers__c = ' caseTriggerHandler , WiFiNetworkTriggerHandler'
+        );
+        Assert.isTrue(TriggerHandler.isBypassed('CaseTriggerHandler'), 'Named, in any case and spacing');
+        Assert.isTrue(TriggerHandler.isBypassed('WiFiNetworkTriggerHandler'), 'Named');
+        Assert.isFalse(TriggerHandler.isBypassed('AssetTriggerHandler'), 'Not named');
+    }
+
+    @IsTest
+    static void bypassAllTriggersSwitchesEveryHandlerOffForThatUser() {
+        insert new Integration_Control__c(SetupOwnerId = UserInfo.getUserId(), Bypass_Triggers__c = true);
+        Assert.isTrue(TriggerHandler.isBypassed('AssetTriggerHandler'), 'Every handler');
+        Assert.isTrue(TriggerHandler.isBypassed('CaseTriggerHandler'), 'Every handler');
+    }
+
+    @IsTest
+    static void withNoSettingNothingIsBypassed() {
+        Assert.isFalse(TriggerHandler.isBypassed('AssetTriggerHandler'), 'Integrations run by default');
+    }
 }

@@ -16,6 +16,14 @@
         <enabled>true</enabled>
     </classAccesses>
     <classAccesses>
+        <apexClass>DeviceCommandAckService</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>DeviceConnectionService</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
         <apexClass>DeviceProvisioningService</apexClass>
         <enabled>true</enabled>
     </classAccesses>
@@ -39,6 +47,175 @@
         <apexClass>WiFiCredentialService</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <!-- Field-level security. Object access alone is not enough: the AWS sync
+         upserts Patient_Vitals__c through the REST API as the integration
+         user, and a field without FLS answers INVALID_FIELD, "No such column".
+         Required fields (Device__c, Device_Reading_Id__c, SSID__c) are left out
+         because Salesforce refuses FLS entries on them; they are always
+         readable and editable. Wi_Fi_Network__c.Passphrase__c is left out on
+         purpose: no integration reads it through the API. -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.BP_Diastolic__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.BP_Systolic__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Heart_Rate__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Humidity__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Patient_State__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Previous_State__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Risk_Score__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Source_System__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.SpO2__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Temperature__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Patient_Vitals__c.Timestamp__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Certificate_Id__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <!-- Connection_Since__c, Connection_Status__c and Last_Disconnect_Reason__c
+         come from AWS IoT's connect and disconnect events, which the
+         device-presence Lambda records through DeviceConnectionService. -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Connection_Since__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Connection_Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Firmware_Version__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Last_Disconnect_Reason__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Last_Telemetry_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Provisioning_Bundle_Link__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Provisioning_Error__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Provisioning_Expires_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Provisioning_Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Thing_ARN__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Thing_Group__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Asset.Wi_Fi_Network__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <!-- Answered_At__c and Status_Detail__c come from the board's answer,
+         which the device-command-ack Lambda records through
+         DeviceCommandAckService. Sent_At__c is set only by the send job,
+         whose update runs in system mode, so this user only reads it. -->
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Answered_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Asset__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Command__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Requested_By__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>false</editable>
+        <field>Device_Command__c.Sent_At__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Status_Detail__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Device_Command__c.Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <objectPermissions>
         <object>Patient_Vitals__c</object>
         <allowCreate>true</allowCreate>

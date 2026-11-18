@@ -40,11 +40,51 @@ check_environment() {
 # you say, in so many words, that this is the break-glass case.
 refuse_local_prod() {
   if [ "$1" = "Prod" ] && ! in_ci && [ "${ALLOW_LOCAL_PROD:-}" != "yes" ]; then
-    die "Prod is deployed by the pipeline: merge Dev into Prod and approve the run. In a genuine emergency, rerun with ALLOW_LOCAL_PROD=yes."
+    die "${2:-Prod is deployed by the pipeline: merge Dev into Prod and approve the run.} In a genuine emergency, rerun with ALLOW_LOCAL_PROD=yes."
   fi
 }
 
+# detect_port - prints the first serial port with the usual name an ESP32's
+# USB-serial chip gets on macOS or Linux, or fails if none is plugged in. A
+# loop rather than `ls ... | head`: with pipefail, ls failing on the names
+# that match nothing would stop the calling script without a word.
+detect_port() {
+  local p
+  for p in /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/cu.wchusbserial* /dev/ttyUSB* /dev/ttyACM*; do
+    if [ -e "$p" ]; then printf '%s' "$p"; return 0; fi
+  done
+  return 1
+}
+
 stack_name() { printf '%s-%s-%s' "$PROJECT" "$1" "$2"; }   # stack_name <dir> <env>
+
+# Where scripts/deploy-aws.sh publishes config/vital-thresholds.json. The
+# templates' ThresholdsParameterName defaults to the same name.
+# shellcheck disable=SC2034  # used by the scripts that source this file
+THRESHOLDS_PARAM=/cloud-agentic-iot/config/vital-thresholds
+
+# package_function <lambda/dir> - zips one function with exactly its declared
+# dependencies and prints the zip's path.
+#
+# Built in a scratch copy, so whatever node_modules your checkout has never
+# ends up in the zip. The copy keeps the function's place in the tree next to
+# lambda/shared, because functions depend on it as "file:../shared";
+# --install-links copies it into node_modules as a real package, with its own
+# dependencies, instead of a symlink the zip would not follow out of the copy.
+package_function() {
+  local dir="$1" build
+  build=$(mktemp -d)
+  mkdir -p "$build/$(dirname "$dir")"
+  cp -R "$dir" "$build/$dir"
+  cp -R "$REPO_ROOT/lambda/shared" "$build/lambda/shared"
+  rm -rf "$build/$dir/node_modules" "$build/lambda/shared/node_modules"
+  if [ -f "$build/$dir/package.json" ]; then
+    (cd "$build/$dir" && npm install --omit=dev --install-links --no-audit --no-fund --loglevel=error) >&2
+  fi
+  (cd "$build/$dir" && zip -qr "$build.zip" .)
+  rm -rf "$build"
+  echo "$build.zip"
+}
 
 # ------------------------------------------------------------------- AWS
 

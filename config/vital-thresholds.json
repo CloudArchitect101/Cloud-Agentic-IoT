@@ -1,0 +1,34 @@
+{
+  "description": "Clinical bands for the AWS side: patient-vitals scores every reading with these, and the alert dispatcher decides CRITICAL_VITALS or ABNORMAL_TREND with them. scripts/deploy-aws.sh copies this file to the SSM parameter /cloud-agentic-iot/config/vital-thresholds, which the Lambdas read at runtime. Salesforce holds the same numbers as Vital_Sign_Threshold__mdt records plus the score fields on Device_Platform_Setting__mdt.Default; test/config/thresholds-match.test.js fails the checks when the two differ. A value is critical when it is below critical.below or above critical.above, otherwise a warning when it is outside the warning limits. Limits are strict: a value equal to a limit is inside the band.",
+  "maxScore": 100,
+  "states": {
+    "CRITICAL": 70,
+    "AT_RISK": 40
+  },
+  "vitals": [
+    {
+      "field": "heartRate",
+      "unit": "bpm",
+      "critical": { "below": 50, "above": 120, "points": 30 },
+      "warning": { "below": 60, "above": 100, "points": 15 }
+    },
+    {
+      "field": "spo2",
+      "unit": "%",
+      "critical": { "below": 90, "points": 35 },
+      "warning": { "below": 95, "points": 20 }
+    },
+    {
+      "field": "temperature",
+      "unit": "C",
+      "critical": { "below": 35.0, "above": 39.0, "points": 25 },
+      "warning": { "below": 36.5, "above": 38.5, "points": 15 }
+    },
+    {
+      "field": "bpSystolic",
+      "unit": "mmHg",
+      "critical": { "above": 160, "points": 20 },
+      "warning": { "above": 140, "points": 10 }
+    }
+  ]
+}

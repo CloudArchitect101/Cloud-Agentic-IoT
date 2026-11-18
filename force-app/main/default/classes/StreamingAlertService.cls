@@ -28,86 +28,75 @@ public with sharing class StreamingAlertService {
     }
 
     /**
-     * Process incoming vitals and publish Platform Event if critical
+     * Process incoming vitals and publish a Platform Event for each payload
+     * that needs attention.
      *
-     * @param payload Vitals from AWS Lambda
-     * @return Alert result with Platform Event ID if published
+     * The bands are Vital_Sign_Threshold__mdt records (VitalSignEvaluator):
+     * any vital in its critical band is CRITICAL_VITALS, any in its warning
+     * band is ABNORMAL_TREND. All events go out in one EventBus.publish, which
+     * counts as one DML statement however many payloads there are; publishing
+     * inside the loop, as before, failed the 151st payload of a call.
+     *
+     * @param payloads Vitals from AWS Lambda
+     * @return One AlertResult per payload, in order
      */
     @InvocableMethod(label='Process Real-time Vitals Alert' description='Processes incoming vitals and publishes Platform Event for critical conditions')
     public static List<AlertResult> processVitalsAlert(List<VitalsPayload> payloads) {
         List<AlertResult> results = new List<AlertResult>();
+        List<Patient_Vital_Alert__e> events = new List<Patient_Vital_Alert__e>();
+        List<AlertResult> resultForEvent = new List<AlertResult>();
 
         for (VitalsPayload payload : payloads) {
             AlertResult result = new AlertResult();
             result.deviceId = payload.deviceId;
             result.alertPublished = false;
-
-            // Evaluate clinical thresholds and determine alert type
-            String alertType = evaluateAlertType(payload);
-
-            if (alertType != null) {
-                // Publish Platform Event for Agentforce agents to consume
-                publishPlatformEvent(payload, alertType);
-                result.alertPublished = true;
-                result.alertType = alertType;
-            }
-
             results.add(result);
+
+            VitalSignEvaluator.Assessment assessment = VitalSignEvaluator.assess(new Map<String, Decimal>{
+                'heartRate'   => payload.heartRate,
+                'spo2'        => payload.spo2,
+                'temperature' => payload.temperature,
+                'bpSystolic'  => payload.bpSystolic
+            });
+            String alertType = alertTypeFor(assessment);
+            if (alertType == null) {
+                continue;
+            }
+            result.alertType = alertType;
+            events.add(buildEvent(payload, alertType, assessment));
+            resultForEvent.add(result);
         }
 
+        if (!events.isEmpty()) {
+            // Publish = producing to a topic: Agentforce agents subscribe to
+            // Patient_Vital_Alert__e and take action.
+            List<Database.SaveResult> saves = EventBus.publish(events);
+            for (Integer i = 0; i < saves.size(); i++) {
+                resultForEvent[i].alertPublished = saves[i].isSuccess();
+                if (!saves[i].isSuccess()) {
+                    System.debug(LoggingLevel.ERROR, 'Patient_Vital_Alert__e publish failed for '
+                        + resultForEvent[i].deviceId + ': ' + saves[i].getErrors()[0].getMessage());
+                }
+            }
+        }
         return results;
     }
 
-    /**
-     * Evaluate vitals against clinical thresholds to determine alert type
-     *
-     * @param payload Patient vitals payload
-     * @return Alert type if critical condition detected, null otherwise
-     */
-    private static String evaluateAlertType(VitalsPayload payload) {
-        // Critical heart rate
-        if (payload.heartRate != null && (payload.heartRate < 50 || payload.heartRate > 120)) {
+    @TestVisible
+    private static String alertTypeFor(VitalSignEvaluator.Assessment assessment) {
+        if (assessment.anyCritical()) {
             return 'CRITICAL_VITALS';
         }
-
-        // Critical SpO2
-        if (payload.spo2 != null && payload.spo2 < 90) {
-            return 'CRITICAL_VITALS';
-        }
-
-        // Critical temperature
-        if (payload.temperature != null && (payload.temperature > 39.0 || payload.temperature < 35.0)) {
-            return 'CRITICAL_VITALS';
-        }
-
-        // Critical blood pressure
-        if (payload.bpSystolic != null && payload.bpSystolic > 160) {
-            return 'CRITICAL_VITALS';
-        }
-
-        // Abnormal trend (non-critical but concerning)
-        if (payload.heartRate != null && (payload.heartRate < 60 || payload.heartRate > 100)) {
+        if (assessment.anyWarning()) {
             return 'ABNORMAL_TREND';
         }
-
-        if (payload.spo2 != null && payload.spo2 < 95) {
-            return 'ABNORMAL_TREND';
-        }
-
         return null;
     }
 
-    /**
-     * Publish Platform Event for Agentforce agents to consume
-     * This is the key integration point — agents subscribe to Platform Events
-     * and take autonomous action when critical vitals are detected
-     *
-     * @param payload Patient vitals
-     * @param alertType Type of alert
-     */
-    private static void publishPlatformEvent(VitalsPayload payload, String alertType) {
+    private static Patient_Vital_Alert__e buildEvent(
+        VitalsPayload payload, String alertType, VitalSignEvaluator.Assessment assessment
+    ) {
         String message;
-
         if (alertType == 'CRITICAL_VITALS') {
             message = 'CRITICAL: Patient device ' + payload.deviceId +
                       ' has abnormal vitals — HR: ' + payload.heartRate +
@@ -123,12 +112,12 @@ public with sharing class StreamingAlertService {
         alertEvent.Patient_Device_Id__c = payload.deviceId;
         alertEvent.Alert_Type__c = alertType;
         alertEvent.Patient_State__c = alertType == 'CRITICAL_VITALS' ? 'CRITICAL' : 'AT_RISK';
+        alertEvent.Risk_Score__c = assessment.riskScore;
         alertEvent.Heart_Rate__c = payload.heartRate;
         alertEvent.SpO2__c = payload.spo2;
         alertEvent.Temperature__c = payload.temperature;
         alertEvent.Message__c = message;
-
-        EventBus.publish(new List<Patient_Vital_Alert__e>{ alertEvent });
+        return alertEvent;
     }
 
     /**

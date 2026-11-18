@@ -1,9 +1,11 @@
 {
   "name": "queue-depth-relay",
   "version": "1.0.0",
+  "private": true,
   "description": "Relays Salesforce Case queue depth changes to an ESP32 via AWS IoT Core",
   "main": "index.js",
   "dependencies": {
-    "@aws-sdk/client-iot-data-plane": "^3.665.0"
+    "@aws-sdk/client-iot-data-plane": "^3.665.0",
+    "@cloud-agentic-iot/shared": "file:../shared"
   }
 }

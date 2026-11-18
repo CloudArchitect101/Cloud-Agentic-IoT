@@ -208,28 +208,18 @@ with open(os.environ["OUT"], "w") as f:
     f.write(json.dumps(bundle, separators=(",", ":")))
 PY
 
-stty -f "$PORT" 115200 raw -echo 2>/dev/null || stty -F "$PORT" 115200 raw -echo
-
-# Hold the port open for the whole exchange. Opening it toggles DTR, which
-# resets the ESP32 - so wait for it to boot into provisioning mode before
-# writing, otherwise the bundle arrives while the bootloader is still running
-# and is lost. Reading the same handle shows the device's own replies.
-exec 3<>"$PORT"
-echo "  Waiting for the device to boot..."
-sleep 4
-
-tr -d '\n' < "$BUNDLE" >&3
-printf '\n' >&3
-
-echo "  Sent. Device says:"
-echo "  ----------------------------------------------------------------"
-cat <&3 | sed 's/^/  /' &
-READER=$!
-sleep 8
-kill "$READER" 2>/dev/null || true
-wait "$READER" 2>/dev/null || true
-exec 3>&-
-echo "  ----------------------------------------------------------------"
+# The board asks for its bundle only in the two minutes after it starts, and
+# can lose characters of one sent in a single burst. board_serial.py restarts
+# it, waits for it to ask, sends the bundle in small pieces, and shows what the
+# board says back until it is online.
+STATUS=0
+python3 "$REPO/scripts/lib/board_serial.py" provision "$PORT" "$BUNDLE" || STATUS=$?
+case "$STATUS" in
+  0) ;;
+  3) warn "The device stored its identity but has not confirmed it is online - see above." ;;
+  2|4) die "The device already holds an identity, so nothing was sent - see above. Keep the certificate and key files in $CERT_DIR." ;;
+  *) die "The device did not store the credentials - see above. Run this again once that is fixed." ;;
+esac
 
 # Over-the-air updates find a board through its Thing Group, so put it in its
 # type's fleet group now. scripts/ota.sh join moves it to the canary ring.
@@ -254,7 +244,7 @@ keep it somewhere safe or delete it, but do not leave it in Downloads.
 
 Do this next: add your phone hotspot as the second network.
 
-    ./scripts/update-wifi.sh "<hotspot-SSID>" "<hotspot-passphrase>"
+    ./scripts/update-wifi.sh "<hotspot-SSID>"      (it asks for the passphrase)
 
 NVS has 3 slots and only the third one ever rotates, so the first two are
 permanent anchors. The network you just provisioned took slot 0; a hotspot in

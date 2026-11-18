@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Commands_Per_Callout__c</fullName>
+    <label>Commands per Callout</label>
+    <description>Device commands (Wi-Fi updates, queue depth) sent in one request. Publishing is cheap, so this can be large.</description>
+    <precision>4</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

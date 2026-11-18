@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Sweep_Delay_Minutes__c</fullName>
+    <label>Sweep Delay (minutes)</label>
+    <description>DeviceProvisioningBatch leaves a device alone until it has gone this long without an edit, so it does not race the job the Asset trigger already started for it.</description>
+    <precision>4</precision>
+    <scale>0</scale>
+    <required>true</required>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

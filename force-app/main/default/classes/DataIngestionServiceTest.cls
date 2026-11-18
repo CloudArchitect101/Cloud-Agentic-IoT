@@ -129,4 +129,84 @@ private class DataIngestionServiceTest {
         System.assertEquals(1, result.size(), 'Should return vitals for the specified device');
         System.assertEquals('TEST-DEVICE-001', result[0].Device__c);
     }
+
+    private static DataIngestionService.VitalRecord reading(String deviceId, Decimal heartRate, Datetime at) {
+        DataIngestionService.VitalRecord vital = new DataIngestionService.VitalRecord();
+        vital.deviceId = deviceId;
+        vital.heartRate = heartRate;
+        vital.spo2 = 98.0;
+        vital.temperature = 36.8;
+        vital.humidity = 41.0;
+        vital.timestamp = at;
+        vital.sourceSystem = 'AWS_IoT';
+        return vital;
+    }
+
+    @IsTest
+    static void test_two_hundred_devices_are_one_upsert() {
+        // The upsert used to sit inside the per-device loop: the 151st device
+        // in one call hit the DML statement limit and the call failed.
+        DeviceTestSettings.use();
+        DeviceTestSettings.useStandardThresholds();
+        List<DataIngestionService.VitalRecord> vitals = new List<DataIngestionService.VitalRecord>();
+        for (Integer i = 0; i < 200; i++) {
+            vitals.add(reading('BULK-' + i, 75, Datetime.now()));
+        }
+
+        Test.startTest();
+        Integer before = Limits.getDmlStatements();
+        List<DataIngestionService.IngestionResult> results = DataIngestionService.ingestVitals(vitals);
+        Integer used = Limits.getDmlStatements() - before;
+        Test.stopTest();
+
+        Assert.areEqual(1, used, 'One DML statement for the whole batch');
+        Assert.areEqual(200, results.size(), 'One result per device');
+        Assert.areEqual(200, [SELECT COUNT() FROM Patient_Vitals__c], 'Every device saved');
+    }
+
+    @IsTest
+    static void test_the_latest_reading_of_a_device_wins_whatever_the_order() {
+        DeviceTestSettings.use();
+        DeviceTestSettings.useStandardThresholds();
+        Datetime earlier = Datetime.newInstanceGmt(2026, 1, 1, 10, 0, 0);
+        Datetime later = earlier.addMinutes(1);
+
+        Test.startTest();
+        DataIngestionService.ingestVitals(new List<DataIngestionService.VitalRecord>{
+            reading('TEST-DEVICE-001', 75, earlier), reading('TEST-DEVICE-001', 130, later)
+        });
+        Test.stopTest();
+
+        Patient_Vitals__c saved = [SELECT Heart_Rate__c, Humidity__c, Patient_State__c, Timestamp__c FROM Patient_Vitals__c];
+        Assert.areEqual(130, saved.Heart_Rate__c, 'The later reading, though it came second');
+        Assert.areEqual(later, saved.Timestamp__c, 'Its time');
+        Assert.areEqual(41.0, saved.Humidity__c, 'Humidity is kept');
+        Assert.areEqual('STABLE', saved.Patient_State__c, '30 points is below AT_RISK');
+    }
+
+    @IsTest
+    static void test_the_reading_id_is_the_one_aws_writes() {
+        // The Lambda keys a reading as deviceId-<toISOString()>. The same
+        // reading arriving both ways must land on one record.
+        Datetime at = Datetime.newInstanceGmt(2025, 10, 27, 16, 0, 0);
+        Assert.areEqual('pm-1-2025-10-27T16:00:00.000Z', DataIngestionService.readingIdFor('pm-1', at),
+            'ISO 8601, UTC, milliseconds');
+    }
+
+    @IsTest
+    static void test_a_retried_batch_updates_instead_of_duplicating() {
+        DeviceTestSettings.use();
+        DeviceTestSettings.useStandardThresholds();
+        Datetime at = Datetime.newInstanceGmt(2026, 1, 1, 10, 0, 0);
+        List<DataIngestionService.VitalRecord> vitals = new List<DataIngestionService.VitalRecord>{
+            reading('TEST-DEVICE-001', 75, at)
+        };
+
+        Test.startTest();
+        DataIngestionService.ingestVitals(vitals);
+        DataIngestionService.ingestVitals(vitals);
+        Test.stopTest();
+
+        Assert.areEqual(1, [SELECT COUNT() FROM Patient_Vitals__c], 'Same reading, same record');
+    }
 }

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Last_Disconnect_Reason__c</fullName>
+    <label>Last Disconnect Reason</label>
+    <description>Why AWS IoT last saw the board disconnect, e.g. CONNECTION_LOST or MQTT_KEEP_ALIVE_TIMEOUT.</description>
+    <length>80</length>
+    <type>Text</type>
+</CustomField>

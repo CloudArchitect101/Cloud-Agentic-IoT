@@ -1,0 +1,10 @@
+{
+  "name": "alert-dispatcher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Judges patient.vitals.update events against the shared clinical bands and raises alerts through StreamingAlertService.",
+  "main": "index.js",
+  "dependencies": {
+    "@cloud-agentic-iot/shared": "file:../../shared"
+  }
+}

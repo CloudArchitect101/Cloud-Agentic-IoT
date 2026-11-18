@@ -18,7 +18,7 @@
 #include <ESP32Servo.h>
 
 // Raise to ship a change - see patient-monitor.ino.
-#define FIRMWARE_VERSION "2.0.1"
+#define FIRMWARE_VERSION "2.2.0"
 
 CloudAgenticDevice device("queue-indicator", FIRMWARE_VERSION);
 
@@ -41,9 +41,12 @@ unsigned long stepIntervalMs() {
   return slowest - ((slowest - fastest) * queueIntensity / 100);
 }
 
-void onCommand(JsonDocument& doc) {
+// True for the queue-depth message, false for anything else: the library
+// answers a command with that, done or refused, when it carries a commandId.
+// The queue-depth API sends none, so these are never answered.
+bool onCommand(JsonDocument& doc) {
   const char* op = doc["operation"] | "";
-  if (strcmp(op, "QUEUE_DEPTH") != 0 && !doc.containsKey("intensity")) return;
+  if (strcmp(op, "QUEUE_DEPTH") != 0 && !doc.containsKey("intensity")) return false;
 
   openCaseCount  = doc["openCaseCount"] | 0;
   queueIntensity = constrain((int)(doc["intensity"] | 0), 0, 100);
@@ -64,6 +67,7 @@ void onCommand(JsonDocument& doc) {
   status["openCaseCount"] = openCaseCount;
   status["intensity"]     = queueIntensity;
   device.publish("status", status);
+  return true;
 }
 
 void driveIndicator() {
