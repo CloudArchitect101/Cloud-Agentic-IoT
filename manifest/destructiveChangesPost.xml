@@ -13,6 +13,10 @@
   Request_Nurse: the patient portal agent's first, old-builder metadata. The
   agent is now Agent Script (aiAuthoringBundles/Patient_Portal_Agent), whose
   actions call the same Apex classes directly.
+
+  Device_Platform_Setting__mdt.Room_Temp_Dispense__c and
+  Room_Temp_Dispense_Cooldown_Minutes__c: retired with firmware 2.6.0, which
+  has no dispense. Deleted on Vitaly's OK (Nov 18).
 -->
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
@@ -32,6 +36,11 @@
         <members>Get_My_Devices</members>
         <members>Request_Nurse</members>
         <name>GenAiFunction</name>
+    </types>
+    <types>
+        <members>Device_Platform_Setting__mdt.Room_Temp_Dispense__c</members>
+        <members>Device_Platform_Setting__mdt.Room_Temp_Dispense_Cooldown_Minutes__c</members>
+        <name>CustomField</name>
     </types>
     <version>65.0</version>
 </Package>
