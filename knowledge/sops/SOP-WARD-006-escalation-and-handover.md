@@ -27,7 +27,7 @@ deterioration process first. Device procedures never delay that.
 
 The agent may open a Case for a device condition, but only after it has
 read the device's latest readings and the user has confirmed which device
-and which reading. It never diagnoses, and it never sends a dose.
+and which reading. It never diagnoses, and it never sends a command to a device.
 
 ## Handover
 

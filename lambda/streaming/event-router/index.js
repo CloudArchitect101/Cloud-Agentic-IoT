@@ -80,7 +80,7 @@ function parseTelemetry(rawPayload) {
             bpSystolic: firstNumber(data.bpSystolic, data.bp_sys),
             bpDiastolic: firstNumber(data.bpDiastolic, data.bp_dia),
             timestamp: data.timestamp || data.receivedAt || new Date().toISOString(),
-            sourceSystem: 'AWS_IoT'
+            sourceSystem: typeof data.sourceSystem === 'string' && data.sourceSystem ? data.sourceSystem.slice(0, 40) : 'AWS_IoT'
         };
     } catch (error) {
         console.error('Failed to parse telemetry:', error);

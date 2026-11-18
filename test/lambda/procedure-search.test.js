@@ -3,7 +3,7 @@
 // procedure-search answers POST /find-procedure for the Patient Care Agent's
 // Find Procedure action. The handler tests search an index the real
 // knowledge-indexer builds from knowledge/sops, over a fake Bedrock that
-// embeds as a bag of words, so a question about a hot room has to find
+// embeds as a bag of words, so a question about a high reading has to find
 // SOP-WARD-001. The template tests pin both functions' roles against the
 // calls they make, the route Salesforce reaches, and the bucket.
 
@@ -52,15 +52,15 @@ async function load(t, { objects, bedrockFail, s3Fail, env = {} } = {}) {
   return { ask, bedrock, s3, lines };
 }
 
-test('a question about a hot room finds the room temperature SOP, with what the agent cites', async (t) => {
+test('a question about a high reading finds the high temperature alert SOP, with what the agent cites', async (t) => {
   const { ask, bedrock } = await load(t);
-  const { status, body } = await ask({ query: 'The room temperature is 31 C and the room stays hot. What are the steps?' });
+  const { status, body } = await ask({ query: 'The sensor reads a high temperature of 31 C and stays high. What are the steps?' });
   assert.equal(status, 200);
   assert.ok(body.passages.length >= 1 && body.passages.length <= 3);
   const top = body.passages[0];
   assert.equal(top.sopId, 'SOP-WARD-001');
   assert.deepEqual(Object.keys(top).sort(), ['matchedBy', 'owner', 'reviewed', 'score', 'section', 'sopId', 'text', 'title', 'version'].sort());
-  assert.equal(top.title, 'Room temperature excursion');
+  assert.equal(top.title, 'High temperature alert');
   assert.match(top.version, /^\d+\.\d+$/);
   assert.equal(top.matchedBy, 'meaning');
   assert.ok(top.score >= 0.25 && top.score <= 1);
@@ -78,7 +78,7 @@ test('each SOP is found by a question in ward words', async (t) => {
   const questions = {
     'SOP-WARD-002': 'Humidity in the medication storage cabinet is above 60 percent',
     'SOP-WARD-003': 'The room monitor is offline and not sending readings',
-    'SOP-WARD-004': 'The dispenser jammed and the dose command failed',
+    'SOP-WARD-004': 'The alert motor is not turning, or keeps turning after the temperature is normal',
     'SOP-WARD-005': 'How do I stop the alert motor sweeping? acknowledge the case',
     'SOP-WARD-006': 'What do I tell the incoming nurse at shift handover?',
   };
@@ -162,12 +162,12 @@ test('a question that looks like an injection attempt is answered and flagged in
 test('the index is read once and kept for CACHE_SECONDS', async (t) => {
   const { ask, s3 } = await load(t);
   await ask({ query: 'room temperature' });
-  await ask({ query: 'dispenser jam' });
+  await ask({ query: 'alert motor stuck' });
   assert.equal(s3.calls.length, 1);
 
   const fresh = await load(t, { env: { CACHE_SECONDS: '0' } });
   await fresh.ask({ query: 'room temperature' });
-  await fresh.ask({ query: 'dispenser jam' });
+  await fresh.ask({ query: 'alert motor stuck' });
   assert.equal(fresh.s3.calls.length, 2);
 });
 

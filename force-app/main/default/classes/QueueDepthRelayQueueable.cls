@@ -2,7 +2,13 @@
  * QueueDepthRelayQueueable.cls
  *
  * Relays Queue_Depth_Change__e events out to AWS, which republishes them to
- * the device's MQTT command topic on IoT Core.
+ * each board's MQTT command topic on IoT Core as QUEUE_DEPTH.
+ *
+ * One event per queue. The boards that follow it are the one its binding
+ * names (Device_Id__c, when set) and, for the Internal Device Queue, every
+ * Internal Device board (DeviceRoles.followingThingNames). When one batch
+ * holds several events for a queue, only the newest is sent: the depth is a
+ * state, and two in flight could arrive in either order.
  *
  * Platform Event triggers run asynchronously but still cannot make callouts
  * directly, so the relay hops through a Queueable. Auth is the Named
@@ -76,19 +82,62 @@ public with sharing class QueueDepthRelayQueueable implements Queueable, Databas
      * Builds relay payloads from published events and enqueues the callout.
      */
     public static void relayToDevices(List<Queue_Depth_Change__e> events) {
-        List<DeviceQueueCommand> deviceCommands = new List<DeviceQueueCommand>();
+        // The newest event of each queue: events arrive in publish order.
+        Map<String, Queue_Depth_Change__e> newestByQueue = new Map<String, Queue_Depth_Change__e>();
         for (Queue_Depth_Change__e event : events) {
-            DeviceQueueCommand deviceCommand = new DeviceQueueCommand();
-            deviceCommand.deviceId           = event.Device_Id__c;
-            deviceCommand.queueDeveloperName = event.Queue_Developer_Name__c;
-            deviceCommand.openCaseCount      = Integer.valueOf(event.Open_Case_Count__c);
-            deviceCommand.intensity          = Integer.valueOf(event.Intensity__c);
-            deviceCommand.motorState         = event.Motor_State__c;
-            deviceCommands.add(deviceCommand);
+            String queueKey = event.Queue_Developer_Name__c == null ? '' : event.Queue_Developer_Name__c.toLowerCase();
+            newestByQueue.put(queueKey, event);
         }
 
-        if (!deviceCommands.isEmpty() && Limits.getLimitQueueableJobs() > Limits.getQueueableJobs()) {
+        String internalQueue = CaseQueueMonitorService.internalDeviceQueue();
+        List<String> internalBoards = null;
+        List<DeviceQueueCommand> deviceCommands = new List<DeviceQueueCommand>();
+        for (Queue_Depth_Change__e event : newestByQueue.values()) {
+            Set<String> boards = new Set<String>();
+            if (String.isNotBlank(event.Device_Id__c)) {
+                boards.add(event.Device_Id__c);
+            }
+            if (internalQueue != null && internalQueue.equalsIgnoreCase(event.Queue_Developer_Name__c)) {
+                if (internalBoards == null) {
+                    internalBoards = DeviceRoles.followingThingNames();
+                }
+                boards.addAll(internalBoards);
+            }
+            for (String board : boards) {
+                DeviceQueueCommand deviceCommand = command(board, event.Queue_Developer_Name__c,
+                    event.Open_Case_Count__c == null ? 0 : event.Open_Case_Count__c.intValue(),
+                    event.Intensity__c == null ? 0 : event.Intensity__c.intValue());
+                deviceCommand.motorState = event.Motor_State__c;
+                deviceCommands.add(deviceCommand);
+            }
+        }
+        enqueue(deviceCommands);
+    }
+
+    /** One board's QUEUE_DEPTH. */
+    public static DeviceQueueCommand command(String deviceId, String queueDeveloperName, Integer openCaseCount, Integer intensity) {
+        DeviceQueueCommand deviceCommand = new DeviceQueueCommand();
+        deviceCommand.deviceId           = deviceId;
+        deviceCommand.queueDeveloperName = queueDeveloperName;
+        deviceCommand.openCaseCount      = openCaseCount;
+        deviceCommand.intensity          = intensity;
+        deviceCommand.motorState         = intensity > 0 ? 'ACTIVE' : 'IDLE';
+        return deviceCommand;
+    }
+
+    /**
+     * Starts the job that sends these, when there are any and the
+     * transaction has a Queueable left; otherwise logs what was not sent.
+     */
+    public static void enqueue(List<DeviceQueueCommand> deviceCommands) {
+        if (deviceCommands == null || deviceCommands.isEmpty()) {
+            return;
+        }
+        if (Limits.getLimitQueueableJobs() > Limits.getQueueableJobs()) {
             System.enqueueJob(new QueueDepthRelayQueueable(deviceCommands));
+        } else {
+            System.debug(LoggingLevel.ERROR, 'No Queueable left in this transaction: queue depth not sent to '
+                + deviceCommands.size() + ' device(s)');
         }
     }
 }

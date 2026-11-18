@@ -70,7 +70,7 @@ Almost all coupling flows through three shared interfaces. This is deliberate �
 
 **2. Platform Events.** Chapter 02 publishes `Patient_Vital_Alert__e`; chapter 03 publishes `Queue_Depth_Change__e`. Anything may subscribe — the agent, an LWC dashboard, the relay Lambda — without the publisher knowing. This is why adding the Slack front door in chapter 04 required no change to chapter 03.
 
-**3. Custom metadata as configuration.** Chapter 03's `Device_Queue_Binding__mdt` means binding a new device to a new queue is a config record, not a deployment. The same principle scales to the rest.
+**3. Configuration, not code.** Chapter 03's indicator is any board whose Asset has the Internal Device record type, and `Device_Queue_Binding__mdt` sets how fast it turns or adds a board to a queue: a record, not a deployment. Every board runs one firmware build, so one OTA covers patient monitors and indicators alike. The same principle scales to the rest.
 
 ## Two pairs that are deliberate alternatives, not additions
 

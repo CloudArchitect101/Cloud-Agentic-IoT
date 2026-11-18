@@ -34,6 +34,8 @@ PEM = '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END PRIVATE KEY-----\n'
 SF = '/cloud-agentic-iot/salesforce'
 LABEL = '/cloud-agentic-iot/environment'
 TOPIC = f'arn:aws:sns:{REGION}:{ACCOUNT}:cloud-agentic-iot-alarms'
+OTA_BUCKET = 'cloud-agentic-iot-ota-dev-firmwarebucket-abc123'
+OTA_ROLE = 'arn:aws:iam::111122223333:role/cloud-agentic-iot-ota-Dev-OtaPresignRole-XYZ'
 
 FAKE_AWS = textwrap.dedent(r'''
     #!/usr/bin/env python3
@@ -164,6 +166,10 @@ FAKE_SF = textwrap.dedent(r'''
         print(json.dumps({'status': 0, 'result': {'username': org['username'], 'id': org['id']}}))
     elif args[:3] == ['project', 'deploy', 'start']:
         print('Deployed.')
+    elif args[:3] == ['project', 'generate', 'manifest']:
+        out = args[args.index('--output-dir') + 1]
+        with open(os.path.join(out, 'package.xml'), 'w') as f:
+            f.write('<Package/>\n')
     else:
         sys.stderr.write('fake sf: no answer prepared for: ' + ' '.join(args) + '\n')
         sys.exit(2)
@@ -368,6 +374,11 @@ class DeploySalesforceGuards(SetupFixture):
         self.assertEqual(self.value(f'{SF}/org-id'), ORG_ID)
         self.assertEqual(self.value('/cloud-agentic-iot/deployed-commit/salesforce'), self.head)
         self.assertEqual(len(self.deploys()), 2)   # check-only, then the deploy
+        for deploy in self.deploys():
+            # By manifest, removing what left force-app/ afterwards.
+            self.assertIn('--post-destructive-changes', deploy)
+            self.assertEqual(deploy[deploy.index('--post-destructive-changes') + 1],
+                             'manifest/destructiveChangesPost.xml')
 
     def test_an_org_paired_with_another_account_is_refused_before_anything_deploys(self):
         self.param(f'{SF}/org-id', OTHER_ORG_ID)
@@ -424,7 +435,10 @@ class DeployAws(SetupFixture):
                                    self.repo], capture_output=True, text=True, check=True).stdout.split()
         self.functions = sorted({word for word in declared if word.startswith('cloud-agentic-iot-')})
         self.state['functions'] = self.functions
-        self.state['outputs'] = {'cloud-agentic-iot-alarms-Dev': {'AlarmTopicArn': TOPIC}}
+        self.state['outputs'] = {
+            'cloud-agentic-iot-alarms-Dev': {'AlarmTopicArn': TOPIC},
+            'cloud-agentic-iot-ota-Dev': {'FirmwareBucketName': OTA_BUCKET, 'OtaPresignRoleArn': OTA_ROLE},
+        }
         self.state['log_groups'] = ['/aws/lambda/cloud-agentic-iot-patient-vitals']
 
     def overrides(self, stack):
@@ -442,6 +456,22 @@ class DeployAws(SetupFixture):
         for stack in ('cloud-agentic-iot-patient-vitals-Dev', 'cloud-agentic-iot-streaming-Dev'):
             self.assertIn(f'AlarmTopicArn={TOPIC}', self.overrides(stack), stack)
         self.assertNotIn(f'AlarmTopicArn={TOPIC}', self.overrides('cloud-agentic-iot-queue-relay-Dev'))
+
+    def test_the_ota_saga_gets_the_firmware_bucket_and_signing_role_of_the_ota_stack(self):
+        code, out = self.run_script('deploy-aws.sh', 'Dev')
+        self.assertEqual(code, 0, out)
+        stacks = [c['options']['stack-name'][0] for c in self.calls('cloudformation deploy')]
+        self.assertLess(stacks.index('cloud-agentic-iot-ota-Dev'), stacks.index('cloud-agentic-iot-ota-saga-Dev'))
+        saga = self.overrides('cloud-agentic-iot-ota-saga-Dev')
+        self.assertIn(f'FirmwareBucketName={OTA_BUCKET}', saga)
+        self.assertIn(f'OtaPresignRoleArn={OTA_ROLE}', saga)
+        self.assertFalse(any(o.startswith('FirmwareBucketName=') for o in self.overrides('cloud-agentic-iot-streaming-Dev')))
+
+    def test_an_ota_stack_without_its_outputs_stops_the_deploy(self):
+        self.state['outputs']['cloud-agentic-iot-ota-Dev'] = {}
+        code, out = self.run_script('deploy-aws.sh', 'Dev')
+        self.assertNotEqual(code, 0)
+        self.assertIn('the OTA saga needs both', out)
 
     def test_without_alarm_email_the_address_the_stack_has_is_kept(self):
         code, out = self.run_script('deploy-aws.sh', 'Dev')

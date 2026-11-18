@@ -67,8 +67,8 @@ Those additional fields are only filled by the tests and the load simulation (`t
 
 | Component | Purpose | Technology |
 |-----------|---------|------------|
-| Patient Device | Collects vitals, actuates on command | Physical ESP32 + DHT11 + servo (chapter `00`) |
-| Queue Indicator | Physical Case-queue depth display | ESP32 + servo, driven by custom metadata (chapter `03`) |
+| Monitoring Device | Reads temperature and humidity wherever its sensor sits (on a patient, in a fridge, in a room), turns its alert motor while the reading is high | Physical ESP32 + DHT11 + servo (chapter `00`) |
+| Queue Indicator | Physical Case-queue depth display | The same ESP32 firmware; an Asset of record type Internal Device follows Care_Team_Queue (chapter `03`) |
 | Slack Bot | Headless Salesforce read/write from chat | Lambda + JWT Bearer Flow (chapter `04`) |
 | Data Ingestion | Transform and route telemetry | AWS Lambda |
 | Data Cloud | Unified patient data engine | Salesforce Data Cloud |
@@ -83,6 +83,6 @@ Those additional fields are only filled by the tests and the load simulation (`t
 - **PII Masking**: Patient data masked before LLM processing
 - **Field-Level Security**: Agents run in designated user context
 - **Audit Trail**: All agent actions logged to Agent_Audit_Log__c
-- **Guardrails**: Every command to a room checked in device-command before it is published (allowed commands, settings and ranges, one room per dose); prompt injection detection, output checks and PII masking for the MCP server's answers ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md))
+- **Guardrails**: Every command to a board checked in device-command before it is published (allowed commands, settings and ranges); prompt injection detection, output checks and PII masking for the MCP server's answers ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md))
 - **MCP server**: Room status and commands for agents outside Salesforce, behind a Lambda function URL that takes only SigV4-signed requests
 - **HIPAA Compliance**: Data encryption, access controls, audit logging

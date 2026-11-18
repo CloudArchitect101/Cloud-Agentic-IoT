@@ -2,9 +2,9 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Device_Id__c</fullName>
     <label>Device ID</label>
-    <description>AWS IoT Thing name of the physical indicator bound to this queue.</description>
+    <description>AWS IoT Thing name of one more board that follows this queue, besides every Internal Device board when this is the Internal Device Queue. Blank: none.</description>
     <length>100</length>
-    <required>true</required>
+    <required>false</required>
     <type>Text</type>
     <unique>false</unique>
 </CustomField>

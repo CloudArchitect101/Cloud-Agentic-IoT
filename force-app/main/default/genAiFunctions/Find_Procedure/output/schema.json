@@ -1,0 +1,70 @@
+{
+  "unevaluatedProperties": false,
+  "properties": {
+    "success": {
+      "title": "Success",
+      "description": "Success",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "message": {
+      "title": "Message",
+      "description": "Message",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "passages": {
+      "title": "Passages",
+      "description": "The passages, best first. Each starts with its SOP ID, version, title and section in square brackets.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "citations": {
+      "title": "Citations",
+      "description": "The SOP ID and version of each passage, for example SOP-WARD-001 v2.0, in the order given.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "topProcedureId": {
+      "title": "Top Procedure ID",
+      "description": "Top Procedure ID",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "topProcedureTitle": {
+      "title": "Top Procedure Title",
+      "description": "Top Procedure Title",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "passagesReturned": {
+      "title": "Passages Returned",
+      "description": "Passages Returned",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "notice": {
+      "title": "Notice",
+      "description": "Notice",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

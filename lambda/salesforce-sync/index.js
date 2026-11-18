@@ -6,7 +6,7 @@
  * Writes the readings patient-vitals decided Salesforce should see (state
  * changes, and re-alerts while a patient stays AT_RISK or CRITICAL) into
  * Patient_Vitals__c. Records pass through unchanged, including the
- * room-temperature flag.
+ * temperature alert flag.
  *
  *   sync queue (SQS) --batches--> this function --sObject Collections upsert--> Salesforce
  *

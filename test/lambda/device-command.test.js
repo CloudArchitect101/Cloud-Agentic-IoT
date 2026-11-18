@@ -75,7 +75,7 @@ test('the one-device shape keeps its one-device answers', async (t) => {
 // the commandId, and the board answers with it on device/<thing>/ack.
 const RECORD_ID = 'a0Bbm00000AbCdEFGH';
 const recordCommand = (fields = {}) => ({
-  body: JSON.stringify({ thingName: 'pm-1', operation: 'DISPENSE_MEDICATION', commandId: RECORD_ID, ...fields }),
+  body: JSON.stringify({ thingName: 'pm-1', operation: 'RESTART', commandId: RECORD_ID, ...fields }),
 });
 
 test('a commandId reaches the board in the payload, with the other fields', async (t) => {
@@ -85,9 +85,9 @@ test('a commandId reaches the board in the payload, with the other fields', asyn
   const res = await handler(recordCommand());
 
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(JSON.parse(res.body), { published: true, thingName: 'pm-1', operation: 'DISPENSE_MEDICATION' });
+  assert.deepEqual(JSON.parse(res.body), { published: true, thingName: 'pm-1', operation: 'RESTART' });
   assert.deepEqual(calls.map((c) => c.input.topic), ['device/pm-1/command']);
-  assert.deepEqual(JSON.parse(calls[0].input.payload.toString()), { operation: 'DISPENSE_MEDICATION', commandId: RECORD_ID });
+  assert.deepEqual(JSON.parse(calls[0].input.payload.toString()), { operation: 'RESTART', commandId: RECORD_ID });
 
   // A command with settings of its own keeps them all, in the batch shape too.
   const batch = await handler({
@@ -214,7 +214,8 @@ test('CASE_ALERT is exported, for the check that Salesforce, this function and t
 test('a command no board takes is refused before anything is published', async (t) => {
   const logs = captureConsole(t);
   const { handler, calls } = load(t);
-  for (const operation of ['REBOOT', 'QUEUE_DEPTH', 'dispense_medication', 'OTA']) {
+  // DISPENSE_MEDICATION was retired on Nov 10.
+  for (const operation of ['REBOOT', 'QUEUE_DEPTH', 'DISPENSE_MEDICATION', 'OTA']) {
     const res = await handler({ thingName: 'pm-1', operation });
     assert.equal(res.statusCode, 400, operation);
     const body = JSON.parse(res.body);
@@ -250,24 +251,20 @@ test('a setting out of the range the board accepts is refused, and the value is 
 test('a field the command does not take is refused: the board would read "command" as the operation', async (t) => {
   captureConsole(t);
   const { handler, calls } = load(t);
-  const res = await handler(recordCommand({ operation: 'CASE_ALERT', active: true, command: 'DISPENSE_MEDICATION' }));
+  const res = await handler(recordCommand({ operation: 'CASE_ALERT', active: true, command: 'RESTART' }));
   assert.equal(res.statusCode, 400);
   assert.deepEqual(JSON.parse(res.body).failures, ['unexpected_field:command']);
   assert.equal(calls.length, 0);
 });
 
-test('a dose goes to one room per request, and no request names more rooms than Salesforce sends', async (t) => {
+test('no request names more devices than Salesforce sends', async (t) => {
   captureConsole(t);
   const { handler, calls } = load(t);
-  const dose = await handler({ body: JSON.stringify({ thingNames: ['pm-1', 'pm-2'], operation: 'DISPENSE_MEDICATION' }) });
-  assert.equal(dose.statusCode, 400);
-  assert.deepEqual(JSON.parse(dose.body).failures, ['too_many_devices']);
-
   const many = await handler(wifiUpdate(Array.from({ length: 201 }, (_, i) => `pm-${i}`)));
   assert.equal(many.statusCode, 400);
   assert.deepEqual(JSON.parse(many.body).failures, ['too_many_devices']);
   assert.equal(calls.length, 0);
 
-  // What Salesforce does send still goes: one dose, one Device Command.
+  // What Salesforce does send still goes: one Device Command.
   assert.equal((await handler(recordCommand())).statusCode, 200);
 });

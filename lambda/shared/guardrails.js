@@ -2,7 +2,7 @@
 
 /*
  * The guardrails every path to a board shares: which commands may be sent,
- * with which settings, to how many rooms at once; what text an agent's
+ * with which settings, to how many devices at once; what text an agent's
  * request or answer may carry; and PII masking for what leaves AWS.
  *
  * Why a module and not only a Lambda of its own: a check another function
@@ -34,11 +34,12 @@ const MAX_DEVICES_PER_REQUEST = 200;
 // the patient monitor also reads "command" as the operation, so an extra
 // field is not harmless padding, it can change what the board does.
 const OPERATIONS = {
-  // Turns the medication servo once. One room per request: a dose is for one
-  // patient, and nothing in Salesforce sends it to more.
-  DISPENSE_MEDICATION: { fields: {}, maxDevices: 1 },
+  // DISPENSE_MEDICATION was retired on Nov 10: the monitored device is a
+  // temperature alert, not a dispenser, so a stale Device Command asking for
+  // it is refused here as an unknown operation.
   RESTART: { fields: {} },
-  // The patient monitor's motor on or off while a Case waits (CaseAlertService).
+  // Retired with firmware 2.5.0 (the motor follows the device's own sensor),
+  // still accepted so an old Device Command can be answered.
   CASE_ALERT: { fields: { active: { type: 'boolean', required: true } } },
   // WiFiCredentialPushJob: one network, every room on it. WPA2 passphrases are
   // 8 to 63 characters, or 64 hex digits; an open network has none.
@@ -61,15 +62,11 @@ const OPERATIONS = {
   },
 };
 
-// What an agent outside Salesforce (the MCP server) may ask for: one room at
-// a time, and only commands that change how a room is watched, never what is
-// given to a patient or the credentials a board holds. A dose needs a
-// verified prescription and the day's dose count, which live in Salesforce
-// (checkBusinessRules below, and the dispense cooldown there), so an agent
-// that cannot show them is refused rather than trusted.
+// What an agent outside Salesforce (the MCP server) may ask for: one device
+// at a time, and only commands that change how a device is watched, never
+// the credentials a board holds.
 const AGENT_OPERATIONS = new Set(['RESTART', 'CASE_ALERT', 'SET_TELEMETRY_INTERVAL']);
 const AGENT_REFUSALS = {
-  DISPENSE_MEDICATION: 'dispense_needs_salesforce',
   WIFI_UPDATE: 'credentials_not_for_agents',
 };
 
@@ -82,7 +79,6 @@ const MESSAGES = {
   unknown_operation: (op) => `${op} is not a command a board takes. Commands: ${Object.keys(OPERATIONS).join(', ')}.`,
   too_many_devices: (max) => `This command goes to at most ${max} room(s) per request.`,
   not_for_agents: (op) => `${op} is not a command an agent may send here. Agents may send: ${[...AGENT_OPERATIONS].join(', ')}.`,
-  dispense_needs_salesforce: () => 'DISPENSE_MEDICATION needs a verified prescription and the day\'s dose count, which only Salesforce holds. Create a Device Command there instead.',
   credentials_not_for_agents: () => 'WIFI_UPDATE carries network credentials; an agent may not send them. Use the Wi-Fi Network record in Salesforce.',
   unexpected_field: (field) => `${field} is not a setting this command takes.`,
   missing_field: (field) => `${field} is required for this command.`,
@@ -266,20 +262,22 @@ function checkOutput(text) {
 }
 
 /**
- * Business rules the model cannot waive. The agent may decide to dispense
- * medication, but only this function decides whether that is permitted.
+ * Business rules the model cannot waive. An agent may decide a high
+ * temperature alert is over, but only this function decides whether closing
+ * it is permitted: the newest reading must be below the re-arm level
+ * (SOP-WARD-001: 29.0 C in the demo) and someone must have rechecked it.
  */
 function checkBusinessRules(action, context = {}) {
   const failures = [];
 
-  if (action === 'DISPENSE_MEDICATION') {
-    if (!context.prescriptionVerified) failures.push('prescription_not_verified');
-    // Fails closed. With either count missing, undefined >= undefined is
-    // false, which used to let the dose through.
-    if (!Number.isFinite(context.dosesInLast24h) || !Number.isFinite(context.maxDailyDoses)) {
-      failures.push('dose_history_unknown');
-    } else if (context.dosesInLast24h >= context.maxDailyDoses) {
-      failures.push('daily_dose_limit_reached');
+  if (action === 'CLOSE_TEMPERATURE_ALERT') {
+    if (!context.recheckedByPerson) failures.push('recheck_not_recorded');
+    // Fails closed. With either number missing, undefined >= undefined is
+    // false, which would let the close through.
+    if (!Number.isFinite(context.latestTemperature) || !Number.isFinite(context.rearmBelow)) {
+      failures.push('temperature_unknown');
+    } else if (context.latestTemperature >= context.rearmBelow) {
+      failures.push('still_high');
     }
   }
 

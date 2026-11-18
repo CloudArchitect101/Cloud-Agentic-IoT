@@ -200,32 +200,36 @@ test('a commandId the board answers is one both command Lambdas take, and no oth
   }
 });
 
-// The case alert (firmware 2.3.0). Salesforce names the command and its on or
-// off, the device-command Lambda checks them, and the patient monitor acts on
-// them. A name one side spells differently is refused by the board, and the
-// motor stays as it was without a word on the Case.
-test('CASE_ALERT and its active are the same in Salesforce, the device-command Lambda and the patient monitor', () => {
+// The case alert (firmware 2.3.0 to 2.4.0) is retired: Salesforce no longer
+// sends it, and since 2.5.0 the board answers it as done and ignores it, so
+// a command still sent through the device API is Acked, not Failed.
+test('CASE_ALERT is retired in Salesforce and acknowledged by the patient monitor', () => {
   const sketch = read('firmware/patient-monitor/patient-monitor.ino');
-  const service = read('force-app/main/default/classes/CaseAlertService.cls');
   const sendJob = read('force-app/main/default/classes/DeviceCommandSendJob.cls');
   const picklist = read('force-app/main/default/objects/Device_Command__c/fields/Command__c.field-meta.xml');
-  const { CASE_ALERT } = loadWithFakes(path.join(root, 'lambda/device-command/index.js'), {
-    '@aws-sdk/client-iot-data-plane': fakeAwsSdk('IoTDataPlaneClient', ['PublishCommand']).sdk,
-  });
+  const destructive = read('manifest/destructiveChangesPost.xml');
 
-  assert.equal(CASE_ALERT, 'CASE_ALERT');
-  assert.match(service, new RegExp(`CASE_ALERT_COMMAND = '${CASE_ALERT}';`));
-  assert.ok(picklist.includes(`<fullName>${CASE_ALERT}</fullName>`), 'Device_Command__c.Command__c must offer CASE_ALERT');
-  assert.match(sketch, new RegExp(`strcmp\\(op, "${CASE_ALERT}"\\) == 0`));
+  assert.ok(!fs.existsSync(path.join(root, 'force-app/main/default/classes/CaseAlertService.cls')));
+  assert.match(destructive, /<members>CaseAlertService<\/members>/);
+  assert.match(destructive, /<members>CaseAlertServiceTest<\/members>/);
+  assert.match(picklist, /<fullName>CASE_ALERT<\/fullName><default>false<\/default><isActive>false<\/isActive>/);
+  assert.doesNotMatch(sendJob, /Case_Alert_On__c|CASE_ALERT/);
 
-  // The on or off travels as active, a JSON true or false.
-  assert.match(sendJob, /body\.put\('active', command\.Case_Alert_On__c == true\)/);
-  assert.match(read('lambda/device-command/index.js'), /typeof fields\.active !== 'boolean'/);
-  assert.match(sketch, /doc\["active"\]\.is<bool>\(\)/);
-  assert.match(sketch, /doc\["active"\]\.as<bool>\(\)/);
+  const caseAlert = sketch.match(/strcmp\(op, "CASE_ALERT"\) == 0\) \{([\s\S]*?)\n  \}/);
+  assert.ok(caseAlert, 'the patient monitor still answers CASE_ALERT');
+  assert.match(caseAlert[1], /return true;/);
 });
 
-test('the patient monitor keeps the case alert in a namespace of its own', () => {
+test('the patient monitor turns its motor from its own room at 30 C, not from Cases', () => {
+  const sketch = read('firmware/patient-monitor/patient-monitor.ino');
+  const demand = read('firmware/patient-monitor/ServoDemand.h');
+  assert.match(demand, /const float ROOM_HOT_C = 30\.0f;/);
+  assert.match(demand, /return celsius >= ROOM_HOT_C;/);
+  assert.match(sketch, /if \(ok\) roomReading\(t\);/);
+  assert.doesNotMatch(sketch, /setCaseAlert/);
+});
+
+test('the namespace the patient monitor clears of an old case alert is its own', () => {
   const sketch = read('firmware/patient-monitor/patient-monitor.ino');
   const library = read('firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp');
   const ours = sketch.match(/#define NVS_CASE_ALERT "([^"]+)"/)[1];
@@ -234,4 +238,42 @@ test('the patient monitor keeps the case alert in a namespace of its own', () =>
   assert.ok(!theirs.includes(ours), `${ours} is one of the library's namespaces`);
   // NVS namespace names are at most 15 characters.
   assert.ok(ours.length <= 15, ours);
+});
+
+// One firmware for every board (2.4.0). The queue relay sends QUEUE_DEPTH to
+// every Internal Device board, and those boards run the patient-monitor
+// build: a field one side spells differently leaves the nurse station still.
+test('QUEUE_DEPTH and its fields are the same in the queue relay and the patient monitor', () => {
+  const sketch = read('firmware/patient-monitor/patient-monitor.ino');
+  const lambda = read('lambda/queue-relay/index.js');
+  assert.match(lambda, /operation: 'QUEUE_DEPTH'/);
+  assert.match(lambda, /openCaseCount: openCaseCount \?\? 0/);
+  assert.match(lambda, /intensity: Math\.max\(0, Math\.min\(100, intensity\)\)/);
+  assert.match(sketch, /strcmp\(op, "QUEUE_DEPTH"\) == 0/);
+  assert.match(sketch, /doc\["intensity"\]/);
+  assert.match(sketch, /doc\["openCaseCount"\]/);
+  // The board answers on status, which its policy allows.
+  assert.match(sketch, /device\.publish\("status", status\)/);
+  assert.ok(relayTemplate.includes('topic/device/${!iot:Connection.Thing.ThingName}/status'));
+});
+
+// Boards refuse an OTA build named for another device type, and every board
+// in the field runs "patient-monitor". The unified build must keep that name,
+// and the internal boards' group must sit where the patient-monitor releases go.
+test('every board, internal ones included, is reached by the patient-monitor build', () => {
+  const sketch = read('firmware/patient-monitor/patient-monitor.ino');
+  assert.match(sketch, /CloudAgenticDevice device\("patient-monitor", FIRMWARE_VERSION/);
+
+  const otaTemplate = read('infra/ota/cloudformation.yaml');
+  const internal = otaTemplate.match(/ThingGroupName: internal-devices\n\s+ParentGroupName: !Ref (\w+)/);
+  assert.ok(internal, 'infra/ota declares internal-devices with a parent group');
+  assert.match(otaTemplate, new RegExp(`  ${internal[1]}:\\n\\s+Type: AWS::IoT::ThingGroup\\n\\s+Properties:\\n\\s+ThingGroupName: fleet-patient-monitor\\n`));
+  assert.match(ota, /INTERNAL_GROUP=internal-devices/);
+
+  const settings = read('force-app/main/default/customMetadata/Device_Platform_Setting.Default.md-meta.xml');
+  assert.match(settings, /<field>Internal_Thing_Group__c<\/field>\s*<value xsi:type="xsd:string">internal-devices<\/value>/);
+  for (const recordType of ['Internal_Device', 'Patient_Device']) {
+    assert.ok(fs.existsSync(path.join(root, `force-app/main/default/objects/Asset/recordTypes/${recordType}.recordType-meta.xml`)), recordType);
+    assert.match(read('force-app/main/default/classes/DeviceRoles.cls'), new RegExp(`= '${recordType}';`));
+  }
 });

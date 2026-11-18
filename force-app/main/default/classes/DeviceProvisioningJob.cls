@@ -158,7 +158,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
     private static Map<String, Asset> loadAssets(List<String> assetIds) {
         Map<String, Asset> byKey = new Map<String, Asset>();
         for (Asset device : [
-            SELECT Id, SerialNumber, Thing_ARN__c, Thing_Group__c, Wi_Fi_Network__c,
+            SELECT Id, RecordTypeId, SerialNumber, Thing_ARN__c, Thing_Group__c, Wi_Fi_Network__c,
                    Wi_Fi_Network__r.SSID__c, Wi_Fi_Network__r.Passphrase__c
             FROM Asset
             WHERE Id IN :assetIds
@@ -256,6 +256,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
         private final Action kind;
         private final Integer bundleTtlMinutes;
         private final String defaultThingGroup;
+        private final String internalThingGroup;
 
         /** Keys this transaction had no callout left for. */
         public final List<String> notReached = new List<String>();
@@ -271,6 +272,7 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
             this.kind = kind;
             this.bundleTtlMinutes = DevicePlatformSettings.bundleTtlMinutes();
             this.defaultThingGroup = DevicePlatformSettings.defaultThingGroup();
+            this.internalThingGroup = DevicePlatformSettings.internalThingGroup();
         }
 
         /**
@@ -423,10 +425,19 @@ public with sharing class DeviceProvisioningJob implements Queueable, Database.A
                 'passphrase' => device.Wi_Fi_Network__r == null ? null : device.Wi_Fi_Network__r.Passphrase__c
             };
             if (kind == Action.PROVISION) {
-                request.put('thingGroup',
-                    String.isBlank(device.Thing_Group__c) ? defaultThingGroup : device.Thing_Group__c);
+                request.put('thingGroup', thingGroupFor(device));
             }
             return request;
+        }
+
+        // The Asset's own Thing Group, else the one for its role: an Internal
+        // Device goes to internal-devices, inside fleet-patient-monitor, so
+        // fleet releases reach it like every other board.
+        private String thingGroupFor(Asset device) {
+            if (String.isNotBlank(device.Thing_Group__c)) {
+                return device.Thing_Group__c;
+            }
+            return DeviceRoles.isInternal(device) ? internalThingGroup : defaultThingGroup;
         }
 
         private void succeed(String key, Map<String, Object> entry) {

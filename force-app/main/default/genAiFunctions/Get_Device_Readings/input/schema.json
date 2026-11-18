@@ -1,0 +1,23 @@
+{
+  "unevaluatedProperties": false,
+  "required": [
+    "deviceId"
+  ],
+  "properties": {
+    "deviceId": {
+      "title": "Device ID",
+      "description": "The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "readingCount": {
+      "title": "Number of Readings",
+      "description": "How many of the latest readings to return, newest first. 5 if empty, at most 20.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

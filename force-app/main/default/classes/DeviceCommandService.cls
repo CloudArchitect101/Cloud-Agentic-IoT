@@ -2,7 +2,7 @@
  * DeviceCommandService.cls
  *
  * What happens when a Device Command is created: by hand, from Send Command
- * on a device's Asset, or by Slack's /dispense-medication. prepare (before
+ * on a device's Asset. prepare (before
  * insert) makes the command ready to send, and send (after insert) starts
  * the job that sends it. A trigger cannot call out, so the callouts happen
  * in DeviceCommandSendJob.
@@ -132,7 +132,7 @@ public with sharing class DeviceCommandService {
         }
         try {
             return [
-                SELECT Id, Name, SerialNumber, Thing_ARN__c
+                SELECT Id, Name, RecordTypeId, SerialNumber, Thing_ARN__c
                 FROM Asset
                 WHERE Id IN :assetIds OR SerialNumber IN :serialNumbers
             ];
@@ -147,7 +147,7 @@ public with sharing class DeviceCommandService {
         if (assetIds.isEmpty()) {
             return new List<Asset>();
         }
-        return [SELECT Id, Name, SerialNumber, Thing_ARN__c FROM Asset WHERE Id IN :assetIds];
+        return [SELECT Id, Name, RecordTypeId, SerialNumber, Thing_ARN__c FROM Asset WHERE Id IN :assetIds];
     }
 
     // Device ID becomes the Thing name of the command's Asset, unless it

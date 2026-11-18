@@ -21,11 +21,28 @@ private class DevicePlatformSettingsTest {
         Assert.areEqual('Agentforce', DevicePlatformSettings.escalationCaseOrigin(), 'Agent Case Origin');
         Assert.areEqual('Care_Team_Queue', DevicePlatformSettings.escalationCaseQueue(), 'Agent Case queue');
 
-        // The room-temperature rule's settings, as the Default record ships them.
-        Assert.areEqual('Room Temperature Rule', DevicePlatformSettings.roomTempCaseOrigin(), 'Room-temperature Case Origin');
-        Assert.areEqual('Care_Team_Queue', DevicePlatformSettings.roomTempCaseQueue(), 'Room-temperature Case queue');
-        Assert.isTrue(DevicePlatformSettings.roomTempDispense(), 'A new room-temperature Case requests a dose');
-        Assert.areEqual(60, DevicePlatformSettings.roomTempDispenseCooldownMinutes(), 'Room-temperature dose cooldown');
+        // The patient temperature alert's settings, as the Default record ships them.
+        Assert.areEqual('Room Temperature Rule', DevicePlatformSettings.roomTempCaseOrigin(), 'Temperature alert Case Origin');
+        Assert.areEqual('Care_Team_Queue', DevicePlatformSettings.roomTempCaseQueue(), 'Patient temperature Case queue');
+
+        // Internal Device boards, as the Default record ships them.
+        Assert.areEqual('internal-devices', DevicePlatformSettings.internalThingGroup(), 'Internal Device OTA group');
+        Assert.areEqual('Care_Team_Queue', DevicePlatformSettings.internalDeviceQueue(), 'The queue Internal Device boards follow');
+    }
+
+    @IsTest
+    static void blankInternalSettingsFallBackToTheDefaults() {
+        Device_Platform_Setting__mdt settings = DeviceTestSettings.use();
+        settings.Internal_Thing_Group__c = ' ';
+        settings.Internal_Device_Queue__c = null;
+        settings.Escalation_Case_Queue__c = 'Escalations';
+        Assert.areEqual('fleet-patient-monitor', DevicePlatformSettings.internalThingGroup(), 'Default_Thing_Group__c');
+        Assert.areEqual('Escalations', DevicePlatformSettings.internalDeviceQueue(), 'Escalation_Case_Queue__c');
+
+        settings.Internal_Thing_Group__c = 'ward-3';
+        settings.Internal_Device_Queue__c = 'Ward_3_Queue';
+        Assert.areEqual('ward-3', DevicePlatformSettings.internalThingGroup(), 'Its own group');
+        Assert.areEqual('Ward_3_Queue', DevicePlatformSettings.internalDeviceQueue(), 'Its own queue');
     }
 
     @IsTest
@@ -57,18 +74,6 @@ private class DevicePlatformSettingsTest {
             Assert.fail('A blank queue name must not be accepted');
         } catch (DevicePlatformSettings.SettingException expected) {
             Assert.isTrue(expected.getMessage().contains('Escalation_Case_Queue__c'), expected.getMessage());
-        }
-    }
-
-    @IsTest
-    static void aZeroRoomTempCooldownIsRefused() {
-        Device_Platform_Setting__mdt settings = DeviceTestSettings.use();
-        settings.Room_Temp_Dispense_Cooldown_Minutes__c = 0;
-        try {
-            DevicePlatformSettings.roomTempDispenseCooldownMinutes();
-            Assert.fail('A zero cooldown would let every new Case dose again');
-        } catch (DevicePlatformSettings.SettingException expected) {
-            Assert.isTrue(expected.getMessage().contains('Room_Temp_Dispense_Cooldown_Minutes__c'), expected.getMessage());
         }
     }
 

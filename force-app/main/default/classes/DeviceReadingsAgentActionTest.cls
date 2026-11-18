@@ -4,6 +4,8 @@
  * The agent's read action: the latest readings of one device, newest first,
  * with the Asset's connection fields, and a plain message instead of a guess
  * when there is no such device, no reading, or a duplicate serial number.
+ * Plus the newest reading stored in AWS, from POST /device-live, which
+ * DeviceApiMock answers for every test that does not set its own mock.
  */
 @IsTest
 private class DeviceReadingsAgentActionTest {
@@ -51,8 +53,14 @@ private class DeviceReadingsAgentActionTest {
         return [SELECT Id FROM User WHERE Username = :username('agent-reader')];
     }
 
+    private static DeviceApiMock aws;
+
     private static List<DeviceReadingsAgentAction.ReadingsResult> call(
             List<DeviceReadingsAgentAction.ReadingsRequest> requests) {
+        if (aws == null) {
+            aws = new DeviceApiMock();
+        }
+        Test.setMock(HttpCalloutMock.class, aws);
         List<DeviceReadingsAgentAction.ReadingsResult> results;
         System.runAs(member()) {
             Test.startTest();
@@ -104,6 +112,38 @@ private class DeviceReadingsAgentActionTest {
             new List<DeviceReadingsAgentAction.ReadingsRequest>{ req(deviceId, readingCount) });
         Assert.areEqual(1, results.size(), 'One result per request');
         return results[0];
+    }
+
+    @IsTest
+    static void lastTelemetryFallsBackToTheNewestReading() {
+        Asset d = device('Test8');
+        d.Last_Telemetry_At__c = null;
+        TriggerHandler.bypass('AssetTriggerHandler');
+        update d;
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+        insert new List<Patient_Vitals__c>{ reading('Test8', 1, 70), reading('Test8', 4, 72) };
+
+        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+
+        Assert.isTrue(res.success, res.message);
+        Assert.areEqual(Datetime.newInstanceGmt(2026, 11, 6, 12, 4, 0), res.lastTelemetryAt,
+            'With no Last Telemetry At on the Asset, the newest reading\'s time');
+    }
+
+    @IsTest
+    static void contactDetailsTypedOnTheAssetReachTheAgentMasked() {
+        Asset d = device('Test8');
+        d.Name = 'Room 4 monitor, family 555-123-4567, nurse.lead@example.com';
+        d.Last_Disconnect_Reason__c = 'Unplugged, call 555-123-4567';
+        TriggerHandler.bypass('AssetTriggerHandler');
+        update d;
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+
+        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+
+        Assert.areEqual('Room 4 monitor, family [PHONE_1], [EMAIL_1]', res.deviceName);
+        Assert.areEqual('Unplugged, call [PHONE_1]', res.lastDisconnectReason);
+        Assert.areEqual('Test8', res.deviceId, 'The device ID is the key, never masked');
     }
 
     @IsTest
@@ -245,6 +285,46 @@ private class DeviceReadingsAgentActionTest {
                 'No requests, no results');
             Assert.areEqual(0, DeviceReadingsAgentAction.getLatestReadings(null).size(), 'Null is treated as empty');
         }
+    }
+
+    @IsTest
+    static void theNewestReadingStoredInAwsComesWithItsAge() {
+        device('Test8');
+        insert reading('Test8', 1, 72);
+
+        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+
+        Assert.isTrue(res.success, res.message);
+        Assert.areEqual(new List<String>{ 'device-live' }, aws.paths, 'One callout, to POST /device-live');
+        Assert.areEqual('Test8', aws.bodies[0].get('thingName'), 'Asked about the named device');
+        Assert.areEqual('latest', aws.bodies[0].get('mode'), 'Only reads: mode latest sends nothing to the board');
+        Assert.areEqual(Datetime.newInstanceGmt(2026, 11, 6, 5, 29, 30), res.liveReadingAt, 'When the board took it');
+        Assert.areEqual(22.5, res.liveTemperature, 'Live temperature');
+        Assert.areEqual(41, res.liveHumidity, 'Live humidity');
+        Assert.isTrue(res.liveReadingAgeMinutes > 0, 'Its age in minutes');
+        Assert.isTrue(res.latestReadingAgeMinutes > 0, 'The saved reading\'s age in minutes');
+        Assert.isTrue(res.liveMessage.contains('22.5 C'), res.liveMessage);
+    }
+
+    @IsTest
+    static void aFailedLiveCallStillReturnsTheSavedReadings() {
+        device('Test8');
+        insert reading('Test8', 1, 72);
+        aws = new DeviceApiMock();
+        aws.statusCode = 503;
+
+        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+
+        Assert.isTrue(res.success, 'The saved readings do not depend on AWS: ' + res.message);
+        Assert.areEqual(72, res.latestHeartRate, 'Saved reading still there');
+        Assert.isNull(res.liveReadingAt, 'No live reading made up');
+        Assert.isTrue(res.liveMessage.contains('unavailable'), res.liveMessage);
+    }
+
+    @IsTest
+    static void anUnknownDeviceCostsNoCallout() {
+        one('Nobody', 5);
+        Assert.areEqual(0, aws.paths.size(), 'No AWS call for a device that is not there');
     }
 
     @IsTest

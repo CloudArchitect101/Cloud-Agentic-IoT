@@ -1,0 +1,182 @@
+{
+  "unevaluatedProperties": false,
+  "properties": {
+    "success": {
+      "title": "Success",
+      "description": "Success",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "message": {
+      "title": "Message",
+      "description": "Message",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "deviceId": {
+      "title": "Device ID",
+      "description": "Device ID",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "deviceName": {
+      "title": "Device Name",
+      "description": "Device Name",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "connectionStatus": {
+      "title": "Connection Status",
+      "description": "Connection Status",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "connectionSince": {
+      "title": "Connection Since",
+      "description": "Connection Since",
+      "lightning:type": "lightning__dateTimeStringType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "lastDisconnectReason": {
+      "title": "Last Disconnect Reason",
+      "description": "Last Disconnect Reason",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "lastTelemetryAt": {
+      "title": "Last Telemetry At",
+      "description": "Last Telemetry At",
+      "lightning:type": "lightning__dateTimeStringType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "readingsReturned": {
+      "title": "Readings Returned",
+      "description": "Readings Returned",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "latestReadingAt": {
+      "title": "Latest Reading At",
+      "description": "Latest Reading At",
+      "lightning:type": "lightning__dateTimeStringType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "latestHeartRate": {
+      "title": "Latest Heart Rate",
+      "description": "Latest Heart Rate",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "latestSpO2": {
+      "title": "Latest SpO2",
+      "description": "Latest SpO2",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "latestTemperature": {
+      "title": "Latest Temperature",
+      "description": "Latest Temperature",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "latestPatientState": {
+      "title": "Latest Patient State",
+      "description": "Latest Patient State",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "latestRiskScore": {
+      "title": "Latest Risk Score",
+      "description": "Latest Risk Score",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "readings": {
+      "title": "Readings",
+      "description": "One line per reading, newest first. A value that was not measured says not measured.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "latestReadingAgeMinutes": {
+      "title": "Latest Reading Age Minutes",
+      "description": "How many minutes ago the newest saved reading was taken.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveReadingAt": {
+      "title": "Live Reading At",
+      "description": "When the board took its newest reading stored in AWS. Empty when AWS has none or could not be read.",
+      "lightning:type": "lightning__dateTimeStringType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveReadingAgeMinutes": {
+      "title": "Live Reading Age Minutes",
+      "description": "How many minutes ago the board took its newest reading stored in AWS.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveTemperature": {
+      "title": "Live Temperature",
+      "description": "Temperature in C of the newest reading stored in AWS.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveHumidity": {
+      "title": "Live Humidity",
+      "description": "Relative humidity in % of the newest reading stored in AWS.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "liveMessage": {
+      "title": "Live Message",
+      "description": "About the newest reading stored in AWS: what it is, or why there is none.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

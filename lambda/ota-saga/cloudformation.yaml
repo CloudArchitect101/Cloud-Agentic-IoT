@@ -1,0 +1,186 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Cloud-Agentic-IoT chapter 09 - an OTA update of one board run as a saga:
+  a queue, its dead-letter queue, and the orchestrator that stages the
+  firmware, marks the Thing, makes the IoT Job and unwinds all three if the
+  board fails.
+
+# scripts/deploy-aws.sh passes FirmwareBucketName and OtaPresignRoleArn from
+# the ota stack (infra/ota), which sorts, and so deploys, before this one.
+# scripts/ota-saga.sh sends a saga to the queue.
+Parameters:
+  FirmwareBucketName:
+    Type: String
+    AllowedPattern: '^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+    Description: The ota stack's FirmwareBucketName output.
+  OtaPresignRoleArn:
+    Type: String
+    AllowedPattern: '^arn:aws[a-z-]*:iam::\d{12}:role/.+$'
+    Description: The ota stack's OtaPresignRoleArn output.
+  PresignExpiresSeconds:
+    Type: Number
+    Default: 3600
+    MinValue: 60
+    MaxValue: 3600
+  # How long a board may spend installing before IoT marks the job TIMED_OUT,
+  # which the saga treats as a failure and unwinds.
+  JobTimeoutMinutes:
+    Type: Number
+    Default: 10
+    MinValue: 1
+  # The saga polls the board by letting its message come back: one look every
+  # PollSeconds, MaxAttempts looks, then it gives up and unwinds. The queue
+  # keeps a message for a few more receives than that, so a saga always ends
+  # in the function, never by going quietly to the dead-letter queue.
+  PollSeconds:
+    Type: Number
+    Default: 60
+    MinValue: 31
+    MaxValue: 900
+  MaxAttempts:
+    Type: Number
+    Default: 20
+    MinValue: 2
+    MaxValue: 100
+  AlarmTopicArn:
+    Type: String
+    Default: ''
+    Description: SNS topic for the alarm below. Empty, it shows in CloudWatch only.
+
+Conditions:
+  HasAlarmTopic: !Not [!Equals [!Ref AlarmTopicArn, '']]
+
+Resources:
+  SagaDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-ota-saga-dlq
+      MessageRetentionPeriod: 1209600
+
+  SagaQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloud-agentic-iot-ota-saga
+      # Longer than the function's timeout (30 s), as Lambda requires, and
+      # the gap between two looks at the board.
+      VisibilityTimeout: !Ref PollSeconds
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt SagaDeadLetterQueue.Arn
+        maxReceiveCount: 110
+
+  SagaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RunTheSaga
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:ChangeMessageVisibility
+                Resource: !GetAtt SagaQueue.Arn
+              # Read any published build; write and delete only its own copies.
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${FirmwareBucketName}/firmware/*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${FirmwareBucketName}/firmware/saga/*'
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub 'arn:${AWS::Partition}:s3:::${FirmwareBucketName}'
+              - Effect: Allow
+                Action:
+                  - iot:DescribeThing
+                  - iot:UpdateThing
+                Resource: !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thing/*'
+              # Its own jobs only: every job it makes is named saga-*.
+              - Effect: Allow
+                Action:
+                  - iot:CreateJob
+                  - iot:CancelJob
+                  - iot:DescribeJobExecution
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:job/saga-*'
+                  - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:thing/*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !Ref OtaPresignRoleArn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: iot.amazonaws.com
+
+  SagaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: cloud-agentic-iot-ota-saga
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt SagaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          exports.handler = async () => ({
+            statusCode: 200,
+            body: 'Placeholder - the deploy pipeline replaces this with the real bundle'
+          });
+      Environment:
+        Variables:
+          FIRMWARE_BUCKET: !Ref FirmwareBucketName
+          PRESIGN_ROLE_ARN: !Ref OtaPresignRoleArn
+          PRESIGN_EXPIRES_SECONDS: !Ref PresignExpiresSeconds
+          JOB_TIMEOUT_MINUTES: !Ref JobTimeoutMinutes
+          MAX_ATTEMPTS: !Ref MaxAttempts
+          ACCOUNT_ID: !Ref AWS::AccountId
+
+  SagaEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt SagaQueue.Arn
+      FunctionName: !Ref SagaFunction
+      BatchSize: 1
+      # A saga still waiting stays on the queue; see the handler.
+      FunctionResponseTypes: [ReportBatchItemFailures]
+
+  # A saga in the dead-letter queue was malformed or failed outside its
+  # steps. Its board may be marked UPDATING: look at it.
+  SagaDeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloud-agentic-iot-ota-saga-dead-letters
+      AlarmDescription: An OTA saga message reached cloud-agentic-iot-ota-saga-dlq. Read it and the ota-saga logs; its board's otaState may need setting back to ACTIVE.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SagaDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmTopic, [!Ref AlarmTopicArn], !Ref AWS::NoValue]
+
+Outputs:
+  SagaQueueUrl:
+    Description: Where scripts/ota-saga.sh sends a saga
+    Value: !Ref SagaQueue
+  SagaFunctionName:
+    Value: !Ref SagaFunction

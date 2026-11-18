@@ -1,8 +1,9 @@
 /*
  * AssetTriggerHandler.cls
  *
- * Routes Asset trigger contexts to the device provisioning service. Holds no
- * business logic: deciding which devices are eligible to provision, and what
+ * Routes Asset trigger contexts to the device provisioning service, and a
+ * change of record type to DeviceRoles, which tells the board its new role.
+ * Holds no business logic: deciding which devices are eligible to provision, and what
  * "provisioned" means, belongs in the service where it can be tested without
  * performing DML.
  */
@@ -18,6 +19,7 @@ public with sharing class AssetTriggerHandler extends TriggerHandler {
         DeviceProvisioningService.provisionEligibleDevices(
             (List<Asset>) Trigger.new, (Map<Id, Asset>) Trigger.oldMap
         );
+        DeviceRoles.rolesChanged((List<Asset>) Trigger.new, (Map<Id, Asset>) Trigger.oldMap);
     }
 
     protected override void handleAfterDelete() {

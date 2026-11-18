@@ -3,8 +3,7 @@
  *
  * Sends Device Commands to their boards: one callout per command to the
  * device API's POST /device-command, { thingName, operation, commandId },
- * which publishes it on device/<thing>/command. A CASE_ALERT also carries
- * active, true or false, from Case_Alert_On__c. The commandId is the record's
+ * which publishes it on device/<thing>/command. The commandId is the record's
  * Id; the board answers with it on device/<thing>/ack, and
  * DeviceCommandAckService records the answer as Acked or Failed.
  *
@@ -58,7 +57,7 @@ public with sharing class DeviceCommandSendJob implements Queueable, Database.Al
     @TestVisible
     private List<Id> sendWhatFits(Map<Id, Device_Command__c> outcomes) {
         List<Device_Command__c> commands = [
-            SELECT Id, Device__c, Command__c, Case_Alert_On__c,
+            SELECT Id, Device__c, Command__c,
                    Asset__r.Name, Asset__r.Provisioning_Status__c,
                    Asset__r.Connection_Status__c, Asset__r.Connection_Since__c
             FROM Device_Command__c
@@ -96,9 +95,6 @@ public with sharing class DeviceCommandSendJob implements Queueable, Database.Al
             'operation' => command.Command__c,
             'commandId' => (String) command.Id
         };
-        if (command.Command__c == CaseAlertService.CASE_ALERT_COMMAND) {
-            body.put('active', command.Case_Alert_On__c == true);
-        }
         DeviceApiClient.Result result = api.post('device-command', body);
         if (!result.succeeded()) {
             return failed(command.Id, 'Not sent: ' + result.summary());

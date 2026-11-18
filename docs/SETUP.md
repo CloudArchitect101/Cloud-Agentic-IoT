@@ -64,8 +64,9 @@ per environment, in the order they come up below:
 Not code yet, and still by hand in Stage 2 of the README: the `AWS_IoT_Relay`
 named and external credentials, the `AWS_IoT_Relay_Callers` permission set
 and its assignments to people (the deploy assigns it to the integration user
-once it exists), queue members, and the `Device_Queue_Binding` record's board
-name. `Care_Team_Queue` itself ships as metadata. They
+once it exists), queue members, and which boards are indicators (an Asset
+record type, Internal Device, set per board). `Care_Team_Queue` itself ships
+as metadata. They
 depend on values from each org, and become per-org metadata next.
 
 ---
@@ -195,8 +196,8 @@ In a real org, both should be Integration Users.
    also accepts terms, and is the admin's decision too.
 
 Do 3 and 4 before the first deploy (§2.3, phase 2). The repo ships the
-Patient Care Agent (`bots/`) with its planner, topic and actions
-(`genAiPlannerBundles/`, `genAiPlugins/`, `genAiFunctions/`). Expect an org
+Patient Care Agent as Agent Script (`aiAuthoringBundles/`) and its actions
+(`genAiFunctions/`). Expect an org
 without Agentforce to refuse the agent, and one refused component fails
 the whole deploy. A Developer Edition org has no charge for either
 switch; agent conversations draw on its included Einstein allowance.
@@ -221,7 +222,12 @@ Setup → **Users** → New User, twice:
 | Username | `integration@iot-dev.<yourdomain>` | `deploy@iot-dev.<yourdomain>` |
 | Gets permissions from | The `Salesforce API Integration` permission set license, then the `Device_Integration` permission set (from the repo) | Its profile, plus the `Metadata_Deploy` permission set from `scripts/` (§2.3) |
 
-Note: For the last name, you can use "Integration" / "Deploy" and reuse your original email address for that ORG.
+Note: For the last name, use "Integration" / "Deploy". Give each user its
+own email, for example plus addresses of yours (`you+integration@…`,
+`you+deploy@…`), which still reach your inbox. Never reuse the admin's
+address: Slack links people to Salesforce users by email and refuses an
+address that more than one active user has (see "Talk to the agent from
+Slack"). The same goes for any test portal user.
 
 Both profiles are minimal on purpose: **all** capability arrives via permission
 sets. That is what makes "what can this user actually do?" answerable by
@@ -700,13 +706,16 @@ Then the agent. The deploy created the **Patient Care Agent** and left it
 inactive deliberately: an agent that can create clinical Cases should be
 switched on by a person, not by a deploy.
 
-1. Activate it, as the admin. `--version 1` matches
-   `bots/Patient_Care_Agent/v1.botVersion-meta.xml`; without it, and without
-   `--api-name`, the command stops to ask.
+1. Publish and activate it, as the admin. Publishing compiles the Agent
+   Script into a new version; `--json` without `--version` activates the
+   newest one (without either, the command stops to ask).
 
    ```bash
-   sf agent activate --api-name Patient_Care_Agent --version 1 --target-org iot-dev-admin
+   SF_TARGET_ORG=iot-dev-admin scripts/publish-agent.sh Dev
    ```
+
+   `scripts/publish-agent.sh` publishes, activates the newest version and then resets `force-app` to the commit,
+   because publishing writes generated files (a `bots/` and a `genAiPlannerBundles/` folder, reformatted `genAiFunctions`) back into the checkout, which the next deploy would refuse as uncommitted.
 
    Or Setup → **Agentforce Agents** → **Patient Care Agent** → **Activate**.
 2. Check that it took:
@@ -716,7 +725,7 @@ switched on by a person, not by a deploy.
      --query "SELECT VersionNumber, Status FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent'"
    ```
 
-   Expect version 1 with Status `Active`.
+   Expect the newest version with Status `Active`.
 3. Assign the `Patient_Care_Agent` permission set to each care team member who
    will use the agent, yourself included. It opens the agent to them and gives
    its three actions what they read and create: the device's readings and
@@ -789,6 +798,11 @@ there.
    The second command prints the bucket name for step 2, and
    `datacloud/room-readings/`. Within a minute of a board sending, CSV files
    appear there ([DATA-CLOUD.md, Check each step](DATA-CLOUD.md#check-each-step)).
+   S3 has no folders: the prefix appears with the first CSV, which is written
+   only when a board sends a reading. Right after the deploy, or while every
+   board is off, `datacloud/room-readings/` does not exist yet; power a board
+   on (one with a DHT11) and look again a minute later. The connection in
+   step 2 can be made before that.
 2. **Start the connection.** Data Cloud Setup → **Other Connectors** (some orgs
    list it under External Integrations, or as **More Connectors**) → **New** →
    **Amazon S3**. Name it `Room Readings S3`. **Bucket Name**: the bucket from
@@ -923,7 +937,9 @@ each step. Almost all of it is the deploy's job:
    allowed`, `authorizationStatus` `NOT_AUTHORIZED`): that takes a free
    Support case under Account and billing, and no IAM change fixes it.
    Until then, `SKIP_SOP_INDEX=yes scripts/deploy-aws.sh Dev` deploys
-   everything else.
+   everything else; once the case is resolved, run
+   `scripts/index-sops.sh Dev --force` once, as the skipped deploy built
+   no index.
 2. **Who may ask.** The action calls AWS as the person talking to the
    agent, through the `AWS_IoT_Relay` Named Credential, so each care team
    member needs `AWS_IoT_Relay_Callers` (README, Stage 2 part d) besides
@@ -934,7 +950,7 @@ each step. Almost all of it is the deploy's job:
      --on-behalf-of <care team member's username>
    ```
 3. **Reactivate the agent once.** The deploy changes the topic and adds an
-   action to version 1, which an active agent may keep running as it was,
+   action to the agent, which an active agent may keep running as it was,
    and an org may refuse to change an active agent at all. Deactivate it
    before the Salesforce deploy that adds Find Procedure, and activate it
    after:
@@ -942,16 +958,67 @@ each step. Almost all of it is the deploy's job:
    ```bash
    sf agent deactivate --api-name Patient_Care_Agent --target-org iot-dev-admin
    scripts/deploy-salesforce.sh Dev
-   sf agent activate --api-name Patient_Care_Agent --version 1 --target-org iot-dev-admin
+   sf agent activate --api-name Patient_Care_Agent --target-org iot-dev-admin --json
    ```
-4. **Try it.** Ask the agent what to do about a room reading 31 C, and check
-   the answer cites `SOP-WARD-001 v1.2`.
+4. **Try it.** Ask the agent what to do about a sensor reading 31 C, and check
+   the answer cites `SOP-WARD-001 v2.0`.
 
 To change a procedure, edit its file in `knowledge/sops/`, raise its
 `version`, commit, and deploy AWS again (or run `scripts/index-sops.sh Dev`
 for an SOP-only change). Unchanged SOPs are not embedded again.
 
 ---
+
+## Talk to the agent from Slack (optional)
+
+The Smart Ward app in [TRY-IT](TRY-IT.md#ask-the-ward-from-slack) answers two
+fixed commands. To ask the Patient Care Agent questions in Slack, use
+Salesforce's own Agentforce in Slack: the same agent, topics and actions,
+answering as the Salesforce user each Slack member is mapped to, so their
+access in Salesforce still decides what they see. No code of ours is
+involved.
+
+What it needs, from [Slack's help](https://slack.com/help/articles/36218109305875-Set-up-and-manage-Agentforce-in-Slack):
+any Slack plan, Free included (Free lacks only the canvas action); an
+Agentforce licence in the org; and an **Employee** agent, which
+Patient Care Agent is (`InternalCopilot`). Whether a Developer Edition can
+connect to Slack is not stated outside Trailhead's Agentforce Developer
+Edition; step 3 below is where that shows. If it cannot, the fallback is a
+slash command that calls the agent through the Agent API from
+`lambda/slack-integration`.
+
+Salesforce side, as an admin:
+
+1. The agent must be active, as the newest version:
+   `sf agent activate --api-name Patient_Care_Agent --target-org "$SF_TARGET_ORG" --json`
+2. The shipped Agent Script already ends with `connection slack:`, so a
+   published version is a Slack agent. An agent made in the legacy builder
+   offers no Slack under **Connections** (only Messaging and Agentforce
+   Mobile) until it is upgraded to the new builder; do not add those two to
+   an employee agent, as a connection cannot be removed.
+
+Slack side, as the workspace owner:
+
+3. **Tools & settings** → **Manage Salesforce Organizations** → **Connect
+   Salesforce Org**: the org's My Domain URL, account mapping field
+   **Email**, **Automatic account mapping** off, **Request Connection**.
+   Approve it in Salesforce (**Setup** → Quick Find **Slack** → **Manage
+   Slack Connection**), then back in **Manage Salesforce Organizations**
+   open the pending connection and **Activate** it.
+4. Only now does the org have a **Users** tab (same page → the org →
+   **Users** → **Add Individually**): link each Slack member who may use the
+   agent; Slack asks them to sign in to Salesforce. An unmapped member
+   cannot use the agent. Each member's Slack email must belong to exactly
+   one active Salesforce user; if the row says **Authentication failed**
+   ("multiple users in Salesforce with the same email"), give the other
+   users their own emails, or **Add Individually** by Salesforce username.
+   Each member's Salesforce user also needs the **Sales Cloud for Slack**
+   permission set (`SlackSalesCloud`, which grants Slack capabilities) as
+   well as `Patient_Care_Agent`:
+   `sf org assign permset --name SlackSalesCloud --on-behalf-of <username> --target-org "$SF_TARGET_ORG"`.
+   Quit and reopen Slack after changing either.
+5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
+6. DM the agent, or mention it in a channel: "What is Test8 reading?"
 
 ## Doing it again for Prod
 

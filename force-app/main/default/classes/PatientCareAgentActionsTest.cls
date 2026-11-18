@@ -167,4 +167,49 @@ private class PatientCareAgentActionsTest {
         Assert.areEqual(UserInfo.getUserId(), [SELECT OwnerId FROM Case LIMIT 1].OwnerId,
             'A queue without Case support cannot own one');
     }
+
+    private static Asset device(String serial) {
+        Account owner = new Account(Name = 'Escalation Patient ' + serial);
+        insert owner;
+        Asset a = new Asset(Name = 'Monitor ' + serial, SerialNumber = serial, AccountId = owner.Id, Status = 'Installed');
+        // The Asset trigger would provision the device in AWS.
+        TriggerHandler.bypass('AssetTriggerHandler');
+        insert a;
+        TriggerHandler.clearBypass('AssetTriggerHandler');
+        return a;
+    }
+
+    @IsTest
+    static void theCaseIsLinkedToTheDevicesAsset() {
+        settings();
+        Asset test8 = device('Test8');
+        Test.startTest();
+        List<PatientCareAgentActions.EscalationResult> results =
+            PatientCareAgentActions.escalate(new List<PatientCareAgentActions.EscalationRequest>{
+                req('Test8', 'Room at 30 C', 'MEDIUM')
+            });
+        Test.stopTest();
+
+        Assert.isTrue(results[0].success, results[0].message);
+        Assert.areEqual(test8.Id, [SELECT AssetId FROM Case LIMIT 1].AssetId,
+            'An agent escalation is the device\'s own Case');
+    }
+
+    @IsTest
+    static void anUnknownOrDuplicatedSerialLeavesTheCaseUnlinked() {
+        settings();
+        device('Twin');
+        device('Twin');
+        Test.startTest();
+        List<PatientCareAgentActions.EscalationResult> results =
+            PatientCareAgentActions.escalate(new List<PatientCareAgentActions.EscalationRequest>{
+                req('Twin', 'Room at 30 C', 'MEDIUM'), req('Nobody', 'Room at 30 C', 'MEDIUM')
+            });
+        Test.stopTest();
+
+        Assert.isTrue(results[0].success && results[1].success, 'Both Cases are still created');
+        for (Case c : [SELECT AssetId FROM Case]) {
+            Assert.isNull(c.AssetId, 'Never tied to the wrong device');
+        }
+    }
 }

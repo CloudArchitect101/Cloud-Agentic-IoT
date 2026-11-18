@@ -106,7 +106,7 @@ Run them as one line joined by `&&`, so the first failure stops the rest.
 Pasted as separate lines, zsh and bash run every line even after one fails,
 so one environment can end up ahead of the other. Later deploys that add a
 field AWS writes go Salesforce first; see
-[Warm the sensor, get a Case and a dose](#warm-the-sensor-get-a-case-and-a-dose).
+[Warm the sensor, get a high temperature alert](#warm-the-sensor-get-a-high-temperature-alert).
 
 Both refuse uncommitted changes under `lambda/`, `infra/`, `force-app/`, `knowledge/`,
 `config/` and `scripts/`, because a laptop deploy would otherwise ship what no
@@ -137,7 +137,7 @@ pipeline's would fail, and [Moving to the pipelines](#moving-to-the-pipelines)
 sets it up.
 
 Then give yourself the interface. The deploy adds the **Cloud Agentic IoT** app,
-with tabs, record pages and page layouts for devices, patient vitals, device
+with tabs, record pages and page layouts for devices, device readings, device
 commands and Wi-Fi networks, but the app and the device fields stay hidden
 until you hold the `Device_Platform_Admin` permission set. Being System
 Administrator isn't enough: fields deployed through the Metadata API come with
@@ -242,9 +242,7 @@ third of a cent in AWS. [LIVE-STATUS.md](LIVE-STATUS.md) has the speeds, the
 costs and what to check when the card waits for the board.
 
 To send a board a command, open its Asset and choose **Send Command**, then
-`DISPENSE_MEDICATION`, `RESTART`, or `CASE_ALERT` with Case Alert On checked
-or not (firmware 2.3.0: the servo sweeps or stops; the next change to the
-device's Cases sets it back to what they say). The Device Command shows `Sent` within
+`RESTART`. The Device Command shows `Sent` within
 seconds and, from firmware 2.2.0, `Acked` once the board answers, or `Failed`
 with the reason (a board that is offline is not sent anything). The command is
 sent as you, so you need the `AWS_IoT_Relay` principal access from
@@ -264,13 +262,13 @@ that can create clinical Cases is left to a person. Activate it, check it, and
 give yourself access:
 
 ```bash
-sf agent activate --api-name Patient_Care_Agent --version 1
+scripts/publish-agent.sh Dev
 sf data query --query "SELECT VersionNumber, Status FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent'"
 sf org assign permset --name Patient_Care_Agent
 ```
 
 Or activate it in Setup → **Agentforce Agents** → **Patient Care Agent**. The
-query shows version 1 `Active`. `Patient_Care_Agent` opens the agent to you
+query shows the newest version `Active`. `Patient_Care_Agent` opens the agent to you
 and gives its actions what they read and create; it is an employee agent, so
 it acts as you. Open it from the Lightning header, then:
 
@@ -281,15 +279,19 @@ it acts as you. Open it from the Lightning header, then:
 3. Confirm. It reports the Case number, and the Case (`Origin = Agentforce`)
    is in Care_Team_Queue, so the indicator board moves.
 
-## Warm the sensor, get a Case and a dose
+## Warm the sensor, get a high temperature alert
 
-The room-temperature demo rule ([README, chapter 03](../README.md#room-temperature-demo-rule)):
-when the patient monitor's DHT11 reads 30 C or more, Salesforce opens a Case
-for the device in Care_Team_Queue, the queue indicator moves, and the
-dispenser's servo turns out a dose, then sweeps back and forth until the Case
-is closed or someone takes it (the case alert, firmware 2.3.0). It is a demo rule, not a clinical alert: the sensor
-measures room air. It is on in Dev (`RoomTempAlert` in `config/Dev.json`) and
-off in Prod.
+The temperature alert demo rule ([README, chapter 03](../README.md#temperature-alert-demo-rule)):
+the monitored device's DHT11 can sit wherever the temperature matters, against
+a patient (the demo puts it under an arm), in a medication fridge, in a room.
+When it reads 30 C or more, the board itself sweeps its servo back and forth to
+tell whoever is near, and stops at the first reading below 30 C (firmware
+2.5.0 and later; decided on the board, so closing the Case does not stop it,
+cooling the sensor does). Salesforce also opens a Case for the device in
+Care_Team_Queue, and the ward board moves. The motor only ever means
+"temperature high": since 2.6.0 there is no dose. It is a demo rule, not a
+clinical alert: a DHT11 is not a calibrated thermometer. It is on in Dev
+(`RoomTempAlert` in `config/Dev.json`) and off in Prod.
 
 **Deploy Salesforce first, then AWS.** A flagged record that reaches an org
 without the `Room_Temperature_Alert__c` field, or without its field access, is
@@ -300,15 +302,10 @@ fires. So when you first bring this rule to a project and org:
 ```bash
 scripts/check.sh
 scripts/deploy-salesforce.sh Dev     # the field, the trigger, the settings; runs every local Apex test
-# verify in the org: the list below, and Device_Integration has Room Temperature Alert
+# verify in the org: the list below, and Device_Integration has Temperature Alert
 scripts/deploy-aws.sh Dev            # patient-vitals with RoomTempAlert "true" from config/Dev.json
-scripts/ota.sh try Dev patient-monitor   # firmware 2.3.0, for the case alert
+scripts/ota.sh try Dev patient-monitor   # firmware 2.7.0: the alert sweep, no dose, ward boards ignore their own sensor
 ```
-
-The case alert needs the same order: Salesforce (the `CASE_ALERT` command and
-the Case Alert fields), then AWS (the device-command Lambda checks the on or
-off), then the board. Older firmware refuses `CASE_ALERT`, and its Device
-Command shows Failed.
 
 The pipeline deploys AWS before Salesforce (`.github/workflows/deploy.yml`),
 so through CI ship it in two pushes: first with `"RoomTempAlert": "false"` in
@@ -322,45 +319,42 @@ sets it to `"true"`.
   only a WARN in the debug log.
 - Care_Team_Queue lists Case as a supported object (Setup → Queues). If not,
   the Case lands with the integration user, an ERROR is logged, and the
-  indicator does not count it.
-- `Device_Queue_Binding.Care_Team_Queue` names your queue indicator's Thing.
-  It ships as `ESP32-Patient-Monitor-01`; change the record if your indicator
-  board has another name, or step 2's indicator will not move.
+  ward board does not count it.
+- Your ward board's Asset has the Internal Device record type, and the
+  board runs patient-monitor 2.4.0 or later. Any such board follows
+  Care_Team_Queue.
 - The integration user has the `AWS_IoT_Relay` principal access
   ([README, Stage 2 part d](../README.md#stage-2--connect-the-seams-ci-cannot-reach)):
-  the dose is a Device Command sent as the user who created it.
-- `Room Temperature Rule` and `Agentforce` are Case Origin values: the
+  the Case moves the ward board through a callout made as that user.
+- `Room Temperature Rule` (labelled Temperature Alert Rule) and `Agentforce` are Case Origin values: the
   deploy adds them (`standardValueSets/CaseOrigin`). A value you added to
   Case Origin by hand must be in that file too, or the deploy may take it
   off the list.
 
 **Steps**
 
-1. Cup your hand around the DHT11, or breathe on it, until it reads 30 C (its
-   maximum is 50 C). Allow 1 to 3 readings, about 30 s each.
-2. A Case appears in Care_Team_Queue, the indicator board moves, and the
-   servo turns out a dose, then sweeps back and forth without stopping. The
-   Asset's Case Alert is checked.
+1. Put the DHT11 under your arm (it reads about 33 to 36 C there), or cup
+   your hand around it, until it reads 30 C (its maximum is 50 C). Within
+   about 5 s the board's servo starts sweeping (console:
+   `temperature 30.0C: 30 C or more, motor turning`).
+2. Within 1 to 3 stored readings (about 30 s each) a Case appears in
+   Care_Team_Queue (Subject `High temperature ... C on Test8`) and the ward
+   board moves. The servo goes on sweeping.
 3. Keep it warm: no new Case. AWS reports the device again every re-alert
    interval (15 minutes in Dev), and Salesforce sees the open Case and stops.
-4. Close the Case while it is still warm: the servo stops within seconds.
-   Within 15 minutes a new Case appears and the sweep starts again. No dose
-   this time: the 60-minute cooldown is running, and the Case Description
-   says so.
-5. Let it cool below 29 C, then warm it again while a Case is open: no new
-   Case.
-6. Change the open Case's owner to yourself: the servo stops, since the Case
-   no longer waits in the queue. Give it back to Care_Team_Queue and it
-   sweeps again.
-7. Unplug the board while a Case waits, plug it back in: it sweeps again as
-   soon as it starts (the state is in its flash), and Salesforce sends
-   `CASE_ALERT` on again once it is online.
-8. If the servo did not turn, look for a `DISPENSE_MEDICATION` Device Command
-   for Test8. If there is none, send it from the Asset with **Send Command**:
-   a failed dose is not retried. If it does not sweep, look for the newest
-   `CASE_ALERT`: Failed with `unknown operation` means the board runs
-   firmware older than 2.3.0; a failure to call AWS means the user who saved
-   the Case lacks the `AWS_IoT_Relay` principal access.
+4. Take the sensor out and let it cool below 30 C: the sweep stops within
+   about 5 s of the first reading below 30 C (a DHT11 takes a minute or two
+   to cool from body heat). The Case stays
+   open, and the ward board keeps moving until someone closes or takes it.
+5. Close the Case: the ward board stops (if it was the queue's last Case).
+   Warm the sensor again: the sweep starts again at once; a new Case follows
+   once a reading went below 29 C in between.
+6. Unplug the board while it is warm, plug it back in: it sweeps again as
+   soon as its first reading after the start is 30 C or more.
+7. If it does not sweep while warm, check the console: a board older than
+   2.5.0 follows Cases, not its sensor (`scripts/ota.sh try Dev patient-monitor`).
+   SOP-WARD-004 is the procedure for a motor that does not follow the
+   temperature.
 
 **For a live talk**, step 4 waits up to `RealertIntervalMinutes`. To shorten
 it, deploy Dev with `"RealertIntervalMinutes": 2` for the session and set it
@@ -374,19 +368,8 @@ SELECT CaseNumber, Owner.Name, Asset.SerialNumber, Status, CreatedDate
 FROM Case WHERE Origin = 'Room Temperature Rule' ORDER BY CreatedDate DESC
 ```
 
-```sql
-SELECT Name, Device__c, Status__c, Status_Detail__c, CreatedDate
-FROM Device_Command__c WHERE Requested_By__c = 'Room Temperature Rule' ORDER BY CreatedDate DESC
-```
-
-```sql
-SELECT Name, Device__c, Case_Alert_On__c, Status__c, Status_Detail__c, Requested_By__c, CreatedDate
-FROM Device_Command__c WHERE Command__c = 'CASE_ALERT' ORDER BY CreatedDate DESC
-```
-
-The case alert is sent as whoever saved the Case, so Requested By names them.
-
-A flagged reading is a `Patient_Vitals__c` row with Room Temperature Alert
+The rule creates no Device Command. A flagged reading is a `Patient_Vitals__c`
+(Device Reading) row with Temperature Alert (`Room_Temperature_Alert__c`)
 checked. In AWS, the salesforce-sync function logs each batch it writes (use
 your project's Region):
 
@@ -404,24 +387,111 @@ record` instead.
 **Emergency stop**: in Setup → Custom Settings → Integration Control, at org
 level, add `PatientVitalsTriggerHandler` to Bypass Handlers. It takes effect
 at once, with no deploy. To stop AWS sending flagged readings, set
-`RoomTempAlert` to `"false"` in `config/Dev.json` and deploy AWS. To keep the
-Cases but stop the doses, set `Room_Temp_Dispense__c` to false in
-`force-app/main/default/customMetadata/Device_Platform_Setting.Default.md-meta.xml`
-and deploy Salesforce; a Setup edit is overwritten by the next deploy. To
-stop the case alert, close or take the Cases; to stop it for every Case, add
-`CaseTriggerHandler` to Bypass Handlers, which also stops the queue indicator.
-A board already sweeping keeps sweeping until it is told off: send
-`CASE_ALERT` from its Asset with Case Alert On unchecked.
+`RoomTempAlert` to `"false"` in `config/Dev.json` and deploy AWS. The
+board's own sweep follows only its sensor: cool the sensor, or unplug the servo.
 
-## Room readings in Data Cloud
+## Device readings in Data Cloud
 
-If the org has Data Cloud, every room reading can reach it from the S3
+If the org has Data Cloud, every device reading can reach it from the S3
 archive, with a daily count of minutes at or above 30 C per device and a
 list of devices that went quiet: [SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward).
 A project cannot hold the IAM identity provider the keyless way needs, so
 here Data Cloud signs in with an access key of an IAM user you make as
 `<name>` (step 3a), typed into Data Cloud and nowhere else.
 [DATA-CLOUD.md](DATA-CLOUD.md) explains the path.
+
+## Fire the vitals stream
+
+The boards send only temperature and humidity, so the chapter 02 stream (EventBridge to
+Salesforce Platform Events) never fires on its own. Send it one synthetic
+reading with a heart rate of 135 and an SpO2 of 86, the way a wearable
+would, from the repository root and signed in as in step 2:
+
+```bash
+scripts/streams-test.sh Dev Test8
+```
+
+It prints what the alert dispatcher decided (`CRITICAL_VITALS`). Within a few
+seconds Salesforce has a Case **Critical vitals on Test8**, Origin **Vital
+Alert**, in **Care Team Queue** on Test8's Asset, and the ward board starts
+turning for it like for any other Case. Run it again while that Case is open
+and no second one opens; close it and the next run opens a new one.
+`scripts/streams-test.sh Dev Test8 warning` publishes an `ABNORMAL_TREND`
+alert, which opens nothing, and `normal` is dropped in AWS. Nothing is
+written to the device's readings and no board is contacted.
+
+## Update one board through the saga
+
+Chapter 09 sends one board one build as a saga: each step has a step that
+undoes it. Use a build that is already published, for example the last try
+(`scripts/ota.sh status Dev` names it):
+
+```bash
+scripts/ota-saga.sh send Dev Test8 patient-monitor 2.5.0-try.1
+scripts/ota-saga.sh status Dev Test8
+```
+
+`status` shows the Thing's `otaState` (`UPDATING` while the saga runs,
+`ACTIVE` with `otaVersion` once the board has installed it) and the board's
+`saga-` jobs. A board already on that version reports it as current and the
+saga completes. The trace is in
+`aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow`.
+
+To watch it unwind, unplug the board, send it again and wait: the job stays
+`QUEUED`, and after 20 minutes the log shows `cancel_iot_job`,
+`mark_device_active` and `delete_staged_firmware`, in that order, and
+`status` shows the job `CANCELED` and the Thing `ACTIVE` on its old version.
+
+## Ask the ward from Slack
+
+Optional (chapter 04). Slack never signs in to Salesforce: a slash command
+reaches the `cloud-agentic-iot-slack-integration` function through API
+Gateway, the function checks Slack's signature, and it calls Salesforce as
+the integration user from step 5, as every other function does. Use a
+workspace where you may install apps; a free workspace of your own keeps the
+demo apart from any team's. Slash commands work on the free plan.
+
+1. **Make the app.** <https://api.slack.com/apps> → **Create New App** →
+   **Pick features** (under **From scratch**; older dialogs call it **From
+   scratch**), name it `Ward Bot`, and pick the workspace. Skip the **AI
+   agent** and **Starter app** templates, which expect code hosted by
+   Slack. **Paste a manifest** works too if it declares both commands with
+   a placeholder URL such as `https://example.com/slack/commands`; replace
+   it with the address from step 3.
+2. **Store its signing secret in AWS.** **Basic Information** → **App
+   Credentials** → **Signing Secret** → **Show**. Then, in your terminal:
+
+   ```bash
+   scripts/seed-ssm.sh Dev
+   ```
+
+   Press Enter at every question except **Slack signing secret**, and paste
+   the secret there, where nothing is shown. A value already in SSM is kept
+   when you press Enter.
+3. **Deploy AWS again.** `scripts/deploy-aws.sh Dev` now finds the secret and
+   deploys the Slack stack. Its address for Slack:
+
+   ```bash
+   aws cloudformation describe-stacks --stack-name cloud-agentic-iot-slack-integration-Dev \
+     --query "Stacks[0].Outputs[?OutputKey=='SlackCommandsUrl'].OutputValue" --output text
+   ```
+4. **Add the command.** In the app, **Slash Commands** → **Create New
+   Command**, with that address as **Request URL**: `/patient-status`
+   (hint `Test8`). An app made before Nov 10 also has `/dispense-medication`:
+   delete it there (**Slash Commands**, the pencil, **Delete**); the function
+   now answers it with `Unknown command`.
+5. **Install it.** **Install App** → **Install to Workspace** → **Allow**.
+6. **Try it.** In any channel: `/patient-status Test8`. The answer shows
+   only to you: first "Looking up `Test8`…", then the live reading from AWS
+   (or "offline since" when the board has not sent for five minutes) and the
+   last event Salesforce saved, which can be hours older because Salesforce
+   keeps only state changes and alerts. Slack sends no commands to a board;
+   that is **Send Command** on the Asset.
+
+If Slack says `dispatch_failed` or the command times out, the address is
+wrong or the stack is not deployed; `aws logs tail
+/aws/lambda/cloud-agentic-iot-slack-integration --since 10m` shows whether
+the call arrived and why it was refused.
 
 ## See what it costs
 

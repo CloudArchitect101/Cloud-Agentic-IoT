@@ -4,10 +4,11 @@
  * The one place Apex reads how it talks to the AWS device platform: the Named
  * Credential, timeouts, batch sizes, retry limits and the risk score bands,
  * the Origin and queue of the Cases the Patient Care agent creates,
- * and how the room-temperature demo rule opens its Cases: their Origin, the
- * queue that owns them, and whether (and how often) one also requests a dose.
+ * and how the patient temperature alert opens its Cases: their Origin and the
+ * queue that owns them.
  * Whether the rule runs at all is decided in AWS (RoomTempAlert in
  * config/<env>.json), not here.
+ * The OTA group and the queue of an Internal Device (DeviceRoles).
  * Values live in the Device_Platform_Setting__mdt record named Default, so an
  * admin changes them in Setup (or in force-app/main/default/customMetadata)
  * without touching code.
@@ -97,6 +98,24 @@ public with sharing class DevicePlatformSettings {
         return required(get().Default_Thing_Group__c, 'Default_Thing_Group__c');
     }
 
+    /**
+     * OTA group for a new Internal Device whose Asset names none:
+     * Internal_Thing_Group__c, or Default_Thing_Group__c when that is blank.
+     */
+    public static String internalThingGroup() {
+        String value = get().Internal_Thing_Group__c;
+        return String.isBlank(value) ? defaultThingGroup() : value;
+    }
+
+    /**
+     * DeveloperName of the queue every Internal Device board follows:
+     * Internal_Device_Queue__c, or Escalation_Case_Queue__c when that is blank.
+     */
+    public static String internalDeviceQueue() {
+        String value = get().Internal_Device_Queue__c;
+        return String.isBlank(value) ? escalationCaseQueue() : value;
+    }
+
     public static String escalationCaseOrigin() {
         return required(get().Escalation_Case_Origin__c, 'Escalation_Case_Origin__c');
     }
@@ -106,7 +125,7 @@ public with sharing class DevicePlatformSettings {
         return required(get().Escalation_Case_Queue__c, 'Escalation_Case_Queue__c');
     }
 
-    /** Origin on room-temperature Cases; also how the rule recognises its own Cases. */
+    /** Origin on high temperature alert Cases; also how the rule recognises its own Cases. */
     public static String roomTempCaseOrigin() {
         return required(get().Room_Temp_Case_Origin__c, 'Room_Temp_Case_Origin__c');
     }
@@ -114,16 +133,6 @@ public with sharing class DevicePlatformSettings {
     /** DeveloperName of the queue that owns them. */
     public static String roomTempCaseQueue() {
         return required(get().Room_Temp_Case_Queue__c, 'Room_Temp_Case_Queue__c');
-    }
-
-    /** Whether each new room-temperature Case also requests one DISPENSE_MEDICATION command. */
-    public static Boolean roomTempDispense() {
-        return get().Room_Temp_Dispense__c == true;
-    }
-
-    /** No second room-temperature dose for a device within this many minutes. */
-    public static Integer roomTempDispenseCooldownMinutes() {
-        return atLeastOne(get().Room_Temp_Dispense_Cooldown_Minutes__c, 'Room_Temp_Dispense_Cooldown_Minutes__c');
     }
 
     private static Integer atLeastOne(Decimal value, String fieldName) {

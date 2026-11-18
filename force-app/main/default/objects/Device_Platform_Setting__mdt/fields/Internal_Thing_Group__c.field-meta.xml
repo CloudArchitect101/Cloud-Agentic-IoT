@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Internal_Thing_Group__c</fullName>
+    <label>Internal Thing Group</label>
+    <description>OTA group for a new Internal Device whose Asset has no Thing Group. infra/ota makes internal-devices inside fleet-patient-monitor, so fleet releases reach it. Blank means Default Thing Group.</description>
+    <length>100</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

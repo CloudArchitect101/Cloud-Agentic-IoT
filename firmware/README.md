@@ -1,11 +1,11 @@
 # Firmware
 
-**Two device types**, one shared runtime.
+**One firmware for every board** (from patient-monitor 2.4.0), one shared runtime.
 
 | Sketch | What it does | Thing Groups |
 |---|---|---|
-| `patient-monitor/` | DHT11 vitals + medication servo | `canary-patient-monitor` → `fleet-patient-monitor` |
-| `queue-indicator/` | Servo driven by Salesforce Case queue depth | `canary-queue-indicator` → `fleet-queue-indicator` |
+| `patient-monitor/` | Every board: DHT11 readings, the temperature alert motor at 30 C, and the queue indicator (QUEUE_DEPTH). What a board does is decided by its Asset's record type in Salesforce, not by its build | `canary-patient-monitor` and `internal-devices` inside `fleet-patient-monitor` |
+| `queue-indicator/` | **Retired** at 2.2.0: kept for a board already flashed with it. A new indicator is a patient-monitor board whose Asset is an Internal Device ([below](#one-firmware-for-every-board-patient-monitor-240)) | `canary-queue-indicator` → `fleet-queue-indicator` |
 | `libraries/CloudAgenticDevice/` | Shared: NVS credentials and settings, provisioning, WiFi, MQTT with backoff, OTA, live mode, commands and their answers | — |
 
 ## Why a shared library
@@ -36,11 +36,13 @@ compiles, flashes, and provisions in one interactive pass. See
 Each sketch declares its own name, which must match its folder:
 
 ```cpp
-#define FIRMWARE_VERSION "2.3.0"
+#define FIRMWARE_VERSION "2.5.0"
 CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY_SECONDS);
 ```
 
 That name travels in every OTA job document, and **the device refuses any firmware built for a different type**. Thing Group targeting should already prevent a mismatch, but a mis-targeted job must not be able to destroy hardware: queue-indicator firmware on a patient monitor means wrong pins and wrong logic, and a bricked device cannot be fixed over the air — only by USB.
+
+This is why the build every board runs is still called `patient-monitor`, internal boards included: every board in the field (Test7, Test8) runs `patient-monitor`, and it would refuse a build under a new name. Renaming would mean a USB flash of every board. A board still on the queue-indicator build refuses the patient-monitor build for the same reason; it moves over only by USB (`scripts/firmware.sh flash patient-monitor`).
 
 ## Built for a fleet, not a desk
 
@@ -75,7 +77,7 @@ From then on the board publishes a reading every `seconds` to `device/<thing>/li
 - **RAM only.** Live mode is never written to NVS, so a restart ends it.
 - **A plain MQTT topic.** Live readings go through the message broker at QoS 0 rather than Basic Ingest, because the card subscribes to them and Basic Ingest reaches only rules. AWS bills them as messaging, which is why they flow only while someone watches.
 - **The console** says `live: every 2 s for 15 min` for each command and `live: off` when it ends, by itself or by `minutes` 0. Live readings print nothing, and `DHT read failed` appears on stored readings only, so the console stays readable.
-- **The queue indicator** accepts the command too, since the library handles it, but its sketch has no reading to send. Firmware older than 2.2.0 ignores the command.
+- **A board without a sensor**, such as an internal board, streams too: from 2.4.0 its live readings say `"sensorError":"no sensor"`. The retired queue indicator accepts the command, since the library handles it, but its sketch has no reading to send. Firmware older than 2.2.0 ignores the command.
 
 `test/firmware/device_timing_test.cpp` checks the window on the host: the first reading at once, a second command extending the window, 0 minutes, and a window that straddles the `millis()` wrap.
 
@@ -89,9 +91,9 @@ Commands arrive on `device/<thing>/command`: from the device-command API (Device
 | `SET_TELEMETRY_INTERVAL` | library | Sets the reading interval to `seconds`, kept in NVS | done `every 60 s`; failed `seconds must be 5-86400` |
 | `LIVE` | library | Opens or ends live mode (above) | done `every 2 s for 15 min` or `off`; failed `seconds must be 1-60 and minutes 1-30, or minutes 0 to stop` |
 | `RESTART` | library | Restarts the board | done `restarting`, sent before it restarts |
-| `DISPENSE_MEDICATION` | patient-monitor | Turns the dispenser servo to 90°, holds it a second, brings it back to 0 | done, once the arm is home |
-| `CASE_ALERT` | patient-monitor (2.3.0) | `active` true: the servo sweeps 0 to 180° and back without stopping; false: it stops at 0 (below) | done, also for a repeat; refused when `active` is not true or false |
-| `QUEUE_DEPTH` | queue-indicator | Runs or parks the indicator servo | done |
+| `DISPENSE_MEDICATION` | patient-monitor up to 2.5.0; retired in 2.6.0 | 2.6.0 does not know it: the board is a temperature alert, not a dispenser | refused `unknown operation DISPENSE_MEDICATION` |
+| `CASE_ALERT` | patient-monitor 2.3.0 to 2.4.0; retired in 2.5.0 | 2.5.0 ignores it: the motor follows the board's own sensor (below) | done |
+| `QUEUE_DEPTH` | patient-monitor (2.4.0), queue-indicator | `intensity` 0-100 (kept to that range) and `openCaseCount`: the servo turns while it is above 0, faster as the queue fills, and stops at 0 unless the temperature is high (below). It publishes `{"deviceId","openCaseCount","intensity"}` on `device/<thing>/status` | none: the queue-depth API sends no `commandId` |
 | anything else | | Nothing | refused `unknown operation <operation>`, or `no operation` when it names none |
 
 The device-command API checks a command against this table before it publishes it ([`lambda/shared/guardrails.js`](../lambda/shared/guardrails.js)): an operation not listed, a setting the operation does not take, or a value outside the range the board accepts is refused there with a 400, so it never reaches the board. `QUEUE_DEPTH` is not among those it sends; the queue-depth API publishes it itself.
@@ -99,32 +101,51 @@ The device-command API checks a command against this table before it publishes i
 **The answer.** A command that carries a `commandId` (1 to 40 of `A-Z a-z 0-9 _ -`; Salesforce sends the Device Command record's Id) is answered on `device/<thing>/ack`, a plain MQTT topic at QoS 0, so the MQTT test client shows answers:
 
 ```json
-{"commandId":"a0Bbm00000AbCdEFGH","operation":"DISPENSE_MEDICATION","outcome":"done"}
+{"commandId":"a0Bbm00000AbCdEFGH","operation":"RESTART","outcome":"done","detail":"restarting"}
 {"commandId":"a0Bbm00000AbCdEFGI","operation":"SET_TELEMETRY_INTERVAL","outcome":"failed","detail":"seconds must be 5-86400"}
 ```
 
 `outcome` is `done` (carried out), `failed` (the board knows the operation but could not carry it out) or `refused` (nothing on the board knows the operation); `detail`, at most 120 characters, is there when there is more to say. Rule `cloud_agentic_iot_device_command_ack` takes each answer to Salesforce, where the record goes from Sent to Acked or Failed. A command without a `commandId` (Wi-Fi pushes, LIVE and QUEUE_DEPTH today) is carried out the same way and not answered. An invalid `commandId` is ignored and the command still carried out: the id is for the answer, not a permission.
 
-- **A command sent twice is carried out once.** A send retried upstream after a timeout reaches the board as a second message with the same `commandId`. The board remembers the last 8 it carried out and what each came to, and answers a repeat with the outcome it remembers and detail `already carried out` instead of carrying it out again: one dispense never moves the servo twice. The memory is RAM only and a restart clears it, which is fine: the board subscribes at QoS 0 with a clean session, so the broker never hands it an old message again after a restart.
+- **A command sent twice is carried out once.** A send retried upstream after a timeout reaches the board as a second message with the same `commandId`. The board remembers the last 8 it carried out and what each came to, and answers a repeat with the outcome it remembers and detail `already carried out` instead of carrying it out again: one RESTART never restarts the board twice. The memory is RAM only and a restart clears it, which is fine: the board subscribes at QoS 0 with a clean session, so the broker never hands it an old message again after a restart.
 - **RESTART** answers first, gives the answer half a second to leave, prints `command: restarting` and restarts. Live mode ends with it; the reading interval and the Wi-Fi networks are in NVS and stay.
-- **The console** says `command: <operation> <outcome>` and the detail for every command, such as `command: DISPENSE_MEDICATION done` or `command: LIVE done - every 2 s for 15 min`, and never the whole message: a WIFI_UPDATE carries a passphrase.
+- **The console** says `command: <operation> <outcome>` and the detail for every command, such as `command: RESTART done - restarting` or `command: LIVE done - every 2 s for 15 min`, and never the whole message: a WIFI_UPDATE carries a passphrase.
 - **Older firmware** carries out what it knows and never answers, so a Device Command sent to a board older than 2.2.0 stays Sent, and RESTART does nothing there.
 
 `test/firmware/device_commands_test.cpp` checks the `commandId` rule and the memory of recent commands on the host, and `test/firmware/contract.test.js` checks that the answer topic, the rule and the device-command APIs agree with the firmware.
 
-## Case alert: the motor turns while a Case waits (patient-monitor 2.3.0)
+## Temperature alert: the motor turns while the sensor reads 30 C or more (patient-monitor 2.5.0 to 2.7.0)
 
-Salesforce sends `{"operation":"CASE_ALERT","active":true}` when the device's first open Case in the care team queue appears, and `"active":false` when the last one is closed, deleted, given to a person or moved to another device (`CaseAlertService`).
+The sensor can sit wherever the temperature matters: against a patient (the demo puts the DHT11 under an arm, which reads about 33 to 36 C), in a medication fridge, in a room. The motor is the alert: it turns to tell whoever is near that the sensor reads high, and stops when it is back to normal. A monitored board decides by itself. It reads its DHT11 every 5 seconds (and at each stored reading), and its servo sweeps without stopping while a reading is 30.0 C or more, and stops once a reading is below 30.0 C. No Case, no Salesforce and no network is involved, so it reacts within seconds and works offline too.
 
-- **The sweep** goes 0 to 180° and back once every 2 seconds (`CaseAlertSweep.h`). The angle comes from the clock, so `loop()` never waits for the servo and MQTT keeps running.
-- **A dose** (`DISPENSE_MEDICATION`) still swings 90° and back. The sweep then starts again from 0.
-- **Kept in NVS** (namespace `caseAlert`), so the motor turns again after a restart or an update while the Case still waits. A repeat changes nothing and writes nothing.
-- **Missed while offline?** When the board reconnects, Salesforce sends the state again: on while the Asset's Case Alert is checked, off when an off was sent while it was away.
-- **A continuous-rotation servo** (FS90R / SG90-360): uncomment `CONTINUOUS_ROTATION_SERVO` in the sketch, as on the queue indicator. It then spins at about half speed while the alert is on, and stands still at 90 when it is off.
-- **The console** says `case alert: on, motor turning`, `case alert: off, motor stopped` or `case alert: already on`.
-- **Older firmware** refuses `CASE_ALERT` as an unknown operation, so the Device Command shows Failed. Update the board first: `scripts/ota.sh try Dev patient-monitor`.
+- **The sweep** goes 0 to 180° and back once every 2 seconds (`ServoSweep.h`). The angle comes from the clock, so `loop()` never waits for the servo and MQTT keeps running.
+- **No dose.** 2.6.0 removed the 90° dispense swing (`DISPENSE_MEDICATION`); the motor only ever means "temperature high" on a monitored board.
+- **Only on a monitored board** (2.7.0). A board that has been sent `QUEUE_DEPTH` is an internal board, and from then on its own DHT11 no longer turns the motor; only the queue does. Salesforce sends `QUEUE_DEPTH` to internal boards only, each time one connects, so after a restart an internal board with a warm sensor can turn for the few seconds until it arrives. Changing a board's record type takes effect at its next restart. Up to 2.6.0 an internal board with a DHT11 turned for its own reading too.
+- **A failed read** changes nothing; a sensor that stops answering stops the motor.
+- **Exactly at the line:** the DHT11 reads in whole degrees, so a sensor sitting at 29 to 30 C can start and stop the motor from one reading to the next. That is the rule as asked; a buffer (for example stop below 29) is a one-line change in `ServoDemand.h`.
+- **A continuous-rotation servo** (FS90R / SG90-360): uncomment `CONTINUOUS_ROTATION_SERVO` in the sketch. It then spins at about half speed while the temperature is high.
+- **The console** says `temperature 30.0C: 30 C or more, motor turning` and `temperature 29.0C: below 30 C, motor stopped`, only when it changes.
+- **`CASE_ALERT`** (2.3.0 to 2.4.0: the motor turned while the device's Case waited) is retired. The board answers it as done and ignores it, and clears the state an older version kept in NVS (namespace `caseAlert`) once at start.
 
-`test/firmware/case_alert_sweep_test.cpp` checks the sweep on the host, and `test/firmware/contract.test.js` checks that Salesforce, the device-command Lambda and the sketch spell `CASE_ALERT` and `active` the same.
+`test/firmware/servo_demand_test.cpp` checks the 30 C rule and `test/firmware/servo_sweep_test.cpp` the sweep on the host.
+
+## One firmware for every board (patient-monitor 2.4.0)
+
+Every board runs the patient-monitor build, so one OTA reaches them all. What a board is told depends on its Asset's record type in Salesforce ([`DeviceRoles`](../force-app/main/default/classes/DeviceRoles.cls)):
+
+| Asset record type | Its servo turns while | Readings | Thing Group when Salesforce provisions it |
+|---|---|---|---|
+| Monitoring Device (API name `Patient_Device`; and an Asset with no record type, every Asset made before 2.4.0) | its own DHT11 reads 30 C or more (2.5.0; up to 2.4.0 its open Case, `CASE_ALERT`) | yes: the 30 C temperature alert opens a Case | `fleet-patient-monitor` |
+| Internal Device: a ward board, such as a nurse-station indicator, on the ward's Account | any open Case is owned by Care_Team_Queue, on any device or none, faster as the queue fills: `QUEUE_DEPTH` | none needed: an internal board usually has no DHT11, and if it has one, its readings open no Case and, from 2.7.0, do not turn its servo | `internal-devices`, inside `fleet-patient-monitor` |
+
+- **The servo turns if either asks.** Since 2.7.0 only a board's own role asks (the temperature on a monitored board, the queue on an internal one), so both are on only for the seconds after an internal board restarts warm; then it sweeps at the faster of the two: the temperature sweeps once every 2 s; the queue from about 7 s a sweep at 1 Case (intensity 20, with a full-speed depth of 5) to about 1 s at full speed, as the queue-indicator firmware did. It stops only when neither asks. `ServoDemand.h` holds the rule, `ServoSweep.h` the sweep, which can change speed without the arm jumping.
+- **A continuous-rotation servo** spins instead: about half speed for a case alert, and from just above standing still to full speed for the queue, the larger of the two.
+- **The queue's depth is not kept in NVS.** Salesforce sends it again each time an internal board connects (`DeviceConnectionService`), and at once when an Asset's record type changes. The case alert is still kept, as in 2.3.0.
+- **No sensor, no noise.** A board without a DHT11 prints `DHT read failed` for its first three readings, then `DHT11: no sensor answers, so this board sends no readings (normal on a ward board)` once, and nothing more. It keeps trying once per reading interval, silently, and says `DHT11: answering again, readings on` if a sensor is plugged in. A sensor that worked and stops says `DHT11: stopped answering` once. No reading is published without a sensor, so nothing in AWS or Salesforce reacts. Its live card shows `sensorError: "no sensor"`. `SensorPresence.h` holds the rule.
+- **The console** says `queue: 2 case(s), intensity 40% -> motor turning`, `-> motor stopped`, or `-> motor turning for the case alert`, and `case alert: off, motor turning for the queue` when the queue still turns it.
+- **Older firmware.** 2.3.0 does not know `QUEUE_DEPTH`: an internal board on it stays still until it takes 2.4.0 (`scripts/ota.sh try Dev patient-monitor`).
+
+`test/firmware/servo_demand_test.cpp` checks the servo rule and the sensor rule on the host, `test/firmware/servo_sweep_test.cpp` the speed change, and `test/firmware/contract.test.js` that the queue relay and the sketch spell `QUEUE_DEPTH`, `intensity` and `openCaseCount` the same, that the build keeps the name `patient-monitor`, and that `internal-devices` sits inside `fleet-patient-monitor`.
 
 ## Lifecycle: manual once, automatic thereafter
 

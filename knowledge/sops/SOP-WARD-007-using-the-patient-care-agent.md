@@ -23,7 +23,7 @@ person may see.
 2. Ask what the device reports before asking what to do. The agent answers
    from stored readings only.
 3. Ask which procedure applies. The agent quotes the procedure ID and
-   version it used, for example SOP-WARD-001 v1.2; check that is the
+   version it used, for example SOP-WARD-001 v2.0; check that is the
    procedure you expected.
 4. Confirm before it acts. The agent states the device and the reading it
    will escalate and waits for a yes.

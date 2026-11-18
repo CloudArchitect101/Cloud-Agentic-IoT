@@ -43,14 +43,14 @@ public class DeviceApiMock implements HttpCalloutMock {
     /** What POST /find-procedure answers: two passages of one SOP. */
     public List<Object> procedurePassages = new List<Object>{
         new Map<String, Object>{
-            'sopId' => 'SOP-WARD-001', 'title' => 'Room temperature excursion', 'version' => '1.2',
-            'owner' => 'Ward charge nurse', 'reviewed' => '2026-10-15', 'section' => 'Steps',
+            'sopId' => 'SOP-WARD-001', 'title' => 'High temperature alert', 'version' => '2.0',
+            'owner' => 'Ward charge nurse', 'reviewed' => '2026-11-10', 'section' => 'Steps',
             'score' => 0.62, 'matchedBy' => 'meaning', 'text' => '1. Take the Case from Care_Team_Queue.'
         },
         new Map<String, Object>{
-            'sopId' => 'SOP-WARD-001', 'title' => 'Room temperature excursion', 'version' => '1.2',
-            'owner' => 'Ward charge nurse', 'reviewed' => '2026-10-15', 'section' => 'When this applies',
-            'score' => 0.51, 'matchedBy' => 'meaning', 'text' => 'A patient room reads 30.0 C or higher.'
+            'sopId' => 'SOP-WARD-001', 'title' => 'High temperature alert', 'version' => '2.0',
+            'owner' => 'Ward charge nurse', 'reviewed' => '2026-11-10', 'section' => 'When this applies',
+            'score' => 0.51, 'matchedBy' => 'meaning', 'text' => 'A monitored device\'s temperature sensor reads 30.0 C or higher.'
         }
     };
     public Integer procedureStatus = 200;

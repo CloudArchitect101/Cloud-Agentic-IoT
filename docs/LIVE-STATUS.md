@@ -32,11 +32,9 @@ connect and disconnect events:
 They change only when the board connects or disconnects, so they work whether
 or not anyone has the card open, and a list view or report can filter on them.
 
-A fourth, **Case Alert**, is checked while the device has an open Case in
-Care_Team_Queue, and the patient monitor's servo then sweeps without stopping
-(firmware 2.3.0). When a board comes online, Salesforce sends it that state
-again as a `CASE_ALERT` Device Command, since a change sent while it was away
-never reached it ([README, chapter 03](../README.md#room-temperature-demo-rule)).
+(A fourth, Case Alert, is retired: since firmware 2.5.0 a monitored board's
+servo follows its own sensor's temperature, not Cases. See
+[README, chapter 03](../README.md#temperature-alert-demo-rule).)
 
 **On the card**, while it is on screen:
 
@@ -215,7 +213,8 @@ The pieces ship with the rest of the project; this is what to check.
 | You see | Likely cause | Check |
 |---|---|---|
 | *Waiting for the board...* | The board is offline, runs firmware older than 2.2.0, or the `queue-relay` stack predates the `/live` policy line | The serial console prints `live: every 2 s for 15 min` when the card opens. If it does not, check `aws: connected, patient-monitor v2.2.0` after a restart |
-| *Waiting for the board...* on a queue indicator | Expected: the queue indicator has no sensor and sends no live readings | |
+| *Waiting for the board...* on a queue indicator | Expected: the retired queue-indicator firmware has no sensor and sends no live readings | |
+| *no sensor* on an Internal Device | Expected: a ward board usually has no DHT11. From 2.4.0 it streams anyway and says so | The serial console says `DHT11: no sensor answers` once |
 | *Live connection unavailable; showing stored readings every 5 s* | The browser could not keep a WebSocket to AWS IoT: no Trusted URL for the Region, or a network that blocks it | The browser console shows a CSP error naming `wss://...iot...` |
 | *Live status is unavailable. Salesforce could not reach the device API...* | No principal access to the AWS_IoT_Relay external credential, or the device API is unreachable | Re-provisioning the same Asset fails the same way |
 | *...has no device-live route yet* | The `queue-relay` stack is older than this feature | Deploy it |

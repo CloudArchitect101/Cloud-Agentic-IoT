@@ -49,7 +49,7 @@ refuse_local_prod() {
 # runs. The pipeline always deploys a commit. So a laptop deploy refuses a tree
 # with changes under the deployed folders, unless you say ALLOW_DIRTY=yes; the
 # commit it records then ends in -dirty.
-DEPLOYED_PATHS="lambda infra force-app config scripts knowledge"
+DEPLOYED_PATHS="lambda infra force-app manifest config scripts knowledge"
 tree_is_dirty() {
   local changes
   # shellcheck disable=SC2086  # the paths are words on purpose

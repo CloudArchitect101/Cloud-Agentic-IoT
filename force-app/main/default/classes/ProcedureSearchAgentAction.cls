@@ -52,7 +52,7 @@ public with sharing class ProcedureSearchAgentAction {
 
     public class ProcedureRequest {
         @InvocableVariable(required=true label='Question'
-            description='What the user needs a procedure for, in their words, for example "room reads 31 C" or "SOP-WARD-003".')
+            description='What the user needs a procedure for, in their words, for example "sensor reads 31 C" or "SOP-WARD-003".')
         public String question;
 
         @InvocableVariable(label='Number of Passages'
@@ -67,7 +67,7 @@ public with sharing class ProcedureSearchAgentAction {
             description='The passages, best first. Each starts with its SOP ID, version, title and section in square brackets.')
         public String passages;
         @InvocableVariable(label='Citations'
-            description='The SOP ID and version of each passage, for example SOP-WARD-001 v1.2, in the order given.')
+            description='The SOP ID and version of each passage, for example SOP-WARD-001 v2.0, in the order given.')
         public String citations;
         @InvocableVariable(label='Top Procedure ID') public String topProcedureId;
         @InvocableVariable(label='Top Procedure Title') public String topProcedureTitle;

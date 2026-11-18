@@ -14,6 +14,19 @@
  * fields that person may see. An unreadable field fails the query rather
  * than coming back empty, and the agent is told so instead of guessing.
  * No patient name is returned: the device is the subject, not the person.
+ * The two fields people or AWS write free text into, the Asset's name and
+ * its last disconnect reason, go through PiiMaskingService first, so an
+ * email or phone number typed there reaches the model as [EMAIL_1] or
+ * [PHONE_1], never as itself.
+ *
+ * Two sources, because Salesforce keeps only the readings someone must act
+ * on (state changes and re-alerts): the saved readings come from
+ * Patient_Vitals__c, and the newest reading the board stored in AWS comes
+ * from one callout per device to the device API's POST /device-live in mode
+ * "latest", which only reads (it sends nothing to the board). The live part
+ * may fail or be absent (Prod keeps no readings in AWS) without failing the
+ * saved part; liveMessage then says why. Both carry their age in minutes,
+ * so the agent never has to work out from timestamps how old a reading is.
  *
  * Its own class because Apex allows one @InvocableMethod per class.
  */
@@ -60,11 +73,27 @@ public with sharing class DeviceReadingsAgentAction {
         @InvocableVariable(label='Readings'
             description='One line per reading, newest first. A value that was not measured says not measured.')
         public String readings;
+        @InvocableVariable(label='Latest Reading Age Minutes'
+            description='How many minutes ago the newest saved reading was taken.')
+        public Integer latestReadingAgeMinutes;
+        @InvocableVariable(label='Live Reading At'
+            description='When the board took its newest reading stored in AWS. Empty when AWS has none or could not be read.')
+        public Datetime liveReadingAt;
+        @InvocableVariable(label='Live Reading Age Minutes'
+            description='How many minutes ago the board took its newest reading stored in AWS.')
+        public Integer liveReadingAgeMinutes;
+        @InvocableVariable(label='Live Temperature' description='Temperature in C of the newest reading stored in AWS.')
+        public Decimal liveTemperature;
+        @InvocableVariable(label='Live Humidity' description='Relative humidity in % of the newest reading stored in AWS.')
+        public Decimal liveHumidity;
+        @InvocableVariable(label='Live Message'
+            description='About the newest reading stored in AWS: what it is, or why there is none.')
+        public String liveMessage;
     }
 
     @InvocableMethod(
         label='Get Latest Device Readings'
-        description='Returns the latest vital-sign readings a patient monitoring device reported, and whether the device is connected.'
+        description='Returns the latest readings a monitored device reported, and whether the device is connected.'
         category='Patient Care')
     public static List<ReadingsResult> getLatestReadings(List<ReadingsRequest> requests) {
         List<ReadingsResult> results = new List<ReadingsResult>();
@@ -89,6 +118,7 @@ public with sharing class DeviceReadingsAgentAction {
             return results;
         }
 
+        DeviceApiClient live = null;
         Map<String, List<Asset>> devicesBySerial;
         try {
             devicesBySerial = assetsBySerial(wanted);
@@ -113,10 +143,12 @@ public with sharing class DeviceReadingsAgentAction {
                 continue;
             }
             Asset device = matches[0];
-            res.deviceName = device.Name;
+            // Typed by people, so it can hold a phone number or an email; the
+            // agent's model gets the PII tokens instead (chapter 10).
+            res.deviceName = PiiMaskingService.mask(device.Name).maskedText;
             res.connectionStatus = device.Connection_Status__c;
             res.connectionSince = device.Connection_Since__c;
-            res.lastDisconnectReason = device.Last_Disconnect_Reason__c;
+            res.lastDisconnectReason = PiiMaskingService.mask(device.Last_Disconnect_Reason__c).maskedText;
             res.lastTelemetryAt = device.Last_Telemetry_At__c;
 
             List<Patient_Vitals__c> latest;
@@ -127,8 +159,62 @@ public with sharing class DeviceReadingsAgentAction {
                 continue;
             }
             describe(res, latest);
+            if (live == null) {
+                live = new DeviceApiClient();
+            }
+            describeLive(res, live);
         }
         return results;
+    }
+
+    /**
+     * The newest reading the board stored in AWS, from POST /device-live in
+     * mode "latest". Never fails the result: a failed call only says so in
+     * liveMessage. This action writes nothing, so a callout here never
+     * meets uncommitted work, and the next device's queries may follow it.
+     */
+    @TestVisible
+    private static void describeLive(ReadingsResult res, DeviceApiClient client) {
+        if (!client.canCall()) {
+            res.liveMessage = 'The live reading was not read: this request has no callout left. Ask about fewer devices at once.';
+            return;
+        }
+        DeviceApiClient.Result result = client.post('device-live',
+            new Map<String, Object>{ 'thingName' => res.deviceId, 'mode' => 'latest' });
+        if (!result.succeeded()) {
+            res.liveMessage = 'The live reading from AWS is unavailable right now (' + result.summary() + ').';
+            return;
+        }
+        Map<String, Object> latest;
+        try {
+            Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(result.body);
+            latest = (Map<String, Object>) body.get('latest');
+        } catch (Exception e) {
+            res.liveMessage = 'AWS answered with something this action cannot read, so there is no live reading.';
+            return;
+        }
+        if (latest == null || latest.get('at') == null) {
+            res.liveMessage = 'AWS holds no stored reading for device ' + res.deviceId + '.';
+            return;
+        }
+        res.liveReadingAt = (Datetime) JSON.deserialize('"' + (String) latest.get('at') + '"', Datetime.class);
+        res.liveReadingAgeMinutes = ageMinutes(res.liveReadingAt);
+        res.liveTemperature = decimalOrNull(latest.get('temperature'));
+        res.liveHumidity = decimalOrNull(latest.get('humidity'));
+        if (res.lastTelemetryAt == null || res.liveReadingAt > res.lastTelemetryAt) {
+            res.lastTelemetryAt = res.liveReadingAt;
+        }
+        res.liveMessage = 'Newest reading the board stored in AWS, ' + res.liveReadingAgeMinutes + ' minutes ago: temperature '
+            + value(res.liveTemperature, ' C') + ', humidity ' + value(res.liveHumidity, ' %') + '.';
+    }
+
+    private static Integer ageMinutes(Datetime at) {
+        return at == null ? null : Math.max(0L, (Datetime.now().getTime() - at.getTime()) / 60000L).intValue();
+    }
+
+    private static Decimal decimalOrNull(Object raw) {
+        return raw instanceof Decimal || raw instanceof Integer || raw instanceof Double || raw instanceof Long
+            ? Decimal.valueOf(String.valueOf(raw)) : null;
     }
 
     /** Matched case-sensitively, as DeviceCommandService.prepare matches a device. */
@@ -174,11 +260,17 @@ public with sharing class DeviceReadingsAgentAction {
         }
         Patient_Vitals__c newest = latest[0];
         res.latestReadingAt = newest.Timestamp__c;
+        res.latestReadingAgeMinutes = ageMinutes(newest.Timestamp__c);
         res.latestHeartRate = newest.Heart_Rate__c;
         res.latestSpO2 = newest.SpO2__c;
         res.latestTemperature = newest.Temperature__c;
         res.latestPatientState = newest.Patient_State__c;
         res.latestRiskScore = newest.Risk_Score__c;
+        // Nothing writes Asset.Last_Telemetry_At__c yet, so fall back to the
+        // newest reading: a null here made the device look silent.
+        if (res.lastTelemetryAt == null) {
+            res.lastTelemetryAt = newest.Timestamp__c;
+        }
 
         List<String> lines = new List<String>();
         for (Patient_Vitals__c reading : latest) {
@@ -201,7 +293,7 @@ public with sharing class DeviceReadingsAgentAction {
             + ', humidity ' + value(reading.Humidity__c, ' %')
             + ', state ' + (String.isBlank(reading.Patient_State__c) ? 'not reported' : reading.Patient_State__c)
             + ', risk score ' + value(reading.Risk_Score__c, '')
-            + (reading.Room_Temperature_Alert__c == true ? ', room-temperature flag set' : '');
+            + (reading.Room_Temperature_Alert__c == true ? ', temperature alert flag set' : '');
     }
 
     private static String value(Decimal measured, String unit) {

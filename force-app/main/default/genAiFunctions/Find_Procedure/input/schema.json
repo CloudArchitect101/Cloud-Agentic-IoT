@@ -1,0 +1,23 @@
+{
+  "unevaluatedProperties": false,
+  "required": [
+    "question"
+  ],
+  "properties": {
+    "question": {
+      "title": "Question",
+      "description": "What the user needs a procedure for, in their words, for example \"sensor reads 31 C\" or \"SOP-WARD-003\".",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "passageCount": {
+      "title": "Number of Passages",
+      "description": "How many passages to return, best first. 3 if empty, at most 5.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

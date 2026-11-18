@@ -2,7 +2,7 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Thing_Group__c</fullName>
     <label>Thing Group</label>
-    <description>OTA audience: fleet-patient-monitor (the default) or fleet-queue-indicator, or canary-patient-monitor / canary-queue-indicator for a board that takes a Prod release before the rest of the fleet.</description>
+    <description>OTA audience, used when the device is provisioned. Blank: fleet-patient-monitor, or internal-devices for an Internal Device (inside fleet-patient-monitor). canary-patient-monitor takes a Prod release first.</description>
     <length>100</length>
     <type>Text</type>
 </CustomField>

@@ -135,4 +135,24 @@ async function invokeAction(className, inputs) {
   return response.json();
 }
 
-module.exports = { getSession, upsertCollection, invokeAction, SalesforceError, COLLECTION_LIMIT };
+/** Runs a SOQL query and returns its records (the first batch, up to 2,000). */
+async function query(soql) {
+  const response = await call('GET', apiPath(`/query?q=${encodeURIComponent(soql)}`));
+  if (!response.ok) {
+    throw new SalesforceError(`Salesforce query failed (${response.status}): ${await response.text()}`, response.status);
+  }
+  return (await response.json()).records;
+}
+
+/** Creates one record and returns its Id. */
+async function createRecord(sobject, fields) {
+  const response = await call('POST', apiPath(`/sobjects/${sobject}`), fields);
+  if (!response.ok) {
+    throw new SalesforceError(`Salesforce create failed (${response.status}): ${await response.text()}`, response.status);
+  }
+  return (await response.json()).id;
+}
+
+module.exports = {
+  getSession, upsertCollection, invokeAction, query, createRecord, SalesforceError, COLLECTION_LIMIT,
+};

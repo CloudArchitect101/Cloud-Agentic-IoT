@@ -8,7 +8,7 @@
     </values>
     <values>
         <field>Device_Id__c</field>
-        <value xsi:type="xsd:string">ESP32-Patient-Monitor-01</value>
+        <value xsi:nil="true"/>
     </values>
     <values>
         <field>Full_Speed_Depth__c</field>

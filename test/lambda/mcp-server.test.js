@@ -188,7 +188,7 @@ test('list_rooms_out_of_range lists the rooms at or above 30 C, with an alert op
   assert.deepEqual(answer.rooms.map((room) => [room.deviceId, room.reasons]), [
     ['room-hot', ['temperature at or above 30 C']],
     ['room-at-threshold', ['temperature at or above 30 C']],
-    ['room-alert-open', ['room-temperature alert open']],
+    ['room-alert-open', ['high temperature alert open']],
     ['room-quiet', ['no reading for over 5 minutes']],
   ]);
   assert.equal(answer.roomsOutOfRange, 4);
@@ -232,7 +232,7 @@ test('send_device_command refuses what the guardrails refuse, before device-comm
   captureConsole(t);
   const { handler, lambdaCalls, published } = load(t);
   const refused = [
-    [{ deviceId: 'room-hot', operation: 'DISPENSE_MEDICATION' }, /must be one of/],
+    [{ deviceId: 'room-hot', operation: 'DISPENSE_MEDICATION' }, /must be one of/], // retired Nov 10,
     [{ deviceId: 'room-hot', operation: 'WIFI_UPDATE' }, /must be one of/],
     [{ deviceId: 'room-hot', operation: 'SET_TELEMETRY_INTERVAL', seconds: 4 }, /at least 5/],
     [{ deviceId: 'room-hot', operation: 'SET_TELEMETRY_INTERVAL' }, /seconds is required/],

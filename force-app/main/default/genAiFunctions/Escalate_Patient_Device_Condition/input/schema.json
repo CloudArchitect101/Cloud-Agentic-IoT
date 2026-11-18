@@ -1,0 +1,31 @@
+{
+  "unevaluatedProperties": false,
+  "required": [
+    "deviceId",
+    "reason"
+  ],
+  "properties": {
+    "deviceId": {
+      "title": "Device ID",
+      "description": "Device ID",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "reason": {
+      "title": "Reason",
+      "description": "Reason",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "severity": {
+      "title": "Severity",
+      "description": "LOW, MEDIUM or HIGH",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

@@ -71,7 +71,7 @@ graph TB
     A -- MQTT over mTLS --> B
     B --> C
     C -- every reading --> E
-    C -- state changes + room-temp reports --> K
+    C -- state changes + high temperature reports --> K
     C --> D
     D --> G
     C -- every reading --> S
@@ -97,16 +97,16 @@ Cloud-Agentic-IoT/
 │   ├── objects/                       # Asset, Patient_Vitals__c, the two platform events, ...
 │   ├── classes/                       # Apex services + tests
 │   ├── triggers/                      # One trigger per object, handler pattern
-│   ├── bots/Patient_Care_Agent/       # The Agentforce agent itself (Bot + BotVersion), shipped inactive
-│   ├── genAiPlannerBundles/           # The agent's planner
-│   ├── genAiPlugins/ genAiFunctions/  # Its topic and registered actions
-│   ├── customMetadata/                # Device_Queue_Binding — config, not code
+│   ├── aiAuthoringBundles/            # The Agentforce agent, as Agent Script (new Agentforce Builder)
+│   ├── genAiFunctions/                # The actions it calls
+│   ├── customMetadata/                # Device_Queue_Binding, Device_Platform_Setting — config, not code
+│   ├── objects/Asset/recordTypes/     # Patient_Device, Internal_Device: what a board is for
 │   └── lwc/                           # queueDepthIndicator, reprovisionDevice, deviceLiveCard, platformUsageCard
 ├── lambda/<function>/                 # Lambda source + CloudFormation per function
 ├── firmware/
 │   ├── libraries/CloudAgenticDevice/  # Shared runtime: NVS, provisioning, WiFi, MQTT, OTA
-│   ├── patient-monitor/               # DHT11 vitals + medication servo
-│   └── queue-indicator/               # Servo driven by Case queue depth
+│   ├── patient-monitor/               # Every board: DHT11 readings, 30 C temperature alert motor, queue indicator
+│   └── queue-indicator/               # Retired: kept for a board already flashed with it
 ├── datacloud/                         # Data Cloud: the room readings' columns, the calculated insights' SQL
 ├── knowledge/sops/                    # The ward's sample SOPs the agent finds and cites (indexed on every AWS deploy)
 ├── mulesoft/                          # The iPaaS alternative to the ingestion Lambda (a design sketch)
@@ -188,7 +188,7 @@ The first `echo` must print the role's ARN before anything is created; an empty 
 
 *c. The named credential.* Named Credentials → New. Name `AWS_IoT_Relay`, URL = the stack's `QueueDepthEndpoint` output (the API's base URL; Apex adds `/provision-device`, `/queue-depth` and the other routes), the external credential from part b, and **Enabled for Callouts** and **Generate Authorization Header** both on. The name is a setting, `Named_Credential__c` on `Device_Platform_Setting__mdt.Default`, so an org can use another.
 
-*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Also give it **Read** on the **User External Credentials** object (Object Settings): without it a call fails with "You don't have read permissions on the User External Credential object". `Device_Integration` already grants that Read to the integration user. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and every admin who views the Home page's usage card, to the integration user the Slack app signs in as, and to the integration user AWS writes readings as (`deploy-salesforce.sh` assigns it to that one once the set exists): a room-temperature dose is sent as whoever saved the reading, a case alert (the patient monitor's motor) as whoever saved the Case, a Device Command as the user who created it, and `/dispense-medication` creates one as that user. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
+*d. Who may use it.* Create a permission set, for example `AWS_IoT_Relay_Callers`, with **External Credential Principal Access** to the principal from part b. Also give it **Read** on the **User External Credentials** object (Object Settings): without it a call fails with "You don't have read permissions on the User External Credential object". `Device_Integration` already grants that Read to the integration user. Assign it to every user whose changes to Assets, Wi-Fi Networks or Cases should reach the devices, to everyone who sends Device Commands or opens a device's live status card, and every admin who views the Home page's usage card, to the integration user the Slack app signs in as, and to the integration user AWS writes readings as (`deploy-salesforce.sh` assigns it to that one once the set exists): a Device Command is sent as the user who created it, and a Case that moves the queue indicator as whoever saved it. The queue indicator's platform event trigger runs as the Automated Process user, which Setup's user list doesn't show, so assign it to that user through the API. The query picks it by its `autoproc@` username, because other hidden system users share its user type:
 
 ```bash
 sf apex run --target-org <your admin alias> <<'EOF'
@@ -219,7 +219,7 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 **2. SSM Parameter Store.** Store `SLACK_SIGNING_SECRET` and the Salesforce JWT credentials the Slack Lambda uses at runtime. Use a **separate, least-privilege integration user** from the CI/CD deploy user — see [`docs/CI-CD-SECRETS.md`](docs/CI-CD-SECRETS.md). Never reuse deploy credentials for runtime access, and never put either in code.
 
-**3. Slack app.** Create it at api.slack.com, add the `/patient-status` and `/dispense-medication` slash commands, and set each one's Request URL to the `SlackCommandsUrl` output of the Slack stack. Copy the Signing Secret into step 2's parameter.
+**3. Slack app.** Create it at api.slack.com, add the `/patient-status` slash command, and set its Request URL to the `SlackCommandsUrl` output of the Slack stack. Copy the Signing Secret into step 2's parameter.
 
 **4. Data Cloud ingestion.** Optional. Every room reading reaches Data Cloud through the S3 archive: with `DataCloudExport` on (Dev), `patient-vitals` also writes each batch as CSV under `datacloud/room-readings/`, and the `patient-vitals` stack lets Data Cloud list and read that folder and nothing else. What stays by hand is in [SETUP.md §7](docs/SETUP.md#7-data-cloud-room-readings-for-the-ward), in order:
 
@@ -232,15 +232,17 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 [`docs/DATA-CLOUD.md`](docs/DATA-CLOUD.md) explains the path and how to check each step.
 
-**5. Case queue + its binding.** The deploy creates `Care_Team_Queue`, a Case queue (`force-app/main/default/queues/`); add its members in Setup → Queues. Put your indicator's IoT Thing name into `force-app/main/default/customMetadata/Device_Queue_Binding.Care_Team_Queue.md-meta.xml`, then push — the binding is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the room-temperature rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so a queue of another name means changing those two values.
+**5. Case queue and its indicator.** The deploy creates `Care_Team_Queue`, a Case queue (`force-app/main/default/queues/`); add its members in Setup → Queues. The indicator is any board whose Asset has the **Internal Device** record type: it follows the queue with no further setup (chapter 03). `Device_Queue_Binding.Care_Team_Queue` sets how fast it turns, and can name one more board; it is configuration, so it ships as metadata rather than being clicked in. The agent's escalations and the temperature alert rule's Cases go to the queue `Device_Platform_Setting__mdt.Default` names (`Escalation_Case_Queue__c` and `Room_Temp_Case_Queue__c`, both `Care_Team_Queue`), so a queue of another name means changing those two values.
 
-**6. Activate the agent.** The deploy creates the **Patient Care Agent** (`force-app/main/default/bots/Patient_Care_Agent`), an employee agent whose version 1 uses `Patient_Care_Planner`, and leaves it inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). Activate it, as the admin:
+**6. Publish and activate the agent.** The **Patient Care Agent** is an employee agent written in Agent Script for the new Agentforce Builder (`force-app/main/default/aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent`). The deploy stores the script; publishing compiles it into a new agent version, which starts inactive. It needs Einstein and Agentforce turned on in the org first ([SETUP.md §2.1](docs/SETUP.md#21-create-the-org-and-secure-the-admin)). As the admin:
 
 ```bash
-sf agent activate --api-name Patient_Care_Agent --version 1 --target-org <your admin alias>
+SF_TARGET_ORG=<your admin alias> scripts/publish-agent.sh Dev
 ```
 
-or Setup → Agentforce Agents → **Patient Care Agent** → Activate. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its three actions (`DeviceReadingsAgentAction`, `ProcedureSearchAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. Find Procedure calls AWS as that person, so they also need `AWS_IoT_Relay_Callers` (part d of step 1). An employee agent acts as the person talking to it, so there is no separate agent user. After a deploy that changes the agent's topic or actions, deactivate and activate it again ([SETUP.md §8](docs/SETUP.md#8-ward-procedures-for-the-agent)).
+`scripts/publish-agent.sh` publishes, activates the newest version and then resets `force-app` to the commit, because publishing writes generated files (a `bots/` and a `genAiPlannerBundles/` folder, reformatted `genAiFunctions`) back into the checkout, which the next deploy would refuse as uncommitted.
+
+`--json` without `--version` activates the newest version. Or open it in Agentforce Builder and click **Activate**. Then assign the `Patient_Care_Agent` permission set to each care team member who will use it: it opens the agent to them and gives its three actions (`DeviceReadingsAgentAction`, `ProcedureSearchAgentAction`, `PatientCareAgentActions`) the device, reading and Case access they run with. Find Procedure calls AWS as that person, so they also need `AWS_IoT_Relay_Callers` (part d of step 1). An employee agent acts as the person talking to it, so there is no separate agent user. After changing the `.agent` file, publish and activate again: each publish is a new version. A routine deploy that leaves the script alone needs no publish.
 
 ```bash
 sf org assign permset --name Patient_Care_Agent --target-org <your admin alias>
@@ -252,7 +254,7 @@ It ships inactive on purpose: activating an agent that can create clinical Cases
 
 **8. Optional — MuleSoft.** Only if you want the iPaaS ingestion path instead of the Lambda. Open `mulesoft/` in Anypoint Studio, or `mvn package` and deploy to CloudHub; set the `sf.*` properties (consumer key, keystore, principal — JWT, no password); then point the AWS IoT rule at the flow's `/telemetry` endpoint. Chapter 07 explains when this is the right call and when it is not.
 
-Two pieces are written and tested but **not yet wired** into the agent's prompts: `PiiMaskingService.mask`/`unmask` (chapter 10; Find Procedure already masks the passages it returns with it) and the guardrails Lambda with its `input`, `output` and `action` phases (chapter 11).
+PII masking (chapter 10) is in the agent's actions: Get Device Readings masks the device's name and disconnect reason, and Find Procedure the passages it returns. The guardrails Lambda's `input`, `output` and `action` phases (chapter 11) guard the MCP server and every command to a room, not the agent's prompts.
 
 ### Why these stay manual
 
@@ -279,7 +281,7 @@ Only the device chapters (00, 03, 13) need hardware. Everything else is cloud-on
 |---|---|
 | ESP32 development board | DOIT DEVKIT V1 or equivalent |
 | DHT11 temperature + humidity sensor | The patient-monitor's vitals source |
-| SG90 micro servo | Medication dispenser (ch. 00) and queue indicator (ch. 03) |
+| SG90 micro servo | Temperature alert motor (ch. 03) and queue indicator (ch. 03) |
 | Breadboard + jumper wires | — |
 | USB cable | Data, not charge-only — a charge-only cable is the most common "board not detected" cause |
 
@@ -370,13 +372,13 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | Device is publishing | S3 → the patient-vitals archive bucket, `readings/date=<today>/`. Readings go through Basic Ingest, straight to the rule, so the MQTT test client does not see them | A new `.ndjson.gz` object for each batch |
 | Device is online | The device's Asset in the Cloud Agentic IoT app ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) | Connection `Online`, and on the Live Status card a reading every 2 s (firmware 2.2.0) |
 | Costs and limits show | The app's Home tab | This month's AWS spend against its budget, and the org's limits by group, read when the page loads |
-| Device accepts commands | On the Asset, **Send Command** with `DISPENSE_MEDICATION`. By hand: publish `{ "operation": "DISPENSE_MEDICATION", "commandId": "by-hand-1" }` to `device/<thing>/command` | The servo moves. From the Asset, the Device Command goes `Sent`, then `Acked` within seconds. By hand, the board's answer shows on `device/<thing>/ack` in the MQTT test client; it answers only a command that carries a `commandId` |
+| Device accepts commands | On the Asset, **Send Command** with `RESTART`. By hand: publish `{ "operation": "RESTART", "commandId": "by-hand-1" }` to `device/<thing>/command` | The board restarts. From the Asset, the Device Command goes `Sent`, then `Acked` within seconds. By hand, the board's answer shows on `device/<thing>/ack` in the MQTT test client; it answers only a command that carries a `commandId` |
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
 | The agent acts | The agent's panel in Lightning, as a holder of `Patient_Care_Agent`: ask for a device's latest readings, then escalate | The readings, then a Case with `Origin = Agentforce` in Care_Team_Queue |
-| Room-temp Case | Warm the DHT11 above 30 C (with `RoomTempAlert` on, [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose)) | A Case with Origin `Room Temperature Rule` in Care_Team_Queue, one `DISPENSE_MEDICATION` Device Command, and a `CASE_ALERT` on |
-| Case alert | Open a Case on a provisioned patient monitor's Asset and give it to Care_Team_Queue (firmware 2.3.0) | The servo sweeps back and forth without stopping, the Asset's Case Alert is checked, and a `CASE_ALERT` Device Command goes `Acked`. Close the Case, or take it yourself, and it stops |
+| High temperature Case | Warm the DHT11 above 30 C, for example under an arm (with `RoomTempAlert` on, [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-high-temperature-alert)) | A Case `High temperature ... C on <device>` with Origin `Room Temperature Rule` in Care_Team_Queue, no Device Command, and the board sweeping until a reading is below 30 C |
+| Temperature alert motor | Warm the DHT11 to 30 C on a monitored device (firmware 2.5.0 or later) | The board's servo sweeps back and forth within about 5 s, decided on the board with no Case, and stops at the first reading below 30 C |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
 
 The Asset's Connection field, its Live Status card and **Send Command** need a device provisioned from Salesforce (chapter 13), whose Asset carries its Thing ARN. On an Asset made by hand in Stage 3, Connection stays *Not reported yet*, the card says the device has no AWS IoT Thing, and a command fails as not provisioned. The by-hand publish works either way.
@@ -395,7 +397,7 @@ The separation is editorial: it is the order the story is told in, across the ar
 
 ### 00 · IoT Device Provisioning
 
-Provisioning a physical ESP32 patient monitor and connecting it securely to AWS IoT Core over mutual TLS, with Salesforce as the system of record for device management — including the groundwork for OTA updates managed from a Salesforce app.
+Provisioning a physical ESP32 monitoring device and connecting it securely to AWS IoT Core over mutual TLS, with Salesforce as the system of record for device management — including the groundwork for OTA updates managed from a Salesforce app.
 
 A real, physical system you can walk end-to-end, not a mockup. Secure authentication and authorization between connected systems is the whole subject.
 
@@ -415,9 +417,9 @@ The device registry uses the **standard Asset object** — SerialNumber is the I
 
 Patient vitals streaming in real time through **EventBridge** and **Platform Events** to trigger autonomous agent action within seconds.
 
-The design: telemetry hits IoT Core → an EventBridge rule routes it to the alert dispatcher → the dispatcher evaluates vitals against clinical thresholds → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it. What runs today: readings reach Salesforce through the patient-vitals stack (IoT rule → SQS → `salesforce-sync`, which upserts `Patient_Vitals__c`). The streaming stack deploys, but no IoT rule feeds its bus yet and nothing subscribes to `Patient_Vital_Alert__e`.
+The design: telemetry hits IoT Core → an EventBridge rule routes it to the alert dispatcher → the dispatcher evaluates vitals against clinical thresholds → publishes `Patient_Vital_Alert__e` for critical conditions → agents subscribed to the event act on it. What runs today: readings reach Salesforce through the patient-vitals stack (IoT rule → SQS → `salesforce-sync`, which upserts `Patient_Vitals__c`). The streaming stack deploys, and `VitalAlertCaseService` subscribes to `Patient_Vital_Alert__e`: a `CRITICAL_VITALS` alert opens one Case per device (Origin Vital Alert) in the care team's queue, which the ward board then turns for. No IoT rule feeds the bus: the ward boards measure room air, which never reaches a clinical band, and every reading on the bus would cost more than IoT Core itself ([SCALING.md](docs/SCALING.md)). `scripts/streams-test.sh Dev <device>` sends one synthetic reading down the whole path ([TRY-IT.md, Fire the vitals stream](docs/TRY-IT.md#fire-the-vitals-stream)).
 
-**Key files:** `objects/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls` (+ test), `lambda/streaming/`
+**Key files:** `objects/Patient_Vital_Alert__e/`, `classes/StreamingAlertService.cls`, `classes/VitalAlertCaseService.cls` (+ tests), `lambda/streaming/`, `scripts/streams-test.sh`
 
 ### 03 · Physical Case Queue Indicator
 
@@ -425,46 +427,51 @@ A servo on a desk that spins while there is unclaimed work in a Salesforce Case 
 
 It is a desk toy. It is also a complete demonstration of Salesforce driving the physical world from business data: trigger → Platform Event → async callout with SigV4 auth → API Gateway → Lambda → IoT Core → MQTT → motor. The payoff is visible from across a room.
 
-**The design decision that matters:** nothing about *which* queue, *which* device, or *how fast* is hardcoded. It is all `Device_Queue_Binding__mdt` custom metadata:
+**The design decision that matters:** nothing about *which* queue, *which* device, or *how fast* is hardcoded.
+
+- **Which boards.** Every board runs the same firmware; the Asset's record type decides what it is for. A **Monitoring Device** (record type API name `Patient_Device`; the default, and every Asset with no record type) turns its servo while its own sensor reads 30 C or more (below). An **Internal Device**, a ward board such as a nurse-station indicator, follows the whole queue and, from firmware 2.7.0, ignores its own sensor: it turns while at least one open Case is owned by Care_Team_Queue, whichever device the Case is on, or none, and stops at 0. Making a board an indicator is a change of record type, and the board is told at once. Salesforce wants an Account or a Contact on every Asset, so an Internal Device sits on the ward's own Account.
+- **Which queue.** `Internal_Device_Queue__c` on `Device_Platform_Setting__mdt.Default` (Care_Team_Queue).
+- **How fast, and extra boards.** `Device_Queue_Binding__mdt`:
 
 | Field | Purpose |
 |---|---|
-| `Queue_Developer_Name__c` | Which queue this device watches |
-| `Device_Id__c` | AWS IoT Thing name of the indicator |
-| `Full_Speed_Depth__c` | Case count at which the motor runs flat out |
+| `Queue_Developer_Name__c` | Which queue this binding watches |
+| `Device_Id__c` | Optional: the AWS IoT Thing name of one more board that follows this queue (blank in the shipped Care_Team_Queue binding) |
+| `Full_Speed_Depth__c` | Case count at which the motor runs flat out (5); also the Internal Device boards' when this is their queue |
 | `Active__c` | Kill switch that does not require a deploy |
 
-Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesforce, so the firmware stays dumb and the business rules stay where an admin can change them. Adding a second device on a second queue is a metadata record, not a code change.
+Apex normalises raw queue depth into a 0–100 intensity before it leaves Salesforce, so the firmware stays dumb and the business rules stay where an admin can change them. One `Queue_Depth_Change__e` goes out per queue; the relay sends its `QUEUE_DEPTH` to the board the binding names and to every Internal Device board that is provisioned and not offline. A board that was offline is sent the depth when it connects again. Internal Device boards get no case alert, no room-rule Case and no dose (a dose sent to one is refused).
 
 **Hardware note:** a standard **SG90 is a positional servo** — 0–180°, physically incapable of continuous rotation. The firmware defaults to a gauge-needle sweep that gets faster as the queue deepens, which works on the SG90 you already have and reads clearly on camera. For literal continuous spin use an **FS90R or SG90-360** (~$6) and uncomment `#define CONTINUOUS_ROTATION_SERVO`. Both paths are compile-verified.
 
-**Key files:** `objects/Device_Queue_Binding__mdt/`, `classes/CaseQueueMonitorService.cls`, `triggers/CaseTrigger.trigger`, `objects/Queue_Depth_Change__e/`, `classes/QueueDepthRelayQueueable.cls`, `lambda/queue-relay/`, `firmware/queue-indicator/`
+**Key files:** `objects/Asset/recordTypes/`, `classes/DeviceRoles.cls`, `objects/Device_Queue_Binding__mdt/`, `classes/CaseQueueMonitorService.cls`, `triggers/CaseTrigger.trigger`, `objects/Queue_Depth_Change__e/`, `classes/QueueDepthRelayQueueable.cls`, `lambda/queue-relay/`, `firmware/patient-monitor/` (2.4.0 and later; [firmware/README.md](firmware/README.md#one-firmware-for-every-board-patient-monitor-240))
 
-**To see it work:** create a Case, assign it to the bound queue, and watch the motor start. Close the Case and watch it stop.
+**To see it work:** give a board's Asset the Internal Device record type, create a Case owned by Care_Team_Queue on any device, and watch that board's motor start. Close the Case and watch it stop.
 
-#### Room-temperature demo rule
+#### Temperature alert demo rule
 
-A demo rule, not a clinical one: warm the patient monitor's DHT11 to 30 C and a Case opens by itself, the indicator moves, and the dispenser's servo turns out a dose, then keeps sweeping until the Case is closed or someone takes it. Steps in [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-case-and-a-dose).
+A demo rule, not a clinical one. The monitored device's DHT11 can sit wherever the temperature matters: against a patient (the demo puts it under an arm), in a medication fridge, in a room. Warm it to 30 C and the device's own motor starts turning to tell whoever is near, a Case opens by itself, and the indicator moves; once it reads below 30 C the motor stops by itself. The motor never dispenses anything. Steps in [TRY-IT.md](docs/TRY-IT.md#warm-the-sensor-get-a-high-temperature-alert). Labels say "temperature alert" and "monitored device"; some API names (`Room_Temperature_Alert__c`, `RoomTemperatureCaseService`, `Patient_Vitals__c`, `Patient_Device`) keep their first names for now.
 
-- **Flow.** patient-vitals → sync queue → salesforce-sync → `Patient_Vitals__c` (flagged `Room_Temperature_Alert__c`) → `PatientVitalsTrigger` → `RoomTemperatureCaseService` → a Case in Care_Team_Queue (which moves the indicator and turns the case alert on through `CaseTrigger`) and one `DISPENSE_MEDICATION` Device Command (which the command trigger sends to the board).
-- **AWS decides when, Salesforce decides what.** The threshold lives once, as `RoomTempAlertCelsius` in `config/<env>.json` (30, inclusive). AWS reports a hot device on the crossing and then at most every `RealertIntervalMinutes` while it stays hot, never per reading. Salesforce never compares `Temperature__c` with 30: that field also holds body temperature, which is always above it. The clinical bands are unchanged.
+- **Flow.** patient-vitals → sync queue → salesforce-sync → `Patient_Vitals__c` (flagged `Room_Temperature_Alert__c`) → `PatientVitalsTrigger` → `RoomTemperatureCaseService` → a Case in Care_Team_Queue, which moves the indicator. No Device Command: the device's motor follows its own sensor.
+- **AWS decides when, Salesforce decides what.** The threshold lives once, as `RoomTempAlertCelsius` in `config/<env>.json` (30, inclusive). AWS reports a device on the crossing and then at most every `RealertIntervalMinutes` while it stays high, never per reading. Salesforce never compares `Temperature__c` with 30 itself: AWS flags the reading. The clinical bands are unchanged.
 - **Hysteresis.** An episode ends only when a reading drops below 29 C (1 C under the threshold), so a sensor wobbling around 30 C is one report.
 - **Dedupe.** One open Case per device from this rule: a Case with Origin `Room Temperature Rule` on the device's Asset. While it is open, nothing new opens. Once it is closed, the next report opens a new one. A device without an Asset gets no Case, only a WARN log.
-- **Dose cooldown.** One dose per new Case, and at most one per device every `Room_Temp_Dispense_Cooldown_Minutes__c` (60). A Case closed and reopened inside that hour gets no second dose, and its Description says so.
-- **Switches.** `RoomTempAlert` in `config/<env>.json` decides whether AWS sends flagged readings at all: on in Dev, off in Prod. `Room_Temp_Dispense__c` on the Default `Device_Platform_Setting__mdt` record turns dosing off while keeping the Cases; change it in the repo, because a Setup edit is overwritten by the next deploy.
+- **Switches.** `RoomTempAlert` in `config/<env>.json` decides whether AWS sends flagged readings at all: on in Dev, off in Prod.
 - **Emergency stop.** Add `PatientVitalsTriggerHandler` to `Integration_Control__c` Bypass Handlers at org level. Instant, no deploy.
-- **Case alert.** Any Case does this, not only the rule's: while a device has at least one open Case owned by Care_Team_Queue (`Room_Temp_Case_Queue__c` and `Escalation_Case_Queue__c`), its patient monitor's servo sweeps 0 to 180° and back every 2 seconds. `CaseAlertService` sends `CASE_ALERT` on with the first such Case and off when the last one is closed, deleted, given to a person or moved to another Asset; the Asset's Case Alert field holds the state last sent, so nothing is sent in between. A dose still swings, then the sweep goes on. The board keeps the state in NVS across restarts and updates, and when it reconnects Salesforce sends the state again. A failure is logged and never stops the Case from saving. Firmware 2.3.0 and later. To stop all of it at once, add `CaseTriggerHandler` to Bypass Handlers (that also stops the queue indicator).
-- **Deploy order.** Salesforce first (the `CASE_ALERT` value and the fields), then AWS (the device-command Lambda checks `active`), then the board: `scripts/ota.sh try Dev patient-monitor`.
+- **The motor on the board.** Since firmware 2.5.0 a monitored device sweeps its servo while its own DHT11 reads 30 C or more, and stops at the first reading below 30 C. The board decides from a reading every 5 s, with no Case, Salesforce or network, so it reacts in seconds and works offline. Cases still drive the ward boards (Internal Device, `QUEUE_DEPTH`). The earlier case alert (`CASE_ALERT`, firmware 2.3.0 to 2.4.0, `CaseAlertService`) is retired: the deploy removes the class (`manifest/destructiveChangesPost.xml`), and a board on 2.5.0 answers an old `CASE_ALERT` as done and ignores it. The dispense swing (`DISPENSE_MEDICATION`, until firmware 2.5.0) is retired too: 2.6.0 refuses it, the guardrails refuse it, and the picklist value is inactive.
+- **Deploy order.** Salesforce first (the fields and the rule), then AWS, then the board: `scripts/ota.sh try Dev patient-monitor`.
 
-**Key files:** `lambda/patient-vitals/index.js` (`planDevice`), `triggers/PatientVitalsTrigger.trigger`, `classes/RoomTemperatureCaseService.cls`, `classes/CaseAlertService.cls`, `firmware/patient-monitor/`, `customMetadata/Device_Platform_Setting.Default.md-meta.xml`
+**Key files:** `lambda/patient-vitals/index.js` (`planDevice`), `triggers/PatientVitalsTrigger.trigger`, `classes/RoomTemperatureCaseService.cls`, `firmware/patient-monitor/`, `customMetadata/Device_Platform_Setting.Default.md-meta.xml`
 
 ### 04 · Headless Slack Integration
 
-A Slack slash-command bot that reads and writes Salesforce data — `/patient-status <device-id>` and `/dispense-medication <device-id>` — without any Slack user ever logging into Salesforce. A dedicated integration user authenticates via the JWT Bearer Flow: the same pattern as the CI/CD pipeline, but as a runtime service call rather than a deploy-time one.
+A Slack slash-command bot that reads AWS and Salesforce data — `/patient-status <device-id>` — without any Slack user ever logging into Salesforce. A dedicated integration user authenticates via the JWT Bearer Flow: the same pattern as the CI/CD pipeline, but as a runtime service call rather than a deploy-time one.
 
-**How it closes the loop:** `/dispense-medication` does not just update a record. It creates a `Device_Command__c`, and an Apex trigger sends it through the device API to the board on `device/<thing>/command`. The board moves the servo and answers on `device/<thing>/ack`; that answer comes back through AWS IoT and marks the record `Acked`, or `Failed` with the board's reason. A Slack message can, headlessly, move a physical servo, and Salesforce knows whether it did. The same record can be created from the device's Asset with **Send Command**. Nothing on this path limits doses yet: `checkBusinessRules` (chapter 11) is not called from it, so anyone who may create a Device Command can dispense. The room-temperature demo rule (chapter 03) also dispenses, automatically: once per new Case, and at most once per device per cooldown (60 minutes). It is off in Prod, and a dose that fails is not retried.
+**What it answers:** `/patient-status Test8` gives the live reading from AWS (or "offline since") and the last event Salesforce saved. `/dispense-medication` was retired on Nov 10 with the dispenser: the device is a temperature alert now, and a command to a board is **Send Command** on its Asset, which creates a `Device_Command__c` that an Apex trigger sends through the device API and the guardrails; the board's answer marks it `Acked` or `Failed`.
 
-**Key files:** `lambda/slack-integration/index.js` (verifies the Slack signature — HMAC, replay-protected), `salesforce-client.js` (headless JWT auth), `cloudformation.yaml`
+**Key files:** `lambda/slack-integration/index.js` (verifies the Slack signature — HMAC, replay-protected — answers within Slack's 3 seconds, then does the Salesforce work in an asynchronous call of itself and posts the result to the command's `response_url`), `lambda/shared/salesforce.js` (headless JWT auth), `cloudformation.yaml`
+
+**Live versus saved:** `/patient-status` answers with two lines. The live reading comes from AWS (the newest reading in the patient-vitals table, the same one the MCP server's `get_room_status` reads, with "offline since" once it is older than five minutes). The last saved event comes from Salesforce, which keeps only the readings someone must act on: state changes and re-alerts. The live part costs one DynamoDB query, about a millionth of a dollar, and no Salesforce API call. If either side cannot be read, the other still answers and the reply says which part is missing.
 
 **To see it work:** run `/patient-status <device-id>` from Slack with nobody logged into Salesforce.
 
@@ -483,17 +490,15 @@ Every agent-created Case is stamped `Origin = 'Agentforce'`, so "what did the ag
 
 | File | What it is |
 |---|---|
-| `bots/Patient_Care_Agent/` | The **agent**: an employee agent (`InternalCopilot`), and its version 1, which names the planner. Deploys inactive |
-| `genAiPlannerBundles/Patient_Care_Planner/` | The planner. Decides which topic handles a request |
-| `genAiPlugins/Patient_Device_Monitoring.genAiPlugin` | The **topic** — scope plus five instructions. Where the agent's behaviour actually lives |
-| `genAiFunctions/Get_Device_Readings/` | The read action: a device's latest readings and connection state, from `DeviceReadingsAgentAction` |
+| `aiAuthoringBundles/Patient_Care_Agent/Patient_Care_Agent.agent` | The **agent**, in Agent Script: an employee agent, its router, the **Device Monitoring** subagent (`Patient_Device_Monitoring`) with five instructions and three actions, Salesforce's standard escalation, off-topic and ambiguous-question subagents, and `connection slack` so it answers in Slack ([SETUP.md](docs/SETUP.md#talk-to-the-agent-from-slack-optional)). The org compiles the planner and bot version from it |
+| `genAiFunctions/Get_Device_Readings/` | The read action: a device's newest reading stored in AWS (one read-only POST /device-live), its latest saved readings and connection state, each reading with its age, from `DeviceReadingsAgentAction` |
 | `genAiFunctions/Find_Procedure/` | The procedure action: the ward SOP passages that answer a question, each with the SOP ID and version to cite, from `ProcedureSearchAgentAction` ([SOP-GROUNDING.md](docs/SOP-GROUNDING.md)) |
 | `genAiFunctions/Escalate_Patient_Device_Condition/` | The escalation action: a Case for the care team, from `PatientCareAgentActions` |
 | `permissionsets/Patient_Care_Agent` | Who may use the agent, and the access its actions run with |
 
 The five instructions are the interesting part: **ground every answer** (only from the readings and procedure passages the actions return; say so when data is missing rather than estimating); **cite the ward procedure** (call Find Procedure when asked what to do, give only the steps a passage holds, cite each by SOP ID and version, and say so when no procedure covers it); **do not diagnose** (describe readings against thresholds, nothing more); **confirm before acting** (state which device and reading, then report the Case number); **be precise about device identity** (always the serial number; ask rather than guess when a patient has several).
 
-`isConfirmationRequired` is `true` on the escalation action (and `false` on the two read-only ones), so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
+`require_user_confirmation` is `True` on the escalation action (and `False` on the two read-only ones), so confirmation is enforced by the platform rather than requested by a prompt that can be argued with.
 
 **Key files:** `classes/PatientCareAgentActions.cls` (+ test, including a 200-record bulk invocation), `classes/DeviceReadingsAgentAction.cls` (+ test, run as a user with and without the permission set), `classes/ProcedureSearchAgentAction.cls` (+ test, every way the callout can fail)
 
@@ -501,7 +506,7 @@ The read action works as the user: `with sharing` and `WITH USER_MODE`, so the a
 
 **To see it work:** with the agent active and `Patient_Care_Agent` assigned, open the agent from the Lightning header, ask what a device (by serial number) is reporting, ask what to do about it and check the answer cites an SOP ID, then ask it to escalate, confirm when prompted, and check Cases filtered to `Origin = Agentforce`.
 
-> **Honest caveat:** Agentforce metadata schema moves between releases. The planner, topic and action have deployed to a real org; the Bot and BotVersion are written against the Metadata API reference and agents retrieved from other orgs, and checked offline, but not yet deployed. Expect to reconcile field names against your org's API version on first deploy — `sf project deploy start --dry-run` will tell you exactly what it disagrees with — and once the agent works, retrieve it (`sf project retrieve start -m Bot:Patient_Care_Agent -m GenAiPlannerBundle:Patient_Care_Planner`) and commit what the org returns.
+> **Honest caveat:** the agent was first built for the legacy builder (Bot, planner and topic metadata). That shape could not take a Slack connection, so it was upgraded in Agentforce Builder and the Agent Script the org produced is what the repo ships, byte for byte (Nov 9, API 66.0). Agents here are built only for the new builder. After changing one in Agentforce Builder, retrieve it (`sf project retrieve start -m AiAuthoringBundle:Patient_Care_Agent`) and commit the `.agent` file; the compiled planner and bot versions are the org's, not the repo's.
 
 ### 06 · Multi-Agent Orchestration (MCP + Agent2Agent)
 
@@ -547,11 +552,11 @@ This chunker splits on paragraph boundaries first, falls back to sentence bounda
 
 **A bug worth keeping in the write-up:** the first version handled long *paragraphs* but not long *sentences*. A 2000-character sentence — a dosage table, a long enumerated list — passed straight through and produced a chunk nearly twice the window. Nothing errored; the embedding model would have silently truncated it and dropped the tail. Found by testing the edge case rather than the happy path. Five cases now assert that no chunk ever exceeds the cap.
 
-**Grounded and cited.** Seven short sample SOPs live in `knowledge/sops/` (room temperature at or above 30.0 C, medication storage humidity, a monitor offline, a failed dose, the case alert motor, escalation and handover, using the agent), each with an ID, version and owner role. Every AWS deploy runs `scripts/index-sops.sh`: the indexer embeds each section with Titan Text Embeddings V2 and writes one index object to S3, and does nothing when no SOP changed. The agent's **Find Procedure** action (`ProcedureSearchAgentAction`) asks the device API's `POST /find-procedure`; procedure-search masks the question, embeds it, ranks the passages by cosine in the function and masks them on the way out. The topic tells the agent to cite each passage by SOP ID and version and to say so when no procedure covers a question. For a few dozen passages one S3 object beats any vector database, and nothing runs while idle: under a cent a month. [SOP-GROUNDING.md](docs/SOP-GROUNDING.md) has the design, the alternatives (Agentforce Data Library, Knowledge, Bedrock Knowledge Bases, S3 Vectors) and the cost.
+**Grounded and cited.** Seven short sample SOPs live in `knowledge/sops/` (a high temperature alert at 30.0 C or above, medication storage humidity, a monitor offline, an alert motor that does not follow the temperature, the case alert motor, escalation and handover, using the agent), each with an ID, version and owner role. Every AWS deploy runs `scripts/index-sops.sh`: the indexer embeds each section with Titan Text Embeddings V2 and writes one index object to S3, and does nothing when no SOP changed. The agent's **Find Procedure** action (`ProcedureSearchAgentAction`) asks the device API's `POST /find-procedure`; procedure-search masks the question, embeds it, ranks the passages by cosine in the function and masks them on the way out. The topic tells the agent to cite each passage by SOP ID and version and to say so when no procedure covers a question. For a few dozen passages one S3 object beats any vector database, and nothing runs while idle: under a cent a month. [SOP-GROUNDING.md](docs/SOP-GROUNDING.md) has the design, the alternatives (Agentforce Data Library, Knowledge, Bedrock Knowledge Bases, S3 Vectors) and the cost.
 
 **Key files:** `knowledge/sops/`, `lambda/shared/sop-index.js`, `lambda/knowledge-indexer/`, `lambda/procedure-search/index.js`, `scripts/index-sops.sh`, `classes/ProcedureSearchAgentAction.cls`
 
-**To see it work:** deploy (the index is built on the way), then ask the agent what to do about a room reading 31 C, and check the answer cites `SOP-WARD-001 v1.2`. [SOP-GROUNDING.md, Check each step](docs/SOP-GROUNDING.md#check-each-step) checks the index, the function and the Apex action one at a time.
+**To see it work:** deploy (the index is built on the way), then ask the agent what to do about a sensor reading 31 C, and check the answer cites `SOP-WARD-001 v2.0`. [SOP-GROUNDING.md, Check each step](docs/SOP-GROUNDING.md#check-each-step) checks the index, the function and the Apex action one at a time.
 
 ### 09 · Event-Driven Architecture (Saga Pattern)
 
@@ -559,12 +564,12 @@ An OTA firmware rollout modelled as a **saga** — a sequence of steps spanning 
 
 **Why a saga and not a transaction:** a firmware update spans an S3 upload, a Salesforce status change, an AWS IoT Job, and a device acknowledgement. There is no shared lock and no two-phase commit across that boundary. The device may simply vanish.
 
-| Step | Compensating action |
-|---|---|
-| `stage_firmware` | `delete_staged_firmware` |
-| `mark_device_updating` | `mark_device_active` |
-| `create_iot_job` | `cancel_iot_job` |
-| `await_device_ack` | `rollback_device_firmware` |
+| Step | What it does | Compensating action |
+|---|---|---|
+| `stage_firmware` | Copies the published build to `firmware/saga/<board>/<run>.bin` | `delete_staged_firmware` deletes the copy |
+| `mark_device_updating` | Sets the Thing's `otaState` attribute to `UPDATING` | `mark_device_active` sets it back to `ACTIVE` |
+| `create_iot_job` | One IoT Job for that board, with the document `scripts/ota.sh` sends | `cancel_iot_job` cancels it |
+| `await_device_ack` | Reads the job execution: `SUCCEEDED` completes, `QUEUED` or `IN_PROGRESS` waits | `rollback_device_firmware`: nothing to undo, an ESP32 boots a new image only after a verified install |
 
 Three decisions make it work:
 
@@ -572,9 +577,11 @@ Three decisions make it work:
 - **Steps must be idempotent.** SQS delivers at least once, so every handler will eventually run twice with identical input. The retry is routine, not exceptional — the single most common thing people get wrong with queue-driven sagas.
 - **A failed compensation is logged loudly and does not stop the unwind.** Otherwise one stuck rollback strands the device in `UPDATING` forever.
 
-**Key files:** `lambda/ota-saga/index.js`
+A saga that is still waiting when its attempts run out (20 looks, one a minute) unwinds too, so a board is never left marked `UPDATING` by a message that went quietly to the dead-letter queue.
 
-**To see it work:** publish an OTA request onto the queue and watch CloudWatch for the step trace. Kill the device mid-update to see compensation run. It has no CloudFormation template yet and its step bodies are still simulated (`index.js`), so no environment deploys it. When it is built, it needs a queue with a DLQ and a visibility timeout longer than a device ack realistically takes.
+**Key files:** `lambda/ota-saga/` (function and template: the queue, its dead-letter queue and alarm), `scripts/ota-saga.sh`
+
+**To see it work:** `scripts/ota-saga.sh send Dev Test8 patient-monitor <a published version>`, then `scripts/ota-saga.sh status Dev Test8` and `aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow` for the step trace. Turn the board off first to watch the unwind ([TRY-IT.md, Update one board through the saga](docs/TRY-IT.md#update-one-board-through-the-saga)). Releases to the fleet still go through `scripts/ota.sh`: the saga is for one board at a time.
 
 ### 10 · Einstein Trust Layer — PII Masking & Audit
 
@@ -588,9 +595,9 @@ Three details that matter:
 - **Only tokens actually issued get restored.** A model that hallucinates `[EMAIL_9]` gets nothing back. Blindly restoring anything token-shaped is how one patient's address ends up in another patient's summary — the failure mode worth designing against, and there is a test for it.
 - **Pattern order is load-bearing.** Email runs before phone, because the digits inside an address like `a1234@x.com` would otherwise be partly consumed by the phone pattern.
 
-**Key files:** `classes/PiiMaskingService.cls` (+ test — six cases including the hallucinated-token one)
+**Key files:** `classes/PiiMaskingService.cls` (+ test — six cases including the hallucinated-token one), `classes/DeviceReadingsAgentAction.cls`, `classes/ProcedureSearchAgentAction.cls`
 
-**Where it would be wired:** `mask` before the agent's prompt and `unmask` after its response. That is not wired yet (see [Current state](#current-state)): the Patient Care Agent's prompts are not masked today. Its one caller so far is `ProcedureSearchAgentAction`, which masks every SOP passage it hands the agent, after AWS has masked them with the same patterns.
+**Where it is wired:** on the way into the model, in the agent's actions. Every free-text value an action hands the Patient Care Agent goes through `mask` first: the device's name and last disconnect reason in Get Device Readings (people type the name, and an email or phone number typed there reaches the model as `[EMAIL_1]` or `[PHONE_1]`), and every SOP passage in Find Procedure, after AWS has masked it with the same patterns. The rest of what the actions return is numbers, times and fixed wording. What the nurse types to the agent is not masked by this code: the conversation itself goes through the platform's own Einstein Trust Layer. `unmask` is there for a caller that sends text to a model itself and shows the answer to a person; none does yet.
 
 ### 11 · Agentforce Guardrails
 
@@ -603,13 +610,13 @@ Three guardrail layers around an agent — input screening, output screening, an
 1. **Blocklists are permanently behind.** Injection phrasing is unbounded. Blocking on a pattern list trains users to rephrase until something gets through, and gives you false confidence in between.
 2. **False positives are expensive.** "Can you show me your system prompt?" from an admin debugging their own agent is a legitimate question.
 
-So detection is a **tripwire, not a wall** — it routes to a human and creates an audit signal. **Output violations do block**, because there is no tradeoff to weigh: an SSN in a response is a fact, not a guess. And **business rules are the layer that actually enforces** — the agent may decide to dispense medication; only `checkBusinessRules` decides whether that is permitted. Prescription unverified or daily dose limit reached returns `allowed: false`, and no amount of prompting changes it.
+So detection is a **tripwire, not a wall** — it routes to a human and creates an audit signal. **Output violations do block**, because there is no tradeoff to weigh: an SSN in a response is a fact, not a guess. And **business rules are the layer that actually enforces** — an agent may decide a high temperature alert is over; only `checkBusinessRules` decides whether closing it is permitted. No recheck recorded, or a newest reading still at or above the re-arm level (29 C), returns `allowed: false`, and no amount of prompting changes it.
 
 **Verified:** all three phases exercised locally — benign input passes; a combined override+extraction attempt raises two distinct signals and routes to `REVIEW`; clean output passes; an SSN in output is blocked; both business-rule failures fire independently while a compliant request is permitted.
 
 **Key files:** `lambda/shared/guardrails.js` — `checkCommand`, `maskPii`, `checkInput`, `checkOutput`, `checkBusinessRules`; `lambda/guardrails/` deploys them as a function of their own
 
-**Where it is wired:** in front of every command that reaches a room. device-command runs `checkCommand` on each request before it publishes: allowed commands only, only their own settings, inside the ranges the boards accept, one room per dose. Salesforce's Device Commands, the Wi-Fi push and the MCP server all pass it. The MCP server also masks PII in and checks every answer. Why a shared module rather than a hop in front of the API: [docs/GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md).
+**Where it is wired:** in front of every command that reaches a board. device-command runs `checkCommand` on each request before it publishes: allowed commands only, only their own settings, inside the ranges the boards accept, one device at a time for an agent. Salesforce's Device Commands, the Wi-Fi push and the MCP server all pass it. The MCP server also masks PII in and checks every answer. Why a shared module rather than a hop in front of the API: [docs/GUARDRAILS-AND-MCP.md](docs/GUARDRAILS-AND-MCP.md).
 
 ### 12 · Capstone — The Complete System
 
@@ -650,7 +657,7 @@ Create an Asset record in Salesforce with a Wi-Fi Network → AWS provisions the
 **The flow:**
 
 1. Create a **Wi-Fi Network** record — SSID plus passphrase in an **Encrypted Text** field, available in every edition, no Shield needed
-2. Create an **Asset**: SerialNumber = intended IoT Thing name, set the Wi-Fi Network, optionally a Thing Group
+2. Create an **Asset**: SerialNumber = intended IoT Thing name, set the Wi-Fi Network, optionally a Thing Group (left blank: `fleet-patient-monitor` for a Monitoring Device, `internal-devices` for an Internal Device, the record type of a ward board)
 3. `AssetTrigger` fires → `DeviceProvisioningService` calls AWS via a SigV4 Named Credential
 4. The Lambda creates the Thing and certificate, attaches the least-privilege policy, adds it to the Thing Group, writes the bundle to S3, returns the pre-signed URL. If a step fails, it undoes the group membership it added and deletes the certificate again, so a failed attempt leaves only an empty Thing
 5. The Asset updates to **Provisioned** with the link and its expiry. The link is in **Provisioning Bundle Link**, a long text field: signed with the Lambda's temporary credentials, it carries their session token and runs far past the 255 characters a URL field holds. If AWS finished but Salesforce cannot save the result, the Asset turns **Failed** with the reason and keeps the Thing ARN, so **Re-provision** issues a new link once the cause is fixed. If even that update fails, for example because the device was deleted meanwhile, only the job's debug log says so
@@ -710,6 +717,21 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 ## Current state
 
-The design, the Apex, the firmware and the Lambdas are written. 465 Node tests cover 17 of the 18 Lambda functions (all but slack-integration), the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, the ward SOPs, their index and their search, and the firmware's timing and command logic compiled for the host; 92 Python tests run the board, OTA, setup, deploy, SOP index and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (23 test classes). The newest pieces are written and tested but not yet run on a real board: each device's Asset shows whether its board is online, and from firmware 2.2.0 its Live Status card streams readings while it is open ([LIVE-STATUS.md](docs/LIVE-STATUS.md)) and the board answers the Device Commands sent to it; the app's Home page shows this month's AWS spend and the org's Salesforce limits ([SPEND-AND-LIMITS.md](docs/SPEND-AND-LIMITS.md)); and every room reading can reach Data Cloud, with two calculated insights per device ([DATA-CLOUD.md](docs/DATA-CLOUD.md)). The first deploys to a real AWS account and Salesforce org ran in August; [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists what broke, why, and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are being switched on now, and the end-to-end loop (chapters 00, 03 and 05) is being wired and tested.
+As of November 9, 2026, in the test setup (one AWS project and one Salesforce Developer Edition org, deployed from a laptop as in [TRY-IT.md](docs/TRY-IT.md)):
 
-The guardrails (chapter 11) now check every command on its way to a room, and the MCP server (chapter 06) deploys behind an IAM-authenticated URL; neither has run against a real account yet. The same goes for the ward SOPs (chapter 08): the index, the search and the agent's Find Procedure action are written and tested, not yet deployed. PII masking (chapter 10) is not yet called on the Patient Care Agent's prompts. The MuleSoft flow (chapter 07) is a design sketch, not a buildable project. Until a chapter says it is live, read it as a design rather than a system you can run.
+| Chapter | State |
+|---|---|
+| 00, 13 · Provisioning | Live: two boards provisioned from their Assets, one Monitoring Device and one Internal Device |
+| 01 · Data Cloud | The CSV copy is live in S3. The connection, stream and mapping are setup steps in the org, and the insights a script ([SETUP.md §7](docs/SETUP.md#7-data-cloud-room-readings-for-the-ward)); not set up in the test org yet |
+| 02 · Streams | Deployed. Fired by `scripts/streams-test.sh`, since the boards send only temperature and humidity |
+| 03 · Queue indicator, 30 °C rule | Live: firmware 2.6.0-try.1 on Test7 and Test8 since Nov 10 (the temperature alert motor, no dispense swing); the armpit test is next |
+| 04 · Slack | Live: `/patient-status`, and the Patient Care Agent answers in Slack DMs. `/dispense-medication` retired Nov 10 |
+| 05 · Agent | Live in the new Agentforce Builder: readings, procedures, escalation to a Case on the device's Asset, in Salesforce and Slack |
+| 06 · MCP | Deployed; `get_room_status` tested by a signed call |
+| 07 · MuleSoft | A design sketch, not a buildable project |
+| 08 · SOP RAG | Live in test-cloudarchitect101 since Nov 10: Find Procedure cited SOP-WARD-001 v1.2 in Slack; v2.0 (the generic high temperature alert) is indexed by the next `index-sops.sh` |
+| 09 · OTA saga | Written and tested, with its template; deployed by the next AWS deploy |
+| 10 · PII masking | In the agent's readings and procedure actions |
+| 11 · Guardrails | Deployed; a refused command tested |
+
+499 Node tests cover all 18 Lambda functions, the checks that keep the firmware, the templates and the Lambdas in step, the live card's MQTT client, the Home page's usage card, the deploy role's rights, the command guardrails and the MCP server, Data Cloud's read access and its insights' SQL, the ward SOPs, their index and their search, and the firmware's timing and command logic compiled for the host; 105 Python tests run the board, OTA, setup, deploy, stream test, SOP index and Data Cloud insight scripts against a simulated board, AWS and org. Every pull request runs them along with a CloudFormation lint, shellcheck, a Salesforce metadata check and an ESP32 compile, and every Salesforce deploy runs the org's Apex tests (24 test classes). [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) lists what broke on the way, why, and how it was fixed. The Dev and Prod pipelines in [DEVELOPMENT.md](docs/DEVELOPMENT.md) are the next step: the same code, deployed by the pipeline into a second org and account.

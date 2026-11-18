@@ -1,16 +1,19 @@
 # Guardrails and the MCP server
 
-The Smart Ward use case: every patient room has a monitor (the patient
-monitor board: temperature, humidity, the medication servo, the alert motor),
+The Smart Ward use case: monitored devices report temperature and humidity
+from wherever their sensor sits (against a patient, in a medication fridge,
+in a room), each with an alert motor that turns while its sensor reads high,
 and the care team works from Salesforce, where the **Patient Care Agent** reads
-a room's readings and opens Cases. This page covers the two pieces that let an
-agent *act* on a room without being trusted to:
+a device's readings and opens Cases. This page covers the two pieces that let
+an agent *act* on a device without being trusted to:
 
-- **Guardrails** — rules outside the model that every command to a room
+- **Guardrails** — rules outside the model that every command to a board
   passes, whoever sends it.
-- **The MCP server** — the ward's rooms as [Model Context
+- **The MCP server** — the ward's devices as [Model Context
   Protocol](https://modelcontextprotocol.io) tools, for agents outside
-  Salesforce: room status, the rooms out of range, and one command to one room.
+  Salesforce: device status, the devices out of range, and one command to one
+  device. The tool names still say "room" (`get_room_status`,
+  `list_rooms_out_of_range`); they are renamed later.
 
 Both deploy with `scripts/deploy-aws.sh`, like every other stack. Nothing in
 Salesforce changes, and the Patient Care Agent keeps using its Apex actions.
@@ -22,11 +25,11 @@ Nothing the agent does calls AWS directly. Its actions are Apex
 reads stored readings; `ProcedureSearchAgentAction` asks `POST /find-procedure`
 for ward SOP passages, which reads only the SOP index and masks what it returns
 with this page's `maskPii`, [SOP-GROUNDING.md](SOP-GROUNDING.md)). What reaches
-a room goes through one door:
+a board goes through one door:
 
 ```
-Patient Care Agent ─ escalate ─> Case ─> CaseAlertService ─┐
-Slack /dispense-medication, a person, a Flow ──────────────┼─> Device_Command__c (Pending)
+Send Command on an Asset, a person, a Flow ───────────────┐
+                                                           ├─> Device_Command__c (Pending)
                                                            │      └─> DeviceCommandSendJob
 Wi-Fi Network record ─> WiFiCredentialPushJob ─────────────┘             │
                                                                          │  Named Credential AWS_IoT_Relay (SigV4)
@@ -38,7 +41,7 @@ MCP client ─SigV4─> function URL ─> mcp-server ─ lambda:InvokeFunction �
                                         device-command ── checkCommand (lambda/shared/guardrails.js)
                                                                          │ allowed
                                                                          v
-                                        AWS IoT  device/<room>/command ─> the room's board
+                                        AWS IoT  device/<thing>/command ─> the board
 ```
 
 ## Guardrails: where they run, and why there
@@ -65,20 +68,25 @@ both pass it. It is plain code with no AWS calls, so
 
 | Rule | Detail |
 |---|---|
-| Allowed commands | `DISPENSE_MEDICATION`, `RESTART`, `CASE_ALERT`, `WIFI_UPDATE`, `SET_TELEMETRY_INTERVAL`, `LIVE`: what a board takes. Anything else (`REBOOT`, a misspelling) is a 400 before it reaches the room. |
-| Only that command's settings | An extra field is refused. The patient monitor reads `command` as the operation when `operation` is missing, so extra fields are not harmless. |
+| Allowed commands | `RESTART`, `CASE_ALERT`, `WIFI_UPDATE`, `SET_TELEMETRY_INTERVAL`, `LIVE`: what a board takes. Anything else (`REBOOT`, a misspelling, `DISPENSE_MEDICATION`, retired Nov 10) is a 400 before it reaches the board. |
+| Only that command's settings | An extra field is refused. The board reads `command` as the operation when `operation` is missing, so extra fields are not harmless. |
 | Ranges the boards accept | `SET_TELEMETRY_INTERVAL` seconds 5–86400; `LIVE` seconds 1–60, minutes 0–30 (`DeviceTiming.h`); `CASE_ALERT` active true or false; `WIFI_UPDATE` SSID 1–32 bytes and a passphrase empty or 8–64. A test compares these with the firmware. |
-| How many rooms | One room per `DISPENSE_MEDICATION`; at most 200 per request otherwise (`Commands_Per_Callout__c`; a test fails if Salesforce is set to send more). |
+| How many devices | At most 200 per request (`Commands_Per_Callout__c`; a test fails if Salesforce is set to send more). |
 
 A refusal answers 400 with `failures` (codes such as `out_of_range:seconds`)
 and a message. Neither ever repeats a value, so a too-short Wi-Fi passphrase
 cannot show up in a log line or a Salesforce `Status_Detail__c`.
 
 **The agent profile.** An agent outside Salesforce gets a narrower set:
-`RESTART`, `CASE_ALERT` and `SET_TELEMETRY_INTERVAL`, one room at a time. A dose
-needs a verified prescription and the day's dose count (`checkBusinessRules`),
-which only Salesforce holds, so `DISPENSE_MEDICATION` is refused instead of
-trusted. `WIFI_UPDATE` carries credentials, so it is refused too.
+`RESTART`, `CASE_ALERT` and `SET_TELEMETRY_INTERVAL`, one device at a time.
+`WIFI_UPDATE` carries credentials, so it is refused.
+
+**Business rules.** `checkBusinessRules` holds what a model cannot waive. Its
+example: closing a high temperature alert (`CLOSE_TEMPERATURE_ALERT`) needs a
+recheck recorded by a person and a newest reading below the re-arm level
+(29 C, SOP-WARD-001); with either number missing it fails closed. Nothing on
+the device path calls it yet; the guardrails function answers it with
+`phase: "action"`.
 
 **PII masking and output checks.** `maskPii` uses the same four patterns,
 labels and order as `PiiMaskingService.cls` (a test fails if they drift):
@@ -100,10 +108,7 @@ aws lambda invoke --function-name cloud-agentic-iot-guardrails --cli-binary-form
   /dev/stdout
 ```
 
-**What it does not do yet.** No daily dose limit is enforced on the device
-path; that needs the dose history, which lives in Salesforce
-(`Room_Temp_Dispense_Cooldown_Minutes__c` covers the room-temperature rule's
-doses only). The Patient Care Agent's prompts are still not PII-masked
+**What it does not do yet.** The Patient Care Agent's prompts are still not PII-masked
 (`PiiMaskingService` is not called from the agent).
 
 ## The MCP server
@@ -115,9 +120,9 @@ Lambda can answer it. Protocol revisions 2025-06-18, 2025-03-26 and
 
 | Tool | What it does | Reads / calls |
 |---|---|---|
-| `get_room_status` | One room: newest reading and when, `online` / `stale` / `unknown`, patient state and risk score, whether the reading is at or above the room-temperature threshold, and whether a room-temperature alert is open | patient-vitals table: newest `VITAL#` item and the `STATE` item |
-| `list_rooms_out_of_range` | Every room whose newest reading is at or above the threshold (30 °C, inclusive, the same `RoomTempAlertCelsius` patient-vitals uses), whose alert is open, or whose monitor has gone quiet (`OfflineAfterMinutes`, 5), with the reasons | the same table, scanned for `STATE` items |
-| `send_device_command` | One of `RESTART`, `CASE_ALERT` (with `active`), `SET_TELEMETRY_INTERVAL` (with `seconds`) to one room | the guardrails' agent profile, then **invokes device-command**, which runs the device API's rules again and publishes |
+| `get_room_status` | One monitored device: newest reading and when, `online` / `stale` / `unknown`, its state and risk score, whether the reading is at or above the temperature alert level, and whether a high temperature alert is open | patient-vitals table: newest `VITAL#` item and the `STATE` item |
+| `list_rooms_out_of_range` | Every device whose newest reading is at or above the threshold (30 °C, inclusive, the same `RoomTempAlertCelsius` patient-vitals uses), whose alert is open, or whose monitor has gone quiet (`OfflineAfterMinutes`, 5), with the reasons | the same table, scanned for `STATE` items |
+| `send_device_command` | One of `RESTART`, `CASE_ALERT` (with `active`), `SET_TELEMETRY_INTERVAL` (with `seconds`) to one device | the guardrails' agent profile, then **invokes device-command**, which runs the device API's rules again and publishes |
 
 The earlier name `get_device_telemetry` still answers, as `get_room_status`.
 `get_queue_depth` only ever returned a placeholder, and now says so: the
@@ -134,8 +139,8 @@ What the tools can and cannot tell:
 - **"Stale"** means no stored reading for `OfflineAfterMinutes`. It is the
   stored readings' view, not AWS IoT's connection state, which only the Asset
   in Salesforce shows (device-presence writes it there). Where readings are
-  not kept in DynamoDB (`KeepReadingsInDynamoDB` false, as in Prod) a room's
-  connectivity is `unknown`, and the answer counts those rooms separately.
+  not kept in DynamoDB (`KeepReadingsInDynamoDB` false, as in Prod) a device's
+  connectivity is `unknown`, and the answer counts those devices separately.
 - **`send_device_command`** answers whether AWS IoT took the command, not
   whether the board carried it out. It records no `Device_Command__c` in
   Salesforce and sends no `commandId`, so the board does not answer it.
@@ -145,7 +150,7 @@ What the tools can and cannot tell:
   for, every item, including stored readings, and filters afterwards.
   `MaxRoomsScanned` (500 in Dev, 2,000 in Prod) caps one call. For a
   fleet of thousands, add a sparse index on the `STATE` items, or have
-  patient-vitals keep a short list of rooms out of range.
+  patient-vitals keep a short list of devices out of range.
 
 ### Authentication
 
@@ -218,7 +223,7 @@ it. It needs [`uv`](https://docs.astral.sh/uv/) (`brew install uv`).
    `--read-only` hides `send_device_command`, which is the only tool not marked
    `readOnlyHint`.
 
-4. **Ask it** "which rooms are out of range?" or "what is the status of
+4. **Ask it** "which devices are out of range?" or "what is the status of
    ESP32-Patient-Monitor-01?".
 
 To check the server without any client, invoke the function directly. This
@@ -240,7 +245,7 @@ The in-org **Patient Care Agent keeps using its Apex actions**
 changes it. Those run inside Salesforce with sharing, as the person talking to
 the agent, and their commands go through `Device_Command__c`, with its record,
 the board's answer and the Salesforce-side checks. Pointing the in-org agent at
-this server would trade all of that for a second path to the same rooms.
+this server would trade all of that for a second path to the same devices.
 
 Should an Agentforce agent ever call this server, here is where Salesforce
 support stood when this was written (November 2026; check the linked pages,
@@ -272,5 +277,5 @@ because it moves every release):
 
 That is a different direction from **Salesforce's own hosted MCP servers**,
 which let agents outside Salesforce read and act on Salesforce data. This
-server goes the other way: an agent reaching the ward's rooms in AWS. Nothing
+server goes the other way: an agent reaching the ward's devices in AWS. Nothing
 here uses or builds the hosted servers.
