@@ -30,6 +30,9 @@ Linux and Windows: [SETUP.md §0](SETUP.md#0-prerequisites--install-the-tooling)
 2. Sign up for a free **Developer Edition** org.
 3. In the org, turn on **Person Accounts** and make Person Account the default Account record type ([SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin), step 5), then Setup → **Einstein Setup** → **Turn on Einstein**, then Setup → **Agentforce Agents** → turn on **Agentforce**.
 
+> [!WARNING]
+> Use a plain AWS project and **do not activate its advanced features**. Activating them removes the spend limit for good and can't be undone. You don't need them here: they only matter for GitHub OIDC, which the pipelines path uses with regular AWS accounts instead.
+
 Why a project, and what it costs: [TRY-IT.md §1](TRY-IT.md#1-create-the-project-and-the-org).
 
 ## 3. Clone and sign in

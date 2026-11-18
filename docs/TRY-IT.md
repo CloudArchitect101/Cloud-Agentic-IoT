@@ -36,6 +36,8 @@ deploys from your laptop, and GitHub comes in only with the regular account.
 1. Sign up through the new AWS experience, or add a project in
    [AWS Settings](https://settings.aws.com).
 2. Upgrade to the paid plan, then set a monthly spend limit. The lowest is $20.
+   Do not activate the project's advanced features: that removes the spend limit
+   for good ([why](#why-a-project-and-what-it-costs)).
 3. Note the project's Region: AWS Settings, **Projects**, your project,
    **Overview**, **Additional Info**.
 4. Sign up for a Developer Edition org, as in

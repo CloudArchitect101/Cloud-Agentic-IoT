@@ -6,7 +6,7 @@ Two ways to run it, same code:
 
 | Path | Where it deploys | Start with |
 |---|---|---|
-| **Try it** | Your own AWS project with a spend limit and a free Developer Edition org, deployed from your laptop | [TRY-IT.md](TRY-IT.md), then Stages 2 to 4 below |
+| **Try it** | Your own AWS project with a spend limit (advanced features **not** activated: activating them removes the spend limit for good) and a free Developer Edition org, deployed from your laptop | [TRY-IT.md](TRY-IT.md), then Stages 2 to 4 below |
 | **Pipelines** | Separate Dev and Prod AWS accounts and Salesforce orgs, deployed by GitHub Actions | [SETUP.md](SETUP.md), then every stage below |
 
 **The whole system deploys once, in one sequence.** Work top to bottom; each stage assumes the previous one is done. Nothing here is per-chapter — the chapters explain what these pieces do, they do not install separately.
