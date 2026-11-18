@@ -25,6 +25,7 @@
 | **Sense** | An ESP32 with a DHT11 sends readings to AWS IoT Core over mutual TLS. No secrets are compiled into the firmware, and every update after the first USB flash goes over the air. |
 | **Alert** | At 30 C the board's own motor turns at once (it works offline), and AWS flags the reading so Salesforce opens one Case for the care team. A ward board spins while that queue has work. |
 | **Act** | The Patient Care Agent (Agentforce, new builder) reads the device, cites the ward's SOPs found with Bedrock embeddings, and escalates only after you confirm. Guardrails and PII masking run outside the model. |
+| **Reach** | Patients sign in to a **React site on Salesforce** (Multi-Framework, React 19) and chat with their own care assistant through **Enhanced Chat v2**: a second Agentforce agent that only ever sees the signed-in patient's devices and can send a nurse request. Staff use **Slack**: `/patient-status <device>` answers with no Salesforce login (JWT integration user), and the Patient Care Agent answers in Slack DMs. |
 | **Measure** | The app's Home tab shows the month's AWS spend against its limit, the org's limits, and a Business Value dashboard: alert response, chat deflection, hours avoided and cost per device. |
 
 ## How it works
@@ -91,6 +92,8 @@ The board is optional: everything except the motor runs without one.
 | Folder | What lives there | Read more |
 |---|---|---|
 | [`force-app/main/default/`](force-app/main/default/) | All Salesforce metadata: objects, Apex and tests, triggers, LWCs, the agents (Agent Script), the portal | [DATA-MODEL.md](docs/DATA-MODEL.md), [CHAPTERS.md §05](docs/CHAPTERS.md#05--the-agent-and-its-actions) |
+| [`force-app/main/default/uiBundles/patientPortal/`](force-app/main/default/uiBundles/patientPortal/) | The patients' React site with the Enhanced Chat window | [PATIENT-PORTAL.md](docs/PATIENT-PORTAL.md) |
+| [`lambda/slack-integration/`](lambda/slack-integration/) | The Slack `/patient-status` command: signature check, then AWS and Salesforce reads | [CHAPTERS.md §04](docs/CHAPTERS.md#04--headless-slack-integration) |
 | [`lambda/`](lambda/) | 18 AWS Lambda functions, each with its CloudFormation template, plus `shared/` code | [CHAPTERS.md](docs/CHAPTERS.md) |
 | [`firmware/`](firmware/) | One ESP32 sketch for every board and its shared library (NVS, WiFi, MQTT, OTA) | [firmware/README.md](firmware/README.md), [DEVICE-IDENTITY.md](docs/DEVICE-IDENTITY.md) |
 | [`infra/`](infra/) | Account-level stacks: the deploy role and budget, alarms, the OTA bucket | [SETUP.md](docs/SETUP.md) |
@@ -121,8 +124,9 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | [How it connects](docs/HOW-IT-CONNECTS.md) and [Architecture overview](docs/ARCHITECTURE-OVERVIEW.md) | [Cost model](docs/COST-MODEL.md): per device, per user, per customer |
 | [Device identity](docs/DEVICE-IDENTITY.md): certificates and WiFi that survive OTA | [Spend and limits](docs/SPEND-AND-LIMITS.md): the Home page's numbers |
 | [SOP grounding](docs/SOP-GROUNDING.md) and [Guardrails and MCP](docs/GUARDRAILS-AND-MCP.md) | [CI/CD and secrets](docs/CI-CD-SECRETS.md): what is automated and the conventions |
-| [Patient portal](docs/PATIENT-PORTAL.md), [Live status](docs/LIVE-STATUS.md), [Data Cloud](docs/DATA-CLOUD.md) | [Agent evals](docs/AGENT-EVALS.md): Testing Center specs and retrieval scores |
-| [Scaling](docs/SCALING.md): the same model at a million devices | [Business value](docs/BUSINESS-VALUE.md): the KPI dashboard and its assumptions |
+| [Patient portal](docs/PATIENT-PORTAL.md): the React site, Enhanced Chat and the patient agent | [Agent evals](docs/AGENT-EVALS.md): Testing Center specs and retrieval scores |
+| [Slack](docs/CHAPTERS.md#04--headless-slack-integration): `/patient-status` with no login, and [the agent in Slack](docs/SETUP.md#talk-to-the-agent-from-slack-optional) | [Business value](docs/BUSINESS-VALUE.md): the KPI dashboard and its assumptions |
+| [Live status](docs/LIVE-STATUS.md), [Data Cloud](docs/DATA-CLOUD.md), [Scaling](docs/SCALING.md) | |
 
 ## KPIs and cost
 

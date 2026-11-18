@@ -193,7 +193,7 @@ a{{color:var(--accent)}}
 <body>
 <main>
 <h1>From a warm sensor to an agent answer</h1>
-<p class="lead">Step through the process with the buttons, the arrow keys, or click a box. <a href="https://github.com/CloudArchitect101/Cloud-Agentic-IoT">Back to the repository</a></p>
+<p class="lead">Step through the process with the buttons, the arrow keys, or click a box. <a href="../">Docs home</a> · <a href="https://github.com/CloudArchitect101/Cloud-Agentic-IoT">Code on GitHub</a></p>
 {svg}
 <div class="panel" aria-live="polite"><div><span class="k" id="num"></span></div><p id="cap"></p><div>In the repo: <code><a id="where" target="_blank" rel="noopener"></a></code></div></div>
 <div class="bar"><button id="prev">&larr; Prev</button><button id="next">Next &rarr;</button><button id="play">&#9654; Play</button><div class="dots" id="dots"></div></div>
