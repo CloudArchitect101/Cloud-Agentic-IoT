@@ -29,6 +29,8 @@ test('each insight has a unique API name ending __cio and a SQL file', () => {
   for (const i of manifest.insights) {
     assert.match(i.apiName, /^[A-Za-z][A-Za-z0-9_]*__cio$/);
     assert.ok(i.displayName && i.description, `${i.apiName}: displayName and description`);
+    // Data Cloud refuses a longer one: "Description can not be over length limit" (Nov 19).
+    assert.ok(i.description.length <= 255, `${i.apiName}: description is ${i.description.length} characters, over 255`);
     assert.ok(fs.existsSync(path.join(root, 'datacloud', i.sql)), `${i.apiName}: ${i.sql}`);
   }
 });

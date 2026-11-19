@@ -13,7 +13,7 @@
     {
       "apiName": "Room_Device_Silence__cio",
       "displayName": "Room Device Silence",
-      "description": "Per device: the time of its last reading in Data Cloud and how many readings it has there. Minutes since, and offline, are worked out where it is read (a calculated insight cannot use the current time after aggregating). As fresh as the data stream's last refresh and this insight's last run.",
+      "description": "Per device: the time of its last reading in Data Cloud and its reading count. Minutes since and offline are worked out where it is read: an insight cannot use the current time after aggregating.",
       "sql": "calculated-insights/Room_Device_Silence.sql",
       "publishScheduleInterval": "One"
     }
