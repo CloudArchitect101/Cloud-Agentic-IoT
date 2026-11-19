@@ -12,6 +12,16 @@
   .markdown-body .copy-btn{position:absolute;top:6px;right:6px;font:12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:5px 8px;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa;color:#24292f;cursor:pointer;opacity:.85}
   .markdown-body .copy-btn:hover,.markdown-body .copy-btn:focus{opacity:1}
   .markdown-body .copy-btn.done{border-color:#1a7f37;color:#1a7f37}
+  .step-rail{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#fff;padding:8px 0;margin:0 0 12px;border-bottom:1px solid #d0d7de;font-size:13px}
+  .step-rail .lbl{color:#59636e;margin-right:4px}
+  .step-rail a{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:2px solid #8c959f;color:#1f2328;text-decoration:none;font-weight:600;background:#fff}
+  .step-rail a.opt{border-style:dashed}
+  .step-rail a.done{background:#1a7f37;border-color:#1a7f37;color:#fff}
+  .step-rail a.cur{border-color:#0969da;box-shadow:0 0 0 3px #0969da40}
+  .step-rail .count{margin-left:auto;color:#59636e}
+  .markdown-body a[id^="step-"],.markdown-body a#resume{display:block;scroll-margin-top:60px}
+  .markdown-body .step-done{display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:600;cursor:pointer}
+  @media (prefers-color-scheme: dark){.step-rail,.step-rail a{background:#0d1117;color:#e6edf3}}
 </style>
 <script type="module">
   const REPO = "https://github.com/CloudArchitect101/Cloud-Agentic-IoT/blob/Dev/";
@@ -22,7 +32,7 @@
   // A short nav bar on every page.
   const nav = document.createElement("nav");
   nav.className = "site-nav";
-  nav.innerHTML = [["Home", ""], ["Walkthrough", "process/"], ["Quick install", "INSTALL"], ["Install guide", "INSTALL-GUIDE"],
+  nav.innerHTML = [["Home", ""], ["Start here", "START-HERE"], ["Walkthrough", "process/"], ["Quick install", "INSTALL"], ["Install guide", "INSTALL-GUIDE"],
     ["Chapters", "CHAPTERS"], ["GitHub", "https://github.com/CloudArchitect101/Cloud-Agentic-IoT"]]
     .map(([t, h]) => `<a href="${h.startsWith("http") ? h : "/Cloud-Agentic-IoT/" + h}">${t}</a>`).join("");
   body.prepend(nav);
@@ -72,6 +82,68 @@
       setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1500);
     });
     wrap.append(btn);
+  }
+
+  // The step map on the Quick install: a sticky row of numbered dots, one per step,
+  // that shows where you are and which steps you ticked as done (kept in this browser only).
+  const stepAnchors = [...body.querySelectorAll('a[id^="step-"]')].filter(a => /^step-\d+$/.test(a.id));
+  if (stepAnchors.length > 3) {
+    const KEY = "cai-steps-done:" + location.pathname;
+    const load = () => { try { return new Set(JSON.parse(localStorage.getItem(KEY) || "[]")); } catch (e) { return new Set(); } };
+    const save = (set) => { try { localStorage.setItem(KEY, JSON.stringify([...set])); } catch (e) {} };
+    const done = load();
+    const optional = new Set(), titles = {};
+    for (const row of body.querySelectorAll("table tr")) {
+      const cells = row.querySelectorAll("td");
+      const link = cells[0] && cells[0].querySelector('a[href^="#step-"]');
+      if (link && cells.length >= 4) {
+        const n = link.getAttribute("href").slice(6);
+        titles[n] = cells[1].textContent.trim();
+        if (/optional/i.test(cells[3].textContent)) optional.add(n);
+      }
+    }
+    const rail = document.createElement("nav");
+    rail.className = "step-rail";
+    rail.setAttribute("aria-label", "Install steps");
+    rail.innerHTML = '<span class="lbl">Steps</span>' + stepAnchors.map(a => {
+      const n = a.id.slice(5);
+      return `<a href="#step-${n}" data-n="${n}" class="${optional.has(n) ? "opt" : ""}" title="${n}. ${(titles[n] || "").replace(/"/g, "&quot;")}${optional.has(n) ? " (optional)" : ""}">${n}</a>`;
+    }).join("") + '<span class="count"></span>';
+    const nav = body.querySelector(".site-nav");
+    (nav || body.firstChild).after(rail);
+    const dots = [...rail.querySelectorAll("a")];
+    const paint = () => {
+      for (const d of dots) d.classList.toggle("done", done.has(d.dataset.n));
+      rail.querySelector(".count").textContent = `${done.size} of ${dots.length} done`;
+    };
+    // A "done" tick at the end of each step's check box.
+    // kramdown wraps a lone <a id> in a <p>, so walk from that block.
+    const blockOf = (a) => (a.parentElement && a.parentElement.tagName === "P" && a.parentElement.textContent.trim() === "") ? a.parentElement : a;
+    const starts = new Set(stepAnchors.map(blockOf));
+    for (const a of stepAnchors) {
+      const n = a.id.slice(5);
+      let el = blockOf(a).nextElementSibling, box = null;
+      while (el && !starts.has(el)) {
+        if (el.classList && el.classList.contains("callout") && /Check before you go on/.test(el.textContent)) box = el;
+        el = el.nextElementSibling;
+      }
+      if (!box) continue;
+      const label = document.createElement("label");
+      label.className = "step-done";
+      label.innerHTML = `<input type="checkbox"> I see this: step ${n} is done`;
+      const cb = label.querySelector("input");
+      cb.checked = done.has(n);
+      cb.addEventListener("change", () => { cb.checked ? done.add(n) : done.delete(n); save(done); paint(); });
+      box.append(label);
+    }
+    // Highlight the step on screen.
+    const current = () => {
+      let cur = stepAnchors[0];
+      for (const a of stepAnchors) if (a.getBoundingClientRect().top < 120) cur = a;
+      for (const d of dots) d.classList.toggle("cur", "step-" + d.dataset.n === cur.id);
+    };
+    addEventListener("scroll", current, { passive: true });
+    paint(); current();
   }
 
   // Mermaid diagrams, drawn the way GitHub draws them.

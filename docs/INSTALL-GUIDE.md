@@ -1,5 +1,8 @@
 # Install guide: every step, explained
 
+> [!TIP]
+> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick install](INSTALL.md) is the one list of steps; this page goes deeper.
+
 This is the long version of the install: each step, plus **why** it is done that way and what to check when it fails. Want only the commands? Use the [Quick install](INSTALL.md). Want to know what you are installing first? Read [How the pieces connect](HOW-IT-CONNECTS.md), or the [README](../README.md) for the one-page overview.
 
 Two ways to run it, same code:
@@ -273,3 +276,7 @@ The Asset's Connection field, its Live Status card and **Send Command** need a d
 ## Stage 5 — Promote to `Prod`
 
 Once it holds together on `Dev`, `Prod` is the same sequence against the second AWS account and Salesforce org — with one exception that makes it a project rather than a push: **device certificates cannot move between environments.** `iot-dev` and `iot-prod` have separate CAs, so a Dev certificate physically cannot connect to Prod. Re-provisioning the fleet is the one irreversible step, which is why [MIGRATION-RUNBOOK.md](MIGRATION-RUNBOOK.md) isolates it, batches it, and puts it last.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

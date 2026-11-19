@@ -286,3 +286,7 @@ that have no metadata, in order. Each one is also in
 - [Enable Agentforce Voice in Enhanced Chat v2 (walkthrough)](https://medium.com/@marketingcloudtips/agentforce-trying-the-voice-enabled-agent-agentforce-voice-637c53685782).
 - [Messaging for In-App and Web user verification (walkthrough)](https://medium.com/@anonymoususer123/messaging-for-in-app-and-web-user-verification-setup-in-salesforce-5789bd8731a4): JWK and keyset, `setIdentityToken`, the end user key built from `sub`.
 - `@salesforce/platform-sdk` 12.17 docs (in the package): `sdk.fetch` for `/services/apexrest/…` on the web app surface.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

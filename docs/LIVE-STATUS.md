@@ -261,3 +261,7 @@ them.
 | Live link | `lambda/device-live/`, `LiveViewerRole` and the device policy in `lambda/queue-relay/cloudformation.yaml`, `force-app/main/default/classes/DeviceLiveController.cls` |
 | Card | `force-app/main/default/lwc/deviceLiveCard/` (`mqtt.js` is a small MQTT 3.1.1 client for the browser) |
 | Checks that keep them in step | `test/firmware/contract.test.js` (topics, limits, the `live-` prefix), `test/lambda/device-presence.test.js`, `test/lambda/device-live.test.js`, `test/lambda/live-viewer-role.test.js`, `test/lwc/device-live-mqtt.test.js` |
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

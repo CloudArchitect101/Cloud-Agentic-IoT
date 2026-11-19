@@ -124,3 +124,7 @@ Add it to the spec, run `npm test` (the input checks catch a misspelt
 subagent or action), then run the live eval. When an agent's instructions
 change, run the evals before publishing to the next environment: that is the
 regression gate.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

@@ -168,3 +168,7 @@ For each chapter, write in this sequence:
 1. **LinkedIn article first** - gets the core message clear
 2. **Blog post second** - expands with technical depth
 3. **Video script third** - identifies visual moments from the blog
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

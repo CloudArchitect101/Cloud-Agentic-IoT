@@ -59,3 +59,7 @@ A trigger runs inside the user's save transaction — blocking that on an HTTP c
 ## Reading `__` suffixes at a glance
 
 `Asset` (no suffix) = standard object • `Patient_Vitals__c` = custom object • `SSID__c` = custom field • `Wi_Fi_Network__r` = *relationship traversal* to that object • `Queue_Depth_Change__e` = platform event • `Device_Queue_Binding__mdt` = custom metadata type
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

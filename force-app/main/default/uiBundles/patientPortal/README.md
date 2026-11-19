@@ -2,7 +2,7 @@
 
 A React template for customer-facing apps on the Salesforce platform. Includes authentication, global search, and an Experience Cloud site container. Built with React, Vite, TypeScript, and Tailwind/shadcn.
 
-For project-level details (metadata, deploy), see the [project README](../../../../../../README.md).
+For project-level details (metadata, deploy), see the [project README](../../../../../README.md).
 
 ## Prerequisites
 

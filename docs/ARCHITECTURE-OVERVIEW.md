@@ -86,3 +86,7 @@ Those additional fields are only filled by the tests and the load simulation (`t
 - **Guardrails**: Every command to a board checked in device-command before it is published (allowed commands, settings and ranges); prompt injection detection, output checks and PII masking for the MCP server's answers ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md))
 - **MCP server**: Room status and commands for agents outside Salesforce, behind a Lambda function URL that takes only SigV4-signed requests
 - **HIPAA Compliance**: Data encryption, access controls, audit logging
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

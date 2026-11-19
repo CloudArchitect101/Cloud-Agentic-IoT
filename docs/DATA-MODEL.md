@@ -58,3 +58,7 @@ The board's answer travels back through AWS IoT (`device/<thing>/ack`), a queue 
 - *"Why not Health Cloud?"* — right model, paid SKU; the free build stays core-platform and says so.
 - *"Why is any vitals data in CRM at all?"* — only events a human or agent acts on; the time series lives in DynamoDB, the analytical copy in Data Cloud.
 - *"Why custom metadata instead of custom settings?"* — deployable through the pipeline, versioned in git.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

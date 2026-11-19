@@ -293,3 +293,7 @@ insight used.
   **Check Syntax** names the problem too, and its SQL dialect is the final
   word on the date functions the insights use (`DATE_TRUNC`,
   `DATEDIFF`, `NOW`).
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

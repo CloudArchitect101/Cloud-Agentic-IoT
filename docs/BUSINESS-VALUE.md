@@ -133,3 +133,7 @@ headline tiles read.
   the window; a patient who left unhappy without asking still counts.
 - In a Developer Edition the numbers are demo-sized. The arithmetic and the
   method are the point; the dashboard is the same in a customer's org.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

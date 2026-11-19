@@ -295,3 +295,7 @@ Budgets stay until root (or a project owner) deletes them. Delete the
 - Salesforce: the Apex `OrgLimits` and `Limits` classes; the
   `TenantUsageEntitlement` object; Platform Cache in Developer Edition;
   Agentforce in Developer Edition; Data 360 in Apex.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

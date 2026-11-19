@@ -2,6 +2,27 @@
 
 Every feature, from a fresh clone to a working system: your own AWS project with a spend limit and a free Salesforce Developer Edition org, deployed from your laptop. Execution steps only, in order. Every Setup click that has to happen before the deploy is gathered in steps 3 and 5, so **step 6 deploys everything in one run**. The [Install guide](INSTALL-GUIDE.md) explains why each step is done that way and what to check when one fails.
 
+<a id="step-map"></a>
+
+**Step map.** Not sure which guide to follow? [Start here](START-HERE.md).
+
+| # | Step | Where you work | Required? |
+|---|---|---|---|
+| [1](#step-1) | [Install the tools](#step-1) | Terminal | Yes |
+| [2](#step-2) | [Create the AWS project and the Salesforce org](#step-2) | Browser | Yes |
+| [3](#step-3) | [Turn on the org's features](#step-3) | Setup | Yes |
+| [4](#step-4) | [Clone and sign in](#step-4) | Terminal | Yes |
+| [5](#step-5) | [Make what the deploy reads](#step-5) | Setup + terminal | Yes |
+| [6](#step-6) | [Deploy everything in one run](#step-6) | Terminal + Setup | Yes |
+| [7](#step-7) | [Let Salesforce call AWS](#step-7) | Setup + terminal | Yes |
+| [8](#step-8) | [Slack](#step-8) | Slack + Setup | Optional |
+| [9](#step-9) | [Data Cloud](#step-9) | Data Cloud | Optional |
+| [10](#step-10) | [Patient portal with Enhanced Chat](#step-10) | Setup + terminal | Optional |
+| [11](#step-11) | [MCP servers](#step-11) | Setup | Optional |
+| [12](#step-12) | [Add a board](#step-12) | Board + terminal | For live readings |
+| [13](#step-13) | [Check that it works](#step-13) | App, Slack, portal | Yes |
+| [14](#step-14) | [Dev and Prod pipelines (optional)](#step-14) | GitHub + terminal | Optional |
+
 > [!NOTE]
 > About two hours for everything, plus about 20 minutes for each board. Do step 2 first, on day one: if Bedrock needs a Support case, it can take up to 72 hours. Steps 1 to 7 and 13 make the core system. Steps 8 to 12 and 14 each add one feature, and you can skip any of them.
 
@@ -16,6 +37,8 @@ Every feature, from a fresh clone to a working system: your own AWS project with
 
 > [!WARNING]
 > Keys, passwords and tokens are typed only into your own terminal or into Salesforce Setup. Never paste them into a file in the repo, a chat or an issue.
+
+<a id="step-1"></a>
 
 ## 1. Install the tools
 
@@ -37,6 +60,13 @@ arduino-cli lib install "PubSubClient" "ArduinoJson" "DHT sensor library" "ESP32
 ```
 
 Linux and Windows: [SETUP.md §0](SETUP.md#0-prerequisites--install-the-tooling).
+
+> [!TIP]
+> **Check before you go on.** Each of these prints a version at least as new as the table: `node --version`, `sf --version`, `aws --version`, `jq --version`. For boards, `arduino-cli core list` shows `esp32:esp32`.
+
+[Step map](#step-map) · [2. Create the AWS project and the Salesforce org →](#step-2)
+
+<a id="step-2"></a>
 
 ## 2. Create the AWS project and the Salesforce org
 
@@ -60,6 +90,13 @@ aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text
   --query authorizationStatus --output text
 ```
 
+> [!TIP]
+> **Check before you go on.** The Bedrock playground answered "hello" (or your Support case is open), AWS Settings shows the project with its spend limit, and you can sign in to the new Developer Edition org.
+
+[← 1. Install the tools](#step-1) · [Step map](#step-map) · [3. Turn on the org's features →](#step-3)
+
+<a id="step-3"></a>
+
 ## 3. Turn on the org's features
 
 One pass through Setup, all before the deploy. Each switch accepts terms or can't be turned off, so a deploy can't make it for you, and without it the deploy fails.
@@ -73,14 +110,14 @@ One pass through Setup, all before the deploy. Each switch accepts terms or can'
 | **Omni-Channel Settings** | **Enable Omni-Channel** |
 | **Messaging Settings** | Turn on **Messaging** |
 
-The patient portal needs one Customer Community licence per test patient.
+The patient portal needs one Customer Community licence per test patient. You count them at the end of step 4, once the terminal knows your org.
 
-**Paste into your terminal.** Once per org, after step 4 (it needs `NAME`). It lists the org's Community licences and how many are used.
+> [!TIP]
+> **Check before you go on.** Reload each Setup page in the table: every switch stays on. In the Accounts tab, **New** offers the **Person Account** record type.
 
-```bash
-sf data query --target-org "$NAME" \
-  --query "SELECT Name, TotalLicenses, UsedLicenses FROM UserLicense WHERE Name LIKE '%Community%'"
-```
+[← 2. Create the AWS project and the Salesforce org](#step-2) · [Step map](#step-map) · [4. Clone and sign in →](#step-4)
+
+<a id="step-4"></a>
 
 ## 4. Clone and sign in
 
@@ -101,6 +138,13 @@ export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
 ```
 
 An AWS project allows only its own Region, so a command in another Region fails with `explicit deny in a service control policy`. Check the profile's Region with `aws configure get region --profile "$NAME"`. If it prints nothing or another Region, set the one from step 2: `aws configure set region us-east-2 --profile "$NAME"` (with your Region).
+
+**Paste into your terminal.** Once per org, only if you plan the patient portal (step 10). It lists the org's Community licences and how many are used.
+
+```bash
+sf data query --target-org "$NAME" \
+  --query "SELECT Name, TotalLicenses, UsedLicenses FROM UserLicense WHERE Name LIKE '%Community%'"
+```
 
 <a id="resume"></a>
 
@@ -126,6 +170,13 @@ An AWS project allows only its own Region, so a command in another Region fails 
 > | Files you made: keys in `scripts/`, the portal key in `~/Downloads` | Kept. Nothing to do |
 >
 > `scripts/install.sh` is safe to run again from the start.
+
+> [!TIP]
+> **Check before you go on.** `aws sts get-caller-identity` prints your project's account, and `sf org display --target-org "$NAME"` shows **Connected Status** `Connected`. The licence query above lists at least one Customer Community licence if you plan the portal (step 10).
+
+[← 3. Turn on the org's features](#step-3) · [Step map](#step-map) · [5. Make what the deploy reads →](#step-5)
+
+<a id="step-5"></a>
 
 ## 5. Make what the deploy reads
 
@@ -187,6 +238,13 @@ CRT=~/Downloads/Patient_Portal_Chat.crt
 node scripts/portal-chat-jwk.mjs "$CRT" patient-portal-chat-1 > ~/Downloads/patient-portal-chat-key.json
 ```
 
+> [!TIP]
+> **Check before you go on.** `ls scripts/server-integration.key scripts/server-integration.crt` lists both files. In Setup, the Integration user is active with the **Salesforce Integration** licence, and you have the External Client App's **Consumer Key** (and the Slack **Signing Secret**, and `~/Downloads/patient-portal-chat-key.json`, if you do those features).
+
+[← 4. Clone and sign in](#step-4) · [Step map](#step-map) · [6. Deploy everything in one run →](#step-6)
+
+<a id="step-6"></a>
+
 ## 6. Deploy everything in one run
 
 **Paste into your terminal.** Once per org, and safe to run again. It deploys AWS and Salesforce and asks for the values from step 5 as it goes (typing is hidden). Without Data Cloud, leave out the `DATA_CLOUD_READER_USER=…` part.
@@ -239,6 +297,13 @@ aws budgets create-budget --region us-east-1 --account-id "$ACCOUNT" \
 aws lambda get-function-configuration --function-name cloud-agentic-iot-salesforce-sync \
   --query Environment.Variables.SALESFORCE_USERNAME --output text
 ```
+
+> [!TIP]
+> **Check before you go on.** `scripts/install.sh` ends by printing the values for the next steps, with no `Error` line above them. The App Launcher shows **Cloud Agentic IoT**, and the last command prints the same integration username as the user in 5b.
+
+[← 5. Make what the deploy reads](#step-5) · [Step map](#step-map) · [7. Let Salesforce call AWS →](#step-7)
+
+<a id="step-7"></a>
 
 ## 7. Let Salesforce call AWS
 
@@ -302,6 +367,13 @@ Every care team member who uses the agent also needs it: `sf org assign permset 
 
 If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) lists each cause and its fix under "If a callout fails".
 
+> [!TIP]
+> **Check before you go on.** Open the app's **Home** tab: the cost card shows this month's AWS spend against your limit, as in the [picture on Start here](START-HERE.md#what-success-looks-like). That number comes through `AWS_IoT_Relay`, so it proves the named credential works. An error on the card instead? See "If a callout fails" in the [Install guide](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
+
+[← 6. Deploy everything in one run](#step-6) · [Step map](#step-map) · [8. Slack →](#step-8)
+
+<a id="step-8"></a>
+
 ## 8. Slack
 
 **a. The `/patient-status` command** (the Ward Bot app from 5d):
@@ -329,6 +401,13 @@ sf org assign permset --name Patient_Care_Agent --on-behalf-of "$MEMBER" --targe
 
 4. Slack **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**. Quit and reopen Slack.
 5. DM the agent: "What is Test8 reading?"
+
+> [!TIP]
+> **Check before you go on.** `/patient-status` answers in the channel, not with Slack's `dispatch_failed`. Until a board exists (step 12) it can't show a reading yet. The agent answers your DM.
+
+[← 7. Let Salesforce call AWS](#step-7) · [Step map](#step-map) · [9. Data Cloud →](#step-9)
+
+<a id="step-9"></a>
 
 ## 9. Data Cloud
 
@@ -377,6 +456,13 @@ SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
 ```
 
 Each insight is created with its schedule from [`datacloud/calculated-insights.json`](../datacloud/calculated-insights.json): Room Device Silence (each board's last reading time) every hour, Room Out Of Range Daily every 6 hours, to spend fewer Data Cloud credits. Change one there, or on the insight in Data Cloud.
+
+> [!TIP]
+> **Check before you go on.** The data stream's last refresh succeeded, and its record count is above 0 once a board has sent readings. `scripts/data-cloud-insights.sh --dry-run` prints the two insights.
+
+[← 8. Slack](#step-8) · [Step map](#step-map) · [10. Patient portal with Enhanced Chat →](#step-10)
+
+<a id="step-10"></a>
 
 ## 10. Patient portal with Enhanced Chat
 
@@ -442,6 +528,13 @@ Put the patient's device on that account: its Asset's Account = the Person Accou
 
 9. **Try it.** Sign in as the patient, ask the assistant "what is my temperature?", then "I need a nurse": a Case appears on Care_Team_Queue.
 
+> [!TIP]
+> **Check before you go on.** Item 9 above works: the patient sees their own device, the assistant answers, and "I need a nurse" opens a Case on Care_Team_Queue.
+
+[← 9. Data Cloud](#step-9) · [Step map](#step-map) · [11. MCP servers →](#step-11)
+
+<a id="step-11"></a>
+
 ## 11. MCP servers
 
 Two directions, each optional: **a.** outside agents (Claude Code) reach the ward's devices through our MCP server, and **b.** our Agentforce agents reach Espressif's catalogs through theirs.
@@ -494,9 +587,19 @@ git diff --stat -- force-app/main/default/aiAuthoringBundles
 node scripts/lib/mcp-probe.js
 ```
 
+> [!TIP]
+> **Check before you go on.** Item 5 of b works in at least one agent, and `node scripts/lib/mcp-probe.js` reports both servers answering.
+
+[← 10. Patient portal with Enhanced Chat](#step-10) · [Step map](#step-map) · [12. Add a board →](#step-12)
+
+<a id="step-12"></a>
+
 ## 12. Add a board
 
 1. Get the parts (ESP32, DHT11, SG90 servo, a data USB cable): [Install guide, Stage 3](INSTALL-GUIDE.md#what-you-need). Wiring: [firmware/README.md](../firmware/README.md#build-and-flash).
+
+   ![Wiring for the monitored device: DHT11 leg 1 to 3.3V, leg 2 to P4, leg 4 to GND with a 10 kΩ resistor across legs 1 and 2; servo orange to P5, red to 5V, brown to GND](images/wiring-monitored-device.png)
+
 2. In the Cloud Agentic IoT app, create a **Wi-Fi Network**, then an **Asset** with Serial Number = the board's name. It turns **Provisioned** with a bundle link.
 3. Download the bundle, plug the board in by USB, and run:
 
@@ -525,6 +628,13 @@ HOTSPOT='<hotspot name>'
 
 Every later firmware update goes over the air: `scripts/ota.sh try Dev patient-monitor`.
 
+> [!TIP]
+> **Check before you go on.** Within a minute or two the board's Asset shows Connection `Online` and readings on the Live Status card.
+
+[← 11. MCP servers](#step-11) · [Step map](#step-map) · [13. Check that it works →](#step-13)
+
+<a id="step-13"></a>
+
 ## 13. Check that it works
 
 | Check | Expect |
@@ -539,6 +649,10 @@ Every later firmware update goes over the air: `scripts/ota.sh try Dev patient-m
 | The portal, as a patient | The patient's own device, and the assistant answering |
 
 The full checklist: [Install guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end). Something failed? [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+[← 12. Add a board](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines (optional) →](#step-14)
+
+<a id="step-14"></a>
 
 ## 14. Dev and Prod pipelines (optional)
 
@@ -694,3 +808,9 @@ gh variable set AUTO_DEPLOY --body "Dev Prod"
 7. **Branch rules.** Settings → **Branches** → add a rule for `Dev` and one for `Prod`: require a pull request, and require the checks to pass (Lambda tests, CloudFormation templates, Shell scripts, Salesforce metadata, Firmware, Patient portal (React)).
 
 Why each piece stays manual: [DEVELOPMENT.md](DEVELOPMENT.md#what-stays-manual-and-why).
+
+[← 13. Check that it works](#step-13) · [Step map](#step-map) · [Docs home](index.md)
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Troubleshooting](TROUBLESHOOTING.md)

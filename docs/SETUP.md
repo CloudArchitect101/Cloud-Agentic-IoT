@@ -1,5 +1,8 @@
 # Setup: Accounts, Identities, Credentials
 
+> [!TIP]
+> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick install](INSTALL.md) is the one list of steps; this page goes deeper.
+
 Everything needed to go from nothing to a working Dev environment, in order.
 Run it once for **Dev**. **Prod is the identical sequence** against a second
 Salesforce org and a second AWS account — the only differences are called out
@@ -1089,3 +1092,7 @@ in this order (details and checks in
 
 Reusing a Dev certificate or role ARN in Prod silently collapses the two
 environments into one and removes the entire point of having them.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

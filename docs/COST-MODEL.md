@@ -152,3 +152,7 @@ Edition's allowance.
 - [Salesforce editions 2026](https://tech.co/crm-software/salesforce-pricing-how-much-does-salesforce-cost)
 - [AWS Free Tier $200/6-month plan](https://aws.amazon.com/about-aws/whats-new/2025/07/aws-free-tier-credits-month-free-plan/), [Free Tier FAQs (new customers only)](https://aws.amazon.com/free/free-tier-faqs/), [Free account plan (joining an Organization upgrades to paid)](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/free-tier-plans.html), [Project spend limits (AWS News Blog)](https://aws.amazon.com/blogs/aws/aws-reimagines-the-getting-started-experience/)
 - §7: [Flex Credits Rate Card, Apr 21 2026](https://www.salesforce.com/en-us/wp-content/uploads/sites/4/assets/pdf/agentforce/Flex-Credits-Rate-Card-04.21.2026.pdf), [Agentforce Voice Minutes rate card, Feb 3 2026](https://www.salesforce.com/en-us/wp-content/uploads/sites/4/assets/pdf/agentforce/Agentforce-Voice-Minutes-Supplemental-Rate-Card-02.03.2026.pdf), [self-service portal pricing](https://www.salesforce.com/in/service/customer-self-service/pricing/), [Enhanced Chat v2](https://help.salesforce.com/s/articleView?id=service.enhanced_chat_v2_intro.htm&language=en_US&type=5)
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
