@@ -138,6 +138,8 @@ public without sharing class PatientDeviceService {
                 // Most often the caller lacks access to the AWS credential.
                 device.liveNote = 'The newest reading from AWS could not be read: ' + e.getMessage().abbreviate(160);
             }
+            System.debug(LoggingLevel.WARN, 'Newest AWS reading for ' + device.serialNumber + ': '
+                + (device.liveNote == null ? (device.readings.isEmpty() || !device.readings[0].live ? 'not newer than the saved one' : 'added') : device.liveNote));
         }
         return devices;
     }
