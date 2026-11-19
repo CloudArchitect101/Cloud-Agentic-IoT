@@ -97,6 +97,11 @@ voice. It would have to use the browser's speech recognition instead. Vitaly
 chose Enhanced Chat v2 with Agentforce Voice on Nov 9. The React site embeds
 it, and every other part of the page is React.
 
+**Only in an org licensed for Agentforce Voice** (not part of the Quick
+install, and not available in a Developer Edition): turn on **Allow
+Agentforce Voice calls in Enhanced Chat** in Messaging Settings. A Developer
+Edition refuses it, and the agent then takes no chats, so leave it off there.
+
 ## Licences: what each patient needs
 
 | Need | Choice | Why |

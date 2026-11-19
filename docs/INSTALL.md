@@ -442,8 +442,6 @@ Put the patient's device on that account: its Asset's Account = the Person Accou
 
 9. **Try it.** Sign in as the patient, ask the assistant "what is my temperature?", then "I need a nurse": a Case appears on Care_Team_Queue.
 
-Voice: turn on **Allow Agentforce Voice calls in Enhanced Chat** in Messaging Settings only in an org licensed for Agentforce Voice. A Developer Edition refuses it, and the agent then takes no chats.
-
 ## 11. MCP server for outside agents
 
 The deploy shipped it; it answers only SigV4-signed requests. To use it from Claude Code, with the MCP endpoint step 6 printed and your Region:
