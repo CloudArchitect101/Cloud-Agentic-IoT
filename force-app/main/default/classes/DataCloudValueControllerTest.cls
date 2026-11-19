@@ -62,9 +62,9 @@ private class DataCloudValueControllerTest {
         Assert.areEqual('2026-11-19T20:05:00.000Z', device.get('last_reading_ts__c'));
 
         Map<String, Object> prices = (Map<String, Object>) answer.get('assumptions');
-        Assert.areEqual(2000, prices.get('dataCloudCreditsPerMonth'));
-        Assert.areEqual(0.005, prices.get('dataCloudPricePerCredit'));
-        Assert.areEqual(55, prices.get('staffHourlyRate'));
+        Assert.areEqual(2000, ((Decimal) prices.get('dataCloudCreditsPerMonth')).intValue());
+        Assert.areEqual(0.005, (Decimal) prices.get('dataCloudPricePerCredit'));
+        Assert.areEqual(55, ((Decimal) prices.get('staffHourlyRate')).intValue());
     }
 
     @IsTest
@@ -103,17 +103,24 @@ private class DataCloudValueControllerTest {
 
     @IsTest
     static void rowsArriveAsMapsOrAsListsInMetadataOrder() {
-        List<Object> data = new List<Object>{
-            new Map<String, Object>{ 'device_id__c' => 'Test8', 'readings__c' => 12 },
-            new List<Object>{ 'Test7', 3 },
-            'not a row'
-        };
-        Map<String, Integer> order = new Map<String, Integer>{ 'device_id__c' => 0, 'readings__c' => 1 };
-        List<Map<String, Object>> rows = DataCloudValueController.toRows(data, order);
+        String body = '{"data":[{"device_id__c":"Test8","readings__c":12},["Test7",3],"not a row"],'
+            + '"metadata":{"readings__c":{"placeInOrder":1,"type":"DECIMAL"},'
+            + '"device_id__c":{"placeInOrder":0,"type":"VARCHAR"}}}';
+        List<Map<String, Object>> rows = DataCloudValueController.fromJson(body);
         Assert.areEqual(2, rows.size(), 'map and list rows are kept, anything else skipped');
         Assert.areEqual('Test8', rows[0].get('device_id__c'));
-        Assert.areEqual('Test7', rows[1].get('device_id__c'));
+        Assert.areEqual('Test7', rows[1].get('device_id__c'), 'a list row is named by placeInOrder');
         Assert.areEqual(3, rows[1].get('readings__c'));
-        Assert.areEqual(0, DataCloudValueController.toRows(null, order).size(), 'no data is no rows');
+    }
+
+    @IsTest
+    static void anEmptyOrOddAnswerIsNoRows() {
+        Assert.areEqual(0, DataCloudValueController.fromJson(null).size());
+        Assert.areEqual(0, DataCloudValueController.fromJson('[]').size());
+        Assert.areEqual(0, DataCloudValueController.fromJson('{"data":null}').size());
+        // No placeInOrder: columns are taken in the order they are listed.
+        List<Map<String, Object>> rows = DataCloudValueController.fromJson(
+            '{"data":[["Test8"]],"metadata":{"device_id__c":{}}}');
+        Assert.areEqual('Test8', rows[0].get('device_id__c'));
     }
 }
