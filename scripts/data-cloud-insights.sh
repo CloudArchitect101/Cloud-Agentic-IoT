@@ -83,8 +83,12 @@ names=$(node "$work/bodies.js" "$work")
 answered_with_api_name() {
   node -e '
     const fs = require("node:fs");
+    // sf prints warnings (an update is available, the command is beta)
+    // into the same file, so read from the first { or [.
+    const text = fs.readFileSync(process.argv[1], "utf8");
+    const start = text.search(/^[\[{]/m);
     let body;
-    try { body = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch { process.exit(1); }
+    try { body = JSON.parse(text.slice(start < 0 ? 0 : start)); } catch { process.exit(1); }
     process.exit(body && !Array.isArray(body) && body.apiName === process.argv[2] ? 0 : 1);
   ' "$1" "$2"
 }
