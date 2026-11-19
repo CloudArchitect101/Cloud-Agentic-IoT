@@ -106,7 +106,17 @@ Then on the user's page: **Permission Set License Assignments** → Edit Assignm
 
 Save, and copy its **Consumer Key** for step 6. The key exists as soon as the app is saved; its policy gets the permission set after the deploy.
 
-**d. The Slack app** (skip without Slack). At [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**, name `Ward Bot`, your workspace. Then **Basic Information** → **App Credentials** → **Signing Secret** → **Show**. Step 6 asks for it.
+**d. The Slack app** (skip without Slack).
+
+No Slack workspace yet? Make a free one first (slash commands and Agentforce in Slack both work on the free plan):
+
+1. Go to [slack.com/get-started#/createnew](https://slack.com/get-started#/createnew), enter your email, and type the code Slack emails you.
+2. **Create a workspace**: name it, for example `Smart Ward Demo`, and enter your name.
+3. Skip inviting people (**Skip this step**) and skip the paid trial. Slack opens the workspace.
+
+You're its **owner**, which steps 8a and 8b need: owners may install apps and connect a Salesforce org. In a company workspace you'd need an admin to do those parts, so a workspace of your own keeps the demo separate.
+
+Then the app: at [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**, name `Ward Bot`, pick your workspace → **Create App**. Then **Basic Information** → **App Credentials** → **Signing Secret** → **Show**. Step 6 asks for it.
 
 **e. The portal's chat certificate** (skip without the portal). Setup → **Certificate and Key Management** → **Create Self-Signed Certificate**: Label and Unique Name `Patient_Portal_Chat`, key size 2048, **Exportable Private Key off**. Download the `.crt`, then:
 
@@ -334,43 +344,117 @@ Every later firmware update goes over the air: `scripts/ota.sh try Dev patient-m
 
 The full checklist: [Install guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end). Something failed? [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
-## 14. Dev and Prod pipelines
+## 14. Dev and Prod pipelines (optional)
 
-When GitHub Actions should deploy for you. The pipelines use regular AWS accounts in `ca-central-1`, one for Dev and one for Prod, because a project can't hold GitHub's OIDC provider. Stacks don't move between accounts, so each board is provisioned again against the new one. For each environment (`Dev`, then `Prod` with a Prod org):
+> [!NOTE]
+> **Optional.** Steps 1 to 13 already give you a complete, working system, deployed from your laptop. Do this step only when you want GitHub Actions to deploy for you, with a separate Prod.
 
-1. **The account, as root:** turn on MFA. IAM → Policies → Create policy from [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), named `cloud-agentic-iot-operator`. IAM → Users → `iot-operator` with that policy, MFA on, and an access key.
-2. **The deploy role and budget:**
+**What it gives you.** Two environments, each with its own branch, GitHub Environment, AWS account and Salesforce org. The names are case-sensitive and must match exactly:
+
+| | Dev | Prod |
+|---|---|---|
+| Branch | `Dev`, the default branch (already exists) | `Prod`, created from `Dev` in 6 below, changed only by pull requests from `Dev` |
+| GitHub Environment | `Dev` | `Prod`, with you as the required reviewer |
+| AWS account | A regular account (not a project), `ca-central-1` | A second regular account |
+| Salesforce org | A Developer Edition org, or your step 2 org | A separate org |
+| A push deploys when | `AUTO_DEPLOY` contains `Dev` | `AUTO_DEPLOY` contains `Prod`, and you approve the run |
+
+Why regular accounts: a project can't hold GitHub's OIDC provider, which the pipeline signs in to AWS with. Stacks don't move between accounts, so each board is provisioned again against the new one.
+
+Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replace `dev` with `prod` in the names).
+
+1. **The AWS account, as root.** Create a regular AWS account and turn on MFA for root. IAM → **Policies** → **Create policy** → JSON: paste [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), name `cloud-agentic-iot-operator`. IAM → **Users** → **Create user** `iot-operator`, attach that policy, MFA on, then **Security credentials** → **Create access key** (CLI).
+2. **The deploy role and the budget.** `bootstrap-aws.sh` creates the OIDC provider, the `github-actions-deploy` role and the `cloud-agentic-iot-monthly` budget, and offers to store the role's ARN as `AWS_ROLE_ARN`:
 
 ```bash
-aws configure --profile iot-dev     # iot-operator's key, Region ca-central-1
+aws configure --profile iot-dev     # iot-operator's access key, Region ca-central-1
 export AWS_PROFILE=iot-dev
 gh auth login
 BUDGET_USD=20 BUDGET_EMAIL='<your email>' scripts/bootstrap-aws.sh Dev
 ```
 
-3. **The deploy user and its app.** Sign in to the environment's org as its admin (`sf org login web --alias iot-dev-admin`, then `export SF_TARGET_ORG=iot-dev-admin`). Setup → **Users** → **New User**: Last name `Deploy`, its own plus-address email, Username `deploy@iot-dev.<yourdomain>`, licence **Salesforce**, profile **System Administrator**. Then:
+3. **The org's two service users and apps.** In the environment's org, do steps 3 and 5a to 5c as before (the integration user and app). Then add the deploy user the pipeline signs in as:
 
 ```bash
+sf org login web --alias iot-dev-admin
+export SF_TARGET_ORG=iot-dev-admin
 openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
   -keyout scripts/server-deploy.key -out scripts/server-deploy.crt \
   -subj "/CN=CloudAgenticIoT-Deploy/O=Personal/C=CA"
 sf project deploy start --source-dir scripts/Metadata_Deploy.permissionset-meta.xml
-sf org assign permset --name Metadata_Deploy --on-behalf-of deploy@iot-dev.<yourdomain>
 ```
 
-   Create a second External Client App, `Cloud Agentic IoT Deploy`, as in 5c with `scripts/server-deploy.crt`, and its policy: **Admin approved users are pre-authorized**, permission set `Metadata_Deploy`.
-4. **GitHub secrets and rules.** It asks for each value, hides secrets, and reads the two key files itself:
+   Setup → **Users** → **New User**: Last name `Deploy`, its own plus-address email, Username `deploy@iot-dev.<yourdomain>`, licence **Salesforce**, profile **System Administrator**. Then `sf org assign permset --name Metadata_Deploy --on-behalf-of deploy@iot-dev.<yourdomain>`. Create a second External Client App, `Cloud Agentic IoT Deploy`, as in 5c with `scripts/server-deploy.crt`, and set its policy: **Admin approved users are pre-authorized**, permission set `Metadata_Deploy`. Copy its **Consumer Key**.
+
+4. **GitHub secrets and variables.** The script creates the environment, limits it to its branch, makes you Prod's reviewer, and asks for each value below, hiding secrets and base64-encoding the key files itself:
 
 ```bash
 ./scripts/setup-github-secrets.sh   # choose Dev; answer n to AUTO_DEPLOY for now
 ```
 
-5. **First run:** Actions → **Deploy** → *Run workflow* → branch `Dev` → part `everything`. When it's green, do steps 6 (the policy), 7 and 13 against this org and account, then switch pushes on:
+   Every value, per environment (Settings → **Environments** → `Dev` or `Prod`):
+
+| Name | Kind | Value, and where it comes from | Set by the script? |
+|---|---|---|---|
+| `AWS_ROLE_ARN` | Secret | `DeployRoleArn` of the bootstrap stack (2) | Yes, read from the stack |
+| `AWS_REGION` | Variable | `ca-central-1` | Yes |
+| `ALARM_EMAIL` | Variable | Optional: who the CloudWatch alarms email | Yes, Enter skips |
+| `SF_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Deploy` (3) | Yes |
+| `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` (3) | Yes |
+| `SF_JWT_KEY` | Secret | `scripts/server-deploy.key`, base64-encoded (3) | Yes, from the file |
+| `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` | Yes |
+| `SF_INTEGRATION_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Integration` (5c) | Yes |
+| `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` (5b) | Yes |
+| `SF_INTEGRATION_JWT_KEY` | Secret | `scripts/server-integration.key`, base64-encoded (5a) | Yes, from the file |
+| `SLACK_SIGNING_SECRET` | Secret | Optional: the Slack app's signing secret (5d). Without it the Slack stack is skipped | Yes, Enter skips |
+| `DATA_CLOUD_OIDC_PROVIDER_ARN` | Variable | Optional, for Data Cloud: the provider ARN from the commands below | **No, by hand** |
+| `DATA_CLOUD_EXTERNAL_ID` | Variable | Optional, for Data Cloud: the connection's External ID (9, step 2, with **Identity Provider (IdP) Based**) | **No, by hand** |
+
+   And on the repository (Settings → **Secrets and variables** → **Actions** → **Variables**):
+
+| Name | Kind | Value | Set by the script? |
+|---|---|---|---|
+| `AUTO_DEPLOY` | Variable | `Dev`, later `Dev Prod`: which branches deploy on a push | Yes, when you answer `y` |
+| `EVAL_DEVICE`, `EVAL_OTHER_DEVICE`, `EVAL_PATIENT_USERNAME` | Variable | Optional, for the **Agent evals** workflow: a test patient's board (`Test8`), another board (`Test7`), the test patient's username | **No, by hand** |
+
+   To set or change any one value by hand, type it at the prompt, never on the command line:
 
 ```bash
-gh variable set AUTO_DEPLOY --body "Dev"        # later "Dev Prod"
+gh secret set SF_CONSUMER_KEY --env Dev                               # asks for the value, hidden
+base64 < scripts/server-deploy.key | gh secret set SF_JWT_KEY --env Dev
+gh variable set AWS_REGION --env Dev --body ca-central-1
+gh variable set EVAL_DEVICE --body Test8                              # a repository variable: no --env
 ```
 
-6. **Prod:** create the `Prod` branch from `Dev`, repeat 1 to 5 with `Prod`, and approve each Prod run in the Actions tab.
+   Data Cloud in a regular account reads the bucket through the org's identity provider, with no key. As an AWS admin, with your My Domain (no `https://`) and the External ID:
 
-Branch rules, required checks and what stays manual: [DEVELOPMENT.md](DEVELOPMENT.md#turning-it-on).
+```bash
+MY_DOMAIN=<your My Domain>
+aws iam create-open-id-connect-provider \
+  --url "https://$MY_DOMAIN/services/connectors" --client-id-list "https://$MY_DOMAIN"
+gh variable set DATA_CLOUD_OIDC_PROVIDER_ARN --env Dev \
+  --body "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):oidc-provider/$MY_DOMAIN/services/connectors"
+gh variable set DATA_CLOUD_EXTERNAL_ID --env Dev --body '<External ID>'
+```
+
+   After the next deploy, paste the patient-vitals stack's `DataCloudReaderRoleArn` output into the connection's **IAM Role Name**.
+
+5. **First run.** Actions → **Deploy** → **Run workflow** → branch `Dev` → part `everything`. When it's green: set the integration app's policy (step 6), then steps 7 to 13 against this org and account. Then switch pushes on:
+
+```bash
+gh variable set AUTO_DEPLOY --body "Dev"
+```
+
+6. **Prod.** Once Dev's first deploy is green, create the branch and repeat 1 to 5 with `Prod`, the Prod account (`iot-prod`) and the Prod org (`iot-prod-admin`, `deploy@iot-prod.<yourdomain>`):
+
+```bash
+git switch Dev && git pull && git switch -c Prod && git push -u origin Prod
+./scripts/setup-github-secrets.sh   # choose Prod
+gh variable set AUTO_DEPLOY --body "Dev Prod"
+```
+
+   From then on, a pull request from `Dev` into `Prod` deploys Prod after you approve the run in the Actions tab.
+
+7. **Branch rules.** Settings → **Branches** → add a rule for `Dev` and one for `Prod`: require a pull request, and require the checks to pass (Lambda tests, CloudFormation templates, Shell scripts, Salesforce metadata, Firmware, Patient portal (React)).
+
+Why each piece stays manual: [DEVELOPMENT.md](DEVELOPMENT.md#what-stays-manual-and-why).
