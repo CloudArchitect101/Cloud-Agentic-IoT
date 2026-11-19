@@ -23,6 +23,44 @@ Every snapshot also keeps the alert counts, devices online, chats, nurse
 requests and staff escalations it used, and an **Assumptions** text with the
 exact values, so any number on the dashboard can be traced.
 
+## Data Cloud value card
+
+![The Data Cloud value card, with sample data](images/data-cloud-value-card-preview.png)
+
+Under the dashboard on Home, the **Data Cloud value: monitored devices** card
+shows what the room readings in Data Cloud measure, next to what Data Cloud
+costs. It reads the two calculated insights ([DATA-CLOUD.md](DATA-CLOUD.md))
+through Data Cloud's SQL query (`DataCloudValueController`), at most once
+every 10 minutes per browser session: each read is two queries, which use
+credits, and the insights only change hourly.
+
+| Tile or chart | From | Why an owner cares |
+| --- | --- | --- |
+| **Out-of-range minutes, 7 days** | `Room_Out_Of_Range_Daily__cio`: minutes at or above the temperature alert threshold, all devices | How much high-temperature time the platform caught without anyone looking |
+| **Highest temperature, 7 days** | Same insight, `max_temperature_c__c` | The worst moment, at a glance |
+| **Monitored devices in Data Cloud** | `Room_Device_Silence__cio`, one row per device; **silent** when its last reading is over 2 hours old | Coverage: a device that stops reporting is a gap in monitoring |
+| **Manual checks replaced, a month** | Devices x Manual Checks per Device per Day x Minutes per Manual Check x 30 days x Staff Hourly Rate | The value side |
+| **Data Cloud cost, a month** | Data Cloud Credits per Month x Data Cloud Price per Credit | The cost side (an estimate) |
+| **Return on Data Cloud** | Value / cost, and the net a month | The one number to say out loud |
+| **Temperature alert minutes a day, 14 days** (bars) | The daily insight, summed per day | The trend after go-live |
+| **Monitored devices** (table) | Both insights per device | Which device, when it last reported, how hot it got |
+
+With the shipped assumptions, two devices replace 36 staff hours of manual
+checks a month (2 x 12 checks x 3 min x 30 days), worth $1,980 at $55 an
+hour, against about $10 of Data Cloud credits (2,000 credits x $0.005).
+The two new assumption fields are **Data Cloud Credits per Month** and
+**Data Cloud Price per Credit**: replace the credit estimate with what
+Setup -> Digital Wallet shows after a month.
+
+"Silent" here is about Data Cloud's copy, which is up to about two hours
+old by design. The live, seconds-fresh signal is still the device's
+**Connection** field on its Asset.
+
+To see the card, a user needs **Business Value Viewer** and Data Cloud
+access (a Data Cloud permission set, such as Data Cloud Architect or Data
+Cloud User). Without Data Cloud access, each insight shows its own error
+and the rest of the card still works.
+
 ## Before and after (as is / to be)
 
 The assumptions live in custom metadata, **Value Assumption -> Default**

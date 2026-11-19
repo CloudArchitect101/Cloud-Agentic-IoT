@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <FlexiPage xmlns="http://soap.sforce.com/2006/04/metadata">
-    <description>The Cloud Agentic IoT app's Home page: the Business Value KPI dashboard (before vs after, Agentforce cost vs value), then the usage card with this month's AWS spend and the Salesforce limits. Desktop only; other apps keep theirs.</description>
+    <description>Home page of the Cloud Agentic IoT app: Business Value KPIs, the Data Cloud value card (alert minutes, devices, cost vs value), then AWS spend and Salesforce limits. Desktop only.</description>
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
@@ -18,6 +18,12 @@
                 </componentInstanceProperties>
                 <componentName>desktopDashboards:embeddedDashboard</componentName>
                 <identifier>businessValueDashboard</identifier>
+            </componentInstance>
+        </itemInstances>
+        <itemInstances>
+            <componentInstance>
+                <componentName>dataCloudValueCard</componentName>
+                <identifier>dataCloudValueCard</identifier>
             </componentInstance>
         </itemInstances>
         <itemInstances>

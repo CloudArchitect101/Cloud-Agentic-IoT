@@ -375,7 +375,8 @@ test("the card is this app's Home page, on desktop, and nowhere else", () => {
   assert.match(page, /<type>HomePage<\/type>/);
   assert.match(page, /<name>home:desktopTemplate<\/name>/);
   assert.deepEqual([...page.matchAll(/<componentName>(.+?)<\/componentName>/g)].map(([, c]) => c),
-    ['desktopDashboards:embeddedDashboard', 'platformUsageCard'], 'the Business Value KPIs first, then cost and limits');
+    ['desktopDashboards:embeddedDashboard', 'dataCloudValueCard', 'platformUsageCard'],
+    'the Business Value KPIs first, then Data Cloud value, then cost and limits');
   assert.match(page, /<name>dashboardName<\/name>\s*<value>Business_Value<\/value>/);
   const overrides = [...app('applications/Cloud_Agentic_IoT.app-meta.xml').matchAll(/<actionOverrides>([\s\S]*?)<\/actionOverrides>/g)]
     .map(([, body]) => body).filter((body) => body.includes('<actionName>Tab</actionName>'));

@@ -37,6 +37,19 @@ test('every permission set description fits in 255 characters', () => {
   }
 });
 
+// Nov 19: the Home page's description was over 255 characters and failed the
+// first deploy of the Data Cloud value card.
+test('every Lightning page description fits in 255 characters', () => {
+  const files = filesUnder(path.join(metadata, 'flexipages'), '.flexipage-meta.xml');
+  assert.ok(files.length > 0, 'no Lightning pages found');
+  for (const file of files) {
+    const match = fs.readFileSync(file, 'utf8').match(/<description>([\s\S]*?)<\/description>/);
+    if (!match) continue;
+    const length = unescapeXml(match[1]).length;
+    assert.ok(length <= 255, `${path.relative(root, file)}: description is ${length} characters, the maximum is 255`);
+  }
+});
+
 test('every Trusted URL description fits in 255 characters', () => {
   const files = filesUnder(path.join(metadata, 'cspTrustedSites'), '.cspTrustedSite-meta.xml');
   assert.ok(files.length > 0, 'no Trusted URLs found');

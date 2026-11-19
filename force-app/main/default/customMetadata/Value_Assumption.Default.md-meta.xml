@@ -38,4 +38,12 @@
         <field>Cost_Per_Agent_Action__c</field>
         <value xsi:type="xsd:double">0.10</value>
     </values>
+    <values>
+        <field>Data_Cloud_Credits_Per_Month__c</field>
+        <value xsi:type="xsd:double">2000</value>
+    </values>
+    <values>
+        <field>Data_Cloud_Price_Per_Credit__c</field>
+        <value xsi:type="xsd:double">0.005</value>
+    </values>
 </CustomMetadata>
