@@ -128,6 +128,8 @@ class DataCloudInsights(unittest.TestCase):
             self.assertEqual(post['body']['displayName'], insight['displayName'])
             # Data Cloud refuses a create without it (REQUIRED_FIELD_MISSING).
             self.assertEqual(post['body']['publishScheduleInterval'], insight['publishScheduleInterval'])
+            # And its first run, the next whole hour in UTC ("Schedule start date is required.").
+            self.assertRegex(post['body']['publishScheduleStartDateTime'], r'^\d{4}-\d\d-\d\dT\d\d:00:00\.000Z$')
         self.assertIn('2 created, 0 already there', out)
 
     def test_an_insight_that_exists_is_left_as_it_is(self):

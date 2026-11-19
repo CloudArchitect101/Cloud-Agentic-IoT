@@ -46,6 +46,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const [work] = process.argv.slice(2);
 const manifest = JSON.parse(fs.readFileSync('datacloud/calculated-insights.json', 'utf8'));
+const hour = 3600 * 1000;
+const firstRun = new Date(Math.ceil((Date.now() + 1) / hour) * hour).toISOString();
 for (const insight of manifest.insights) {
   if (!/^[A-Za-z][A-Za-z0-9_]*__cio$/.test(insight.apiName)) {
     throw new Error(`${insight.apiName}: a calculated insight's API name is letters, digits and _, ending __cio`);
@@ -64,6 +66,9 @@ for (const insight of manifest.insights) {
     description: insight.description,
     definitionType: 'CalculatedMetric',
     publishScheduleInterval: insight.publishScheduleInterval,
+    // A scheduled insight also needs its first run's time ("Schedule start
+    // date is required."): the next whole hour, in UTC.
+    publishScheduleStartDateTime: firstRun,
     expression,
   };
   fs.writeFileSync(path.join(work, `${insight.apiName}.json`), JSON.stringify(body, null, 2));
