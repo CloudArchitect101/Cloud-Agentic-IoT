@@ -28,7 +28,7 @@ A real, physical system you can walk end-to-end, not a mockup. Secure authentica
 
 Patient IoT data flowing from edge devices through **Data Cloud** into a RAG pipeline that lets agents retrieve patient context autonomously.
 
-The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and stores in DynamoDB and the S3 archive → syncs the readings someone acts on to Salesforce via REST → Data Cloud ingests every room reading from the archive's CSV copy into the `Room_Reading` data model object, with two calculated insights per device ([DATA-CLOUD.md](DATA-CLOUD.md)) → auto-chunks the time series → Bedrock embeds each chunk → agents retrieve by semantic search. The ingestion and the insights are built; the chunking, embedding and retrieval are not yet.
+The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and stores in DynamoDB and the S3 archive → syncs the readings someone acts on to Salesforce via REST → Data Cloud ingests every room reading from the archive's CSV copy into the `Room_Readings` data model object, with two calculated insights per device ([DATA-CLOUD.md](DATA-CLOUD.md)) → auto-chunks the time series → Bedrock embeds each chunk → agents retrieve by semantic search. The ingestion and the insights are built; the chunking, embedding and retrieval are not yet.
 
 **Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`, `datacloud/`
 

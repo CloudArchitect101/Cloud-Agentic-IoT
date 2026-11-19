@@ -50,7 +50,7 @@ per environment, in the order they come up below:
     only; in a regular account, the IAM identity provider for the org's My
     Domain (§7, step 3).
 16. Optional, for Data Cloud: create the Amazon S3 connection, the room
-    readings data stream and its mapping to the `Room_Reading` data model
+    readings data stream and its mapping to the `Room_Readings` data model
     object (§7, steps 2 and 4 to 6). The calculated insights are a script
     (§7, step 7).
 17. For the ward procedures: give each care team member who uses the agent
@@ -889,9 +889,9 @@ there.
      frequent the org offers.
    - **Deploy**, then **Refresh Now** once to import what is already there.
 6. **Map it to the data model.** On the stream, **Start** the data mapping →
-   **New Custom Object**, `Room_Reading`, with every field of the stream under
+   **New Custom Object**, `Room_Readings`, with every field of the stream under
    the same name and `reading_id` as its primary key. Data Cloud names them
-   `reading_id__c` and so on, on `Room_Reading__dlm`; the insights in step 7
+   `reading_id__c` and so on, on `Room_Readings__dlm`; the insights in step 7
    read exactly those names. Save.
 7. **Create the calculated insights.** Once step 6's object has rows
    ([DATA-CLOUD.md, Check each step](DATA-CLOUD.md#check-each-step), item 4),
@@ -906,8 +906,9 @@ there.
    from the SQL in `datacloud/calculated-insights/`, and leaves one that
    exists already alone. If Data Cloud refuses one, paste its SQL into
    Calculated Insights → **New** → **Create with SQL**; **Check Syntax**
-   names the problem. Then set each insight's schedule to the most frequent
-   the org offers.
+   names the problem. Each insight is created with the schedule in
+   `datacloud/calculated-insights.json`: Room Device Silence hourly, Room Out
+   Of Range Daily every 6 hours, since every run uses Data Cloud credits.
 8. **Keep it as metadata, for the next org.** Data Cloud metadata is moved
    with a data kit built in an org that has it, not written by hand. Data
    Cloud Setup → **Data Kits** → **New**, type **DevOps**, add the data

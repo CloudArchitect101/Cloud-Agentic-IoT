@@ -13,7 +13,7 @@
 # so this sends that, as whoever SF_TARGET_ORG signs in as: an admin with Data
 # Cloud, not the deploy user. The SQL is the file in datacloud/, as it is.
 #
-# Run it after the Room_Reading data model object exists and has data
+# Run it after the Room_Readings data model object exists and has data
 # (docs/DATA-CLOUD.md): Data Cloud checks the SQL against it and refuses an
 # insight over fields it does not have. An insight that exists already is
 # left as it is: change it in Data Cloud, or delete it there and run this
@@ -46,9 +46,18 @@ const fs = require('node:fs');
 const path = require('node:path');
 const [work] = process.argv.slice(2);
 const manifest = JSON.parse(fs.readFileSync('datacloud/calculated-insights.json', 'utf8'));
+const hour = 3600 * 1000;
+const firstRun = new Date(Math.ceil((Date.now() + 1) / hour) * hour).toISOString();
 for (const insight of manifest.insights) {
   if (!/^[A-Za-z][A-Za-z0-9_]*__cio$/.test(insight.apiName)) {
     throw new Error(`${insight.apiName}: a calculated insight's API name is letters, digits and _, ending __cio`);
+  }
+  // Data Cloud refuses a new insight without a publish schedule
+  // (REQUIRED_FIELD_MISSING publishScheduleInterval). Only the hourly ones
+  // are accepted here: NotScheduled would leave the insight never running.
+  const intervals = ['One', 'Six', 'Twelve', 'TwentyFour'];
+  if (!intervals.includes(insight.publishScheduleInterval)) {
+    throw new Error(`${insight.apiName}: publishScheduleInterval must be one of ${intervals.join(', ')}`);
   }
   const expression = fs.readFileSync(path.join('datacloud', insight.sql), 'utf8').trim();
   const body = {
@@ -56,6 +65,10 @@ for (const insight of manifest.insights) {
     displayName: insight.displayName,
     description: insight.description,
     definitionType: 'CalculatedMetric',
+    publishScheduleInterval: insight.publishScheduleInterval,
+    // A scheduled insight also needs its first run's time ("Schedule start
+    // date is required."): the next whole hour, in UTC.
+    publishScheduleStartDateTime: firstRun,
     expression,
   };
   fs.writeFileSync(path.join(work, `${insight.apiName}.json`), JSON.stringify(body, null, 2));
@@ -70,8 +83,12 @@ names=$(node "$work/bodies.js" "$work")
 answered_with_api_name() {
   node -e '
     const fs = require("node:fs");
+    // sf prints warnings (an update is available, the command is beta)
+    // into the same file, so read from the first { or [.
+    const text = fs.readFileSync(process.argv[1], "utf8");
+    const start = text.search(/^[\[{]/m);
     let body;
-    try { body = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); } catch { process.exit(1); }
+    try { body = JSON.parse(text.slice(start < 0 ? 0 : start)); } catch { process.exit(1); }
     process.exit(body && !Array.isArray(body) && body.apiName === process.argv[2] ? 0 : 1);
   ' "$1" "$2"
 }
@@ -109,5 +126,5 @@ if [ "$DRY_RUN" = true ]; then
   note "Dry run: nothing sent to $org."
   exit 0
 fi
-[ -z "$failed" ] || die "Data Cloud did not take:$failed (its answer is above). Check that Room_Reading has the fields the SQL names, or paste the SQL into Data Cloud's calculated insight builder, whose Check Syntax names the problem."
+[ -z "$failed" ] || die "Data Cloud did not take:$failed (its answer is above). Check that Room_Readings has the fields the SQL names, or paste the SQL into Data Cloud's calculated insight builder, whose Check Syntax names the problem."
 note "Calculated insights in $org: $created created, $kept already there."

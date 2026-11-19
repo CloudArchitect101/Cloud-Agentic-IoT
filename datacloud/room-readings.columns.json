@@ -1,5 +1,5 @@
 {
-  "description": "The columns of the CSV files patient-vitals writes under datacloud/room-readings/ (DATA_CLOUD_EXPORT_PREFIX), in file order, with the Data Cloud type to give each when creating the data stream and the field of the Room_Reading data model object each maps to. test/lambda/patient-vitals.test.js fails the checks when the Lambda's columns and these differ. docs/DATA-CLOUD.md explains each step.",
+  "description": "The columns of the CSV files patient-vitals writes under datacloud/room-readings/ (DATA_CLOUD_EXPORT_PREFIX), in file order, with the Data Cloud type to give each when creating the data stream and the field of the Room_Readings data model object each maps to. test/lambda/patient-vitals.test.js fails the checks when the Lambda's columns and these differ. docs/DATA-CLOUD.md explains each step.",
   "file": {
     "folder": "datacloud/room-readings/",
     "fileNamePattern": "room-readings-*.csv",
@@ -14,7 +14,7 @@
     "eventTimeField": "reading_ts",
     "refreshMode": "Upsert"
   },
-  "dataModelObject": "Room_Reading",
+  "dataModelObject": "Room_Readings",
   "columns": [
     { "name": "reading_id", "type": "Text", "dmoField": "reading_id__c", "primaryKey": true, "about": "deviceId-timestamp: the same id as Patient_Vitals__c.Device_Reading_Id__c, so a reading in both places has one id" },
     { "name": "device_id", "type": "Text", "dmoField": "device_id__c", "about": "The AWS IoT Thing name of the board, from the topic it published on" },

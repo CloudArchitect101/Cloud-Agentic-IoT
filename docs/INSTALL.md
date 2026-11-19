@@ -320,15 +320,15 @@ aws iam create-access-key --user-name cloud-agentic-iot-data-cloud-reader
 
 **Deploy**, then **Refresh Now**.
 
-4. **Mapping.** On the stream, **Start** the mapping → **New Custom Object** `Room_Reading`, every field under the same name, `reading_id` as primary key → Save.
-5. **Calculated insights**, once `Room_Reading__dlm` has rows (a board must have sent readings):
+4. **Mapping.** On the stream, **Start** the mapping → **New Custom Object** `Room_Readings`, every field under the same name, `reading_id` as primary key → Save.
+5. **Calculated insights**, once `Room_Readings__dlm` has rows (a board must have sent readings):
 
 ```bash
 scripts/data-cloud-insights.sh --dry-run
 scripts/data-cloud-insights.sh
 ```
 
-Then set each insight's schedule to the most frequent one.
+Each insight is created with its schedule from [`datacloud/calculated-insights.json`](../datacloud/calculated-insights.json): Room Device Silence (each board's last reading time) every hour, Room Out Of Range Daily every 6 hours, to spend fewer Data Cloud credits. Change one there, or on the insight in Data Cloud.
 
 ## 10. Patient portal with Enhanced Chat
 

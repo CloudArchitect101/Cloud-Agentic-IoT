@@ -4,7 +4,7 @@
 // when someone creates them in an org. These checks catch, before that, the
 // mistakes that would still pass Data Cloud's own check: a threshold that no
 // longer matches the room-temperature rule, minutes counted at an interval the
-// boards no longer send at, or a field the Room_Reading object does not have.
+// boards no longer send at, or a field the Room_Readings object does not have.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -29,18 +29,20 @@ test('each insight has a unique API name ending __cio and a SQL file', () => {
   for (const i of manifest.insights) {
     assert.match(i.apiName, /^[A-Za-z][A-Za-z0-9_]*__cio$/);
     assert.ok(i.displayName && i.description, `${i.apiName}: displayName and description`);
+    // Data Cloud refuses a longer one: "Description can not be over length limit" (Nov 19).
+    assert.ok(i.description.length <= 255, `${i.apiName}: description is ${i.description.length} characters, over 255`);
     assert.ok(fs.existsSync(path.join(root, 'datacloud', i.sql)), `${i.apiName}: ${i.sql}`);
   }
 });
 
-test('the SQL reads only Room_Reading, and only fields it has', () => {
+test('the SQL reads only Room_Readings, and only fields it has', () => {
   const fields = new Set(spec.columns.map((c) => c.dmoField));
   for (const i of manifest.insights) {
     const text = sql(i);
     assert.match(text, new RegExp(`\\bFROM ${DMO}\\b`), i.apiName);
     assert.deepEqual([...text.matchAll(/\bFROM (\w+)/g)].map((m) => m[1]), [DMO], `${i.apiName}: one source`);
     for (const [, field] of text.matchAll(new RegExp(`${DMO}\\.(\\w+)`, 'g'))) {
-      assert.ok(fields.has(field), `${i.apiName} reads ${field}, which Room_Reading does not have`);
+      assert.ok(fields.has(field), `${i.apiName} reads ${field}, which Room_Readings does not have`);
     }
     // Sent as one API field: no statement separator, no comment that could swallow the rest.
     assert.doesNotMatch(text, /;|--|\/\*/, i.apiName);
@@ -86,11 +88,25 @@ test('minutes out of range are readings times the interval the boards send at', 
   assert.match(firmware, new RegExp(`#define DEFAULT_TELEMETRY_SECONDS ${daily.telemetrySeconds}\\b`));
 });
 
-test('a device is offline after the minutes the manifest says, in both places the SQL counts them', () => {
-  const silence = insight('Room_Device_Silence__cio');
-  const text = sql(silence);
-  const seconds = Number(text.match(/\) > (\d+) THEN 1 ELSE 0 END AS offline__c/)[1]);
-  assert.equal(seconds, silence.offlineAfterMinutes * 60);
-  assert.ok(silence.description.includes(`${silence.offlineAfterMinutes} minutes`), 'the description gives the same minutes');
-  assert.match(text, /\/ 60 AS minutes_since_last_reading__c/);
+// Data Cloud refuses the current time after an aggregate in a calculated
+// insight (UNIX_TIMESTAMP not supported; DATEDIFF takes two dates and counts
+// days; NOW() after MAX: "Formatting non-inlined parameter current_timestamp
+// is not supported", Nov 19). So the silence insight gives the last reading's
+// time, and minutes since and offline are worked out where it is read.
+test('the silence insight gives each device its last reading time, with no current time in the SQL', () => {
+  const text = sql(insight('Room_Device_Silence__cio'));
+  assert.match(text, /MAX\(\w+\.reading_ts__c\) AS last_reading_ts__c/);
+  assert.doesNotMatch(text, /UNIX_TIMESTAMP|DATEDIFF|NOW\(|CURRENT_(TIMESTAMP|DATE)/i);
+});
+
+// Data Cloud refuses to create an insight without a publish schedule
+// (REQUIRED_FIELD_MISSING publishScheduleInterval, Nov 19). Each run costs
+// Data Cloud credits, so only the last-reading check runs hourly.
+test('each insight has a publish schedule, hourly only where freshness needs it', () => {
+  for (const i of manifest.insights) {
+    assert.ok(['One', 'Six', 'Twelve', 'TwentyFour'].includes(i.publishScheduleInterval),
+      `${i.apiName}: publishScheduleInterval`);
+  }
+  assert.equal(insight('Room_Device_Silence__cio').publishScheduleInterval, 'One');
+  assert.notEqual(insight('Room_Out_Of_Range_Daily__cio').publishScheduleInterval, 'One');
 });

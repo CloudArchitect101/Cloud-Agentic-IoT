@@ -114,7 +114,7 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 2. Start the Amazon S3 connection in Data Cloud on the archive bucket, Parent Directory `datacloud/room-readings/` (step 2).
 3. Make what Data Cloud signs in with (step 3): in an AWS project, an IAM user whose access key you type into the connection and nowhere else (`DATA_CLOUD_READER_USER`); in a regular account, the IAM identity provider for the org's My Domain, then the stack's `cloud-agentic-iot-data-cloud-reader` role (`DATA_CLOUD_OIDC_PROVIDER_ARN`, `DATA_CLOUD_EXTERNAL_ID`), with no key at all.
 4. Test and save the connection (step 4).
-5. Create the data stream into the `Room_Readings` data lake object (step 5) and map it to the `Room_Reading` data model object (step 6).
+5. Create the data stream into the `Room_Readings` data lake object (step 5) and map it to the `Room_Readings` data model object (step 6).
 6. Create the two calculated insights, minutes out of the 30.0 C range per device per day and devices with no reading for 10 minutes, with `scripts/data-cloud-insights.sh` (step 7).
 
 [`docs/DATA-CLOUD.md`](DATA-CLOUD.md) explains the path and how to check each step.

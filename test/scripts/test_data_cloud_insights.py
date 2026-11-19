@@ -50,6 +50,11 @@ FAKE_SF = textwrap.dedent(r'''
     with open(os.path.join(state_dir, 'calls.jsonl'), 'a') as f:
         f.write(json.dumps({'method': method, 'url': url, 'options': options, 'body': body}) + '\n')
 
+    if state.get('warn'):
+        # What a real sf prints ahead of the answer; the script reads both streams.
+        sys.stderr.write(' >   Warning: @salesforce/cli update available from 2.145.6 to 2.158.7.\n')
+        sys.stderr.write("Warning: This command is currently in beta. Don't use beta commands in your scripts.\n")
+        sys.stderr.flush()
     name = url.rsplit('/', 1)[1]
     if method == 'GET':
         if name in state['existing']:
@@ -126,6 +131,10 @@ class DataCloudInsights(unittest.TestCase):
                 self.assertEqual(post['body']['expression'], f.read().strip())
             self.assertEqual(post['body']['definitionType'], 'CalculatedMetric')
             self.assertEqual(post['body']['displayName'], insight['displayName'])
+            # Data Cloud refuses a create without it (REQUIRED_FIELD_MISSING).
+            self.assertEqual(post['body']['publishScheduleInterval'], insight['publishScheduleInterval'])
+            # And its first run, the next whole hour in UTC ("Schedule start date is required.").
+            self.assertRegex(post['body']['publishScheduleStartDateTime'], r'^\d{4}-\d\d-\d\dT\d\d:00:00\.000Z$')
         self.assertIn('2 created, 0 already there', out)
 
     def test_an_insight_that_exists_is_left_as_it_is(self):
@@ -146,6 +155,14 @@ class DataCloudInsights(unittest.TestCase):
                 self.assertIn(f'did not take: {self.names[0]}', out)
                 self.assertIn('reading_ts__c does not exist', out)
                 self.assertEqual([p['body']['apiName'] for p in self.posts()], self.names)
+
+    def test_sf_warnings_ahead_of_the_answer_do_not_hide_a_created_insight(self):
+        # Nov 19: the insight was created, but the warnings sf prints first made
+        # the answer unreadable as JSON, so the run called it refused.
+        self.state['warn'] = True
+        code, out = self.run_script(SF_TARGET_ORG='test-org')
+        self.assertEqual(code, 0, out)
+        self.assertIn('2 created, 0 already there', out)
 
     def test_a_dry_run_sends_nothing(self):
         code, out = self.run_script('--dry-run', SF_TARGET_ORG='test-org')

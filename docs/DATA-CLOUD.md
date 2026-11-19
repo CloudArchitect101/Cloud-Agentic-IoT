@@ -23,7 +23,7 @@ flowchart LR
   L -->|state changes only| S[Patient_Vitals__c]
   C -->|Amazon S3 connection| D[Data stream]
   D --> DLO[Data lake object<br/>Room_Readings]
-  DLO -->|mapping| DMO[Data model object<br/>Room_Reading]
+  DLO -->|mapping| DMO[Data model object<br/>Room_Readings]
   DMO --> CI1[Room_Out_Of_Range_Daily__cio]
   DMO --> CI2[Room_Device_Silence__cio]
 ```
@@ -42,7 +42,7 @@ flowchart LR
    imports the new CSV files on a schedule into a **data lake object** (DLO),
    Data Cloud's raw table for one source.
 4. **DLO to DMO.** A mapping copies the DLO's fields onto a **data model
-   object** (DMO), `Room_Reading`: the shape every Data Cloud feature reads,
+   object** (DMO), `Room_Readings`: the shape every Data Cloud feature reads,
    whatever source the data came from.
 5. **Insights.** Two **calculated insights**, SQL that Data Cloud runs on a
    schedule over the DMO, give a table per device:
@@ -50,8 +50,11 @@ flowchart LR
      at or above 30.0 C (the temperature alert rule's threshold,
      `RoomTempAlertCelsius`), about how many minutes that is at one reading
      every 30 seconds, and the day's highest temperature.
-   - `Room_Device_Silence__cio`: per device, minutes since its last reading,
-     and `offline__c` = 1 when that is over 10 minutes.
+   - `Room_Device_Silence__cio`: per device, the time of its last reading
+     (`last_reading_ts__c`) and its reading count. A calculated insight
+     cannot use the current time after aggregating, so "minutes since" and
+     "offline" are worked out where it is read: a segment, a flow or a
+     report filter on `last_reading_ts__c`.
 
 ### Why a second copy, in CSV
 
@@ -205,12 +208,12 @@ echo "$BUCKET"
 3. **The stream imports.** Data Streams → **Room Readings** shows a last run
    with records processed. **Refresh Now** runs it at once instead of waiting
    for the schedule.
-4. **The DMO has rows.** Data Explorer → Data Model Object **Room_Reading**,
+4. **The DMO has rows.** Data Explorer → Data Model Object **Room_Readings**,
    or Query Editor:
 
    ```sql
    SELECT reading_id__c, device_id__c, reading_ts__c, temperature_c__c, humidity_pct__c
-   FROM Room_Reading__dlm ORDER BY reading_ts__c DESC LIMIT 10
+   FROM Room_Readings__dlm ORDER BY reading_ts__c DESC LIMIT 10
    ```
 
    A `reading_id__c` that is also a `Patient_Vitals__c.Device_Reading_Id__c`
@@ -221,15 +224,19 @@ echo "$BUCKET"
    Insight **Room Out Of Range Daily** shows today's row for that device with
    `readings_out_of_range__c` above 0 and `minutes_out_of_range__c` at half
    of it.
-6. **Silence shows.** Unplug a board. After 10 minutes, the next stream
-   refresh and the next insight run, **Room Device Silence** shows
-   `offline__c` = 1 for it.
+6. **Silence shows.** Unplug a board. After the next stream refresh and
+   the next insight run, **Room Device Silence** shows its
+   `last_reading_ts__c` stuck at the time it was unplugged, while the other
+   boards' move on.
 
 ### How fresh it is
 
 A data stream from S3 and a calculated insight each run on a schedule, so the
 insights are as old as the stream's last refresh plus the insight's last run:
-up to a couple of hours with hourly schedules. They are for the ward's trends
+up to a couple of hours for Room Device Silence, which runs hourly, and up
+to about 7 hours for Room Out Of Range Daily, which runs every 6 hours to
+spend fewer credits (`publishScheduleInterval` in
+`datacloud/calculated-insights.json`). They are for the ward's trends
 and daily review, not for alarms. The live signals stay where they are: a
 board's **Connection** on its Asset changes within seconds of it going offline
 ([LIVE-STATUS.md](LIVE-STATUS.md)), and a high reading opens a Case through the
@@ -266,9 +273,23 @@ insight used.
 - **The stream finds no files.** The connection's Parent Directory is
   `datacloud/room-readings/`, the file type CSV and the file name
   `room-readings-*.csv`. Files in subfolders are ignored by design.
+- **`Cannot find type for node Room_Readings__dlm...` / `Error getting FactTable Room_Readings__dlm`.**
+  The data model object does not exist yet: the stream has only its data
+  lake object (`Room_Readings__dll`). Do the mapping (SETUP.md §7 step 6)
+  and wait for the stream's first run to finish with records, then run the
+  script again.
+- **`Function UNIX_TIMESTAMP not supported`, `DATEDIFF function has to take
+  2 arguments of type Date/DateTime`, or `Formatting non-inlined parameter
+  current_timestamp is not supported`.** A calculated insight cannot do
+  arithmetic with the current time after aggregating. The silence insight
+  gives `last_reading_ts__c` only; an older copy of the SQL tried to count
+  minutes.
+- **`REQUIRED_FIELD_MISSING: publishScheduleInterval`.** The create request
+  must carry the insight's schedule. The script sends the one in
+  `datacloud/calculated-insights.json`; an older copy of the script did not.
 - **A calculated insight is refused.** `scripts/data-cloud-insights.sh`
   prints Data Cloud's answer. Usually a field name: the DMO's fields must be
   the ones in the column table, with `__c`. The calculated insight builder's
   **Check Syntax** names the problem too, and its SQL dialect is the final
   word on the date functions the insights use (`DATE_TRUNC`,
-  `UNIX_TIMESTAMP`, `CURRENT_TIMESTAMP`).
+  `DATEDIFF`, `NOW`).
