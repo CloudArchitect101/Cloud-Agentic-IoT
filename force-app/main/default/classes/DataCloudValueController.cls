@@ -34,8 +34,41 @@ public with sharing class DataCloudValueController {
             ConnectApi.CdpQueryInput input = new ConnectApi.CdpQueryInput();
             input.sql = sql;
             ConnectApi.CdpQueryOutput output = ConnectApi.CdpQuery.queryAnsiSql(input);
-            return output == null || output.data == null ? new List<Map<String, Object>>() : output.data;
+            if (output == null) return new List<Map<String, Object>>();
+            Map<String, Integer> order = new Map<String, Integer>();
+            if (output.metadata != null) {
+                for (String column : output.metadata.keySet()) {
+                    order.put(column, output.metadata.get(column).placeInOrder);
+                }
+            }
+            return toRows(output.data, order);
         }
+    }
+
+    /*
+     * CdpQueryOutput.data is a List<Object>, not a list of maps: Apex refuses
+     * the direct conversion. A row arrives as a map of column to value, or as
+     * a list of values in the order the metadata gives (placeInOrder), so both
+     * become a map here. Anything else is skipped.
+     */
+    @TestVisible
+    private static List<Map<String, Object>> toRows(List<Object> data, Map<String, Integer> order) {
+        List<Map<String, Object>> rows = new List<Map<String, Object>>();
+        if (data == null) return rows;
+        for (Object row : data) {
+            if (row instanceof Map<String, Object>) {
+                rows.add((Map<String, Object>) row);
+            } else if (row instanceof List<Object>) {
+                List<Object> values = (List<Object>) row;
+                Map<String, Object> named = new Map<String, Object>();
+                for (String column : order.keySet()) {
+                    Integer place = order.get(column);
+                    if (place != null && place >= 0 && place < values.size()) named.put(column, values[place]);
+                }
+                rows.add(named);
+            }
+        }
+        return rows;
     }
 
     @TestVisible

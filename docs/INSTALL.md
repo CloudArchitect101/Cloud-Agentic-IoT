@@ -187,6 +187,9 @@ DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader scripts/install.sh De
 
 Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` skips the agent publish. If Bedrock is still held (step 2), run `SKIP_SOP_INDEX=yes scripts/install.sh Dev`. Everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force`.
 
+> [!NOTE]
+> **A later deploy fails with `This schedulable class has jobs pending or in progress`.** Once the case queue monitor is scheduled, Salesforce refuses a deploy that touches the classes it uses. In a Dev or test org, turn on Setup → **Deployment Settings** → **Allow deployments of components when corresponding Apex jobs are pending or in progress**, then deploy again. In Prod, stop the scheduled jobs, deploy, and schedule them again.
+
 Then three clicks and one command:
 
 1. **The app's policy.** External Client App Manager → `Cloud Agentic IoT Integration` → **Manage Policies**: **Admin approved users are pre-authorized**, permission set `Device_Integration`.

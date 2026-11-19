@@ -100,4 +100,20 @@ private class DataCloudValueControllerTest {
         Assert.areEqual('2026-11-19', DataCloudValueController.plain(Date.newInstance(2026, 11, 19)));
         Assert.isNull(DataCloudValueController.plain(null));
     }
+
+    @IsTest
+    static void rowsArriveAsMapsOrAsListsInMetadataOrder() {
+        List<Object> data = new List<Object>{
+            new Map<String, Object>{ 'device_id__c' => 'Test8', 'readings__c' => 12 },
+            new List<Object>{ 'Test7', 3 },
+            'not a row'
+        };
+        Map<String, Integer> order = new Map<String, Integer>{ 'device_id__c' => 0, 'readings__c' => 1 };
+        List<Map<String, Object>> rows = DataCloudValueController.toRows(data, order);
+        Assert.areEqual(2, rows.size(), 'map and list rows are kept, anything else skipped');
+        Assert.areEqual('Test8', rows[0].get('device_id__c'));
+        Assert.areEqual('Test7', rows[1].get('device_id__c'));
+        Assert.areEqual(3, rows[1].get('readings__c'));
+        Assert.areEqual(0, DataCloudValueController.toRows(null, order).size(), 'no data is no rows');
+    }
 }
