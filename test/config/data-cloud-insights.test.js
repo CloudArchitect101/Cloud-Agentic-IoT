@@ -89,10 +89,13 @@ test('minutes out of range are readings times the interval the boards send at', 
 test('a device is offline after the minutes the manifest says, in both places the SQL counts them', () => {
   const silence = insight('Room_Device_Silence__cio');
   const text = sql(silence);
-  const seconds = Number(text.match(/\) > (\d+) THEN 1 ELSE 0 END AS offline__c/)[1]);
-  assert.equal(seconds, silence.offlineAfterMinutes * 60);
+  const minutes = Number(text.match(/\) > (\d+) THEN 1 ELSE 0 END AS offline__c/)[1]);
+  assert.equal(minutes, silence.offlineAfterMinutes);
   assert.ok(silence.description.includes(`${silence.offlineAfterMinutes} minutes`), 'the description gives the same minutes');
-  assert.match(text, /\/ 60 AS minutes_since_last_reading__c/);
+  // Both counts in minutes with DATEDIFF: Data Cloud refuses UNIX_TIMESTAMP
+  // ("Function UNIX_TIMESTAMP not supported", Nov 19).
+  assert.equal([...text.matchAll(/DATEDIFF\('minute', MAX\(\w+\.reading_ts__c\), NOW\(\)\)/g)].length, 2);
+  assert.doesNotMatch(text, /UNIX_TIMESTAMP/);
 });
 
 // Data Cloud refuses to create an insight without a publish schedule

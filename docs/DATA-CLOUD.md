@@ -269,6 +269,14 @@ insight used.
 - **The stream finds no files.** The connection's Parent Directory is
   `datacloud/room-readings/`, the file type CSV and the file name
   `room-readings-*.csv`. Files in subfolders are ignored by design.
+- **`Cannot find type for node Room_Reading__dlm...` / `Error getting FactTable Room_Reading__dlm`.**
+  The data model object does not exist yet: the stream has only its data
+  lake object (`Room_Readings__dll`). Do the mapping (SETUP.md §7 step 6)
+  and wait for the stream's first run to finish with records, then run the
+  script again.
+- **`Function UNIX_TIMESTAMP not supported`.** Calculated insights do not
+  take it; the silence insight counts minutes with
+  `DATEDIFF('minute', ..., NOW())`. An older copy of the SQL used it.
 - **`REQUIRED_FIELD_MISSING: publishScheduleInterval`.** The create request
   must carry the insight's schedule. The script sends the one in
   `datacloud/calculated-insights.json`; an older copy of the script did not.
@@ -277,4 +285,4 @@ insight used.
   the ones in the column table, with `__c`. The calculated insight builder's
   **Check Syntax** names the problem too, and its SQL dialect is the final
   word on the date functions the insights use (`DATE_TRUNC`,
-  `UNIX_TIMESTAMP`, `CURRENT_TIMESTAMP`).
+  `DATEDIFF`, `NOW`).
