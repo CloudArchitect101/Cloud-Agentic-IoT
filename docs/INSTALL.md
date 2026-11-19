@@ -486,7 +486,8 @@ git diff --stat -- force-app/main/default/aiAuthoringBundles
 ```
 
    Commit that on a branch. A new org needs 1 to 3 again: Salesforce says MCP tool actions don't work out of the box after a deploy.
-5. **Try it.** In the agent panel, a Slack DM to the agent, and the portal chat: "What is the spec of the ESP32-S3-DevKitC-1?" The answer names the Espressif catalog it used, and links docs.espressif.com for anything the catalogs don't hold.
+5. **Let the links through.** Agentforce shows any link to a site that is not a Trusted URL as `URL_Redacted`. The repo ships two Trusted URLs, `Espressif_Docs` (`https://docs.espressif.com`) and `Espressif_Website` (`https://www.espressif.com`), in `force-app/main/default/cspTrustedSites`, so step 6's `scripts/deploy-salesforce.sh` already added them. To check: Setup → Quick Find **Trusted URLs**: both rows active, CSP context **All**.
+6. **Try it.** In the agent panel, a Slack DM to the agent, and the portal chat: "What is the spec of the ESP32-S3-DevKitC-1?" The answer names the Espressif catalog it used, and links docs.espressif.com for anything the catalogs don't hold.
 
 **Paste into your terminal.** Any time; free and read-only. It checks both servers still answer and still offer every tool allowlisted in 2.
 

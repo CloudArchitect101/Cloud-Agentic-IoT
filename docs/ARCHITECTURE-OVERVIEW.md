@@ -85,4 +85,5 @@ Those additional fields are only filled by the tests and the load simulation (`t
 - **Audit Trail**: All agent actions logged to Agent_Audit_Log__c
 - **Guardrails**: Every command to a board checked in device-command before it is published (allowed commands, settings and ranges); prompt injection detection, output checks and PII masking for the MCP server's answers ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md))
 - **MCP server**: Room status and commands for agents outside Salesforce, behind a Lambda function URL that takes only SigV4-signed requests
+- **Outside MCP servers (Espressif)**: Both agents call Espressif's open, read-only MCP servers (ESP Pilot, ESP Component Registry) through Agentforce Registry for generic ESP32 questions. No sign-in, nothing from the org goes into a tool input, results are treated as data, and only Trusted URLs (`docs.espressif.com`, `www.espressif.com`) reach the user as links ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents))
 - **HIPAA Compliance**: Data encryption, access controls, audit logging
