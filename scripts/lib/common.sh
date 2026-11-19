@@ -125,7 +125,7 @@ aws_whoami() {
   need aws "Install AWS CLI v2 - see docs/SETUP.md."
   local who
   who=$(aws sts get-caller-identity --query '[Account,Arn]' --output text) \
-    || die "The AWS CLI has no working credentials. On a laptop: export AWS_PROFILE=<your profile> (test-yourname for a try-it account, iot-dev for the pipeline Dev account), then aws login --profile <that profile>."
+    || die "The AWS CLI has no working credentials. On a laptop: export AWS_PROFILE=<your profile> (test-yourname for a try-it account, iot-dev for the pipeline Dev account), and sign in to it with aws login."
   AWS_ACCOUNT_ID=${who%%[[:space:]]*}
   AWS_REGION=${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region || true)}}
   [ -n "$AWS_REGION" ] || die "No AWS region set. Set one on the profile, or export AWS_REGION."
