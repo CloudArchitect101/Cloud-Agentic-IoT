@@ -63,6 +63,7 @@ for (const [name, sub] of Object.entries(AGENTS)) {
     // Links outside Trusted URLs reach the user as URL_Redacted (Winter '26
     // Trusted URL allowlisting); the repo ships Espressif's two hosts.
     assert.match(block, /URL_Redacted/);
+    assert.match(block, /End every answer with a line that reads: More details: https:\/\/docs\.espressif\.com/);
     for (const url of block.match(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)+/g) || []) {
       assert.ok(TRUSTED.some((t) => url === t), `${sub} links ${url}, which is not a Trusted URL in cspTrustedSites`);
     }
