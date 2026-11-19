@@ -332,8 +332,10 @@ things (troubleshooting guides, your RainMaker devices).
   becomes a chip id, ESP32-S3-DevKitC-1 → `esp32s3`, whose peripherals ESP
   Pilot lists), and add only facts from a short reference card copied from
   Espressif's product pages (ESP32-S3 and the DevKitC-1, checked Nov 19,
-  2026). Anything else points to docs.espressif.com, written without
-  `https://` because the Einstein Trust Layer masks URLs; never from memory.
+  2026). Anything else points to https://docs.espressif.com; never from
+  memory. Agentforce turns any link whose host is not in the org's Trusted
+  URLs into `URL_Redacted`, so the repo ships Espressif's two hosts as Trusted
+  URLs and the subagents link only those.
   A new board's facts go into that card from its Espressif page.
 - **Results are data.** Instructions inside returned text are ignored.
   Salesforce also warns about hidden Unicode in tool descriptions at allowlist
