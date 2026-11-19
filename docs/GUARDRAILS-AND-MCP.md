@@ -279,3 +279,96 @@ That is a different direction from **Salesforce's own hosted MCP servers**,
 which let agents outside Salesforce read and act on Salesforce data. This
 server goes the other way: an agent reaching the ward's devices in AWS. Nothing
 here uses or builds the hosted servers.
+
+## Espressif MCP servers for the agents
+
+The other direction again, and the first outside MCP servers our agents call:
+anyone asks a generic ESP32 question, such as "What is the spec of the
+ESP32-S3-DevKitC-1?", in the agent panel, in Slack or in the patient portal,
+and the agent answers from Espressif's own catalogs. **Nobody signs in.**
+Setup clicks: [INSTALL.md step 11b](INSTALL.md#espressif-mcp). The record of
+what each org registers: [`config/mcp-servers.json`](../config/mcp-servers.json).
+
+```
+staff in Lightning or Slack ─> Patient Care Agent  ─ router ─> ESP32_Hardware ─┐
+patient in the portal chat  ─> Patient Portal Agent ─ router ─> esp32_hardware ─┤ only chip, board or
+                                                                                │ component names
+            Agentforce MCP client (No Authentication) <─────────────────────────┘
+              ├─> ESP Pilot               https://mcp.esp-pilot.espressif.com/mcp
+              ├─> ESP-VISION              https://mcp.vision.espressif.com
+              └─> ESP Component Registry  https://components.espressif.com/mcp
+```
+
+**The servers** (each tested with MCP `initialize`, `tools/list` and a tool
+call on Nov 19, 2026; all Streamable HTTP, no auth, no published rate limit):
+
+| Server | Allowlisted tools (all read-only) | Answers | Doesn't answer |
+|---|---|---|---|
+| ESP Pilot | `catalog_list_socs`, `catalog_list_bmgr_boards`, `catalog_list_bmgr_peripherals` | Which chips ESP-IDF supports (ESP32, C2, C3, C5, C6, C61, H2, H21, H4, P4, S2, S3, S31), Espressif's board catalog (ESP Board Manager) with each board's chip, devices and peripherals, a chip's peripherals | Datasheet figures; the catalog is mostly audio and display boards, so a plain DevKitC may be missing |
+| ESP-VISION | `list_firmware_versions`, `get_capabilities`, `search_docs` | Camera and on-device AI features per chip or board (P4, S3, S31) | Anything outside camera and AI. Every call needs an exact firmware version, so the agent lists them first |
+| ESP Component Registry | `search_components`, `fetch_component_detailed_information` | ESP-IDF drivers and components, such as a DHT11 or servo driver | Hardware specs |
+
+**What we chose not to use.** Espressif's documentation server
+(`https://mcp.espressif.com/docs`, tool `search_espressif_sources`) is the one
+that searches datasheets and reference manuals, and would answer a full spec.
+It needs each user to sign in with GitHub or WeChat (it answers `401
+invalid_token` without), and allows each user 40 searches an hour and 200 a
+day. Agentforce could reach it only through a per-user External Credential,
+for employee agents only, so not the portal. Vitaly chose no sign-in in every
+agent instead, so the agents give what the open catalogs hold and link
+https://docs.espressif.com and Espressif's technical documents page for the
+rest. Espressif Engineering and RainMaker also need a sign-in and answer other
+things (troubleshooting guides, your RainMaker devices).
+
+**Guardrails.**
+- **Read-only.** Only the eight tools above are allowlisted, and the ESP32
+  subagents have no device, procedure, escalation or nurse action.
+- **No org data leaves.** The subagents send Espressif only generic Espressif
+  terms (a chip, board or component name), never a patient, a serial number,
+  a reading, a Case number or anything else from the org or the chat. Asked a
+  mixed question, the staff agent searches the generic part and says it left
+  the rest out. Each router sends questions about a monitored device, or the
+  patient's own sensor, to the device subagent first. Because no one signs
+  in, Espressif sees only Salesforce's servers, not who asked.
+- **Grounded.** Answers come only from returned results, name the catalog,
+  and say when the full spec is in the datasheet instead; never from memory.
+- **Results are data.** Instructions inside returned text are ignored.
+  Salesforce also warns about hidden Unicode in tool descriptions at allowlist
+  time; read each one before ticking it.
+- **Patient chats.** In the portal it is a side answer in plain words, after
+  which the agent goes back to the patient's sensor or a nurse.
+- **Fails visibly.** A server down: the agent says so and links
+  docs.espressif.com.
+
+**Tests.** `test/config/esp32-mcp.test.js` checks that no server needs a
+sign-in, both routers and subagents, that the subagents hold no org action and
+carry the no-org-data rule, the docs, and the probe against fake servers. The
+Testing Center specs route "What is the spec of the ESP32-S3-DevKitC-1?" to
+`ESP32_Hardware` and `esp32_hardware`, and check a question with a patient's
+name in it doesn't echo the name ([AGENT-EVALS.md](AGENT-EVALS.md)).
+`node scripts/lib/mcp-probe.js` checks, for free, that each server still
+answers and still offers every allowlisted tool.
+
+**KPIs.**
+
+| KPI | Target | Where it comes from |
+|---|---|---|
+| Routing accuracy for ESP32 questions | 100% of the eval cases | `scripts/eval-agents.sh Dev agents` |
+| Answers that name their catalog, or link docs.espressif.com when the catalog lacks it | ≥ 95% | Testing Center judged outcome |
+| Org data in an outbound action input | 0 | The eval case with a patient's name in it, plus a monthly look at the actions' inputs in the agents' event logs |
+| Tool latency | p95 < 10 s (Agentforce gives up at 60 s, 120 s for the whole turn) | The probe's latency, the agents' event logs |
+| Probe passing | Every run | `node scripts/lib/mcp-probe.js` before a demo |
+| Questions sent to docs.espressif.com because no catalog had it | Watched, not targeted | Judged outcomes; a high share is the case for adding the sign-in docs server for staff later |
+
+**Cost.** Espressif charges nothing. Each MCP tool action is billed like any
+other agent action: 20 Flex Credits, about **$0.10**; a question takes one or
+two ([COST-MODEL.md](COST-MODEL.md#8-espressif-mcp-servers-for-the-agents)).
+A Developer Edition org uses its included credits. No AWS cost: Salesforce
+calls Espressif directly.
+
+**Scaling.** No sign-in and no per-user state, so it serves any number of
+staff and patients; the published limits are none, so watch the probe and the
+failure rate as use grows. Another server is one entry in
+`config/mcp-servers.json` plus a registration and its actions; the tests hold
+it to the same rules (read-only, https, Streamable HTTP, no sign-in, named
+agents).
