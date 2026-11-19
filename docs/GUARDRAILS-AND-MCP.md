@@ -328,8 +328,13 @@ things (troubleshooting guides, your RainMaker devices).
   the rest out. Each router sends questions about a monitored device, or the
   patient's own sensor, to the device subagent first. Because no one signs
   in, Espressif sees only Salesforce's servers, not who asked.
-- **Grounded.** Answers come only from returned results, name the catalog,
-  and say when the full spec is in the datasheet instead; never from memory.
+- **Grounded.** The subagents call the actions every turn (a board name
+  becomes a chip id, ESP32-S3-DevKitC-1 → `esp32s3`, whose peripherals ESP
+  Pilot lists), and add only facts from a short reference card copied from
+  Espressif's product pages (ESP32-S3 and the DevKitC-1, checked Nov 19,
+  2026). Anything else points to docs.espressif.com, written without
+  `https://` because the Einstein Trust Layer masks URLs; never from memory.
+  A new board's facts go into that card from its Espressif page.
 - **Results are data.** Instructions inside returned text are ignored.
   Salesforce also warns about hidden Unicode in tool descriptions at allowlist
   time; read each one before ticking it.
