@@ -296,14 +296,25 @@ Needs Data Cloud (Data 360) in the org, and you as an admin with **Data Cloud Ar
 aws iam create-access-key --user-name cloud-agentic-iot-data-cloud-reader
 ```
 
+   **What this user may do.** Nothing of its own: it has no IAM policy. The archive bucket's policy (`ArchiveBucketPolicy` in [`lambda/patient-vitals/cloudformation.yaml`](../lambda/patient-vitals/cloudformation.yaml)) gives it three permissions, and only when `DATA_CLOUD_READER_USER` named it:
+
+   | Action | Resource | Condition |
+   |---|---|---|
+   | `s3:GetBucketLocation` | the archive bucket | none |
+   | `s3:ListBucket` | the archive bucket | `s3:prefix` like `datacloud/*` |
+   | `s3:GetObject` | `<bucket>/datacloud/*` | none |
+
+   It cannot write, delete, read `readings/` or call any other AWS service, and the bucket refuses it without TLS. To confirm nothing else was attached by hand: `aws iam list-attached-user-policies --user-name cloud-agentic-iot-data-cloud-reader` and `aws iam list-user-policies --user-name cloud-agentic-iot-data-cloud-reader` both print empty lists.
+
 2. **Connection.** Data Cloud Setup → **Other Connectors** → **New** → **Amazon S3**: Name `Room Readings S3`, **Bucket Name** = the Data Cloud bucket step 6 printed, **Parent Directory** `datacloud/room-readings/`, **Access Key/Secret Based** with the key from 1. **Test Connection** → **Save**.
 3. **Data stream.** Data Streams → **New** → **Amazon S3** → `Room Readings S3`:
 
 | Setting | Value |
 |---|---|
 | File Type / File Name | CSV, `room-readings-*.csv` (Import from Directory empty) |
-| Source | `AWS IoT` |
+| Source | `AWS_IoT`. Letters, digits and single underscores only: no spaces, starts with a letter, no `__`, no `_` at the end, unique in the org |
 | Data lake object | New, `Room_Readings`. `reading_ts` and `received_ts` DateTime, `temperature_c` and `humidity_pct` Number, the rest Text |
+| Date format of `reading_ts` and `received_ts` | Not in the list: choose the manual (custom) format and type `yyyy-MM-dd'T'HH:mm:ss.SSSXXX`. The CSV writes them as `2026-11-19T18:00:00.123Z` (UTC, milliseconds, a literal `Z`) |
 | Category / primary key / event time | Engagement, `reading_id`, `reading_ts` |
 | Refresh | **Upsert**, the most frequent schedule |
 

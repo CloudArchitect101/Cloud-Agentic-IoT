@@ -82,11 +82,17 @@ Lambda differ.
 | `device_id` | Text | The board's AWS IoT Thing name, from the topic it published on |
 | `serial_number` | Text | The Thing name again. It is the device Asset's `SerialNumber`, which is how a row finds its Asset |
 | `reading_ts` | DateTime, event time | When the reading was taken, ISO 8601 in UTC (`2025-10-27T16:00:00.000Z`). The board sends no clock, so today it is when AWS IoT received it |
-| `received_ts` | DateTime | When AWS IoT received it |
+| `received_ts` | DateTime | When AWS IoT received it, in the same format. Rarely empty, which loads as null |
 | `temperature_c` | Number | Temperature in °C, wherever the sensor sits; empty when the sensor did not read |
 | `humidity_pct` | Number | Relative humidity in %; empty when the sensor did not read |
 | `room` | Text | A room or location label, when the board sends `room` or `location`. The patient monitor sends neither, so it is empty today; the Asset's Account and location are in CRM |
 | `source_system` | Text | `AWS_IoT` |
+
+Both timestamps come from JavaScript's `toISOString()`, so they always look
+like `2026-11-19T18:00:00.123Z`. In the data stream's **Add Date Format**
+dialog that is not one of the listed formats: type it as a manual format,
+`yyyy-MM-dd'T'HH:mm:ss.SSSXXX` (`XXX` reads the literal `Z` as UTC; a bare
+`Z` expects `+0000` and fails).
 
 The CSV holds no Asset Id: AWS knows a board by its Thing name. To join a
 reading to its Asset in Data Cloud, bring the Asset object in through the
@@ -252,6 +258,11 @@ insight used.
   stack names it (S3 refuses a bucket policy for a user that does not exist,
   and the stack update rolls back), and the key typed into Data Cloud must be
   that user's.
+- **The stream will not save its Source.** `AWS IoT` is refused: the Source
+  takes letters, digits and single underscores only. Use `AWS_IoT`.
+- **The timestamps import empty or the stream fails on them.** The date
+  format of `reading_ts` and `received_ts` must be the manual format
+  `yyyy-MM-dd'T'HH:mm:ss.SSSXXX`, not one picked from the list.
 - **The stream finds no files.** The connection's Parent Directory is
   `datacloud/room-readings/`, the file type CSV and the file name
   `room-readings-*.csv`. Files in subfolders are ignored by design.
