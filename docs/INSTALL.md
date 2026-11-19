@@ -5,6 +5,9 @@ Every feature, from a fresh clone to a working system: your own AWS project with
 > [!NOTE]
 > About two hours for everything, plus about 20 minutes for each board. Do step 2 first, on day one: if Bedrock needs a Support case, it can take up to 72 hours. Steps 1 to 7 and 13 make the core system. Steps 8 to 12 and 14 each add one feature, and you can skip any of them.
 
+> [!IMPORTANT]
+> **Fill in first.** A command that needs your own values has a **Fill in first** list right above it. Replace each one before you run the command, including any `<` `>` around it. For example, `EMAIL='<your email>'` becomes `EMAIL='you@example.com'`. Anything not on the list runs as it is.
+
 > [!WARNING]
 > Keys, passwords and tokens are typed only into your own terminal or into Salesforce Setup. Never paste them into a file in the repo, a chat or an issue.
 
@@ -73,6 +76,9 @@ sf data query --target-org "$NAME" \
 
 Use one name for both CLIs, for example `test-<your GitHub name>`.
 
+**Fill in first:**
+- `NAME=test-yourname`: your own short name, used for both the AWS profile and the org alias. Example: `NAME=test-jsmith`.
+
 ```bash
 git clone https://github.com/CloudArchitect101/Cloud-Agentic-IoT.git
 cd Cloud-Agentic-IoT
@@ -130,6 +136,9 @@ Then the app: at [api.slack.com/apps](https://api.slack.com/apps) → **Create N
 
 **e. The portal's chat certificate** (skip without the portal). Setup → **Certificate and Key Management** → **Create Self-Signed Certificate**: Label and Unique Name `Patient_Portal_Chat`, key size 2048, **Exportable Private Key off**. Download the `.crt`, then:
 
+**Fill in first:**
+- `~/Downloads/Patient_Portal_Chat.crt`: where your browser saved the certificate, if not `~/Downloads`. Leave `patient-portal-chat-1` as it is.
+
 ```bash
 node scripts/portal-chat-jwk.mjs ~/Downloads/Patient_Portal_Chat.crt patient-portal-chat-1 \
   > ~/Downloads/patient-portal-chat-key.json   # public; it goes into Setup in step 10, not the repo
@@ -159,6 +168,11 @@ Then three clicks and one command:
 1. **The app's policy.** External Client App Manager → `Cloud Agentic IoT Integration` → **Manage Policies**: **Admin approved users are pre-authorized**, permission set `Device_Integration`.
 2. **The queue.** Setup → **Queues** → `Care_Team_Queue` → add the members who should get the temperature alert Cases.
 3. **The spend card's budget.** The Home page shows this month's AWS spend against a budget equal to the spend limit:
+
+**Fill in first:**
+- `LIMIT=20`: your project's monthly spend limit in US dollars, the same number you set in step 2. Example: `LIMIT=50`. Keep `20` if you chose the lowest.
+- `EMAIL='<your email>'`: the address AWS sends the budget alerts to. Example: `EMAIL='you@example.com'`.
+- `ACCOUNT` fills itself in. Run the whole block as it is otherwise.
 
 ```bash
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
@@ -208,6 +222,9 @@ aws iam create-access-key --user-name "$CALLER"
 
 **d. Who may use it.** Create a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal from b, and **Read** on **User External Credentials** (Object Settings). Then assign it to you, the integration user and the hidden Automated Process user:
 
+**Fill in first:**
+- `integration@iot-dev.<yourdomain>`: the integration user's username from 5b. Example: `integration@iot-dev.jsmith.com`.
+
 ```bash
 sf org assign permset --name AWS_IoT_Relay_Callers
 sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of integration@iot-dev.<yourdomain>
@@ -233,6 +250,9 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
 1. In Slack, as the workspace owner: **Tools & settings** → **Manage Salesforce Organizations** → **Connect Salesforce Org**: your My Domain URL, account mapping field **Email**, **Automatic account mapping** off → **Request Connection**.
 2. In Salesforce: Setup → Quick Find **Slack** → **Manage Slack Connection** → approve. Back in Slack's **Manage Salesforce Organizations**, open the pending connection → **Activate**.
 3. Same page → the org → **Users** → **Add Individually**: each Slack member who may use the agent. Each needs one Salesforce user with the same email, and two permission sets:
+
+**Fill in first** (run the pair once per Slack member):
+- `<username>`: that member's Salesforce username. Example: `nurse.lee@iot-dev.jsmith.com`.
 
 ```bash
 sf org assign permset --name SlackSalesCloud --on-behalf-of <username>
@@ -283,6 +303,9 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
 2. **User verification.** Setup → **Enhanced Chat User Verification** → **JSON Web Keys** → **New Key**: upload `patient-portal-chat-key.json` (5e). Then **JSON Web Keysets** → **New Keyset**: name `Patient_Portal_Keyset`, issuer `cloud-agentic-iot-patient-portal`, add the key. In **Messaging Settings**, open the channel: tick **Add User Verification**, save, then **User Verification Configuration** → **New** → `Patient_Portal_Keyset`.
 3. **The agent user.** Setup → **Users** → **New User**: licence **Einstein Agent**, profile **Einstein Agent User**. Then:
 
+**Fill in first:**
+- `AGENT_USER=<the agent user's username>`: the username of the Einstein Agent user you just made. Example: `AGENT_USER=portal-agent@iot-dev.jsmith.com`. `$NAME` is already set from step 4.
+
 ```bash
 AGENT_USER=<the agent user's username>
 for set in AgentforceServiceAgentBase AgentforceServiceAgentUser EinsteinGPTPromptTemplateUser Patient_Portal_Agent; do
@@ -305,6 +328,9 @@ scripts/deploy-salesforce.sh Dev
 7. **Guest user.** The site → **Administration** → **Pages** → **Public Access**: assign `Patient_Portal_Guest_Api`.
 8. **Patients.** Setup → **Users** → your user → **Edit** → Role **Care Team Administrator**. Then for each patient's Person Account: **Enable Customer User** (profile Customer Community User, its own plus-address email), and:
 
+**Fill in first** (once per patient):
+- `<patient's username>`: the username Salesforce gave the patient's Customer Community user. Example: `you+patient-a@example.com`.
+
 ```bash
 sf org assign permset --name Patient_Portal_User --on-behalf-of <patient's username>
 ```
@@ -319,6 +345,10 @@ Voice: turn on **Allow Agentforce Voice calls in Enhanced Chat** in Messaging Se
 
 The deploy shipped it; it answers only SigV4-signed requests. To use it from Claude Code, with the MCP endpoint step 6 printed and your Region:
 
+**Fill in first:**
+- `<MCP endpoint>`: the "Step 11, MCP endpoint" URL that step 6 printed. Example: `https://abc123.lambda-url.us-east-2.on.aws/`.
+- `<your region>`: your project's Region. Example: `us-east-2`.
+
 ```bash
 claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest <MCP endpoint> \
   --service lambda --region <your region> --profile "$NAME"
@@ -331,6 +361,10 @@ Then ask it "which devices are out of range?". Another client, or a profile that
 1. Get the parts (ESP32, DHT11, SG90 servo, a data USB cable): [Install guide, Stage 3](INSTALL-GUIDE.md#what-you-need). Wiring: [firmware/README.md](../firmware/README.md#build-and-flash).
 2. In the Cloud Agentic IoT app, create a **Wi-Fi Network**, then an **Asset** with Serial Number = the board's name. It turns **Provisioned** with a bundle link.
 3. Download the bundle, plug the board in by USB, and run:
+
+**Fill in first:**
+- `bundle.json`: the path of the bundle you downloaded, if it isn't in the current folder. Example: `~/Downloads/bundle.json` (then `rm ~/Downloads/bundle.json`).
+- `<hotspot-SSID>`: the name of a second Wi-Fi network, such as your phone's hotspot. Example: `"My iPhone"`. The script asks for its password, hidden. Skip this line if you have only one network.
 
 ```bash
 ./scripts/provision-device.sh bundle.json
@@ -375,6 +409,12 @@ Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replac
 
 1. **The AWS account, as root.** Create a regular AWS account and turn on MFA for root. IAM → **Policies** → **Create policy** → JSON: paste [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), name `cloud-agentic-iot-operator`. IAM → **Users** → **Create user** `iot-operator`, attach that policy, MFA on, then **Security credentials** → **Create access key** (CLI). Then do the Bedrock check from step 2 in this account too, and open its Support case at once if it is held.
 2. **The deploy role and the budget.** `bootstrap-aws.sh` creates the OIDC provider, the `github-actions-deploy` role and the `cloud-agentic-iot-monthly` budget, and offers to store the role's ARN as `AWS_ROLE_ARN`:
+
+**Fill in first:**
+- `aws configure` asks for `iot-operator`'s access key ID and secret (from 1). Type them at its prompts, Region `ca-central-1`, output `json`.
+- `BUDGET_USD=20`: the monthly amount to watch, in US dollars. Example: `BUDGET_USD=50`.
+- `BUDGET_EMAIL='<your email>'`: where the budget alerts go. Example: `BUDGET_EMAIL='you@example.com'`.
+- For Prod, use `iot-prod` instead of `iot-dev` and `Prod` instead of `Dev`.
 
 ```bash
 aws configure --profile iot-dev     # iot-operator's access key, Region ca-central-1
@@ -437,6 +477,11 @@ gh variable set EVAL_DEVICE --body Test8                              # a reposi
 ```
 
    Data Cloud in a regular account reads the bucket through the org's identity provider, with no key. As an AWS admin, with your My Domain (no `https://`) and the External ID:
+
+**Fill in first:**
+- `MY_DOMAIN=<your My Domain>`: from Setup → **My Domain**, without `https://`. Example: `MY_DOMAIN=jsmith-dev-ed.develop.my.salesforce.com`.
+- `<External ID>`: the External ID the Data Cloud connection showed (9, step 2). Paste it between the quotes.
+- For Prod, use `--env Prod`.
 
 ```bash
 MY_DOMAIN=<your My Domain>
