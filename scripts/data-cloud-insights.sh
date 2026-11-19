@@ -13,7 +13,7 @@
 # so this sends that, as whoever SF_TARGET_ORG signs in as: an admin with Data
 # Cloud, not the deploy user. The SQL is the file in datacloud/, as it is.
 #
-# Run it after the Room_Reading data model object exists and has data
+# Run it after the Room_Readings data model object exists and has data
 # (docs/DATA-CLOUD.md): Data Cloud checks the SQL against it and refuses an
 # insight over fields it does not have. An insight that exists already is
 # left as it is: change it in Data Cloud, or delete it there and run this
@@ -117,5 +117,5 @@ if [ "$DRY_RUN" = true ]; then
   note "Dry run: nothing sent to $org."
   exit 0
 fi
-[ -z "$failed" ] || die "Data Cloud did not take:$failed (its answer is above). Check that Room_Reading has the fields the SQL names, or paste the SQL into Data Cloud's calculated insight builder, whose Check Syntax names the problem."
+[ -z "$failed" ] || die "Data Cloud did not take:$failed (its answer is above). Check that Room_Readings has the fields the SQL names, or paste the SQL into Data Cloud's calculated insight builder, whose Check Syntax names the problem."
 note "Calculated insights in $org: $created created, $kept already there."

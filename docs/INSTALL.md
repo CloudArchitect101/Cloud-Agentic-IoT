@@ -320,8 +320,8 @@ aws iam create-access-key --user-name cloud-agentic-iot-data-cloud-reader
 
 **Deploy**, then **Refresh Now**.
 
-4. **Mapping.** On the stream, **Start** the mapping → **New Custom Object** `Room_Reading`, every field under the same name, `reading_id` as primary key → Save.
-5. **Calculated insights**, once `Room_Reading__dlm` has rows (a board must have sent readings):
+4. **Mapping.** On the stream, **Start** the mapping → **New Custom Object** `Room_Readings`, every field under the same name, `reading_id` as primary key → Save.
+5. **Calculated insights**, once `Room_Readings__dlm` has rows (a board must have sent readings):
 
 ```bash
 scripts/data-cloud-insights.sh --dry-run

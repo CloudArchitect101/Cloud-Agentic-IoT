@@ -57,7 +57,7 @@ Those additional fields are only filled by the tests and the load simulation (`t
 
 1. **Edge**: The ESP32 patient monitor sends temperature and humidity (the data model also has heart rate, SpO2 and blood pressure, for a real monitor)
 2. **AWS Ingestion**: IoT Core receives telemetry, Lambda processes and stores in DynamoDB
-3. **Data Cloud Ingestion**: Every room reading reaches Data Cloud from the S3 archive's CSV copy, through an Amazon S3 data stream, into the `Room_Reading` data model object and two calculated insights ([DATA-CLOUD.md](DATA-CLOUD.md))
+3. **Data Cloud Ingestion**: Every room reading reaches Data Cloud from the S3 archive's CSV copy, through an Amazon S3 data stream, into the `Room_Readings` data model object and two calculated insights ([DATA-CLOUD.md](DATA-CLOUD.md))
 4. **RAG Pipeline**: Data is chunked, embedded (Bedrock), and indexed in Vector Store
 5. **Platform Events**: Real-time alerts published to Platform Events
 6. **Agentforce**: Agents consume Platform Events, retrieve context from Vector Store, and take actions

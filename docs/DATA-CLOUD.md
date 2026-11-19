@@ -23,7 +23,7 @@ flowchart LR
   L -->|state changes only| S[Patient_Vitals__c]
   C -->|Amazon S3 connection| D[Data stream]
   D --> DLO[Data lake object<br/>Room_Readings]
-  DLO -->|mapping| DMO[Data model object<br/>Room_Reading]
+  DLO -->|mapping| DMO[Data model object<br/>Room_Readings]
   DMO --> CI1[Room_Out_Of_Range_Daily__cio]
   DMO --> CI2[Room_Device_Silence__cio]
 ```
@@ -42,7 +42,7 @@ flowchart LR
    imports the new CSV files on a schedule into a **data lake object** (DLO),
    Data Cloud's raw table for one source.
 4. **DLO to DMO.** A mapping copies the DLO's fields onto a **data model
-   object** (DMO), `Room_Reading`: the shape every Data Cloud feature reads,
+   object** (DMO), `Room_Readings`: the shape every Data Cloud feature reads,
    whatever source the data came from.
 5. **Insights.** Two **calculated insights**, SQL that Data Cloud runs on a
    schedule over the DMO, give a table per device:
@@ -205,12 +205,12 @@ echo "$BUCKET"
 3. **The stream imports.** Data Streams → **Room Readings** shows a last run
    with records processed. **Refresh Now** runs it at once instead of waiting
    for the schedule.
-4. **The DMO has rows.** Data Explorer → Data Model Object **Room_Reading**,
+4. **The DMO has rows.** Data Explorer → Data Model Object **Room_Readings**,
    or Query Editor:
 
    ```sql
    SELECT reading_id__c, device_id__c, reading_ts__c, temperature_c__c, humidity_pct__c
-   FROM Room_Reading__dlm ORDER BY reading_ts__c DESC LIMIT 10
+   FROM Room_Readings__dlm ORDER BY reading_ts__c DESC LIMIT 10
    ```
 
    A `reading_id__c` that is also a `Patient_Vitals__c.Device_Reading_Id__c`
@@ -269,7 +269,7 @@ insight used.
 - **The stream finds no files.** The connection's Parent Directory is
   `datacloud/room-readings/`, the file type CSV and the file name
   `room-readings-*.csv`. Files in subfolders are ignored by design.
-- **`Cannot find type for node Room_Reading__dlm...` / `Error getting FactTable Room_Reading__dlm`.**
+- **`Cannot find type for node Room_Readings__dlm...` / `Error getting FactTable Room_Readings__dlm`.**
   The data model object does not exist yet: the stream has only its data
   lake object (`Room_Readings__dll`). Do the mapping (SETUP.md §7 step 6)
   and wait for the stream's first run to finish with records, then run the

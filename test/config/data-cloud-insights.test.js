@@ -4,7 +4,7 @@
 // when someone creates them in an org. These checks catch, before that, the
 // mistakes that would still pass Data Cloud's own check: a threshold that no
 // longer matches the room-temperature rule, minutes counted at an interval the
-// boards no longer send at, or a field the Room_Reading object does not have.
+// boards no longer send at, or a field the Room_Readings object does not have.
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -33,14 +33,14 @@ test('each insight has a unique API name ending __cio and a SQL file', () => {
   }
 });
 
-test('the SQL reads only Room_Reading, and only fields it has', () => {
+test('the SQL reads only Room_Readings, and only fields it has', () => {
   const fields = new Set(spec.columns.map((c) => c.dmoField));
   for (const i of manifest.insights) {
     const text = sql(i);
     assert.match(text, new RegExp(`\\bFROM ${DMO}\\b`), i.apiName);
     assert.deepEqual([...text.matchAll(/\bFROM (\w+)/g)].map((m) => m[1]), [DMO], `${i.apiName}: one source`);
     for (const [, field] of text.matchAll(new RegExp(`${DMO}\\.(\\w+)`, 'g'))) {
-      assert.ok(fields.has(field), `${i.apiName} reads ${field}, which Room_Reading does not have`);
+      assert.ok(fields.has(field), `${i.apiName} reads ${field}, which Room_Readings does not have`);
     }
     // Sent as one API field: no statement separator, no comment that could swallow the rest.
     assert.doesNotMatch(text, /;|--|\/\*/, i.apiName);
