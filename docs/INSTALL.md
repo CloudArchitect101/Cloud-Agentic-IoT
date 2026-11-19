@@ -467,15 +467,15 @@ Then ask it "which devices are out of range?". Another client, or a profile that
 
 **b. Espressif's MCP servers for every agent.** Anyone asks a generic ESP32 question, such as "What is the spec of the ESP32-S3-DevKitC-1?", in the agent panel, in Slack or in the patient portal, and the agent answers from Espressif's own catalogs. **Nobody signs in**: all three servers are open. Salesforce does not deploy MCP registrations, so this part is Setup clicks; Developer Edition supports it. The catalogs are not datasheets, so for a full spec the agents link docs.espressif.com. Why these three: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents).
 
-| Name in Registry | URL | Tools to allowlist | Answers |
+| Name in Registry (letters and digits only) | URL | Tools to allowlist | Answers |
 |---|---|---|---|
-| `ESP Pilot` | `https://mcp.esp-pilot.espressif.com/mcp` | `catalog_list_socs`, `catalog_list_bmgr_boards`, `catalog_list_bmgr_peripherals` | Chips, the board catalog with each board's chip, devices and peripherals |
-| `ESP-VISION` | `https://mcp.vision.espressif.com` | `list_firmware_versions`, `get_capabilities`, `search_docs` | Camera and on-device AI features per chip or board |
-| `ESP Component Registry` | `https://components.espressif.com/mcp` | `search_components`, `fetch_component_detailed_information` | ESP-IDF drivers and components |
+| `ESPPilot` | `https://mcp.esp-pilot.espressif.com/mcp` | `catalog_list_socs`, `catalog_list_bmgr_boards`, `catalog_list_bmgr_peripherals` | Chips, the board catalog with each board's chip, devices and peripherals |
+| `ESPVISION` | `https://mcp.vision.espressif.com` | `list_firmware_versions`, `get_capabilities`, `search_docs` | Camera and on-device AI features per chip or board |
+| `ESPComponentRegistry` | `https://components.espressif.com/mcp` | `search_components`, `fetch_component_detailed_information` | ESP-IDF drivers and components |
 
-1. **Register each server.** Setup → Quick Find **Agentforce** → **Agentforce Registry** → **New** → from scratch: the name and URL from a row above, a one-line description, authentication **No Authentication** → **Create and Continue**. Salesforce pings it.
+1. **Register each server.** Setup → Quick Find **Agentforce** → **Agentforce Registry** → **New** → from scratch: the name exactly as in the row above (Registry accepts only letters and digits: no spaces, `-` or `_`), its URL, a one-line description, authentication **No Authentication** → **Create and Continue**. Salesforce pings it.
 2. **Allowlist only that row's tools** (all read-only) → **Allow and Continue** → **Save**. Read each tool's description first; Salesforce warns if one hides odd characters. Repeat 1 and 2 for the other two rows.
-3. **Give both agents the actions.** Agentforce Builder → **Patient Care Agent** → new version → subagent **ESP32 Hardware Questions** → add the eight actions from the asset library (named like `catalog_list_socs ESP Pilot`). Never change their generated developer names. **Commit** and **Activate**. Then the same in **Patient Portal Agent**, subagent **ESP32 Hardware**.
+3. **Give both agents the actions.** Agentforce Builder → **Patient Care Agent** → new version → subagent **ESP32 Hardware Questions** → add the eight actions from the asset library (named like `catalog_list_socs ESPPilot`). Never change their generated developer names. **Commit** and **Activate**. Then the same in **Patient Portal Agent**, subagent **ESP32 Hardware**.
 4. **Keep it in the repo.** The step 3 actions exist only in that org until they are retrieved.
 
 **Paste into your terminal.** Once, after 3. It copies both agents, now with the MCP actions, from the org into your checkout, so the next publish keeps them.

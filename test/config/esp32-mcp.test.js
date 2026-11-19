@@ -30,6 +30,7 @@ test('every outside MCP server is read-only, https, Streamable HTTP, and names a
   assert.ok(servers.length >= 1);
   for (const s of servers) {
     assert.match(s.url, /^https:\/\//, s.name);
+    assert.match(s.name, /^[A-Za-z0-9]+$/, `${s.name}: Agentforce Registry says "Name must be alphanumeric"`);
     assert.equal(s.transport, 'streamable-http', `${s.name}: Agentforce speaks only Streamable HTTP`);
     assert.equal(s.readOnly, true, `${s.name}: only read-only tools may be allowlisted`);
     assert.ok(['none', 'oauth-per-user'].includes(s.auth.type), s.name);
@@ -83,6 +84,7 @@ test('the docs give the servers, their tools and the Setup clicks', () => {
   assert.match(install, /Agentforce Registry/);
   for (const s of servers) {
     assert.ok(install.includes(s.url), `INSTALL.md lacks ${s.url}`);
+    assert.ok(install.includes(`| \`${s.name}\` | \`${s.url}\``), `INSTALL.md's table must give ${s.name} for ${s.url}`);
     for (const t of s.tools) assert.ok(install.includes(t), `INSTALL.md lacks tool ${t}`);
   }
   assert.match(read('docs/GUARDRAILS-AND-MCP.md'), /## Espressif MCP servers for the agents/);
