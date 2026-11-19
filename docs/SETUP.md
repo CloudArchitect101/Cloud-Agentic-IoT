@@ -874,11 +874,14 @@ there.
    connection from step 2.
    - **File Type** CSV. **Import from Directory** empty, so it reads the
      connection's Parent Directory. **File Name** `room-readings-*.csv`.
-     **Source** `AWS IoT`.
+     **Source** `AWS_IoT` (letters, digits and single underscores only, so
+     no spaces; it must start with a letter and be unique in the org).
    - A new data lake object, **Room Readings** (`Room_Readings`). Give the
      fields the types in [`datacloud/room-readings.columns.json`](../datacloud/room-readings.columns.json):
      `reading_ts` and `received_ts` DateTime, `temperature_c` and
-     `humidity_pct` Number, the rest Text.
+     `humidity_pct` Number, the rest Text. For the two DateTime fields, the
+     **Add Date Format** list has no match: choose the manual format and
+     type `yyyy-MM-dd'T'HH:mm:ss.SSSXXX`.
    - Category **Engagement**, primary key `reading_id`, event time field
      `reading_ts`.
    - Data space: default. Refresh mode **Upsert**, so each run takes only new
