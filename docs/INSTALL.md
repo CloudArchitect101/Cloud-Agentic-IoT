@@ -444,15 +444,15 @@ Put the patient's device on that account: its Asset's Account = the Person Accou
 
 ## 11. MCP servers
 
-Two directions, each optional: **a.** outside agents (Claude Code) reach the ward's devices through our MCP server, and **b.** our Agentforce agents reach Espressif's catalogs through theirs.
+Optional. **a.** lets Claude Code reach your devices; **b.** lets every agent answer generic ESP32 questions, with no sign-in. Background: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents).
 
-**a. Our MCP server for outside agents.** The deploy shipped it; it answers only SigV4-signed requests. To use it from Claude Code, with the MCP endpoint step 6 printed and your Region:
+**a. Our MCP server in Claude Code**
 
 **Fill in first:**
-- `MCP_URL='<MCP endpoint>'`: the "Step 11, MCP endpoint" URL that step 6 printed. Example: `MCP_URL='https://abc123.lambda-url.us-east-2.on.aws/'`.
-- `REGION='<your region>'`: your project's Region. Example: `REGION='us-east-2'`.
+- `MCP_URL`: the "Step 11, MCP endpoint" URL step 6 printed. Example: `'https://abc123.lambda-url.us-east-2.on.aws/'`.
+- `REGION`: your Region. Example: `'us-east-2'`.
 
-**Paste into your terminal.** Once per computer. It adds the `smart-ward` MCP server to Claude Code, signed with your AWS profile.
+**Paste into your terminal.** Once per computer.
 
 ```bash
 MCP_URL='<MCP endpoint>'
@@ -461,38 +461,27 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
   --service lambda --region "$REGION" --profile "$NAME"
 ```
 
-Then ask it "which devices are out of range?". Another client, or a profile that holds only the MCP role: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#connect-an-mcp-client).
-
 <a id="espressif-mcp"></a>
 
-**b. Espressif's MCP servers for every agent.** Anyone asks a generic ESP32 question, such as "What is the spec of the ESP32-S3-DevKitC-1?", in the agent panel, in Slack or in the patient portal, and the agent answers from Espressif's own catalogs. **Nobody signs in**: both servers are open. Salesforce does not deploy MCP registrations, so this part is Setup clicks; Developer Edition supports it. The catalogs are not datasheets, so for a full spec the agents link docs.espressif.com. Why these two: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents).
+**b. Espressif's MCP servers in both agents**
 
-| Name in Registry (letters and digits only) | URL | Tools to allowlist | Answers |
-|---|---|---|---|
-| `ESPPilot` | `https://mcp.esp-pilot.espressif.com/mcp` | `catalog_list_socs`, `catalog_list_bmgr_boards`, `catalog_list_bmgr_peripherals` | Chips, the board catalog with each board's chip, devices and peripherals |
-| `ESPComponentRegistry` | `https://components.espressif.com/mcp` | `search_components`, `fetch_component_detailed_information` | ESP-IDF drivers and components |
+| Name in Registry | URL | Tools to allowlist |
+|---|---|---|
+| `ESPPilot` | `https://mcp.esp-pilot.espressif.com/mcp` | `catalog_list_socs`, `catalog_list_bmgr_boards`, `catalog_list_bmgr_peripherals` |
+| `ESPComponentRegistry` | `https://components.espressif.com/mcp` | `search_components`, `fetch_component_detailed_information` |
 
-1. **Register each server.** Setup → Quick Find **Agentforce** → **Agentforce Registry** → **New** → from scratch: the name exactly as in the row above (Registry accepts only letters and digits: no spaces, `-` or `_`), its URL, a one-line description, authentication **No Authentication** → **Create and Continue**. Salesforce pings it.
-2. **Allowlist only that row's tools** (all read-only) → **Allow and Continue** → **Save**. Read each tool's description first; Salesforce warns if one hides odd characters. Repeat 1 and 2 for the other row.
-3. **Give both agents the actions.** Agentforce Builder → **Patient Care Agent** → new version → subagent **ESP32 Hardware Questions** → add the five actions from the asset library (named like `catalog_list_socs ESPPilot`). Never change their generated developer names. **Commit** and **Activate**. Then the same in **Patient Portal Agent**, subagent **ESP32 Hardware**.
-4. **Keep it in the repo.** The step 3 actions exist only in that org until they are retrieved.
+1. **Register both servers.** Setup → **Agentforce Registry** → **New** → name and URL from the table (letters and digits only), authentication **No Authentication** → **Create and Continue** → allowlist that row's tools → **Save**.
+2. **Add the actions.** Agentforce Builder → **Patient Care Agent** → subagent **ESP32 Hardware Questions** → add the five actions → **Commit** → **Activate**. Repeat in **Patient Portal Agent**, subagent **ESP32 Hardware**.
+3. **Save them to the repo.**
 
-**Paste into your terminal.** Once, after 3. It copies both agents, now with the MCP actions, from the org into your checkout, so the next publish keeps them.
+**Paste into your terminal.** Once, after 2.
 
 ```bash
 sf project retrieve start --metadata AiAuthoringBundle:Patient_Care_Agent --target-org "$NAME"
 sf project retrieve start --metadata AiAuthoringBundle:Patient_Portal_Agent --target-org "$NAME"
-git diff --stat -- force-app/main/default/aiAuthoringBundles
 ```
 
-   Commit that on a branch. A new org needs 1 to 3 again: Salesforce says MCP tool actions don't work out of the box after a deploy.
-5. **Try it.** In the agent panel, a Slack DM to the agent, and the portal chat: "What is the spec of the ESP32-S3-DevKitC-1?" The answer names the Espressif catalog it used, and links docs.espressif.com for anything the catalogs don't hold.
-
-**Paste into your terminal.** Any time; free and read-only. It checks both servers still answer and still offer every tool allowlisted in 2.
-
-```bash
-node scripts/lib/mcp-probe.js
-```
+4. **Try it** in the agent panel, Slack or the portal: "What is the spec of the ESP32-S3-DevKitC-1?" The answer ends with a docs.espressif.com link. If it shows `URL_Redacted`, check Setup → **Trusted URLs** lists `docs.espressif.com` and `www.espressif.com` (step 6 deploys both).
 
 ## 12. Add a board
 

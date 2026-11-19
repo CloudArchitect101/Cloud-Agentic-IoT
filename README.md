@@ -1,7 +1,7 @@
 # Cloud-Agentic-IoT
 
 [![Checks](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/actions/workflows/checks.yml/badge.svg?branch=Dev)](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/actions/workflows/checks.yml)
-![Tests](https://img.shields.io/badge/tests-531%20Node%20%C2%B7%20118%20Python%20%C2%B7%20Apex-brightgreen)
+![Tests](https://img.shields.io/badge/tests-561%20Node%20%C2%B7%20118%20Python%20%C2%B7%20Apex-brightgreen)
 ![AWS cost](https://img.shields.io/badge/AWS-%E2%89%88%240.08%20per%20device%2Fmonth-orange)
 ![Salesforce](https://img.shields.io/badge/Salesforce-Agentforce%20%C2%B7%20Data%20Cloud-00A1E0)
 ![AWS](https://img.shields.io/badge/AWS-IoT%20Core%20%C2%B7%20Lambda%20%C2%B7%20Bedrock-FF9900)
@@ -48,7 +48,7 @@ flowchart LR
         DB[(DynamoDB<br/>+ S3 archive)]
         API[Device API<br/>SigV4]
         PS[procedure-search<br/>Bedrock Titan V2]
-        MCP[MCP server]
+        MCP[MCP server<br/>outside agents, SigV4]
         SL[Slack Lambda]
     end
 
@@ -60,6 +60,8 @@ flowchart LR
         DC[Data Cloud]
     end
 
+    ESP[Espressif MCP<br/>ESP Pilot + Component Registry<br/>no sign-in]
+
     D -- readings --> IOT --> PV --> DB
     PV -- alerts, state changes --> CASE
     DB -- CSV --> DC
@@ -68,6 +70,7 @@ flowchart LR
     AG -- Find Procedure --> PS
     AG --> CASE
     PORT --> AG
+    AG -- generic ESP32 questions --> ESP
     MCP --> DB
     SL --> DB
 ```
@@ -143,7 +146,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 
 ## Quality
 
-- **Tests:** 531 Node tests cover all 18 Lambda functions, the guardrails, the MCP server, the SOP index and the firmware's logic compiled for the host. 118 Python tests run the board, OTA, install, deploy and setup scripts against a simulated board, AWS and org. Every Salesforce deploy to CI and Prod runs the org's Apex tests (38 test classes).
+- **Tests:** 561 Node tests cover all 18 Lambda functions, the guardrails, the MCP server, the Espressif MCP setup (servers, agent routing, Trusted URLs), the SOP index and the firmware's logic compiled for the host. 118 Python tests run the board, OTA, install, deploy and setup scripts against a simulated board, AWS and org. Every Salesforce deploy to CI and Prod runs the org's Apex tests (38 test classes).
 - **On every pull request:** the tests, a CloudFormation lint, shellcheck, a Salesforce metadata check, the portal's React build and an ESP32 compile ([`checks.yml`](.github/workflows/checks.yml)).
 - **Security:** mutual TLS per device, least-privilege IAM, SigV4 on every Salesforce-to-AWS call, no private key ever stored in Salesforce, guardrails and PII masking outside the model.
 
@@ -159,6 +162,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | 04 · Slack | Live: `/patient-status`, and the Patient Care Agent answers in Slack DMs |
 | 05 · Agent | Live in the new Agentforce Builder: readings, procedures, escalation to a Case, in Salesforce and Slack |
 | 06 · MCP | Deployed; `get_room_status` tested by a signed call |
+| 06 · Espressif MCP | Live since Nov 19: both agents answer generic ESP32 questions from ESP Pilot and ESP Component Registry (Agentforce Registry, no sign-in), with docs links allowed by Trusted URLs |
 | 07 · MuleSoft | A design sketch, not a buildable project |
 | 08 · SOP RAG | Live since Nov 10: Find Procedure cites the SOP ID and version |
 | 09 · OTA saga | Verified on one board |

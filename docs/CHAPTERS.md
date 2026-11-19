@@ -148,6 +148,15 @@ Two consequences that show up immediately:
 
 **To see it work:** connect an MCP client ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#connect-an-mcp-client)) and ask which rooms are out of range. The in-org Patient Care Agent keeps using its Apex actions; Agentforce's own MCP client takes no SigV4, which that page covers.
 
+**The other direction: Agentforce as an MCP client.** Since Nov 19 both agents also *call* MCP servers. Generic ESP32 questions ("What is the spec of the ESP32-S3-DevKitC-1?") go to an ESP32 hardware subagent that uses Espressif's open servers, ESP Pilot (`https://mcp.esp-pilot.espressif.com/mcp`: chips, boards, peripherals) and ESP Component Registry (`https://components.espressif.com/mcp`: ESP-IDF components), registered in Agentforce Registry with no authentication, so patients and staff never sign in.
+
+- **Why these two:** Espressif's docs server (`mcp.espressif.com/docs`) needs a GitHub or WeChat sign-in per user, which a patient chat can't do. The open servers are catalogs, not datasheets, so the subagent carries a short reference card from Espressif's product pages and links the docs for the rest.
+- **Security:** read-only tools only, allowlisted per server; no org data in any tool input (a test spec puts a patient name in the question to prove it); returned text is data, never instructions.
+- **Links:** Agentforce replaces any link to a site that isn't a Trusted URL with `URL_Redacted`, so the repo ships Trusted URLs for `docs.espressif.com` and `www.espressif.com`, and a test fails if a subagent links any other host.
+- **Cost:** about 20 Flex Credits (≈ $0.10) per MCP action; a typical answer uses one or two. Espressif charges nothing ([COST-MODEL.md](COST-MODEL.md)).
+
+**Key files:** `config/mcp-servers.json`, `scripts/lib/mcp-probe.js`, `force-app/main/default/cspTrustedSites/`, `test/config/esp32-mcp.test.js`, [INSTALL.md step 11b](INSTALL.md#espressif-mcp)
+
 ## 07 · Cross-Cloud Integrations (iPaaS / MuleSoft)
 
 The same AWS-to-Salesforce telemetry sync as chapter 01, implemented as a **MuleSoft flow** instead of a Lambda — DataWeave transform, JWT connection, idempotent upsert, retryable error handling.
