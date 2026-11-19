@@ -90,6 +90,10 @@ FAKE_AWS = textwrap.dedent(r'''
     elif call == 'configure get':
         print(state['region'])
     elif call == 'ssm get-parameter':
+        if state.get('scp_denies'):
+            fail(f"An error occurred (AccessDeniedException) when calling the GetParameter operation: "
+                 f"User: arn:aws:sts::{state['account']}:assumed-role/Operator/someone is not authorized to perform: "
+                 f"ssm:GetParameter with an explicit deny in a service control policy")
         p = params.get(one('name'))
         if p is None:
             fail('An error occurred (ParameterNotFound) when calling the GetParameter operation')
@@ -393,6 +397,16 @@ class DeploySalesforceGuards(SetupFixture):
         code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org')
         self.assertNotEqual(code, 0)
         self.assertIn('not the org paired with AWS account', out)
+        self.assertEqual(self.deploys(), [])
+
+    def test_a_region_the_account_denies_is_named_before_anything_deploys(self):
+        # Nov 19: a profile in us-east-1 for an AWS project that allows only
+        # us-east-2 hit an explicit SCP deny on the account label.
+        self.state['scp_denies'] = True
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org')
+        self.assertNotEqual(code, 0)
+        self.assertIn(f'an organization policy denies it in {REGION}', out)
+        self.assertIn('AWS_PROFILE', out)
         self.assertEqual(self.deploys(), [])
 
     def test_uncommitted_changes_are_refused_on_a_laptop(self):
