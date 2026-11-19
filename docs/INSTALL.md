@@ -3,7 +3,7 @@
 Every feature, from a fresh clone to a working system: your own AWS project with a spend limit and a free Salesforce Developer Edition org, deployed from your laptop. Execution steps only, in order. Every Setup click that has to happen before the deploy is gathered in steps 3 and 5, so **step 6 deploys everything in one run**. The [Install guide](INSTALL-GUIDE.md) explains why each step is done that way and what to check when one fails.
 
 > [!NOTE]
-> About two hours for everything, plus about 20 minutes for each board. Steps 1 to 7 and 13 make the core system. Steps 8 to 12 and 14 each add one feature, and you can skip any of them.
+> About two hours for everything, plus about 20 minutes for each board. Do step 2 first, on day one: if Bedrock needs a Support case, it can take up to 72 hours. Steps 1 to 7 and 13 make the core system. Steps 8 to 12 and 14 each add one feature, and you can skip any of them.
 
 > [!WARNING]
 > Keys, passwords and tokens are typed only into your own terminal or into Salesforce Setup. Never paste them into a file in the repo, a chat or an issue.
@@ -30,12 +30,22 @@ Linux and Windows: [SETUP.md §0](SETUP.md#0-prerequisites--install-the-tooling)
 ## 2. Create the AWS project and the Salesforce org
 
 1. Create an AWS **project** in [AWS Settings](https://settings.aws.com) on the paid plan, and set a monthly spend limit (the lowest is $20). Note its Region.
-2. Sign up for a free **Developer Edition** org at [developer.salesforce.com/signup](https://developer.salesforce.com/signup).
+2. **Check that Bedrock works in the project, right away.** The agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account is often held from Bedrock until AWS lifts it. Signed in to the project, in its Region: open the [Amazon Bedrock console](https://console.aws.amazon.com/bedrock/) → **Playgrounds** → **Chat / Text**, pick any model, and send "hello".
+   - **It answers:** Bedrock works. Carry on.
+   - **It says `Operation not allowed`, or that the account isn't authorized:** open a free case now in the [Support Center](https://support.console.aws.amazon.com/support/home#/case/create) → **Account and billing** → **Account** (not Technical). Ask AWS to enable Amazon Bedrock for Titan Text Embeddings V2 in your Region, and say it's for a new account. Finish any account verification or payment-method notice in Billing first. It can take **up to 72 hours**. Carry on with the install meanwhile, and run step 6 with `SKIP_SOP_INDEX=yes` until the case is resolved.
+3. Sign up for a free **Developer Edition** org at [developer.salesforce.com/signup](https://developer.salesforce.com/signup).
 
 > [!WARNING]
 > Use a plain AWS project and **do not activate its advanced features**. Activating them removes the spend limit for good and can't be undone. You don't need them here: they only matter for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts instead.
 
 Why a project, and what it costs: [TRY-IT.md](TRY-IT.md#why-a-project-and-what-it-costs-you).
+
+After step 4, the same Bedrock check from the terminal. `AUTHORIZED` means it works:
+
+```bash
+aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text-v2:0 \
+  --query authorizationStatus --output text
+```
 
 ## 3. Turn on the org's features
 
@@ -142,7 +152,7 @@ DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader scripts/install.sh De
 7. `publish-agent.sh`: publishes and activates the Patient Care Agent.
 8. Prints every value the next steps ask for: the role ARN and URL for step 7, the Slack Request URL, the Data Cloud bucket and the MCP endpoint.
 
-Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` skips the agent publish. If Bedrock refuses the SOP index (`Operation not allowed`), add `SKIP_SOP_INDEX=yes` and see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` skips the agent publish. If Bedrock is still held (step 2), run `SKIP_SOP_INDEX=yes scripts/install.sh Dev`. Everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force`.
 
 Then three clicks and one command:
 
@@ -363,7 +373,7 @@ Why regular accounts: a project can't hold GitHub's OIDC provider, which the pip
 
 Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replace `dev` with `prod` in the names).
 
-1. **The AWS account, as root.** Create a regular AWS account and turn on MFA for root. IAM → **Policies** → **Create policy** → JSON: paste [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), name `cloud-agentic-iot-operator`. IAM → **Users** → **Create user** `iot-operator`, attach that policy, MFA on, then **Security credentials** → **Create access key** (CLI).
+1. **The AWS account, as root.** Create a regular AWS account and turn on MFA for root. IAM → **Policies** → **Create policy** → JSON: paste [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), name `cloud-agentic-iot-operator`. IAM → **Users** → **Create user** `iot-operator`, attach that policy, MFA on, then **Security credentials** → **Create access key** (CLI). Then do the Bedrock check from step 2 in this account too, and open its Support case at once if it is held.
 2. **The deploy role and the budget.** `bootstrap-aws.sh` creates the OIDC provider, the `github-actions-deploy` role and the `cloud-agentic-iot-monthly` budget, and offers to store the role's ARN as `AWS_ROLE_ARN`:
 
 ```bash

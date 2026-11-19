@@ -17,6 +17,8 @@
 #   DATA_CLOUD_READER_USER    optional: the IAM user Data Cloud reads the bucket as.
 #                             Created when missing, then named to the AWS deploy.
 #   SKIP_CHECK=yes            skip scripts/check.sh (the local tests)
+#   SKIP_SOP_INDEX=yes        passed on to deploy-aws.sh: skip the Bedrock SOP index while
+#                             the account's Bedrock hold is open (docs/INSTALL.md, step 2)
 #   SKIP_AGENT=yes            skip publishing Patient_Care_Agent (each publish is
 #                             a new version, so skip it when the script is unchanged)
 #
