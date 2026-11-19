@@ -121,7 +121,7 @@ An AWS project allows only its own Region, so a command in another Region fails 
 > | `NAME`, `AWS_PROFILE`, `SF_TARGET_ORG` (step 4) | **Gone.** Run the three lines above |
 > | `sf` org login (step 4) | Kept on disk. Nothing to do |
 > | `aws login` session (step 4) | Kept on disk, but it expires after some hours. If a command says the token or session expired, run `aws login --profile "$NAME"` again |
-> | Variables set inside one command block (`ACCOUNT`, `LIMIT`, `EMAIL`, `STACK`, `CALLER`, `ROLE_ARN`, `INTEGRATION_USER`, `MEMBER`, `AGENT_USER`, `PATIENT_USER`, `CRT`, `BUNDLE`, `MCP_URL`, `REGION`, `MY_DOMAIN`) | Used only in that block. If the terminal closed partway through a block, run the whole block again |
+> | Variables set inside one command block (`ACCOUNT`, `LIMIT`, `EMAIL`, `STACK`, `CALLER`, `ROLE_ARN`, `INTEGRATION_USER`, `MEMBER`, `AGENT_USER`, `PATIENT_USER`, `CRT`, `BUNDLE`, `MCP_URL`, `REGION`, `MY_DOMAIN`, `CALLBACK`, `PERMSET`) | Used only in that block. If the terminal closed partway through a block, run the whole block again |
 > | Pipelines (step 14): `AWS_PROFILE=iot-dev`, `SF_TARGET_ORG=iot-dev-admin` | **Gone.** Run their `export` lines again |
 > | Files you made: keys in `scripts/`, the portal key in `~/Downloads` | Kept. Nothing to do |
 >
@@ -442,9 +442,11 @@ Put the patient's device on that account: its Asset's Account = the Person Accou
 
 9. **Try it.** Sign in as the patient, ask the assistant "what is my temperature?", then "I need a nurse": a Case appears on Care_Team_Queue.
 
-## 11. MCP server for outside agents
+## 11. MCP servers
 
-The deploy shipped it; it answers only SigV4-signed requests. To use it from Claude Code, with the MCP endpoint step 6 printed and your Region:
+Two directions, each optional: **a.** outside agents (Claude Code) reach the ward's devices through our MCP server, and **b.** the Patient Care Agent reaches Espressif's documentation through theirs.
+
+**a. Our MCP server for outside agents.** The deploy shipped it; it answers only SigV4-signed requests. To use it from Claude Code, with the MCP endpoint step 6 printed and your Region:
 
 **Fill in first:**
 - `MCP_URL='<MCP endpoint>'`: the "Step 11, MCP endpoint" URL that step 6 printed. Example: `MCP_URL='https://abc123.lambda-url.us-east-2.on.aws/'`.
@@ -460,6 +462,67 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
 ```
 
 Then ask it "which devices are out of range?". Another client, or a profile that holds only the MCP role: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#connect-an-mcp-client).
+
+<a id="espressif-docs"></a>
+
+**b. Espressif documentation for the Patient Care Agent.** Staff ask generic ESP32 questions, such as "What is the spec of the ESP32-S3-DevKitC-1?", in Salesforce or Slack, and the agent answers from Espressif's official docs with source links. The server is `https://mcp.espressif.com/docs`. It needs each user to sign in once with GitHub, and allows each user 40 requests an hour and 200 a day. Salesforce does not deploy MCP registrations, so this part is Setup clicks. Developer Edition supports it. The patient portal agent does not use it: it points patients to docs.espressif.com instead. Why: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-documentation-for-the-agents).
+
+1. **The sign-in provider.** Setup → **Named Credentials** → **External Auth Identity Providers** → **New**:
+   - Label `Espressif Docs`, Name `Espressif_Docs`.
+   - Authentication Protocol **OAuth 2.0**, Authentication Flow Type **Authorization Code (Browser Flow)**.
+   - Client ID `placeholder`, Client Secret `placeholder` (step 3 replaces them).
+   - **Pass client credentials in request body**: on.
+   - Authorize Endpoint URL `https://mcp.espressif.com/docs/authorize`, Token Endpoint URL `https://mcp.espressif.com/docs/token`, User Info Endpoint URL empty.
+   - **Use Proof Key for Code Exchange (PKCE) Extension**: on. **Save**, then copy the **Callback URL** on its detail page.
+2. **An OAuth client from Espressif.** Espressif gives clients out by Dynamic Client Registration, not a console.
+
+**Fill in first:**
+- `CALLBACK='<callback URL>'`: the Callback URL you copied in 1. Example: `CALLBACK='https://jsmith-dev-ed.develop.my.salesforce.com/services/...'` (copy it whole; don't build it by hand).
+
+**Paste into your terminal.** Once per org. It registers a client for that callback URL and prints its client ID and secret in this terminal only.
+
+```bash
+CALLBACK='<callback URL>'
+./scripts/register-espressif-client.sh "$CALLBACK"
+```
+
+3. Back on the provider from 1: **Edit**, paste the **Client ID** and **Client Secret** the script printed, **Save**. Don't save them anywhere else.
+4. **The per-user credential.** Same page → **External Credentials** → **New**: Label `Espressif Docs`, Name `Espressif_Docs`, Authentication Protocol **OAuth 2.0**, Authentication Flow Type **Browser Flow**, Scope `read:user`, Identity Provider **External Auth Identity Provider** → `Espressif Docs`. **Save**. Under **Principals** → **New**: Parameter Name `Staff`, Sequence Number `1`, Identity Type **Per User Principal** → **Save**.
+5. **Register the server.** Setup → Quick Find **Agentforce** → **Agentforce Registry** → **New** → from scratch: Name `Espressif Docs`, URL `https://mcp.espressif.com/docs`, authentication **Use External Credential** → `Espressif Docs`. If its status says **Authenticate**, click it, sign in with GitHub, **Allow**, then the refresh icon until it says **Configured**. **Create and Continue**.
+6. **Allowlist one tool.** Tick only `search_espressif_sources` (read-only search) → **Allow and Continue** → **Save**. Salesforce makes the permission set `Espressif Docs Permission Set`.
+7. **Who may use it.** Every staff member who uses the agent, in Salesforce or Slack:
+
+**Fill in first:**
+- `MEMBER='<username>'`: that staff member's Salesforce username (Setup → **Users**). Example: `MEMBER='nurse.lee@iot-dev.jsmith.com'`.
+
+**Paste into your terminal.** Once per staff member. It looks up the permission set Salesforce made in 6 and assigns it.
+
+```bash
+MEMBER='<username>'
+PERMSET=$(sf data query --query "SELECT Name FROM PermissionSet WHERE Label LIKE 'Espressif Docs%'" --json --target-org "$NAME" | node -pe 'JSON.parse(require("fs").readFileSync(0)).result.records[0].Name')
+sf org assign permset --name "$PERMSET" --on-behalf-of "$MEMBER" --target-org "$NAME"
+```
+
+   If a callout later says `We couldn't access the credential(s)`: Setup → **Permission Sets** → that permission set → **External Credential Principal Access** → add `Espressif_Docs - Staff`.
+8. **Give the agent the action.** Agentforce Builder → **Patient Care Agent** → new version → subagent **ESP32 Hardware Questions** → add the action **search_espressif_sources Espressif Docs** from the asset library. In Script view, give it the alias `search_espressif_docs` (never change its generated developer name). **Commit** and **Activate**.
+9. **Keep it in the repo.** The step 8 action exists only in that org until it is retrieved.
+
+**Paste into your terminal.** Once, after 8. It copies the agent, now with the MCP action, from the org into your checkout, so the next `publish-agent.sh` keeps it.
+
+```bash
+sf project retrieve start --metadata AiAuthoringBundle:Patient_Care_Agent --target-org "$NAME"
+git diff --stat -- force-app/main/default/aiAuthoringBundles
+```
+
+   Commit that on a branch. A new org needs 1 to 8 again: Salesforce says MCP tool actions don't work out of the box after a deploy.
+10. **Each user signs in once.** Profile picture → **Settings** → **External Credentials** → `Espressif Docs` → **Allow Access** → GitHub. Slack users do this in Salesforce first; Slack can't show the sign-in.
+11. **Try it.** In the agent panel and in a Slack DM to the agent: "What is the spec of the ESP32-S3-DevKitC-1?" The answer cites docs.espressif.com links.
+
+**Paste into your terminal.** Any time; free, and uses none of anyone's Espressif limit. It checks the server still answers and still offers what step 1 and 6 set up.
+
+```bash
+node scripts/lib/mcp-probe.js
+```
 
 ## 12. Add a board
 
@@ -500,6 +563,7 @@ Every later firmware update goes over the air: `scripts/ota.sh try Dev patient-m
 | **Send Command** → `RESTART` on the Asset | The Device Command goes `Sent`, then `Acked` |
 | Warm the sensor to 30 C (under an arm) | The board's motor sweeps, and a Case opens in Care_Team_Queue |
 | Ask the agent "what is Test8 reporting?" | The latest readings, and an SOP citation when you ask what to do |
+| Ask the agent "What is the spec of the ESP32-S3-DevKitC-1?" (after 11b) | An answer from Espressif's docs with docs.espressif.com links |
 | The app's Home tab | This month's AWS spend against the limit, and the org's limits |
 | `/patient-status Test8` in Slack | The live reading |
 | The portal, as a patient | The patient's own device, and the assistant answering |

@@ -279,3 +279,104 @@ That is a different direction from **Salesforce's own hosted MCP servers**,
 which let agents outside Salesforce read and act on Salesforce data. This
 server goes the other way: an agent reaching the ward's devices in AWS. Nothing
 here uses or builds the hosted servers.
+
+## Espressif documentation for the agents
+
+The other direction again, and the first outside MCP server an agent of ours
+calls: staff ask the **Patient Care Agent** generic ESP32 questions, such as
+"What is the spec of the ESP32-S3-DevKitC-1?", in Salesforce or Slack, and it
+answers from Espressif's official documentation with the source links.
+Setup clicks: [INSTALL.md step 11b](INSTALL.md#espressif-docs). The record of
+what each org registers: [`config/mcp-servers.json`](../config/mcp-servers.json).
+
+```
+staff (Lightning or Slack) ─> Patient Care Agent ─ router ─> ESP32_Hardware subagent
+                                                              │ only the generic question
+                                                              v
+          Agentforce MCP client ─ per-user OAuth (External Credential) ─> https://mcp.espressif.com/docs
+                                                                        search_espressif_sources
+```
+
+**The server** (checked Nov 19, 2026). Espressif's documentation MCP server
+searches their datasheets, technical reference manuals, hardware design
+guidelines, the latest ESP-IDF guide, PCNs and blog posts, and returns text
+passages with source URLs. One tool, `search_espressif_sources (query,
+language)`; retrieval only. Streamable HTTP. It is **not** open: without a
+token it answers `401 invalid_token`, and each user signs in once with GitHub
+or WeChat (OAuth 2.1: authorization code with PKCE S256, Dynamic Client
+Registration, scope `read:user`). Limits are per user: **40 requests an hour
+and 200 a day** ([Espressif's announcement](https://developer.espressif.com/blog/2026/04/doc-mcp-server/)).
+
+**How Agentforce reaches it.** Agentforce's MCP client takes no auth, OAuth
+client credentials, or an External Credential with **per-user** sign-in, and
+the per-user kind is for **employee agents only**
+([Register a Third-Party MCP Server](https://help.salesforce.com/s/articleView?id=ai.agent_mcp_connect_register.htm&language=en_US&type=5)).
+Espressif offers no client-credentials grant, so:
+
+| Agent | Uses the server? | Why |
+|---|---|---|
+| Patient Care Agent in Lightning | Yes | Employee agent: each staff member's own GitHub sign-in, own rate limit |
+| Patient Care Agent in Slack | Yes | The same agent; the Slack user maps to a Salesforce user who has signed in once in Salesforce |
+| Patient Portal Agent (Enhanced Chat) | **No**, by design | A service agent runs as its agent user, so per-user sign-in is not offered. Hardware questions are also outside a patient chat's job. It points patients to docs.espressif.com |
+
+The other way to reach the portal, an Apex action calling the server with one
+admin's sign-in for everyone, was considered and not built: every patient
+would share one person's 200 searches a day, it goes against Espressif's
+per-user limits, and it would put an outside service in patient chats.
+
+**Guardrails.**
+- **Read-only.** Only `search_espressif_sources` is allowlisted, and the
+  `ESP32_Hardware` subagent has no device, procedure or escalation action.
+- **No org data leaves.** The subagent sends Espressif only a short generic
+  search query, never a patient, a serial number, a reading, a Case number or
+  anything else from the org; asked a mixed question, it searches the generic
+  part and says it left the rest out. The router sends any question about a
+  monitored device to `Patient_Device_Monitoring` first. Espressif links each
+  query to an anonymised account ID, which is one more reason to keep queries
+  generic.
+- **Grounded.** It answers only from returned passages with their links, says
+  when they don't answer, and never answers from memory, so a stale or
+  invented spec doesn't reach staff.
+- **Passages are data.** Instructions inside returned text are ignored.
+  Salesforce also warns about hidden Unicode in tool descriptions at allowlist
+  time; review the one description before ticking it.
+- **Fails closed and visibly.** Not signed in, rate limited or down: the agent
+  says so and points to docs.espressif.com.
+
+**Tests.** `test/config/esp32-mcp.test.js` checks the router, the subagent's
+rules, that the portal agent never names the server, that a per-user OAuth
+server is used only by employee agents, and the probe below against fake
+servers. The Testing Center specs route "What is the spec of the
+ESP32-S3-DevKitC-1?" to `ESP32_Hardware` in the staff agent and to
+`off_topic` in the portal agent, and check a question with a patient's name in
+it doesn't echo the name ([AGENT-EVALS.md](AGENT-EVALS.md)).
+`node scripts/lib/mcp-probe.js` checks, without signing in or using any
+limit, that the server still answers `401` with the same endpoints, grant and
+PKCE the org was set up with.
+
+**KPIs.**
+
+| KPI | Target | Where it comes from |
+|---|---|---|
+| Routing accuracy for ESP32 questions | 100% of the eval cases | `scripts/eval-agents.sh Dev agents` |
+| Answers with at least one docs.espressif.com link | ≥ 95% | Testing Center judged outcome |
+| Org data in an outbound query | 0 | The eval case with a patient's name in it, plus a monthly look at the action's inputs in the agent's event logs |
+| Tool latency | p95 < 10 s (Agentforce gives up at 60 s) | The probe's latency, the agent's event logs |
+| Searches per user per day | < 150 (75% of Espressif's 200) | Agent event logs / Digital Wallet action count |
+| Probe passing | Every run | `node scripts/lib/mcp-probe.js` before a demo |
+
+**Cost.** Espressif charges nothing. Each MCP tool action is billed like any
+other agent action: 20 Flex Credits, about **$0.10**
+([COST-MODEL.md](COST-MODEL.md#8-espressif-documentation-for-the-agents)).
+A Developer Edition org uses its included credits. No AWS cost: the call goes
+from Salesforce to Espressif directly.
+
+**Scaling.** Each user has their own Espressif limit, so the server scales
+with staff, not with the org. Another outside server is one entry in
+`config/mcp-servers.json` plus a registration and a subagent; the tests then
+hold it to the same rules (read-only, https, Streamable HTTP, named agents,
+per-user OAuth only for employee agents). Espressif's no-auth **Component
+Registry** server (`https://components.espressif.com/mcp`, tools
+`search_components` and `fetch_component_detailed_information`) is the next
+candidate: it answers library questions, not chip specs, and since it needs
+no sign-in, it could serve the portal too.

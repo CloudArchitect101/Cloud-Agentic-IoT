@@ -1,0 +1,30 @@
+{
+  "description": "Outside MCP servers the Agentforce agents may call, registered in Agentforce Registry (Setup). Salesforce does not deploy or package a registration, so this file is the record of what each org must register by hand: docs/INSTALL.md step 11b has the clicks, docs/GUARDRAILS-AND-MCP.md the design. scripts/lib/mcp-probe.js checks every server here is reachable and still offers what we allowlist; test/config/esp32-mcp.test.js checks the agents and docs agree with it. To add a server: add an entry, allowlist only read-only tools, name the agents that may use it, and give the new subagent the same no-org-data rule.",
+  "servers": [
+    {
+      "name": "Espressif_Docs",
+      "label": "Espressif Docs",
+      "url": "https://mcp.espressif.com/docs",
+      "transport": "streamable-http",
+      "auth": {
+        "type": "oauth-per-user",
+        "grant": "authorization_code",
+        "pkce": "S256",
+        "clientAuth": "client_secret_post",
+        "scope": "read:user",
+        "authorizeUrl": "https://mcp.espressif.com/docs/authorize",
+        "tokenUrl": "https://mcp.espressif.com/docs/token",
+        "registrationUrl": "https://mcp.espressif.com/docs/register",
+        "signIn": "GitHub or WeChat account, once per user"
+      },
+      "tools": ["search_espressif_sources"],
+      "readOnly": true,
+      "agents": ["Patient_Care_Agent"],
+      "subagent": "ESP32_Hardware",
+      "actionAlias": "search_espressif_docs",
+      "rateLimits": { "perUserPerHour": 40, "perUserPerDay": 200 },
+      "costPerCallUsd": 0,
+      "docs": "https://developer.espressif.com/blog/2026/04/doc-mcp-server/"
+    }
+  ]
+}

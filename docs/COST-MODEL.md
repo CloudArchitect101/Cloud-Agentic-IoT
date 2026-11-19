@@ -127,7 +127,25 @@ modality cannot be used. Organization does not have access to Voice
 features." Agentforce Voice needs a paid org with the Agentforce Voice
 entitlement, so a Developer Edition demo is text chat only.
 
-## Sources (checked 2026-07; §7 on 2026-11-09)
+## 8. Espressif documentation for the agents
+
+Staff ask the Patient Care Agent generic ESP32 questions, answered through
+Espressif's documentation MCP server ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-documentation-for-the-agents)).
+
+| Item | Rate | Per question (USD) |
+|---|---|---|
+| Espressif documentation MCP server | Free; 40 searches per user an hour, 200 a day | 0 |
+| The MCP tool action | 20 Flex Credits, like any agent action (Flex Credits Rate Card, Apr 21 2026) | 0.10 |
+| The agent's reasoning around it | Counted in the same conversation | 0 extra |
+| AWS | None: Salesforce calls Espressif directly | 0 |
+
+About **$0.10 a question**. A ward of 10 staff asking 5 hardware questions a
+working day is about 1,100 questions a year, or **≈ $110 a year** of Flex
+Credits, well inside the 200k credits (≈ 10,000 actions) Foundations
+includes. In test-cloudarchitect101 it uses the Developer Edition's
+allowance. The cap that matters first is Espressif's, per user, not cost.
+
+## Sources (checked 2026-07; §7 on 2026-11-09, §8 on 2026-11-19)
 
 - [Agentforce flexible pricing (Salesforce)](https://www.salesforce.com/news/press-releases/2025/05/15/agentforce-flexible-pricing-news/), [Flex credits guide](https://www.jitendrazaa.com/blog/salesforce/salesforce-agentforce-credits-cost-model-complete-guide-2026/), [2026 tiers](https://ekfrazo.com/resources/blogs/salesforce-agentforce-pricing-2026/)
 - [Data Cloud pricing changes (Salesforce Ben)](https://www.salesforceben.com/new-pricing-for-salesforce-data-cloud-is-here-what-you-need-to-know/), [credit consumption](https://davidpalencia.com/salesforce-data-cloud-pricing-credit-consumption/)
