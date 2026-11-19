@@ -295,7 +295,6 @@ patient in the portal chat  ─> Patient Portal Agent ─ router ─> esp32_hard
                                                                                 │ component names
             Agentforce MCP client (No Authentication) <─────────────────────────┘
               ├─> ESP Pilot               https://mcp.esp-pilot.espressif.com/mcp
-              ├─> ESP-VISION              https://mcp.vision.espressif.com
               └─> ESP Component Registry  https://components.espressif.com/mcp
 ```
 
@@ -305,7 +304,6 @@ call on Nov 19, 2026; all Streamable HTTP, no auth, no published rate limit):
 | Server | Allowlisted tools (all read-only) | Answers | Doesn't answer |
 |---|---|---|---|
 | ESP Pilot | `catalog_list_socs`, `catalog_list_bmgr_boards`, `catalog_list_bmgr_peripherals` | Which chips ESP-IDF supports (ESP32, C2, C3, C5, C6, C61, H2, H21, H4, P4, S2, S3, S31), Espressif's board catalog (ESP Board Manager) with each board's chip, devices and peripherals, a chip's peripherals | Datasheet figures; the catalog is mostly audio and display boards, so a plain DevKitC may be missing |
-| ESP-VISION | `list_firmware_versions`, `get_capabilities`, `search_docs` | Camera and on-device AI features per chip or board (P4, S3, S31) | Anything outside camera and AI. Every call needs an exact firmware version, so the agent lists them first |
 | ESP Component Registry | `search_components`, `fetch_component_detailed_information` | ESP-IDF drivers and components, such as a DHT11 or servo driver | Hardware specs |
 
 **What we chose not to use.** Espressif's documentation server
@@ -321,7 +319,7 @@ rest. Espressif Engineering and RainMaker also need a sign-in and answer other
 things (troubleshooting guides, your RainMaker devices).
 
 **Guardrails.**
-- **Read-only.** Only the eight tools above are allowlisted, and the ESP32
+- **Read-only.** Only the five tools above are allowlisted, and the ESP32
   subagents have no device, procedure, escalation or nurse action.
 - **No org data leaves.** The subagents send Espressif only generic Espressif
   terms (a chip, board or component name), never a patient, a serial number,
@@ -330,8 +328,13 @@ things (troubleshooting guides, your RainMaker devices).
   the rest out. Each router sends questions about a monitored device, or the
   patient's own sensor, to the device subagent first. Because no one signs
   in, Espressif sees only Salesforce's servers, not who asked.
-- **Grounded.** Answers come only from returned results, name the catalog,
-  and say when the full spec is in the datasheet instead; never from memory.
+- **Grounded.** The subagents call the actions every turn (a board name
+  becomes a chip id, ESP32-S3-DevKitC-1 → `esp32s3`, whose peripherals ESP
+  Pilot lists), and add only facts from a short reference card copied from
+  Espressif's product pages (ESP32-S3 and the DevKitC-1, checked Nov 19,
+  2026). Anything else points to docs.espressif.com, written without
+  `https://` because the Einstein Trust Layer masks URLs; never from memory.
+  A new board's facts go into that card from its Espressif page.
 - **Results are data.** Instructions inside returned text are ignored.
   Salesforce also warns about hidden Unicode in tool descriptions at allowlist
   time; read each one before ticking it.

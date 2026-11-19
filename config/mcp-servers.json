@@ -1,44 +1,47 @@
 {
-  "description": "Outside MCP servers the Agentforce agents may call, registered in Agentforce Registry (Setup) with No Authentication, so nobody signs in. Salesforce does not deploy or package a registration, so this file is the record of what each org registers by hand: docs/INSTALL.md step 11b has the clicks, docs/GUARDRAILS-AND-MCP.md the design. scripts/lib/mcp-probe.js checks every server here still answers and still offers every allowlisted tool; test/config/esp32-mcp.test.js checks the agents and docs agree with it. To add a server: add an entry, allowlist only read-only tools, name the agents that may use it. Espressif's documentation server (https://mcp.espressif.com/docs) is deliberately not here: it needs each user's GitHub sign-in (docs/TROUBLESHOOTING.md).",
+  "description": "Outside MCP servers the Agentforce agents may call, registered in Agentforce Registry (Setup) with No Authentication, so nobody signs in. Salesforce does not deploy or package a registration, so this file is the record of what each org registers by hand: docs/INSTALL.md step 11b has the clicks, docs/GUARDRAILS-AND-MCP.md the design. scripts/lib/mcp-probe.js checks every server here still answers and still offers every allowlisted tool; test/config/esp32-mcp.test.js checks the agents and docs agree with it. To add a server: add an entry, allowlist only read-only tools, name the agents that may use it. ESP-VISION was dropped on Nov 19 (camera and AI only, not needed here). Espressif's documentation server (https://mcp.espressif.com/docs) is deliberately not here: it needs each user's GitHub sign-in (docs/TROUBLESHOOTING.md).",
   "servers": [
     {
-      "name": "ESP_Pilot",
+      "name": "ESPPilot",
       "label": "ESP Pilot",
       "url": "https://mcp.esp-pilot.espressif.com/mcp",
       "transport": "streamable-http",
-      "auth": { "type": "none" },
+      "auth": {
+        "type": "none"
+      },
       "answers": "Which SoCs ESP-IDF supports, Espressif's board catalog (ESP Board Manager) with each board's chip, devices and peripherals, and which peripherals a chip supports",
-      "tools": ["catalog_list_socs", "catalog_list_bmgr_boards", "catalog_list_bmgr_peripherals"],
+      "tools": [
+        "catalog_list_socs",
+        "catalog_list_bmgr_boards",
+        "catalog_list_bmgr_peripherals"
+      ],
       "readOnly": true,
-      "agents": ["Patient_Care_Agent", "Patient_Portal_Agent"],
+      "agents": [
+        "Patient_Care_Agent",
+        "Patient_Portal_Agent"
+      ],
       "rateLimits": null,
       "costPerCallUsd": 0,
       "docs": "https://mcp.espressif.com/"
     },
     {
-      "name": "ESP_VISION",
-      "label": "ESP-VISION",
-      "url": "https://mcp.vision.espressif.com",
-      "transport": "streamable-http",
-      "auth": { "type": "none" },
-      "answers": "Camera and on-device AI capabilities per chip or board (ESP32-P4, ESP32-S3, ESP32-S31), and the ESP-VISION and MicroPython docs",
-      "tools": ["list_firmware_versions", "get_capabilities", "search_docs"],
-      "readOnly": true,
-      "agents": ["Patient_Care_Agent", "Patient_Portal_Agent"],
-      "rateLimits": null,
-      "costPerCallUsd": 0,
-      "docs": "https://mcp.espressif.com/"
-    },
-    {
-      "name": "ESP_Component_Registry",
+      "name": "ESPComponentRegistry",
       "label": "ESP Component Registry",
       "url": "https://components.espressif.com/mcp",
       "transport": "streamable-http",
-      "auth": { "type": "none" },
+      "auth": {
+        "type": "none"
+      },
       "answers": "ESP-IDF software components and drivers, for example a DHT11 or servo driver",
-      "tools": ["search_components", "fetch_component_detailed_information"],
+      "tools": [
+        "search_components",
+        "fetch_component_detailed_information"
+      ],
       "readOnly": true,
-      "agents": ["Patient_Care_Agent", "Patient_Portal_Agent"],
+      "agents": [
+        "Patient_Care_Agent",
+        "Patient_Portal_Agent"
+      ],
       "rateLimits": null,
       "costPerCallUsd": 0,
       "docs": "https://components.espressif.com/"
