@@ -1,0 +1,77 @@
+<template>
+    <lightning-card title="Data Cloud value: monitored devices" icon-name="standard:dashboard">
+        <lightning-button-icon slot="actions" icon-name="utility:refresh" alternative-text="Read Data Cloud again"
+            title="Read Data Cloud again" onclick={handleRefresh}></lightning-button-icon>
+        <div class="slds-p-horizontal_medium">
+            <template lwc:if={loading}>
+                <lightning-spinner alternative-text="Reading Data Cloud" size="small"></lightning-spinner>
+            </template>
+            <template lwc:if={error}>
+                <p class="slds-text-color_error">{error}</p>
+            </template>
+            <template lwc:if={view}>
+                <div class="tiles">
+                    <template for:each={view.tiles} for:item="tile">
+                        <div key={tile.key} class="tile">
+                            <p class="tile-label">{tile.label}</p>
+                            <p class="tile-value">{tile.value}</p>
+                            <p class="tile-hint">{tile.hint}</p>
+                        </div>
+                    </template>
+                </div>
+
+                <template lwc:if={view.hasData}>
+                    <h3 class="slds-text-heading_small slds-m-top_medium">Temperature alert minutes a day, last 14 days</h3>
+                    <div class="chart" role="img" aria-label="Out-of-range minutes per day, all monitored devices">
+                        <template for:each={view.trend} for:item="bar">
+                            <div key={bar.day} class="bar-slot" title={bar.title}>
+                                <span class="bar-value">{bar.minutes}</span>
+                                <div class="bar" style={bar.style}></div>
+                                <span class="bar-label">{bar.label}</span>
+                            </div>
+                        </template>
+                    </div>
+
+                    <h3 class="slds-text-heading_small slds-m-top_medium">Monitored devices</h3>
+                    <template lwc:if={view.hasDevices}>
+                        <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-m-top_x-small">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Device</th>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Last reading</th>
+                                    <th scope="col">Out-of-range min, 7 days</th>
+                                    <th scope="col">Highest, 7 days</th>
+                                    <th scope="col">Readings</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={view.devices} for:item="device">
+                                    <tr key={device.id}>
+                                        <td>{device.id}</td>
+                                        <td><span class={device.statusClass}>{device.status}</span></td>
+                                        <td>{device.lastReading} <span class="slds-text-color_weak">{device.ago}</span></td>
+                                        <td>{device.outOfRangeMinutes}</td>
+                                        <td>{device.highest}</td>
+                                        <td>{device.readings}</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </template>
+                </template>
+                <template lwc:else>
+                    <p class="slds-m-top_medium slds-text-color_weak">{noData}</p>
+                </template>
+
+                <template lwc:if={view.outOfRangeError}>
+                    <p class="slds-m-top_small slds-text-color_error">Room Out Of Range Daily: {view.outOfRangeError}</p>
+                </template>
+                <template lwc:if={view.silenceError}>
+                    <p class="slds-m-top_small slds-text-color_error">Room Device Silence: {view.silenceError}</p>
+                </template>
+                <p class="slds-m-top_small slds-text-body_small slds-text-color_weak">{estimateNote} Read at {asOf}; kept for 10 minutes.</p>
+            </template>
+        </div>
+    </lightning-card>
+</template>
