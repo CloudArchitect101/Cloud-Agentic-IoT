@@ -2,7 +2,7 @@
 
 // Nov 19: Vitaly asked for ESP32 hardware questions in every agent (Lightning,
 // Slack and the patient portal) with no user sign-in, answered from
-// Espressif's no-auth MCP servers through Agentforce Registry. Salesforce does
+// Espressif's no-auth MCP servers (ESP Pilot and the Component Registry) through Agentforce Registry. Salesforce does
 // not deploy the registration, so config/mcp-servers.json is the record of it,
 // and these checks keep the agents, the docs and the probe in step with that
 // file, and keep org data out of the outside tools.
@@ -53,7 +53,7 @@ for (const [name, sub] of Object.entries(AGENTS)) {
     assert.match(text, new RegExp(`go_to_${sub}: @utils\\.transition to @subagent\\.${sub}`));
     for (const s of servers) assert.ok(s.agents.includes(name), `${s.name} is not given to ${name}`);
     const block = subagent(text, sub);
-    for (const label of ['ESP Pilot', 'ESP-VISION', 'ESP Component Registry']) assert.match(block, new RegExp(label));
+    for (const label of ['ESP Pilot', 'ESP Component Registry']) assert.match(block, new RegExp(label));
     assert.match(block, /Do not answer from memory/);
     assert.match(block, /docs\.espressif\.com/);
     assert.match(block, /Never (put in an action input|send anything about the patient)/);

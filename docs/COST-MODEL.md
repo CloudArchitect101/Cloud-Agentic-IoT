@@ -134,8 +134,8 @@ open MCP servers ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-se
 
 | Item | Rate | Per question (USD) |
 |---|---|---|
-| ESP Pilot, ESP-VISION, ESP Component Registry | Free, no sign-in, no published limit | 0 |
-| MCP tool actions | 20 Flex Credits each, like any agent action (Flex Credits Rate Card, Apr 21 2026); one or two a question (ESP-VISION always takes two) | 0.10 to 0.20 |
+| ESP Pilot, ESP Component Registry | Free, no sign-in, no published limit | 0 |
+| MCP tool actions | 20 Flex Credits each, like any agent action (Flex Credits Rate Card, Apr 21 2026); usually one a question, two when a component needs its details | 0.10 to 0.20 |
 | AWS | None: Salesforce calls Espressif directly | 0 |
 
 About **$0.15 a question**. 10 staff asking 5 hardware questions a working
