@@ -328,7 +328,7 @@ scripts/data-cloud-insights.sh --dry-run
 scripts/data-cloud-insights.sh
 ```
 
-Then set each insight's schedule to the most frequent one.
+Each insight is created with its schedule from [`datacloud/calculated-insights.json`](../datacloud/calculated-insights.json): Room Device Silence every hour (it has to notice an offline board), Room Out Of Range Daily every 6 hours, to spend fewer Data Cloud credits. Change one there, or on the insight in Data Cloud.
 
 ## 10. Patient portal with Enhanced Chat
 

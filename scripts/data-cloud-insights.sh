@@ -50,12 +50,20 @@ for (const insight of manifest.insights) {
   if (!/^[A-Za-z][A-Za-z0-9_]*__cio$/.test(insight.apiName)) {
     throw new Error(`${insight.apiName}: a calculated insight's API name is letters, digits and _, ending __cio`);
   }
+  // Data Cloud refuses a new insight without a publish schedule
+  // (REQUIRED_FIELD_MISSING publishScheduleInterval). Only the hourly ones
+  // are accepted here: NotScheduled would leave the insight never running.
+  const intervals = ['One', 'Six', 'Twelve', 'TwentyFour'];
+  if (!intervals.includes(insight.publishScheduleInterval)) {
+    throw new Error(`${insight.apiName}: publishScheduleInterval must be one of ${intervals.join(', ')}`);
+  }
   const expression = fs.readFileSync(path.join('datacloud', insight.sql), 'utf8').trim();
   const body = {
     apiName: insight.apiName,
     displayName: insight.displayName,
     description: insight.description,
     definitionType: 'CalculatedMetric',
+    publishScheduleInterval: insight.publishScheduleInterval,
     expression,
   };
   fs.writeFileSync(path.join(work, `${insight.apiName}.json`), JSON.stringify(body, null, 2));

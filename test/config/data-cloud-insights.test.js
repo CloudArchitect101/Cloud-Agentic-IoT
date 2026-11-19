@@ -94,3 +94,16 @@ test('a device is offline after the minutes the manifest says, in both places th
   assert.ok(silence.description.includes(`${silence.offlineAfterMinutes} minutes`), 'the description gives the same minutes');
   assert.match(text, /\/ 60 AS minutes_since_last_reading__c/);
 });
+
+// Data Cloud refuses to create an insight without a publish schedule
+// (REQUIRED_FIELD_MISSING publishScheduleInterval, Nov 19). Each run costs
+// Data Cloud credits, so only the silence check, which has to notice an
+// offline board, runs hourly.
+test('each insight has a publish schedule, hourly only where freshness needs it', () => {
+  for (const i of manifest.insights) {
+    assert.ok(['One', 'Six', 'Twelve', 'TwentyFour'].includes(i.publishScheduleInterval),
+      `${i.apiName}: publishScheduleInterval`);
+  }
+  assert.equal(insight('Room_Device_Silence__cio').publishScheduleInterval, 'One');
+  assert.notEqual(insight('Room_Out_Of_Range_Daily__cio').publishScheduleInterval, 'One');
+});

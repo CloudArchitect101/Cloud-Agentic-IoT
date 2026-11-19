@@ -126,6 +126,8 @@ class DataCloudInsights(unittest.TestCase):
                 self.assertEqual(post['body']['expression'], f.read().strip())
             self.assertEqual(post['body']['definitionType'], 'CalculatedMetric')
             self.assertEqual(post['body']['displayName'], insight['displayName'])
+            # Data Cloud refuses a create without it (REQUIRED_FIELD_MISSING).
+            self.assertEqual(post['body']['publishScheduleInterval'], insight['publishScheduleInterval'])
         self.assertIn('2 created, 0 already there', out)
 
     def test_an_insight_that_exists_is_left_as_it_is(self):

@@ -906,8 +906,9 @@ there.
    from the SQL in `datacloud/calculated-insights/`, and leaves one that
    exists already alone. If Data Cloud refuses one, paste its SQL into
    Calculated Insights → **New** → **Create with SQL**; **Check Syntax**
-   names the problem. Then set each insight's schedule to the most frequent
-   the org offers.
+   names the problem. Each insight is created with the schedule in
+   `datacloud/calculated-insights.json`: Room Device Silence hourly, Room Out
+   Of Range Daily every 6 hours, since every run uses Data Cloud credits.
 8. **Keep it as metadata, for the next org.** Data Cloud metadata is moved
    with a data kit built in an org that has it, not written by hand. Data
    Cloud Setup → **Data Kits** → **New**, type **DevOps**, add the data

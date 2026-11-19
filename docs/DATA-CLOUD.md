@@ -229,7 +229,10 @@ echo "$BUCKET"
 
 A data stream from S3 and a calculated insight each run on a schedule, so the
 insights are as old as the stream's last refresh plus the insight's last run:
-up to a couple of hours with hourly schedules. They are for the ward's trends
+up to a couple of hours for Room Device Silence, which runs hourly, and up
+to about 7 hours for Room Out Of Range Daily, which runs every 6 hours to
+spend fewer credits (`publishScheduleInterval` in
+`datacloud/calculated-insights.json`). They are for the ward's trends
 and daily review, not for alarms. The live signals stay where they are: a
 board's **Connection** on its Asset changes within seconds of it going offline
 ([LIVE-STATUS.md](LIVE-STATUS.md)), and a high reading opens a Case through the
@@ -266,6 +269,9 @@ insight used.
 - **The stream finds no files.** The connection's Parent Directory is
   `datacloud/room-readings/`, the file type CSV and the file name
   `room-readings-*.csv`. Files in subfolders are ignored by design.
+- **`REQUIRED_FIELD_MISSING: publishScheduleInterval`.** The create request
+  must carry the insight's schedule. The script sends the one in
+  `datacloud/calculated-insights.json`; an older copy of the script did not.
 - **A calculated insight is refused.** `scripts/data-cloud-insights.sh`
   prints Data Cloud's answer. Usually a field name: the DMO's fields must be
   the ones in the column table, with `__c`. The calculated insight builder's

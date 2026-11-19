@@ -1,5 +1,5 @@
 {
-  "description": "The calculated insights over the Room_Reading data model object (docs/DATA-CLOUD.md). scripts/data-cloud-insights.sh creates each one in an org's Data Cloud through the Connect REST API; the SQL can also be pasted into Data Cloud's calculated insight builder by hand. test/config/data-cloud-insights.test.js keeps the numbers in the SQL in step with config/<env>.json and the room-temperature rule.",
+  "description": "The calculated insights over the Room_Reading data model object (docs/DATA-CLOUD.md). scripts/data-cloud-insights.sh creates each one in an org's Data Cloud through the Connect REST API; the SQL can also be pasted into Data Cloud's calculated insight builder by hand. test/config/data-cloud-insights.test.js keeps the numbers in the SQL in step with config/<env>.json and the room-temperature rule. publishScheduleInterval is how often Data Cloud runs each one (One, Six, Twelve or TwentyFour hours): every run uses Data Cloud credits, so a daily count runs every 6 hours and only the silence check, which must notice a board offline, runs every hour.",
   "insights": [
     {
       "apiName": "Room_Out_Of_Range_Daily__cio",
@@ -7,14 +7,16 @@
       "description": "Per device and day: how many readings were at or above 30.0 C, the room-temperature rule's threshold, and about how many minutes that is at one reading every 30 seconds.",
       "sql": "calculated-insights/Room_Out_Of_Range_Daily.sql",
       "roomTempAlertCelsius": 30,
-      "telemetrySeconds": 30
+      "telemetrySeconds": 30,
+      "publishScheduleInterval": "Six"
     },
     {
       "apiName": "Room_Device_Silence__cio",
       "displayName": "Room Device Silence",
       "description": "Per device: minutes since the time of its last reading in Data Cloud, and offline (1) when that is over 10 minutes. As fresh as the data stream's last refresh and this insight's last run.",
       "sql": "calculated-insights/Room_Device_Silence.sql",
-      "offlineAfterMinutes": 10
+      "offlineAfterMinutes": 10,
+      "publishScheduleInterval": "One"
     }
   ]
 }
