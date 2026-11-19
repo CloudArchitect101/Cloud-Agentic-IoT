@@ -6,6 +6,8 @@ Every feature, from a fresh clone to a working system: your own AWS project with
 > About two hours for everything, plus about 20 minutes for each board. Do step 2 first, on day one: if Bedrock needs a Support case, it can take up to 72 hours. Steps 1 to 7 and 13 make the core system. Steps 8 to 12 and 14 each add one feature, and you can skip any of them.
 
 > [!IMPORTANT]
+> Restarted your computer or opened a new terminal partway through? See [Resuming after a restart](#resume) under step 4 first.
+>
 > **Fill in first.** A command that needs your own values has a **Fill in first** list right above it. Replace each one before you run the command, including any `<` `>` around it. For example, `EMAIL='<your email>'` becomes `EMAIL='you@example.com'`. Anything not on the list runs as it is.
 
 > [!WARNING]
@@ -87,6 +89,28 @@ aws login --profile "$NAME"
 sf org login web --alias "$NAME"
 export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
 ```
+
+<a id="resume"></a>
+
+> [!WARNING]
+> **Resuming after a restart or in a new terminal.** A new terminal forgets every variable you set (`NAME=…`, `export …`). Your logins and the repo stay. Before you carry on, run these three lines again, with your own name:
+>
+> ```bash
+> cd Cloud-Agentic-IoT                                   # the folder you cloned in step 4
+> NAME=test-yourname                                     # the same name as in step 4
+> export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
+> ```
+>
+> | What | After a restart |
+> |---|---|
+> | `NAME`, `AWS_PROFILE`, `SF_TARGET_ORG` (step 4) | **Gone.** Run the three lines above |
+> | `sf` org login (step 4) | Kept on disk. Nothing to do |
+> | `aws login` session (step 4) | Kept on disk, but it expires after some hours. If a command says the token or session expired, run `aws login --profile "$NAME"` again |
+> | Variables set inside one command block (`ACCOUNT`, `LIMIT`, `EMAIL`, `STACK`, `CALLER`, `ROLE_ARN`, `AGENT_USER`, `MY_DOMAIN`) | Used only in that block. If the terminal closed partway through a block, run the whole block again |
+> | Pipelines (step 14): `AWS_PROFILE=iot-dev`, `SF_TARGET_ORG=iot-dev-admin` | **Gone.** Run their `export` lines again |
+> | Files you made: keys in `scripts/`, the portal key in `~/Downloads` | Kept. Nothing to do |
+>
+> `scripts/install.sh` is safe to run again from the start.
 
 ## 5. Make what the deploy reads
 
