@@ -35,35 +35,50 @@ public with sharing class DataCloudValueController {
             input.sql = sql;
             ConnectApi.CdpQueryOutput output = ConnectApi.CdpQuery.queryAnsiSql(input);
             if (output == null) return new List<Map<String, Object>>();
-            Map<String, Integer> order = new Map<String, Integer>();
-            if (output.metadata != null) {
-                for (String column : output.metadata.keySet()) {
-                    order.put(column, output.metadata.get(column).placeInOrder);
-                }
-            }
-            return toRows(output.data, order);
+            // Through JSON on purpose: the output's row and column classes
+            // differ between API versions (CdpQueryMetadataItem has no
+            // placeInOrder in Apex), but their JSON shape is the REST API's.
+            return fromJson(JSON.serialize(output));
         }
     }
 
     /*
-     * CdpQueryOutput.data is a List<Object>, not a list of maps: Apex refuses
-     * the direct conversion. A row arrives as a map of column to value, or as
-     * a list of values in the order the metadata gives (placeInOrder), so both
-     * become a map here. Anything else is skipped.
+     * The query answer as JSON: { "data": [...], "metadata": { column:
+     * { "placeInOrder": n, ... } } }. A row arrives as a map of column to
+     * value, or as a list of values in metadata order; both become a map.
+     * Anything else is skipped.
      */
     @TestVisible
-    private static List<Map<String, Object>> toRows(List<Object> data, Map<String, Integer> order) {
+    private static List<Map<String, Object>> fromJson(String body) {
         List<Map<String, Object>> rows = new List<Map<String, Object>>();
-        if (data == null) return rows;
-        for (Object row : data) {
+        Object parsed = String.isBlank(body) ? null : JSON.deserializeUntyped(body);
+        if (!(parsed instanceof Map<String, Object>)) return rows;
+        Map<String, Object> answer = (Map<String, Object>) parsed;
+
+        Map<Integer, String> columnAt = new Map<Integer, String>();
+        Object metadata = answer.get('metadata');
+        if (metadata instanceof Map<String, Object>) {
+            Map<String, Object> columns = (Map<String, Object>) metadata;
+            Integer next = 0;
+            for (String column : columns.keySet()) {
+                Object item = columns.get(column);
+                Object place = item instanceof Map<String, Object>
+                    ? ((Map<String, Object>) item).get('placeInOrder') : null;
+                columnAt.put(place instanceof Integer ? (Integer) place : next, column);
+                next++;
+            }
+        }
+
+        Object data = answer.get('data');
+        if (!(data instanceof List<Object>)) return rows;
+        for (Object row : (List<Object>) data) {
             if (row instanceof Map<String, Object>) {
                 rows.add((Map<String, Object>) row);
             } else if (row instanceof List<Object>) {
                 List<Object> values = (List<Object>) row;
                 Map<String, Object> named = new Map<String, Object>();
-                for (String column : order.keySet()) {
-                    Integer place = order.get(column);
-                    if (place != null && place >= 0 && place < values.size()) named.put(column, values[place]);
+                for (Integer i = 0; i < values.size(); i++) {
+                    if (columnAt.containsKey(i)) named.put(columnAt.get(i), values[i]);
                 }
                 rows.add(named);
             }
