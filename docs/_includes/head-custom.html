@@ -20,6 +20,41 @@
   .step-rail a.cur{border-color:#0969da;box-shadow:0 0 0 3px #0969da40}
   .step-rail .count{margin-left:auto;color:#59636e}
   .markdown-body a[id^="step-"],.markdown-body a#resume{display:block;scroll-margin-top:60px}
+  /* Landing and audience pages (index, Start here, PATH-*). On github.com these
+     classes are stripped and the same HTML reads as plain headings and links. */
+  .markdown-body .lp-hero{background:linear-gradient(180deg,#f0fdfa,#fff);border-radius:16px;padding:28px 28px 8px;margin:0 0 8px}
+  .markdown-body .lp-eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#0f766e;margin:0}
+  .markdown-body .lp-hero h1{font-size:36px;line-height:1.15;border:0;margin:8px 0 10px;color:#0f172a}
+  .markdown-body .lp-lead{font-size:18px;line-height:1.5;color:#475569;max-width:760px}
+  .markdown-body .lp-pills{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 18px}
+  .markdown-body .lp-pills span{background:#ccfbf1;color:#115e59;border-radius:999px;padding:4px 12px;font-size:13px}
+  .markdown-body .lp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:16px 0 24px}
+  .markdown-body .lp-card{border:1px solid #cbd5e1;border-radius:14px;padding:18px;background:#fff;display:flex;flex-direction:column}
+  .markdown-body .lp-card img{width:44px;height:44px;margin:0}
+  .markdown-body .lp-card h3{font-size:17px;margin:10px 0 6px;border:0;padding:0}
+  .markdown-body .lp-card p{color:#475569;font-size:14px;line-height:1.45;margin:0 0 12px;flex:1}
+  .markdown-body .lp-card .lp-go{font-weight:600}
+  .markdown-body .lp-card .lp-meta{font-size:12px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:10px;margin:10px 0 0;flex:0}
+  .markdown-body .lp-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:12px 0 24px}
+  .markdown-body .lp-stats div{background:#f8fafc;border-radius:12px;padding:14px;font-size:13px;color:#475569}
+  .markdown-body .lp-stats b{display:block;font-size:22px;color:#0f766e}
+  .markdown-body .lp-head{display:flex;gap:16px;align-items:center}
+  .markdown-body .lp-head img{width:56px;height:56px}
+  .markdown-body .lp-crumb{font-size:13px;color:#64748b;margin:0}
+  .markdown-body .lp-layout{display:grid;grid-template-columns:2fr 1fr;gap:24px;align-items:start}
+  @media (max-width:760px){.markdown-body .lp-layout{grid-template-columns:1fr}.markdown-body .lp-hero h1{font-size:28px}}
+  .markdown-body .lp-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .markdown-body .lp-step{display:flex;gap:14px;border:1px solid #e2e8f0;border-radius:12px;padding:14px;counter-increment:lpstep}
+  .markdown-body .lp-steps{counter-reset:lpstep;margin-bottom:16px}
+  .markdown-body .lp-step::before{content:counter(lpstep);flex:none;width:34px;height:34px;border-radius:50%;background:#0f766e;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .markdown-body .lp-step h4{margin:2px 0 4px;font-size:15px}
+  .markdown-body .lp-step p{margin:0;font-size:13px;color:#475569}
+  .markdown-body .lp-step .lp-check{margin-top:6px;color:#166534}
+  .markdown-body .lp-box{background:#f0fdfa;border-radius:14px;padding:16px 18px;font-size:14px;color:#334155;margin:0 0 14px}
+  .markdown-body .lp-box h4{margin:0 0 8px;color:#134e4a}
+  .markdown-body .lp-box ul{padding-left:18px;margin:0}
+  .markdown-body .lp-side img{border:1px solid #e2e8f0;border-radius:12px;margin-bottom:14px}
+  body.lp-page .markdown-body > h1:first-of-type:not(.lp-title){display:none}
   .markdown-body .step-done{display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:600;cursor:pointer}
   @media (prefers-color-scheme: dark){.step-rail,.step-rail a{background:#0d1117;color:#e6edf3}}
 </style>
@@ -36,6 +71,8 @@
     ["Chapters", "CHAPTERS"], ["GitHub", "https://github.com/CloudArchitect101/Cloud-Agentic-IoT"]]
     .map(([t, h]) => `<a href="${h.startsWith("http") ? h : "/Cloud-Agentic-IoT/" + h}">${t}</a>`).join("");
   body.prepend(nav);
+  // Landing pages draw their own heading, so the theme's site title (the first h1) is hidden there.
+  if (body.querySelector(".lp-hero")) document.body.classList.add("lp-page");
 
   // Links to files outside docs/ (the README, firmware, scripts) go to GitHub.
   for (const a of body.querySelectorAll('a[href^="../"]')) a.href = REPO + a.getAttribute("href").replace(/^\.\.\//, "");

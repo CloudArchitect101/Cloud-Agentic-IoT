@@ -2,14 +2,36 @@
 title: Cloud-Agentic-IoT
 ---
 
-# Cloud-Agentic-IoT
+<div class="lp-hero">
+<p class="lp-eyebrow">Open-source healthcare IoT reference build</p>
+<h1 class="lp-title">Build your own monitored device, end to end</h1>
+<p class="lp-lead">A temperature sensor on an ESP32 streams to AWS IoT. At 30 C a temperature alert opens one Case for the care team in Salesforce, and an Agentforce agent answers from the readings and your procedures, in Salesforce, Slack and a portal.</p>
+<p class="lp-pills"><span>≈ $0.08 AWS per device a month</span> <span>≈ $37 CAD of hardware</span> <span>alert on the device in about 5 s, offline too</span></p>
+<img src="images/device-to-care.svg" alt="From a monitored device to the care team: sense, stream, alert, act">
+</div>
 
-A healthcare IoT + Agentforce system, built from scratch and in public. A physical ESP32 board measures temperature, AWS IoT streams it, Salesforce turns it into Cases, and an Agentforce agent answers from the readings and the ward's procedures, in Salesforce, Slack and a patient portal.
+## Who are you? Pick your path
+
+<div class="lp-cards">
+<div class="lp-card"><img src="images/icons/admin.svg" alt=""><h3>Clinic Salesforce admin</h3><p>Turn it on in a free org: Setup clicks you know, copy-paste for the rest, and a check after every step.</p><a class="lp-go" href="PATH-ADMIN.md">Admin path →</a><p class="lp-meta">About 2 hours · no code to write</p></div>
+<div class="lp-card"><img src="images/icons/hardware.svg" alt=""><h3>Device builder</h3><p>Parts, wiring, firmware, the device's own certificate, and printable cases for your own board.</p><a class="lp-go" href="PATH-DEVICE.md">Device path →</a><p class="lp-meta">About 20 minutes per board</p></div>
+<div class="lp-card"><img src="images/icons/developer.svg" alt=""><h3>Developer</h3><p>Deploy AWS and Salesforce in one run from your laptop, then read the code behind each part.</p><a class="lp-go" href="PATH-DEVELOPER.md">Developer path →</a><p class="lp-meta">About 2 hours</p></div>
+<div class="lp-card"><img src="images/icons/pipelines.svg" alt=""><h3>Pipelines team</h3><p>Separate Dev and Prod accounts and orgs, deployed by GitHub Actions with an approval for Prod.</p><a class="lp-go" href="PATH-PIPELINES.md">Pipelines path →</a><p class="lp-meta">About a day</p></div>
+</div>
+
+Not sure? **[Start here](START-HERE.md)** compares the paths. Only want to see it work first? **[Step through the process](process/)**, no install needed.
 
 > [!NOTE]
 > **Video walkthrough: coming soon.** A short video showing the end result and where each part lives in the repository.
 
-**[Start here →](START-HERE.md)** · **[Step through the process](process/)** · **[Quick install](INSTALL.md)** · **[Install guide](INSTALL-GUIDE.md)** · **[Code on GitHub](https://github.com/CloudArchitect101/Cloud-Agentic-IoT)**
+## What you get at the end
+
+<div class="lp-stats">
+<div><b>1 Case</b>per device per alert, routed to the care team queue</div>
+<div><b>3 places</b>the agent answers: Salesforce, Slack and a portal</div>
+<div><b>Live</b>status card and remote commands on each device</div>
+<div><b>Cost and limits</b>AWS spend and org limits on the app's Home tab</div>
+</div>
 
 ## What it does
 
@@ -27,7 +49,7 @@ A healthcare IoT + Agentforce system, built from scratch and in public. A physic
 
 ## Install
 
-New here? **[Start here](START-HERE.md)** picks your path: Salesforce admin, developer, or a team with pipelines. Everyone follows the Quick install, with a check after each step; the Install guide explains the why.
+New here? **[Start here](START-HERE.md)** picks your path: clinic Salesforce admin, device builder, developer, or a team with pipelines. Everyone follows the Quick install, with a check after each step; the Install guide explains the why.
 
 | | [Quick install](INSTALL.md) | [Install guide](INSTALL-GUIDE.md) |
 |---|---|---|
@@ -41,7 +63,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 
 | Learn by doing | Get a task done |
 |---|---|
-| [Start here](START-HERE.md): which guide to follow, and the admin's view of each step | |
+| [Start here](START-HERE.md): the four paths (admin, device builder, developer, pipelines) | |
 | [Quick install](INSTALL.md): every feature, step by step | [Install guide](INSTALL-GUIDE.md): every step, explained |
 | [Try it](TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | [Setup](SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
 | [Platform primer](PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | [Development](DEVELOPMENT.md): laptop to Dev to Prod |

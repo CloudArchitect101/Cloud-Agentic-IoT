@@ -79,7 +79,7 @@ More diagrams and the reasoning behind each piece: [How the pieces connect](docs
 
 ## Install
 
-**New here? [Start here](docs/START-HERE.md)** picks your path in one table: Salesforce admin, developer, or a team with pipelines. Everyone follows the Quick install step by step, with a check after each step; open the Install guide beside it when you want the why behind a step.
+**New here? [Start here](docs/START-HERE.md)** picks your path in one table: clinic Salesforce admin, device builder, developer, or a team with pipelines. Everyone follows the Quick install step by step, with a check after each step; open the Install guide beside it when you want the why behind a step.
 
 | | [**Quick install**](docs/INSTALL.md) | [**Install guide**](docs/INSTALL-GUIDE.md) |
 |---|---|---|
