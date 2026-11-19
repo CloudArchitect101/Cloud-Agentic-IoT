@@ -86,22 +86,20 @@ test('minutes out of range are readings times the interval the boards send at', 
   assert.match(firmware, new RegExp(`#define DEFAULT_TELEMETRY_SECONDS ${daily.telemetrySeconds}\\b`));
 });
 
-test('a device is offline after the minutes the manifest says, in both places the SQL counts them', () => {
-  const silence = insight('Room_Device_Silence__cio');
-  const text = sql(silence);
-  const minutes = Number(text.match(/\) > (\d+) THEN 1 ELSE 0 END AS offline__c/)[1]);
-  assert.equal(minutes, silence.offlineAfterMinutes);
-  assert.ok(silence.description.includes(`${silence.offlineAfterMinutes} minutes`), 'the description gives the same minutes');
-  // Both counts in minutes with DATEDIFF: Data Cloud refuses UNIX_TIMESTAMP
-  // ("Function UNIX_TIMESTAMP not supported", Nov 19).
-  assert.equal([...text.matchAll(/DATEDIFF\('minute', MAX\(\w+\.reading_ts__c\), NOW\(\)\)/g)].length, 2);
-  assert.doesNotMatch(text, /UNIX_TIMESTAMP/);
+// Data Cloud refuses the current time after an aggregate in a calculated
+// insight (UNIX_TIMESTAMP not supported; DATEDIFF takes two dates and counts
+// days; NOW() after MAX: "Formatting non-inlined parameter current_timestamp
+// is not supported", Nov 19). So the silence insight gives the last reading's
+// time, and minutes since and offline are worked out where it is read.
+test('the silence insight gives each device its last reading time, with no current time in the SQL', () => {
+  const text = sql(insight('Room_Device_Silence__cio'));
+  assert.match(text, /MAX\(\w+\.reading_ts__c\) AS last_reading_ts__c/);
+  assert.doesNotMatch(text, /UNIX_TIMESTAMP|DATEDIFF|NOW\(|CURRENT_(TIMESTAMP|DATE)/i);
 });
 
 // Data Cloud refuses to create an insight without a publish schedule
 // (REQUIRED_FIELD_MISSING publishScheduleInterval, Nov 19). Each run costs
-// Data Cloud credits, so only the silence check, which has to notice an
-// offline board, runs hourly.
+// Data Cloud credits, so only the last-reading check runs hourly.
 test('each insight has a publish schedule, hourly only where freshness needs it', () => {
   for (const i of manifest.insights) {
     assert.ok(['One', 'Six', 'Twelve', 'TwentyFour'].includes(i.publishScheduleInterval),

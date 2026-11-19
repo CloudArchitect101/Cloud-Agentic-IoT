@@ -50,8 +50,11 @@ flowchart LR
      at or above 30.0 C (the temperature alert rule's threshold,
      `RoomTempAlertCelsius`), about how many minutes that is at one reading
      every 30 seconds, and the day's highest temperature.
-   - `Room_Device_Silence__cio`: per device, minutes since its last reading,
-     and `offline__c` = 1 when that is over 10 minutes.
+   - `Room_Device_Silence__cio`: per device, the time of its last reading
+     (`last_reading_ts__c`) and its reading count. A calculated insight
+     cannot use the current time after aggregating, so "minutes since" and
+     "offline" are worked out where it is read: a segment, a flow or a
+     report filter on `last_reading_ts__c`.
 
 ### Why a second copy, in CSV
 
@@ -221,9 +224,10 @@ echo "$BUCKET"
    Insight **Room Out Of Range Daily** shows today's row for that device with
    `readings_out_of_range__c` above 0 and `minutes_out_of_range__c` at half
    of it.
-6. **Silence shows.** Unplug a board. After 10 minutes, the next stream
-   refresh and the next insight run, **Room Device Silence** shows
-   `offline__c` = 1 for it.
+6. **Silence shows.** Unplug a board. After the next stream refresh and
+   the next insight run, **Room Device Silence** shows its
+   `last_reading_ts__c` stuck at the time it was unplugged, while the other
+   boards' move on.
 
 ### How fresh it is
 
@@ -274,9 +278,12 @@ insight used.
   lake object (`Room_Readings__dll`). Do the mapping (SETUP.md §7 step 6)
   and wait for the stream's first run to finish with records, then run the
   script again.
-- **`Function UNIX_TIMESTAMP not supported`.** Calculated insights do not
-  take it; the silence insight counts minutes with
-  `DATEDIFF('minute', ..., NOW())`. An older copy of the SQL used it.
+- **`Function UNIX_TIMESTAMP not supported`, `DATEDIFF function has to take
+  2 arguments of type Date/DateTime`, or `Formatting non-inlined parameter
+  current_timestamp is not supported`.** A calculated insight cannot do
+  arithmetic with the current time after aggregating. The silence insight
+  gives `last_reading_ts__c` only; an older copy of the SQL tried to count
+  minutes.
 - **`REQUIRED_FIELD_MISSING: publishScheduleInterval`.** The create request
   must carry the insight's schedule. The script sends the one in
   `datacloud/calculated-insights.json`; an older copy of the script did not.
