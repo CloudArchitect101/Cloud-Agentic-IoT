@@ -49,4 +49,69 @@ private class PatientDeviceServiceTest {
         Assert.areEqual(PatientDeviceService.MAX_READINGS,
             PatientDeviceService.devicesFor(both[0].account.Id, 500)[0].readings.size());
     }
+
+    private static DeviceApiClient.Result awsAnswer(Integer status, String at, Decimal temperature) {
+        DeviceApiClient.Result result = new DeviceApiClient.Result();
+        result.statusCode = status;
+        result.body = JSON.serialize(new Map<String, Object>{
+            'latest' => at == null ? null : new Map<String, Object>{ 'at' => at, 'temperature' => temperature, 'humidity' => 40 }
+        });
+        return result;
+    }
+
+    @IsTest
+    static void aNewerReadingFromAwsComesFirst() {
+        List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
+        PatientDeviceService.Device device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];
+        Boolean savedAlert = device.readings[0].roomTemperatureAlert;
+
+        PatientDeviceService.addLatest(device, awsAnswer(200, '2026-11-19T23:00:00.000Z', 31.5));
+
+        Assert.areEqual(3, device.readings.size());
+        Assert.isTrue(device.readings[0].live, 'The AWS reading is marked live');
+        Assert.areEqual(31.5, device.readings[0].temperature);
+        Assert.areEqual(savedAlert, device.readings[0].roomTemperatureAlert, 'The alert follows the newest saved reading');
+        Assert.isFalse(device.readings[1].live);
+        Assert.isNull(device.liveNote);
+    }
+
+    @IsTest
+    static void anOlderReadingFromAwsIsIgnored() {
+        List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
+        PatientDeviceService.Device device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];
+
+        PatientDeviceService.addLatest(device, awsAnswer(200, '2026-11-01T00:00:00.000Z', 20));
+
+        Assert.areEqual(2, device.readings.size(), 'The saved readings are already newer');
+        Assert.isFalse(device.readings[0].live);
+    }
+
+    @IsTest
+    static void aFailedAwsCallKeepsTheSavedReadings() {
+        List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
+        DeviceApiMock aws = new DeviceApiMock();
+        aws.statusCode = 403;
+        Test.setMock(HttpCalloutMock.class, aws);
+
+        Test.startTest();
+        List<PatientDeviceService.Device> mine =
+            PatientDeviceService.withLatestFromAws(PatientDeviceService.devicesFor(both[0].account.Id, 5));
+        Test.stopTest();
+
+        Assert.areEqual(2, mine[0].readings.size());
+        Assert.isTrue(mine[0].liveNote.contains('403'), mine[0].liveNote);
+        Assert.areEqual(new List<String>{ 'device-live' }, aws.paths);
+        Assert.areEqual(PatientPortalTestData.SERIAL_A, aws.bodies[0].get('thingName'));
+    }
+
+    @IsTest
+    static void noReadingAtAwsSaysSo() {
+        List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
+        PatientDeviceService.Device device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];
+
+        PatientDeviceService.addLatest(device, awsAnswer(200, null, null));
+
+        Assert.areEqual(2, device.readings.size());
+        Assert.isTrue(device.liveNote.contains('no stored reading'), device.liveNote);
+    }
 }

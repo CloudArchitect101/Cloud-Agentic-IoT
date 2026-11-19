@@ -66,7 +66,8 @@ public with sharing class MyDevicesAgentAction {
         }
         res.patientVerified = true;
         List<PatientDeviceService.Device> mine =
-            PatientDeviceService.devicesFor(who.accountId, req.deviceId, req.readingCount);
+            PatientDeviceService.withLatestFromAws(
+                PatientDeviceService.devicesFor(who.accountId, req.deviceId, req.readingCount));
         res.success = true;
         res.deviceCount = mine.size();
         if (mine.isEmpty()) {
@@ -95,14 +96,22 @@ public with sharing class MyDevicesAgentAction {
             lines.add('  no readings yet');
         }
         for (PatientDeviceService.Reading r : device.readings) {
-            lines.add('  ' + (r.at == null ? 'unknown time' : utc(r.at))
+            lines.add('  ' + (r.at == null ? 'unknown time' : utc(r.at) + ' (' + ageMinutes(r.at) + ' minutes ago)')
+                + (r.live ? ', newest reading from the device' : ', saved reading')
                 + ': temperature ' + value(r.temperature, ' C')
                 + ', humidity ' + value(r.humidity, ' %')
                 + (r.heartRate == null ? '' : ', heart rate ' + value(r.heartRate, ' bpm'))
                 + (r.spO2 == null ? '' : ', SpO2 ' + value(r.spO2, ' %'))
                 + (r.roomTemperatureAlert ? ', temperature-above-limit flag set' : ''));
         }
+        if (String.isNotBlank(device.liveNote)) {
+            lines.add('  ' + device.liveNote);
+        }
         return String.join(lines, '\n');
+    }
+
+    private static Long ageMinutes(Datetime at) {
+        return Math.max(0L, (Datetime.now().getTime() - at.getTime()) / 60000L);
     }
 
     private static String utc(Datetime at) {

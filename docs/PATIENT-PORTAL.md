@@ -248,7 +248,12 @@ that have no metadata, in order. Each one is also in
     - **The enabling user's rights.** The user who clicks Enable Customer User
       needs Manage External Users, which System Administrator has.
     - For each Person Account: Enable Customer User (profile Customer
-      Community User), and assign `Patient_Portal_User`. Give each test
+      Community User), and assign `Patient_Portal_User` and
+      `AWS_IoT_Relay_Callers` (INSTALL-GUIDE step 1 part d). The second one
+      lets the My monitor page fetch the board's newest reading from AWS:
+      Salesforce saves a reading only on an alert change, so without it the
+      page shows the last saved one, which can be days old. The agent user
+      needs `AWS_IoT_Relay_Callers` too, for the same reading in the chat. Give each test
       patient its own email, such as a plus address (`you+patient-a@...`),
       never the admin's: Slack and other connected apps match users by
       email and refuse an address two users share. A Patient Device

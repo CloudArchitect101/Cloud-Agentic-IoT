@@ -14,6 +14,8 @@ export interface Reading {
 	spO2: number | null;
 	patientState: string | null;
 	roomTemperatureAlert: boolean;
+	/** The newest reading the board stored in AWS, not a saved Salesforce one. */
+	live?: boolean;
 }
 
 export interface Device {
@@ -23,6 +25,8 @@ export interface Device {
 	connectionStatus: string | null;
 	connectionSince: string | null;
 	readings: Reading[];
+	/** Why there is no newer reading from AWS, when there is none. */
+	liveNote?: string | null;
 }
 
 export interface MyDevices {

@@ -44,7 +44,7 @@ global with sharing class PortalDevicesResource {
             readings = Integer.valueOf(asked);
         }
         body.patient = true;
-        body.devices = PatientDeviceService.devicesFor(who.accountId, readings);
+        body.devices = PatientDeviceService.withLatestFromAws(PatientDeviceService.devicesFor(who.accountId, readings));
         body.message = body.devices.isEmpty() ? 'No monitoring device is linked to your account yet.' : null;
         return body;
     }
