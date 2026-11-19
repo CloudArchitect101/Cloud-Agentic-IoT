@@ -8,6 +8,10 @@
   .markdown-body .mermaid{background:#fff;text-align:center;margin:16px 0}
   .site-nav{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid #d0d7de}
   .markdown-body table{display:block;overflow-x:auto}
+  .markdown-body .copy-wrap{position:relative}
+  .markdown-body .copy-btn{position:absolute;top:6px;right:6px;font:12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:5px 8px;border:1px solid #d0d7de;border-radius:6px;background:#f6f8fa;color:#24292f;cursor:pointer;opacity:.85}
+  .markdown-body .copy-btn:hover,.markdown-body .copy-btn:focus{opacity:1}
+  .markdown-body .copy-btn.done{border-color:#1a7f37;color:#1a7f37}
 </style>
 <script type="module">
   const REPO = "https://github.com/CloudArchitect101/Cloud-Agentic-IoT/blob/Dev/";
@@ -40,6 +44,34 @@
     const kind = m[1].toLowerCase();
     q.classList.add("callout", kind === "warning" || kind === "caution" ? "warning" : "note");
     q.insertAdjacentHTML("afterbegin", `<div class="callout-title">${m[1][0] + m[1].slice(1).toLowerCase()}</div>`);
+  }
+
+  // A Copy button on every code block, as on GitHub. It copies the text as shown,
+  // so a "Fill in first" placeholder still has to be replaced after pasting.
+  const copyText = async (text) => {
+    try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+      const t = document.createElement("textarea");
+      t.value = text; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+      document.body.append(t); t.select();
+      const ok = document.execCommand("copy"); t.remove(); return ok;
+    }
+  };
+  for (const pre of body.querySelectorAll("pre")) {
+    const code = pre.querySelector("code") || pre;
+    if (code.classList.contains("language-mermaid") || pre.closest(".language-mermaid")) continue;
+    const box = pre.closest("div.highlighter-rouge") || pre;
+    const wrap = box === pre ? (() => { const w = document.createElement("div"); pre.before(w); w.append(pre); return w; })() : box;
+    wrap.classList.add("copy-wrap");
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "copy-btn"; btn.textContent = "Copy";
+    btn.setAttribute("aria-label", "Copy this code");
+    btn.addEventListener("click", async () => {
+      const ok = await copyText(code.innerText.replace(/\n$/, ""));
+      btn.textContent = ok ? "Copied" : "Press Ctrl+C";
+      btn.classList.toggle("done", ok);
+      setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1500);
+    });
+    wrap.append(btn);
   }
 
   // Mermaid diagrams, drawn the way GitHub draws them.
