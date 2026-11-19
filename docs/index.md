@@ -9,7 +9,7 @@ A healthcare IoT + Agentforce system, built from scratch and in public. A physic
 > [!NOTE]
 > **Video walkthrough: coming soon.** A short video showing the end result and where each part lives in the repository.
 
-**[Step through the process →](process/)** · **[Quick install](INSTALL.md)** · **[Install guide](INSTALL-GUIDE.md)** · **[Code on GitHub](https://github.com/CloudArchitect101/Cloud-Agentic-IoT)**
+**[Start here →](START-HERE.md)** · **[Step through the process](process/)** · **[Quick install](INSTALL.md)** · **[Install guide](INSTALL-GUIDE.md)** · **[Code on GitHub](https://github.com/CloudArchitect101/Cloud-Agentic-IoT)**
 
 ## What it does
 
@@ -27,6 +27,8 @@ A healthcare IoT + Agentforce system, built from scratch and in public. A physic
 
 ## Install
 
+New here? **[Start here](START-HERE.md)** picks your path: Salesforce admin, developer, or a team with pipelines. Everyone follows the Quick install, with a check after each step; the Install guide explains the why.
+
 | | [Quick install](INSTALL.md) | [Install guide](INSTALL-GUIDE.md) |
 |---|---|---|
 | For | Getting it running | Understanding every step |
@@ -39,6 +41,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 
 | Learn by doing | Get a task done |
 |---|---|
+| [Start here](START-HERE.md): which guide to follow, and the admin's view of each step | |
 | [Quick install](INSTALL.md): every feature, step by step | [Install guide](INSTALL-GUIDE.md): every step, explained |
 | [Try it](TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | [Setup](SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
 | [Platform primer](PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | [Development](DEVELOPMENT.md): laptop to Dev to Prod |

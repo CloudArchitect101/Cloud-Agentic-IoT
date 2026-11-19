@@ -231,3 +231,7 @@ and no Data Cloud credits.
 `test/lambda/sop-index.test.js`, `test/lambda/knowledge-indexer.test.js`,
 `test/lambda/procedure-search.test.js`,
 `classes/ProcedureSearchAgentActionTest.cls`.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

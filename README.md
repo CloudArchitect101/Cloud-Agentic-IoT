@@ -32,7 +32,7 @@
 
 ![From a warm sensor to an agent answer: eight steps, animated](docs/images/process-flow.svg)
 
-Prefer to go step by step? Open the [interactive walkthrough](https://cloudarchitect101.github.io/Cloud-Agentic-IoT/process/) (Prev / Next, arrow keys, or Play). Both are drawn from one list of steps in [`scripts/render-process-flow.py`](scripts/render-process-flow.py).
+New here? Begin at **[Start here](docs/START-HERE.md)**. Prefer to go step by step? Open the [interactive walkthrough](https://cloudarchitect101.github.io/Cloud-Agentic-IoT/process/) (Prev / Next, arrow keys, or Play). Both are drawn from one list of steps in [`scripts/render-process-flow.py`](scripts/render-process-flow.py).
 
 ## Architecture
 
@@ -79,7 +79,7 @@ More diagrams and the reasoning behind each piece: [How the pieces connect](docs
 
 ## Install
 
-Pick one. Both end with the same running system.
+**New here? [Start here](docs/START-HERE.md)** picks your path in one table: Salesforce admin, developer, or a team with pipelines. Everyone follows the Quick install step by step, with a check after each step; open the Install guide beside it when you want the why behind a step.
 
 | | [**Quick install**](docs/INSTALL.md) | [**Install guide**](docs/INSTALL-GUIDE.md) |
 |---|---|---|

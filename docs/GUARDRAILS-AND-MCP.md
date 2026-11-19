@@ -377,3 +377,7 @@ failure rate as use grows. Another server is one entry in
 `config/mcp-servers.json` plus a registration and its actions; the tests hold
 it to the same rules (read-only, https, Streamable HTTP, no sign-in, named
 agents).
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

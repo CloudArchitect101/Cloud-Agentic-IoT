@@ -180,3 +180,7 @@ IoT Job      →  the instruction       (job document: S3 URL + version)
 | Amazon Root CA | Compiled into firmware | No | No |
 | AWS IoT endpoint | Device NVS, `identity` namespace | **Yes** | No |
 | GitHub secrets | OIDC role ARN, Salesforce JWT key — **deploy credentials only** | Yes | No |
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

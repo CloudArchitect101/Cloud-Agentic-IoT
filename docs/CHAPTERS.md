@@ -346,3 +346,7 @@ The patients' side of the system: a **React site on Salesforce** (Multi-Framewor
 **Key files:** `uiBundles/patientPortal/` (`src/pages/Home.tsx`, `src/components/PatientChat.tsx`), `aiAuthoringBundles/Patient_Portal_Agent/`, `classes/PortalIdentityService.cls`, `classes/PatientDeviceService.cls`, `scripts/publish-portal-agent.sh`
 
 **To see it work:** sign in to the site as a patient, check My monitor shows their device, then ask the chat what the device reads and request a nurse. A Case appears in Care_Team_Queue. Setup steps and costs: [PATIENT-PORTAL.md](PATIENT-PORTAL.md) and [SETUP.md §9](SETUP.md#9-patient-portal).
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

@@ -221,3 +221,16 @@ for the test-cloudarchitect101 project (new AWS experience, us-east-2).
 
 Check the install: `aws agent-toolkit list-available-skills --region us-east-1 --profile test-cloudarchitect101`
 (the toolkit service runs only in us-east-1) listed 126 skills on Nov 18.
+
+## Docs and navigation (newcomer audit, Nov 19)
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+| --- | --- | --- | --- | --- |
+| Nov 19 | Quick install step 3 asked you to run a licence query that fails with an empty `--target-org` | The command needs `NAME`, which is only set in step 4 | The query moved to the end of step 4 | Each step now ends with a **Check before you go on** box run in order |
+| Nov 19 | A newcomer couldn't tell which of Quick install, Install guide, Setup and Try it to follow | Four entry points, each with its own numbering, and no page that picks one | [Start here](START-HERE.md) picks one path per reader, and the Quick install has a step map | `docs-navigation.test.js` checks the step map and Start here links |
+| Nov 19 | Read on github.com, 20 of 23 docs pages had no link back home or on to the next step | The back links lived only in the docs site's nav bar, which github.com does not show | A footer on every page, and Previous / Next under every install step | `docs-navigation.test.js` fails a page with no link to the docs home |
+| Nov 19 | The portal README's "project README" link opened a 404 on GitHub | One `../` too many in the relative path | Fixed the path | `docs-navigation.test.js` checks every relative link and anchor |
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md)

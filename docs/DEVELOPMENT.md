@@ -208,3 +208,7 @@ and the pipeline's Dev can be compared by SHA.
 | Approving a Prod deploy | It is the last look before production |
 | Promoting a Prod release to the whole fleet | It is the judgement that the canary behaved |
 | Entering secrets | Secret values never pass through automation or chat |
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

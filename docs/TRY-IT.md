@@ -1,5 +1,8 @@
 # Try it on your own AWS project and Salesforce org
 
+> [!TIP]
+> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick install](INSTALL.md) is the one list of steps; this page goes deeper.
+
 Cloned this repo to learn or experiment? Run it on two things of your own: an
 AWS **project** with a spend limit, and a free Salesforce Developer Edition
 org. You deploy both from your laptop and skip the GitHub setup until you need
@@ -569,3 +572,7 @@ move to regular AWS accounts:
 - [Activate advanced features](https://docs.aws.amazon.com/accounts/latest/reference/activate-advanced-features.html): removes spend limits, can't be reversed
 - [Project Regions](https://docs.aws.amazon.com/accounts/latest/reference/project-regions.html)
 - [Connect an AI coding tool](https://docs.aws.amazon.com/accounts/latest/reference/connect-ai-coding-tool.html) and [Login with console credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html): `aws login`, CLI 2.32.0, 12-hour sessions
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

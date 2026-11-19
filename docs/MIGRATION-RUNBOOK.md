@@ -45,3 +45,7 @@ Only after Prod has run the fleet for two weeks. Delete the original account's s
 ## Why this artefact matters
 
 Migration engagements live or die on exactly this: a phased, reversible plan with the risk concentrated where it is visible, written so both engineers and stakeholders can follow it.
+
+---
+
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

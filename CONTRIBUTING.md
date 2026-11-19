@@ -60,6 +60,8 @@ Project rules the checks enforce:
 - More conventions are in [docs/CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md#conventions-the-pipelines-enforce).
 - If you hit a problem and solve it, add it to
   [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+- Writing docs, posts or video scripts: follow [docs/CONTENT-GUIDE.md](docs/CONTENT-GUIDE.md).
+  Every page in `docs/` ends with a link back to the docs home and Start here.
 
 ## Review
 
