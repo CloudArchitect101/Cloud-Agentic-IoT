@@ -87,11 +87,10 @@ identity check differs. One service agent for both is possible, but staff
 would then run as the agent user and lose their own permissions, which is
 the weaker design for a hospital.
 
-The same split decides who gets Espressif's documentation MCP server: it
-needs each user's own GitHub sign-in, which Agentforce offers employee agents
-only, so the staff agent answers ESP32 hardware questions and the patient
-agent points patients to docs.espressif.com
-([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-documentation-for-the-agents)).
+Both agents also answer generic ESP32 questions from Espressif's open MCP
+servers, which need no sign-in, so the patient agent can use them too; it
+sends them no patient data and goes back to the patient's sensor afterwards
+([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents)).
 
 ## Why Enhanced Chat v2 and not a chat drawn in React
 

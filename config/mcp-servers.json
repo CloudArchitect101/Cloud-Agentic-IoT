@@ -1,30 +1,47 @@
 {
-  "description": "Outside MCP servers the Agentforce agents may call, registered in Agentforce Registry (Setup). Salesforce does not deploy or package a registration, so this file is the record of what each org must register by hand: docs/INSTALL.md step 11b has the clicks, docs/GUARDRAILS-AND-MCP.md the design. scripts/lib/mcp-probe.js checks every server here is reachable and still offers what we allowlist; test/config/esp32-mcp.test.js checks the agents and docs agree with it. To add a server: add an entry, allowlist only read-only tools, name the agents that may use it, and give the new subagent the same no-org-data rule.",
+  "description": "Outside MCP servers the Agentforce agents may call, registered in Agentforce Registry (Setup) with No Authentication, so nobody signs in. Salesforce does not deploy or package a registration, so this file is the record of what each org registers by hand: docs/INSTALL.md step 11b has the clicks, docs/GUARDRAILS-AND-MCP.md the design. scripts/lib/mcp-probe.js checks every server here still answers and still offers every allowlisted tool; test/config/esp32-mcp.test.js checks the agents and docs agree with it. To add a server: add an entry, allowlist only read-only tools, name the agents that may use it. Espressif's documentation server (https://mcp.espressif.com/docs) is deliberately not here: it needs each user's GitHub sign-in (docs/TROUBLESHOOTING.md).",
   "servers": [
     {
-      "name": "Espressif_Docs",
-      "label": "Espressif Docs",
-      "url": "https://mcp.espressif.com/docs",
+      "name": "ESP_Pilot",
+      "label": "ESP Pilot",
+      "url": "https://mcp.esp-pilot.espressif.com/mcp",
       "transport": "streamable-http",
-      "auth": {
-        "type": "oauth-per-user",
-        "grant": "authorization_code",
-        "pkce": "S256",
-        "clientAuth": "client_secret_post",
-        "scope": "read:user",
-        "authorizeUrl": "https://mcp.espressif.com/docs/authorize",
-        "tokenUrl": "https://mcp.espressif.com/docs/token",
-        "registrationUrl": "https://mcp.espressif.com/docs/register",
-        "signIn": "GitHub or WeChat account, once per user"
-      },
-      "tools": ["search_espressif_sources"],
+      "auth": { "type": "none" },
+      "answers": "Which SoCs ESP-IDF supports, Espressif's board catalog (ESP Board Manager) with each board's chip, devices and peripherals, and which peripherals a chip supports",
+      "tools": ["catalog_list_socs", "catalog_list_bmgr_boards", "catalog_list_bmgr_peripherals"],
       "readOnly": true,
-      "agents": ["Patient_Care_Agent"],
-      "subagent": "ESP32_Hardware",
-      "actionAlias": "search_espressif_docs",
-      "rateLimits": { "perUserPerHour": 40, "perUserPerDay": 200 },
+      "agents": ["Patient_Care_Agent", "Patient_Portal_Agent"],
+      "rateLimits": null,
       "costPerCallUsd": 0,
-      "docs": "https://developer.espressif.com/blog/2026/04/doc-mcp-server/"
+      "docs": "https://mcp.espressif.com/"
+    },
+    {
+      "name": "ESP_VISION",
+      "label": "ESP-VISION",
+      "url": "https://mcp.vision.espressif.com",
+      "transport": "streamable-http",
+      "auth": { "type": "none" },
+      "answers": "Camera and on-device AI capabilities per chip or board (ESP32-P4, ESP32-S3, ESP32-S31), and the ESP-VISION and MicroPython docs",
+      "tools": ["list_firmware_versions", "get_capabilities", "search_docs"],
+      "readOnly": true,
+      "agents": ["Patient_Care_Agent", "Patient_Portal_Agent"],
+      "rateLimits": null,
+      "costPerCallUsd": 0,
+      "docs": "https://mcp.espressif.com/"
+    },
+    {
+      "name": "ESP_Component_Registry",
+      "label": "ESP Component Registry",
+      "url": "https://components.espressif.com/mcp",
+      "transport": "streamable-http",
+      "auth": { "type": "none" },
+      "answers": "ESP-IDF software components and drivers, for example a DHT11 or servo driver",
+      "tools": ["search_components", "fetch_component_detailed_information"],
+      "readOnly": true,
+      "agents": ["Patient_Care_Agent", "Patient_Portal_Agent"],
+      "rateLimits": null,
+      "costPerCallUsd": 0,
+      "docs": "https://components.espressif.com/"
     }
   ]
 }
