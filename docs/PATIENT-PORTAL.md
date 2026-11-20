@@ -253,7 +253,11 @@ that have no metadata, in order. Each one is also in
       lets the My monitor page fetch the board's newest reading from AWS:
       Salesforce saves a reading only on an alert change, so without it the
       page shows the last saved one, which can be days old. The agent user
-      needs `AWS_IoT_Relay_Callers` too, for the same reading in the chat. Give each test
+      needs `AWS_IoT_Relay_Callers` too, for the same reading in the chat,
+      plus `Patient_Portal_Agent`, which adds the Read on User External
+      Credentials the callout needs. Never add that Read to
+      `AWS_IoT_Relay_Callers`: the Customer Community licence refuses it
+      ("Read External Data Connectors"), so the set cannot save. Give each test
       patient its own email, such as a plus address (`you+patient-a@...`),
       never the admin's: Slack and other connected apps match users by
       email and refuse an address two users share. A Patient Device
