@@ -22,7 +22,7 @@ title: Device builder
 <p>Each step links to its full instructions in the <a href="INSTALL.md">Quick install</a>, where the commands and the check box are.</p>
 </div>
 <div class="lp-side">
-<img src="images/wiring-monitored-device.png" alt="Wiring for the monitored device: DHT11 leg 1 to 3.3V, leg 2 to P4, leg 4 to GND with a 10 kΩ resistor across legs 1 and 2; servo orange to P5, red to 5V, brown to GND">
+<img src="images/wiring-monitored-device.svg" alt="Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers">
 <div class="lp-box"><h4>Before you start</h4><ul><li>Quick install steps 1 to 7 are done, so the app can provision the board</li><li>About $37 CAD of parts</li><li>No soldering except the resistor</li></ul></div>
 <div class="lp-box"><h4>Going further</h4><a href="DEVICE-IDENTITY.md">Device identity</a>: certificates and Wi-Fi that survive updates. <a href="../firmware/README.md">Firmware</a>: live mode, commands and OTA.</div>
 <div class="lp-box"><h4>Stuck?</h4>Board problems and their fixes are in <a href="TROUBLESHOOTING.md#the-board-and-the-serial-scripts">Troubleshooting: the board</a>.</div>

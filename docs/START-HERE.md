@@ -37,7 +37,7 @@ The app's Home tab after step 7 (sample data):
 
 The board after step 12: an ESP32 with a DHT11 temperature sensor and an SG90 servo. The servo turns while the temperature is at or above 30 C.
 
-![Wiring for the monitored device: DHT11 leg 1 to 3.3V, leg 2 to P4, leg 4 to GND with a 10 kΩ resistor across legs 1 and 2; servo orange to P5, red to 5V, brown to GND](images/wiring-monitored-device.png)
+![Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers](images/wiring-monitored-device.svg)
 
 The Business Value card in Data Cloud after step 9 (sample data) is in [Business value](BUSINESS-VALUE.md).
 
