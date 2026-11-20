@@ -345,7 +345,7 @@ test('both modes read the newest stored reading and the patient state, as number
     const { latest, state } = answer(res);
     // The newest of this board's readings, not Test70's; no heart rate or SpO2 from a DHT11.
     assert.deepEqual(latest, { temperature: 22.5, humidity: 41, at: '2026-11-06T05:29:30.000Z' });
-    assert.deepEqual(state, { patientState: 'AT_RISK', riskScore: 25, updatedAt: '2026-11-06T05:29:30.000Z' });
+    assert.deepEqual(state, { patientState: 'AT_RISK', riskScore: 25, updatedAt: '2026-11-06T05:29:30.000Z', temperatureAlert: false });
   }
 });
 

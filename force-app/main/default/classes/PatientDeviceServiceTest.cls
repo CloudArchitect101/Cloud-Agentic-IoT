@@ -51,10 +51,15 @@ private class PatientDeviceServiceTest {
     }
 
     private static DeviceApiClient.Result awsAnswer(Integer status, String at, Decimal temperature) {
+        return awsAnswer(status, at, temperature, null);
+    }
+
+    private static DeviceApiClient.Result awsAnswer(Integer status, String at, Decimal temperature, Boolean alert) {
         DeviceApiClient.Result result = new DeviceApiClient.Result();
         result.statusCode = status;
         result.body = JSON.serialize(new Map<String, Object>{
-            'latest' => at == null ? null : new Map<String, Object>{ 'at' => at, 'temperature' => temperature, 'humidity' => 40 }
+            'latest' => at == null ? null : new Map<String, Object>{ 'at' => at, 'temperature' => temperature, 'humidity' => 40 },
+            'state' => alert == null ? null : new Map<String, Object>{ 'patientState' => 'STABLE', 'temperatureAlert' => alert }
         });
         return result;
     }
@@ -63,16 +68,30 @@ private class PatientDeviceServiceTest {
     static void aNewerReadingFromAwsComesFirst() {
         List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
         PatientDeviceService.Device device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];
-        Boolean savedAlert = device.readings[0].roomTemperatureAlert;
 
-        PatientDeviceService.addLatest(device, awsAnswer(200, '2026-11-19T23:00:00.000Z', 31.5));
+        PatientDeviceService.addLatest(device, awsAnswer(200, '2026-11-19T23:00:00.000Z', 31.5, true));
 
         Assert.areEqual(3, device.readings.size());
         Assert.isTrue(device.readings[0].live, 'The AWS reading is marked live');
         Assert.areEqual(31.5, device.readings[0].temperature);
-        Assert.areEqual(savedAlert, device.readings[0].roomTemperatureAlert, 'The alert follows the newest saved reading');
+        Assert.isTrue(device.readings[0].roomTemperatureAlert, 'The alert is the one AWS reports');
         Assert.isFalse(device.readings[1].live);
         Assert.isNull(device.liveNote);
+    }
+
+    @IsTest
+    static void aCooledDeviceShowsNoAlertEvenIfTheLastSavedReadingHadOne() {
+        List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
+        PatientDeviceService.Device device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];
+        device.readings[0].roomTemperatureAlert = true;
+
+        PatientDeviceService.addLatest(device, awsAnswer(200, '2026-11-19T23:00:00.000Z', 19.2, false));
+        Assert.isFalse(device.readings[0].roomTemperatureAlert, 'AWS says the episode ended');
+
+        device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];
+        device.readings[0].roomTemperatureAlert = true;
+        PatientDeviceService.addLatest(device, awsAnswer(200, '2026-11-19T23:00:00.000Z', 19.2));
+        Assert.isFalse(device.readings[0].roomTemperatureAlert, 'No flag from AWS is no alert');
     }
 
     @IsTest

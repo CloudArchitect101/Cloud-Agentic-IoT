@@ -164,9 +164,13 @@ public without sharing class PatientDeviceService {
         reading.temperature = decimalOrNull(latest.get('temperature'));
         reading.humidity = decimalOrNull(latest.get('humidity'));
         reading.live = true;
-        // A saved reading is written on every alert change, so the newest
-        // saved one still says whether the temperature alert is on.
-        reading.roomTemperatureAlert = newestSaved != null && newestSaved.roomTemperatureAlert == true;
+        // The alert is AWS's episode flag (state.temperatureAlert), never the
+        // newest saved reading's: a saved reading is written when the alert
+        // starts or repeats, not when it ends, so the last one stays flagged
+        // after the device cools. No flag from AWS means no alert.
+        Object state = ((Map<String, Object>) JSON.deserializeUntyped(result.body)).get('state');
+        reading.roomTemperatureAlert = state instanceof Map<String, Object>
+            && ((Map<String, Object>) state).get('temperatureAlert') == true;
         reading.patientState = newestSaved == null ? null : newestSaved.patientState;
         if (device.readings.isEmpty()) {
             device.readings.add(reading);
