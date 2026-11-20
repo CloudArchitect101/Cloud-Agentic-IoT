@@ -17,7 +17,7 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '../..');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const DOCS = fs.readdirSync(path.join(ROOT, 'docs')).filter((f) => f.endsWith('.md')).map((f) => `docs/${f}`);
-const PAGES = [...DOCS, 'hardware/cases/README.md', 'README.md', 'CONTRIBUTING.md', 'firmware/README.md', 'force-app/main/default/uiBundles/patientPortal/README.md'];
+const PAGES = [...DOCS, 'hardware/cases/README.md', 'docs/images/platforms/CREDITS.md', 'README.md', 'CONTRIBUTING.md', 'firmware/README.md', 'force-app/main/default/uiBundles/patientPortal/README.md'];
 
 // Fenced code and HTML comments are not rendered as links.
 const prose = (s) => s.replace(/```[\s\S]*?```/g, '').replace(/<!--[\s\S]*?-->/g, '');

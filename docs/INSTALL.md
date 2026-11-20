@@ -8,20 +8,20 @@ Every feature, from a fresh clone to a working system: your own AWS project with
 
 | # | Step | Where you work | Required? |
 |---|---|---|---|
-| [1](#step-1) | [Install the tools](#step-1) | Terminal | Yes |
-| [2](#step-2) | [Create the AWS project and the Salesforce org](#step-2) | Browser | Yes |
-| [3](#step-3) | [Turn on the org's features](#step-3) | Setup | Yes |
-| [4](#step-4) | [Clone and sign in](#step-4) | Terminal | Yes |
-| [5](#step-5) | [Make what the deploy reads](#step-5) | Setup + terminal | Yes |
-| [6](#step-6) | [Deploy everything in one run](#step-6) | Terminal + Setup | Yes |
-| [7](#step-7) | [Let Salesforce call AWS](#step-7) | Setup + terminal | Yes |
-| [8](#step-8) | [Slack](#step-8) | Slack + Setup | Optional |
-| [9](#step-9) | [Data Cloud](#step-9) | Data Cloud | Optional |
-| [10](#step-10) | [Patient portal with Enhanced Chat](#step-10) | Setup + terminal | Optional |
-| [11](#step-11) | [MCP servers](#step-11) | Setup | Optional |
-| [12](#step-12) | [Add a board](#step-12) | Board + terminal | For live readings |
-| [13](#step-13) | [Check that it works](#step-13) | App, Slack, portal | Yes |
-| [14](#step-14) | [Dev and Prod pipelines (optional)](#step-14) | GitHub + terminal | Optional |
+| [1](#step-1) | [Install the tools](#step-1) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Terminal | Yes |
+| [2](#step-2) | [Create the AWS project and the Salesforce org](#step-2) | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Browser | Yes |
+| [3](#step-3) | [Turn on the org's features](#step-3) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Setup | Yes |
+| [4](#step-4) | [Clone and sign in](#step-4) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> Terminal | Yes |
+| [5](#step-5) | [Make what the deploy reads](#step-5) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Setup + terminal | Yes |
+| [6](#step-6) | [Deploy everything in one run](#step-6) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Terminal + Setup | Yes |
+| [7](#step-7) | [Let Salesforce call AWS](#step-7) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> Setup + terminal | Yes |
+| [8](#step-8) | [Slack](#step-8) | <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Slack + Setup | Optional |
+| [9](#step-9) | [Data Cloud](#step-9) | <img class="pi" src="images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> Data Cloud | Optional |
+| [10](#step-10) | [Patient portal with Enhanced Chat](#step-10) | <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Setup + terminal | Optional |
+| [11](#step-11) | [MCP servers](#step-11) | <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> Setup | Optional |
+| [12](#step-12) | [Add a board](#step-12) | <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> Board + terminal | For live readings |
+| [13](#step-13) | [Check that it works](#step-13) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> App, Slack, portal | Yes |
+| [14](#step-14) | [Dev and Prod pipelines (optional)](#step-14) | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> GitHub + terminal | Optional |
 
 > [!NOTE]
 > About two hours for everything, plus about 20 minutes for each board. Do step 2 first, on day one: if Bedrock needs a Support case, it can take up to 72 hours. Steps 1 to 7 and 13 make the core system. Steps 8 to 12 and 14 each add one feature, and you can skip any of them.
