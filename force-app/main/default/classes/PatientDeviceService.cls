@@ -15,6 +15,14 @@
  * the agent user) the right rows. The account filter is the access rule.
  * What leaves this class is a fixed set of fields, with the free text a
  * person or AWS typed (the device name, its last disconnect reason) masked.
+ *
+ * Salesforce keeps only the readings someone must act on (state changes and
+ * re-alerts), so the newest saved reading can be days old while the board
+ * reports every 30 seconds. withLatestFromAws adds the newest reading the
+ * board stored in AWS (POST /device-live, mode latest, read only), as the
+ * staff agent's readings action does. It needs the caller to hold
+ * AWS_IoT_Relay_Callers; without it, or when AWS fails, the saved readings
+ * stand and liveNote says why.
  */
 public without sharing class PatientDeviceService {
 
@@ -34,6 +42,8 @@ public without sharing class PatientDeviceService {
         public Decimal spO2;
         public String patientState;
         public Boolean roomTemperatureAlert;
+        /** True for the newest reading stored in AWS, false for a saved one. */
+        public Boolean live = false;
     }
 
     public class Device {
@@ -43,6 +53,8 @@ public without sharing class PatientDeviceService {
         public String connectionStatus;
         public Datetime connectionSince;
         public List<Reading> readings = new List<Reading>();
+        /** Why there is no newer reading from AWS, when there is none. */
+        public String liveNote;
     }
 
     /** The patient's devices, each with its latest readings, newest first. */
@@ -102,6 +114,78 @@ public without sharing class PatientDeviceService {
             devices.add(device);
         }
         return devices;
+    }
+
+    /**
+     * Puts the newest reading the board stored in AWS first in each device's
+     * readings when it is newer than the newest saved one. Callouts only: call
+     * it before any DML in the transaction. Never throws.
+     */
+    public static List<Device> withLatestFromAws(List<Device> devices) {
+        DeviceApiClient client = null;
+        for (Device device : devices) {
+            try {
+                if (client == null) {
+                    client = new DeviceApiClient();
+                }
+                if (!client.canCall()) {
+                    device.liveNote = 'No callout left in this request.';
+                    continue;
+                }
+                addLatest(device, client.post('device-live',
+                    new Map<String, Object>{ 'thingName' => device.serialNumber, 'mode' => 'latest' }));
+            } catch (Exception e) {
+                // Most often the caller lacks access to the AWS credential.
+                device.liveNote = 'The newest reading from AWS could not be read: ' + e.getMessage().abbreviate(160);
+            }
+            System.debug(LoggingLevel.WARN, 'Newest AWS reading for ' + device.serialNumber + ': '
+                + (device.liveNote == null ? (device.readings.isEmpty() || !device.readings[0].live ? 'not newer than the saved one' : 'added') : device.liveNote));
+        }
+        return devices;
+    }
+
+    @TestVisible
+    private static void addLatest(Device device, DeviceApiClient.Result result) {
+        if (!result.succeeded()) {
+            // Status 0 is a callout that never got an answer; its message
+            // (for example a missing credential permission) is the reason.
+            device.liveNote = 'The newest reading from AWS is unavailable ('
+                + (result.statusCode == 0 && String.isNotBlank(result.body)
+                    ? result.body.abbreviate(160) : 'HTTP ' + result.statusCode) + ').';
+            return;
+        }
+        Map<String, Object> latest = (Map<String, Object>) ((Map<String, Object>) JSON.deserializeUntyped(result.body)).get('latest');
+        if (latest == null || latest.get('at') == null) {
+            device.liveNote = 'AWS holds no stored reading for this device.';
+            return;
+        }
+        Reading reading = new Reading();
+        reading.at = (Datetime) JSON.deserialize('"' + (String) latest.get('at') + '"', Datetime.class);
+        Reading newestSaved = device.readings.isEmpty() ? null : device.readings[0];
+        if (newestSaved != null && newestSaved.at != null && reading.at <= newestSaved.at) {
+            return;
+        }
+        reading.temperature = decimalOrNull(latest.get('temperature'));
+        reading.humidity = decimalOrNull(latest.get('humidity'));
+        reading.live = true;
+        // The alert is AWS's episode flag (state.temperatureAlert), never the
+        // newest saved reading's: a saved reading is written when the alert
+        // starts or repeats, not when it ends, so the last one stays flagged
+        // after the device cools. No flag from AWS means no alert.
+        Object state = ((Map<String, Object>) JSON.deserializeUntyped(result.body)).get('state');
+        reading.roomTemperatureAlert = state instanceof Map<String, Object>
+            && ((Map<String, Object>) state).get('temperatureAlert') == true;
+        reading.patientState = newestSaved == null ? null : newestSaved.patientState;
+        if (device.readings.isEmpty()) {
+            device.readings.add(reading);
+        } else {
+            device.readings.add(0, reading);
+        }
+    }
+
+    private static Decimal decimalOrNull(Object raw) {
+        return raw instanceof Decimal || raw instanceof Integer || raw instanceof Double || raw instanceof Long
+            ? Decimal.valueOf(String.valueOf(raw)) : null;
     }
 
     private static Integer clamp(Integer requested) {

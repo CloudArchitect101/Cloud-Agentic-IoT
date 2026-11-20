@@ -174,6 +174,13 @@ FAKE_SF = textwrap.dedent(r'''
         print(json.dumps({'status': 0, 'result': {'id': '0AfVALIDATION'}}))
     elif args[:3] in (['project', 'deploy', 'resume'], ['project', 'deploy', 'quick']):
         print('Done.')
+    elif args[:2] == ['data', 'query']:
+        size = 1 if os.path.exists(os.path.join(state_dir, 'callers-exist')) else 0
+        print(json.dumps({'status': 0, 'result': {'totalSize': size, 'records': []}}))
+    elif args[:2] == ['apex', 'run']:
+        with open(args[args.index('--file') + 1]) as f, open(os.path.join(state_dir, 'apex.txt'), 'w') as out:
+            out.write(f.read())
+        print('Compiled successfully.')
     elif args[:3] == ['project', 'generate', 'manifest']:
         out = args[args.index('--output-dir') + 1]
         with open(os.path.join(out, 'package.xml'), 'w') as f:
@@ -391,6 +398,20 @@ class DeploySalesforceGuards(SetupFixture):
         self.assertEqual(validate[validate.index('--test-level') + 1], 'RunLocalTests')
         self.assertEqual(resume[resume.index('--job-id') + 1], '0AfVALIDATION')
         self.assertEqual(quick[quick.index('--job-id') + 1], '0AfVALIDATION')
+
+    def test_portal_patients_and_the_portal_agent_get_the_aws_callers_set(self):
+        open(os.path.join(self.state_dir, 'callers-exist'), 'w').close()
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org')
+        self.assertEqual(code, 0, out)
+        with open(os.path.join(self.state_dir, 'apex.txt')) as f:
+            apex = f.read()
+        self.assertIn("'Patient_Portal_User', 'Patient_Portal_Agent'", apex)
+        self.assertIn('NOT IN (SELECT AssigneeId FROM PermissionSetAssignment WHERE PermissionSetId = :callers)', apex)
+
+    def test_without_the_aws_callers_set_no_portal_user_is_touched(self):
+        code, out = self.run_script('deploy-salesforce.sh', 'Dev', SF_TARGET_ORG='test-org')
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(['apex', 'run'], [args[:2] for args in self.lines('sf.jsonl')])
 
     def test_an_org_paired_with_another_account_is_refused_before_anything_deploys(self):
         self.param(f'{SF}/org-id', OTHER_ORG_ID)

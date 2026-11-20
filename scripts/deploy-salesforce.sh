@@ -175,5 +175,36 @@ if [ "$paired" = true ]; then
   fi
   endstep
 fi
+
+# Portal patients (Patient_Portal_User) and the portal agent's user
+# (Patient_Portal_Agent) read the board's newest reading from AWS, so they
+# need the credential's principal access too. It lives in the hand-made
+# AWS_IoT_Relay_Callers, never in the repo's sets: a deploy replaces a repo
+# set whole, so access added to one by hand vanishes at the next deploy.
+# One Apex insert covers any number of users (DML rows limit 10,000).
+callers=${callers:-$(sf data query --target-org "$org" --json \
+  --query "SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'" 2>/dev/null | jq -r '.result.totalSize // 0' || echo 0)}
+if [ -n "$callers" ] && [ "$callers" != "0" ]; then
+  step "Let portal patients and the portal agent call AWS"
+  apex_file=$(mktemp)
+  cat > "$apex_file" <<'APEX'
+Id callers = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers' LIMIT 1].Id;
+List<PermissionSetAssignment> missing = new List<PermissionSetAssignment>();
+for (User u : [SELECT Id FROM User WHERE IsActive = true
+        AND Id IN (SELECT AssigneeId FROM PermissionSetAssignment
+                   WHERE PermissionSet.Name IN ('Patient_Portal_User', 'Patient_Portal_Agent'))
+        AND Id NOT IN (SELECT AssigneeId FROM PermissionSetAssignment WHERE PermissionSetId = :callers)
+        LIMIT 9000]) {
+    missing.add(new PermissionSetAssignment(AssigneeId = u.Id, PermissionSetId = callers));
+}
+insert missing;
+System.debug(LoggingLevel.ERROR, 'AWS_IoT_Relay_Callers given to ' + missing.size() + ' portal user(s)');
+APEX
+  sf apex run --file "$apex_file" --target-org "$org" >/dev/null \
+    && echo "  portal users who lacked AWS_IoT_Relay_Callers now hold it" \
+    || warn "Could not give AWS_IoT_Relay_Callers to portal users; assign it by hand (docs/PATIENT-PORTAL.md step 11)."
+  rm -f "$apex_file"
+  endstep
+fi
 note "Salesforce $ENV is deployed from $(deployed_commit)."
 note "New objects or fields stay hidden, even from admins, until a permission set grants them: assign the feature's permission set (e.g. Business_Value_Viewer, docs/BUSINESS-VALUE.md)."

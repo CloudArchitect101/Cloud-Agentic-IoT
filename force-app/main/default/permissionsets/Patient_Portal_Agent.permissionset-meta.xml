@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <label>Patient Portal Agent</label>
-    <description>For the Patient Portal Agent's agent user: its two actions, Get My Devices and Request a Nurse. Each finds the patient from the verified chat and reads or writes only that patient's account.</description>
+    <description>For the Patient Portal Agent's agent user: its two actions, Get My Devices and Request a Nurse, and Read on User External Credentials for the AWS call. Each finds the patient from the verified chat and reads or writes only that patient's account.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <classAccesses>
         <apexClass>MyDevicesAgentAction</apexClass>
@@ -11,4 +11,18 @@
         <apexClass>RequestNurseAgentAction</apexClass>
         <enabled>true</enabled>
     </classAccesses>
+    <objectPermissions>
+        <!-- Get My Devices calls AWS (device-live) through the AWS_IoT_Relay
+             named credential, which needs Read here besides the principal
+             access in AWS_IoT_Relay_Callers. It lives in this set, not in
+             AWS_IoT_Relay_Callers, because that set is also assigned to
+             Customer Community users, whose licence refuses this permission. -->
+        <object>UserExternalCredential</object>
+        <allowCreate>false</allowCreate>
+        <allowRead>true</allowRead>
+        <allowEdit>false</allowEdit>
+        <allowDelete>false</allowDelete>
+        <viewAllRecords>false</viewAllRecords>
+        <modifyAllRecords>false</modifyAllRecords>
+    </objectPermissions>
 </PermissionSet>

@@ -46,7 +46,7 @@ class NoLiveLink extends Error {}
  *     -> 200 { thingName,
  *              live: { url, clientId, topic, expiresAt, seconds, minutes, commandPublished },
  *              latest: { temperature, humidity, at, heartRate?, spo2? } | null,
- *              state: { patientState, riskScore, updatedAt } | null }
+ *              state: { patientState, riskScore, updatedAt, temperatureAlert } | null }
  *
  * mode "start", the default, tells the board to send a reading every
  * LIVE_READING_SECONDS for the next LIVE_MINUTES on device/<thing>/live, and
@@ -384,6 +384,10 @@ function toState(item) {
     patientState: typeof item.PatientState === 'string' ? item.PatientState : null,
     riskScore: numberOrNull(item.RiskScore),
     updatedAt: isoOrNull(item.UpdatedAt),
+    // patient-vitals keeps RoomTempHot: true from a reading at or above the
+    // temperature alert level until one drops 1 C below it. It is the
+    // episode, which no single reading can tell.
+    temperatureAlert: item.RoomTempHot === true,
   };
 }
 

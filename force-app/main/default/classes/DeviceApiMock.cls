@@ -132,7 +132,8 @@ public class DeviceApiMock implements HttpCalloutMock {
                 'temperature' => 22.5, 'humidity' => 41, 'at' => '2026-11-06T05:29:30.000Z'
             },
             'state'     => new Map<String, Object>{
-                'patientState' => 'STABLE', 'riskScore' => 0.12, 'updatedAt' => '2026-11-06T05:00:00.000Z'
+                'patientState' => 'STABLE', 'riskScore' => 0.12, 'updatedAt' => '2026-11-06T05:00:00.000Z',
+                'temperatureAlert' => false
             }
         };
         if ((String) body.get('mode') == 'start') {
