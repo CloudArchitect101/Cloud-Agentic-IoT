@@ -56,7 +56,7 @@ The credential bundle is assembled in a temp file with owner-only permissions an
 
 — because that anchor is what makes the third slot remotely updatable. See [what the 3 slots actually do](#what-the-3-slots-actually-do).
 
-> `scripts/provision-device.sh` and `scripts/update-wifi.sh` are still there and still work. `setup-device.sh` is the wizard that does the whole first-time sequence; those two are the narrower tools for re-sending an existing bundle or changing only WiFi.
+> `scripts/provision-device.sh` and `scripts/update-wifi.sh` are still there and still work. `setup-device.sh` is the wizard that does the whole first-time sequence for a certificate you downloaded from AWS IoT yourself. `provision-device.sh` sends a bundle that already exists: the one an Asset in Salesforce makes (after `firmware.sh flash` on a new board, [INSTALL step 12](INSTALL.md#step-12)), or one being sent again. `update-wifi.sh` changes only WiFi.
 
 ### Why the firmware has to be flashed first
 

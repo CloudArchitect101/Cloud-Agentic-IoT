@@ -27,9 +27,15 @@ without it the shared header is not found. The OTA pipeline builds with the
 same script, so what you flash and what the boards receive come from the same
 command.
 
-Setting up a new device? Don't run this by hand — `./scripts/setup-device.sh`
-compiles, flashes, and provisions in one interactive pass. See
-[`docs/DEVICE-IDENTITY.md`](../docs/DEVICE-IDENTITY.md).
+Setting up a new device? There are two ways, by where its identity was made:
+
+- **An Asset in Salesforce made it** (the Quick install, the usual way): flash,
+  then send the bundle, in one line:
+  `./scripts/firmware.sh flash patient-monitor && ./scripts/provision-device.sh <bundle.json>`
+  ([INSTALL step 12](../docs/INSTALL.md#step-12)).
+- **You made the Thing and certificate by hand in AWS IoT**:
+  `./scripts/setup-device.sh` compiles, flashes, and provisions in one
+  interactive pass. See [`docs/DEVICE-IDENTITY.md`](../docs/DEVICE-IDENTITY.md).
 
 ## The safety check that matters
 
@@ -149,7 +155,7 @@ Every board runs the patient-monitor build, so one OTA reaches them all. What a 
 
 ## Lifecycle: manual once, automatic thereafter
 
-1. **Once per device** — `./scripts/setup-device.sh`: USB flash + serial provisioning bundle. The only hands-on step in a device's life, because the ROM bootloader has no network stack and cannot fetch its own first firmware.
+1. **Once per device** — USB flash + serial provisioning bundle: `firmware.sh flash` then `provision-device.sh` for a board whose Asset made the bundle ([INSTALL step 12](../docs/INSTALL.md#step-12)), or `./scripts/setup-device.sh` for a certificate made by hand in AWS IoT. The only hands-on step in a device's life, because the ROM bootloader has no network stack and cannot fetch its own first firmware.
 2. **Every update after that** is over the air. Raise `FIRMWARE_VERSION` (a pull request that changes firmware without raising it fails its checks) and merge. Merged into `Dev`, the pipeline builds, publishes, and sends it to every Dev board; merged into `Prod`, to that type's canary ring. A device that was offline during the rollout asks for pending jobs when it reconnects. To try a build over the air before merging, `scripts/ota.sh try Dev <type>` sends your working copy to every Dev board of that type as `<version>-try.<n>`, a version no release uses. The console names the image a board downloads (`OTA: downloading https://s3.<region>.amazonaws.com/<bucket>/firmware/...bin`); from 2.2.0 it leaves out the link's query string, which holds its signature and the OTA role's session token.
 3. **One click per release** promotes a Prod release from canary to fleet, for that device type only.
 

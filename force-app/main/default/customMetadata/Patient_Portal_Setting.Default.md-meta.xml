@@ -22,8 +22,9 @@
          org has its own chat site, and a deploy sets every field a record
          names, so naming them would put one org's URL into every other org
          and reset what an admin typed. A field a deploy does not name keeps
-         the org's value: set Chat Site URL once in Setup (docs/INSTALL.md,
-         step 10). test/config/per-org-values.test.js keeps them out. -->
+         the org's value: scripts/set-portal-chat-url.sh stores the chat URL
+         once per org (docs/INSTALL.md, step 10).
+         test/config/per-org-values.test.js keeps them out of this file. -->
     <values>
         <field>Token_Minutes__c</field>
         <value xsi:type="xsd:double">5</value>

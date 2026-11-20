@@ -64,6 +64,9 @@ FAKE_SF = textwrap.dedent(r'''
         q = opt('--query')
         if q.startswith('SELECT Id FROM BotVersion WHERE'):
             assert "DeveloperName = 'Patient_Care_Agent'" in q and "Status = 'Active'" in q
+            if state.get('agent_query_fails'):
+                print(json.dumps({'status': 1, 'name': 'INVALID_TYPE', 'message': 'sObject type BotVersion is not supported'}))
+                sys.exit(1)
             n = 1 if state.get('agent_active') else 0
         elif q.startswith('SELECT Id FROM PermissionSet WHERE'):
             name = re.search(r"Name = '([^']+)'", q).group(1)
@@ -126,7 +129,7 @@ class InstallTest(unittest.TestCase):
         with open(os.path.join(self.state_dir, 'state.json'), 'w') as f:
             json.dump(self.state, f)
         open(os.path.join(self.state_dir, 'calls.log'), 'w').close()
-        environ = {k: v for k, v in os.environ.items() if not k.startswith(('SF_', 'DATA_CLOUD', 'SKIP_', 'GITHUB_'))}
+        environ = {k: v for k, v in os.environ.items() if not k.startswith(('SF_', 'DATA_CLOUD', 'SKIP_', 'REPUBLISH_', 'GITHUB_'))}
         environ.update({'PATH': self.bin + os.pathsep + environ['PATH'], 'FAKE_STATE': self.state_dir})
         environ.update(extra)
         result = subprocess.run(['bash', 'scripts/install.sh', env], cwd=self.repo, env=environ,
@@ -174,6 +177,14 @@ class InstallTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('publish-agent.sh', self.chained(calls))
         self.assertIn('REPUBLISH_AGENT=yes', result.stdout + result.stderr)
+
+    def test_an_org_that_cannot_say_is_not_published_to(self):
+        self.state['agent_query_fails'] = True
+        result, calls, _ = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('publish-agent.sh', self.chained(calls))
+        self.assertIn('Could not tell', result.stdout + result.stderr)
+        self.assertNotIn('already has an active version', result.stdout + result.stderr)
 
     def test_republish_agent_replaces_a_running_agent_when_asked(self):
         self.state['agent_active'] = True
