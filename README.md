@@ -28,6 +28,8 @@
 | <img class="pi" src="docs/images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <img class="pi" src="docs/images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> **Reach** | Patients sign in to a **React site on Salesforce** (Multi-Framework, React 19) and chat with their own care assistant through **Enhanced Chat v2**: a second Agentforce agent that only ever sees the signed-in patient's devices and can send a nurse request. Staff use **Slack**: `/patient-status <device>` answers with no Salesforce login (JWT integration user), and the Patient Care Agent answers in Slack DMs. |
 | <img class="pi" src="docs/images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="docs/images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> **Measure** | The app's Home tab shows the month's AWS spend against its limit, the org's limits, and a Business Value dashboard: alert response, chat deflection, hours avoided and cost per device. |
 
+<sub>Product names and logos belong to their owners, shown to say what this project works with, not endorsement. [Icon credits](docs/images/platforms/CREDITS.md).</sub>
+
 ## How it works
 
 ![From a warm sensor to an agent answer: eight steps, animated](docs/images/process-flow.svg)

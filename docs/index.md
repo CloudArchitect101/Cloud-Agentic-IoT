@@ -54,6 +54,8 @@ Each icon marks the platform a step or a page is about.
 <div><img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <b>Terminal</b> <span>copy-paste command blocks</span></div>
 </div>
 
+<small>Product names and logos belong to their owners. They are used to show what this project works with, not endorsement. Where each icon comes from: [icon credits](images/platforms/CREDITS.md).</small>
+
 ## What it does
 
 | Part | What happens |
