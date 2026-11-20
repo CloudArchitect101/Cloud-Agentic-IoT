@@ -1063,8 +1063,9 @@ in this order (details and checks in
    Service Agent permission sets, run
    `PORTAL_AGENT_USER=<username> scripts/publish-portal-agent.sh <org>`, then
    activate it and connect Enhanced Chat v2 with voice on.
-8. Set `Chat_Site_Url__c` in `Patient_Portal_Setting.Default` from the
-   deployment's code snippet, and deploy again.
+8. Set **Chat Site URL** on the `Patient_Portal_Setting.Default` record in
+   Setup (Custom Metadata Types) from the deployment's code snippet. Nothing
+   to deploy: the repo's record does not name the field.
 9. Allow the chat hosts in the site's CSP, and the site in CORS.
 10. Give the site's guest user `Patient_Portal_Guest_Api`.
 11. Give the user who owns the patients' Person Accounts (usually you) the
@@ -1087,7 +1088,7 @@ in this order (details and checks in
 | GitHub | `./scripts/setup-github-secrets.sh`, choosing `Prod`: same secret names, different values, and you as the required reviewer. |
 | Salesforce aliases | `iot-prod-admin`, `iot-prod-deploy`, `iot-prod-integration`. |
 | AWS Organizations | Only after the free-credit phase — see `MIGRATION-RUNBOOK.md` phase 1. |
-| Patient portal (§9) | A new signing certificate and keyset in the Prod org, never Dev's. `Chat_Site_Url__c` comes from Prod's own deployment, set in Prod's copy of `Patient_Portal_Setting.Default`. |
+| Patient portal (§9) | A new signing certificate and keyset in the Prod org, never Dev's. `Chat_Site_Url__c` comes from Prod's own deployment, typed into Prod's `Patient_Portal_Setting.Default` record in Setup. |
 | Ward procedures (§8) | The same SOPs are indexed by the Prod deploy. Check Titan Text Embeddings V2 is available in `ca-central-1` before the first one: the index step fails, naming Bedrock, if it is not. |
 
 Reusing a Dev certificate or role ARN in Prod silently collapses the two

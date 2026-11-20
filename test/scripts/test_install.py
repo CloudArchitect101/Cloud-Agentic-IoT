@@ -62,7 +62,10 @@ FAKE_SF = textwrap.dedent(r'''
         return args[args.index(name) + 1] if name in args else None
     if args[:2] == ['data', 'query']:
         q = opt('--query')
-        if q.startswith('SELECT Id FROM PermissionSet WHERE'):
+        if q.startswith('SELECT Id FROM BotVersion WHERE'):
+            assert "DeveloperName = 'Patient_Care_Agent'" in q and "Status = 'Active'" in q
+            n = 1 if state.get('agent_active') else 0
+        elif q.startswith('SELECT Id FROM PermissionSet WHERE'):
             name = re.search(r"Name = '([^']+)'", q).group(1)
             n = 1 if name in state['permsets'] else 0
         else:
@@ -164,6 +167,18 @@ class InstallTest(unittest.TestCase):
     def test_skips_check_and_agent_when_asked(self):
         _, calls, _ = self.run_install(SKIP_CHECK='yes', SKIP_AGENT='yes')
         self.assertEqual(self.chained(calls), ['seed-ssm.sh', 'deploy-aws.sh', 'deploy-salesforce.sh'])
+
+    def test_an_org_that_already_runs_the_agent_keeps_it(self):
+        self.state['agent_active'] = True
+        result, calls, _ = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn('publish-agent.sh', self.chained(calls))
+        self.assertIn('REPUBLISH_AGENT=yes', result.stdout + result.stderr)
+
+    def test_republish_agent_replaces_a_running_agent_when_asked(self):
+        self.state['agent_active'] = True
+        _, calls, _ = self.run_install(REPUBLISH_AGENT='yes')
+        self.assertEqual(self.chained(calls), CHAINED)
 
     def test_creates_the_data_cloud_reader_before_the_aws_deploy(self):
         result, calls, state = self.run_install(DATA_CLOUD_READER_USER='cloud-agentic-iot-data-cloud-reader')

@@ -19,8 +19,12 @@
 #   SKIP_CHECK=yes            skip scripts/check.sh (the local tests)
 #   SKIP_SOP_INDEX=yes        passed on to deploy-aws.sh: skip the Bedrock SOP index while
 #                             the account's Bedrock hold is open (docs/INSTALL.md, step 2)
-#   SKIP_AGENT=yes            skip publishing Patient_Care_Agent (each publish is
-#                             a new version, so skip it when the script is unchanged)
+#   SKIP_AGENT=yes            never publish Patient_Care_Agent
+#   REPUBLISH_AGENT=yes       publish it even though the org already has an active
+#                             version. Without this a second run leaves the agent
+#                             alone: a publish replaces it with the repo's copy,
+#                             which drops actions added by hand in Agentforce
+#                             Builder (the Espressif MCP actions, INSTALL step 11)
 #
 # Prod is never installed from a laptop: the pipeline deploys it.
 
@@ -122,7 +126,14 @@ EOF
 fi
 endstep
 
-if [ "${SKIP_AGENT:-}" != "yes" ]; then
+# Publish the agent on a first install only. A publish replaces the org's
+# agent with the repo's copy, so on an org that already runs one it would
+# drop whatever was added in Agentforce Builder since.
+if [ "${SKIP_AGENT:-}" = "yes" ]; then
+  :
+elif [ "${REPUBLISH_AGENT:-}" != "yes" ] && [ "$(count "SELECT Id FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent' AND Status = 'Active'")" != "0" ]; then
+  note "Patient_Care_Agent already has an active version, so it was not published again. To replace it with the repo's copy (this drops actions added by hand in Agentforce Builder), run again with REPUBLISH_AGENT=yes."
+else
   "$scripts/publish-agent.sh" "$ENV"
 fi
 

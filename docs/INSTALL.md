@@ -496,14 +496,7 @@ scripts/deploy-portal-routing.sh "$NAME"
 A permission set the user already holds prints a warning: that's fine, carry on.
 
 4. **Routing.** **Messaging Settings** → the channel → Routing Type **Omni-Flow**, Flow `Route_Patient_Portal_Chat`, Fallback Queue **Care Team Queue**.
-5. **The site's chat link.** From the deployment's code snippet, copy the site URL (it holds `ESW`). Put it in `Chat_Site_Url__c` in [`force-app/main/default/customMetadata/Patient_Portal_Setting.Default.md-meta.xml`](../force-app/main/default/customMetadata/Patient_Portal_Setting.Default.md-meta.xml), then:
-
-**Paste into your terminal.** Once per org. It commits the URL in your clone only (never push it: the deploy refuses uncommitted changes) and deploys Salesforce again.
-
-```bash
-git commit -am "Portal chat URL for my org"
-SF_TARGET_ORG="$NAME" scripts/deploy-salesforce.sh Dev
-```
+5. **The site's chat link.** From the deployment's code snippet, copy the site URL (it holds `ESW`). Then Setup → **Custom Metadata Types** → **Patient Portal Setting** → **Manage Records** → **Default** → **Edit**, paste it into **Chat Site URL** and **Save**. Once per org: nothing to commit or deploy, and later deploys keep it, because the repo's copy of the record does not name this field.
 
 6. **CORS.** Setup → **CORS** → **New**: `https://<your My Domain>.my.site.com`. Publish the Embedded Service deployment again.
 7. **Guest user.** The site → **Administration** → **Pages** → **Public Access**: assign `Patient_Portal_Guest_Api`.
@@ -595,12 +588,11 @@ sf project retrieve start --metadata AiAuthoringBundle:Patient_Portal_Agent --ta
 **Fill in first:**
 - `BUNDLE=~/Downloads/bundle.json`: where you saved the bundle. Change it only if it's somewhere else.
 
-**Paste into your terminal.** Once per board. It writes the board's certificate and Wi-Fi to the board over USB, then deletes the bundle, which holds the board's private key.
+**Paste into your terminal.** Once per board. It writes the firmware to the board over USB (a new board has none), then the board's certificate and Wi-Fi. Only if that worked does it delete the bundle, which holds the board's private key. If a step fails, the bundle stays: fix what the message says and paste the block again.
 
 ```bash
 BUNDLE=~/Downloads/bundle.json
-./scripts/provision-device.sh "$BUNDLE"
-rm "$BUNDLE"
+./scripts/firmware.sh flash patient-monitor && ./scripts/provision-device.sh "$BUNDLE" && rm "$BUNDLE"
 ```
 
 Optional, a second Wi-Fi network such as your phone's hotspot. Close `scripts/firmware.sh monitor` first, since it holds the USB port.
