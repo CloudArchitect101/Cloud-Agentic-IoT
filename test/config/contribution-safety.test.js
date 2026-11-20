@@ -12,7 +12,6 @@ const path = require('node:path');
 
 const root = path.join(__dirname, '../..');
 const WORKFLOWS = path.join(root, '.github/workflows');
-const MAINTAINER = '@CloudArchitect101';
 
 const workflows = fs.readdirSync(WORKFLOWS)
   .filter((f) => /\.ya?ml$/.test(f))
@@ -70,8 +69,14 @@ test('CODEOWNERS sends every change and the workflows to the maintainer', () => 
     .split('\n').filter((l) => l.trim() && !l.trim().startsWith('#'))
     .map((l) => l.trim().split(/\s+/));
   const ownerOf = (p) => owners.find(([pattern]) => pattern === p)?.slice(1) ?? [];
-  assert.ok(ownerOf('*').includes(MAINTAINER));
-  assert.ok(ownerOf('/.github/').includes(MAINTAINER));
+  // CODEOWNERS is the one place that names the maintainer, so a fork changes
+  // one file. Whoever owns `*` must also own the paths that decide what runs
+  // with the project's credentials.
+  const [maintainer] = ownerOf('*');
+  assert.match(maintainer ?? '', /^@[\w-]+(\/[\w-]+)?$/, 'CODEOWNERS gives `*` to a GitHub login or team');
+  for (const guarded of ['/.github/', '/infra/', '/scripts/']) {
+    assert.ok(ownerOf(guarded).includes(maintainer), `${guarded} goes to ${maintainer}`);
+  }
 });
 
 test('the community files exist', () => {

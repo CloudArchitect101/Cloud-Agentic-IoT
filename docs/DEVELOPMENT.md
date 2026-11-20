@@ -204,7 +204,7 @@ and the pipeline's Dev can be compared by SHA.
 
 | Step | Why |
 |---|---|
-| A new board's first flash, over USB (`scripts/setup-device.sh`) | A blank ESP32 has no network stack. OTA works only once our firmware runs. |
+| A new board's first flash, over USB (`scripts/firmware.sh flash`, INSTALL step 12; `scripts/setup-device.sh` for a hand-made certificate) | A blank ESP32 has no network stack. OTA works only once our firmware runs. |
 | Approving a Prod deploy | It is the last look before production |
 | Promoting a Prod release to the whole fleet | It is the judgement that the canary behaved |
 | Entering secrets | Secret values never pass through automation or chat |

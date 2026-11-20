@@ -2,14 +2,16 @@
 #
 # install.sh - the Quick install's deploy in one run: seed the settings, check,
 # deploy AWS and Salesforce, give the people their permission sets, publish the
-# agent, then print every value the remaining Setup steps ask for.
+# agent on a first install, then print every value the remaining Setup steps
+# ask for.
 #
 #   scripts/install.sh Dev
 #   DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader scripts/install.sh Dev
 #
 # It only chains the scripts that already exist, in the order docs/INSTALL.md
 # gives, so each one keeps its own guards (which account, which org, a clean
-# tree). Run it again after any Setup step: every part is safe to repeat. A
+# tree). Run it again after any Setup step: every part is safe to repeat (an
+# agent the org already runs is left as it is, see REPUBLISH_AGENT below). A
 # permission set that is already assigned is left alone, and one the org does
 # not have yet (AWS_IoT_Relay_Callers before step 6) is reported, not failed.
 #
@@ -19,8 +21,12 @@
 #   SKIP_CHECK=yes            skip scripts/check.sh (the local tests)
 #   SKIP_SOP_INDEX=yes        passed on to deploy-aws.sh: skip the Bedrock SOP index while
 #                             the account's Bedrock hold is open (docs/INSTALL.md, step 2)
-#   SKIP_AGENT=yes            skip publishing Patient_Care_Agent (each publish is
-#                             a new version, so skip it when the script is unchanged)
+#   SKIP_AGENT=yes            never publish Patient_Care_Agent
+#   REPUBLISH_AGENT=yes       publish it even though the org already has an active
+#                             version. Without this a second run leaves the agent
+#                             alone: a publish replaces it with the repo's copy,
+#                             which drops actions added by hand in Agentforce
+#                             Builder (the Espressif MCP actions, INSTALL step 11)
 #
 # Prod is never installed from a laptop: the pipeline deploys it.
 
@@ -39,8 +45,18 @@ org="${SF_TARGET_ORG:-iot-$(tr '[:upper:]' '[:lower:]' <<< "$ENV")-deploy}"
 export SF_TARGET_ORG="$org"
 scripts="$REPO_ROOT/scripts"
 
-count() {   # count <SOQL>: how many rows, 0 when the query fails
-  sf data query --target-org "$org" --json --query "$1" 2>/dev/null | jq -r '.result.totalSize // 0' || echo 0
+count() {   # count <SOQL>: how many rows, 0 when the query fails. Always one value.
+  local out
+  out=$(sf data query --target-org "$org" --json --query "$1" 2>/dev/null) || { echo 0; return; }
+  jq -r '.result.totalSize // 0' <<< "$out" 2>/dev/null || echo 0
+}
+
+agent_versions() {   # how many active versions Patient_Care_Agent has; "unknown" when the org would not say
+  local out
+  out=$(sf data query --target-org "$org" --json \
+    --query "SELECT Id FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent' AND Status = 'Active'" 2>/dev/null) \
+    || { echo unknown; return; }
+  jq -r '.result.totalSize // "unknown"' <<< "$out" 2>/dev/null || echo unknown
 }
 
 assign() {   # assign <permission set> [username]: once, and only if the set exists
@@ -122,8 +138,22 @@ EOF
 fi
 endstep
 
-if [ "${SKIP_AGENT:-}" != "yes" ]; then
+# Publish the agent on a first install only. A publish replaces the org's
+# agent with the repo's copy, so on an org that already runs one it would
+# drop whatever was added in Agentforce Builder since.
+# Only an answer of exactly 0 active versions counts as a first install: when
+# the org would not say, leaving the agent alone is the choice that loses nothing.
+if [ "${SKIP_AGENT:-}" = "yes" ]; then
+  :
+elif [ "${REPUBLISH_AGENT:-}" = "yes" ]; then
   "$scripts/publish-agent.sh" "$ENV"
+else
+  active=$(agent_versions)
+  case "$active" in
+    0) "$scripts/publish-agent.sh" "$ENV" ;;
+    unknown) warn "Could not tell whether Patient_Care_Agent already runs in $org (is Agentforce on? docs/INSTALL.md, step 3), so it was not published. On a first install, run again with REPUBLISH_AGENT=yes." ;;
+    *) note "Patient_Care_Agent already has an active version, so it was not published again. To replace it with the repo's copy (this drops actions added by hand in Agentforce Builder), run again with REPUBLISH_AGENT=yes." ;;
+  esac
 fi
 
 step "Values for the Setup steps"

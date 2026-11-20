@@ -261,10 +261,10 @@ SF_TARGET_ORG="$NAME" DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader
 4. `deploy-aws.sh`: every stack, the guardrails, the MCP server, the Slack stack once its secret is in, and the SOP index for the agent.
 5. `deploy-salesforce.sh`: the app, the React portal, the agents' actions, the permission sets.
 6. Gives you `Device_Platform_Admin`, `Platform_Usage_Viewer` and `Patient_Care_Agent`, and gives the integration user `Device_Integration`.
-7. `publish-agent.sh`: publishes and activates the Patient Care Agent.
+7. `publish-agent.sh`: publishes and activates the Patient Care Agent, on a first install only. When the org already runs a version of the agent, it is left as it is.
 8. Prints every value the next steps ask for: the role ARN and URL for step 7, the Slack Request URL, the Data Cloud bucket and the MCP endpoint.
 
-Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` skips the agent publish. If Bedrock is still held (step 2), run `SKIP_SOP_INDEX=yes scripts/install.sh Dev`. Everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force`.
+Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` never publishes the agent. `REPUBLISH_AGENT=yes` replaces a running agent with the repo's copy; that drops actions added by hand in Agentforce Builder (step 11), so retrieve and commit them first. If Bedrock is still held (step 2), run `SKIP_SOP_INDEX=yes scripts/install.sh Dev`. Everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force`.
 
 > [!NOTE]
 > **A later deploy fails with `This schedulable class has jobs pending or in progress`.** Once the case queue monitor is scheduled, Salesforce refuses a deploy that touches the classes it uses. In a Dev or test org, turn on Setup → **Deployment Settings** → **Allow deployments of components when corresponding Apex jobs are pending or in progress**, then deploy again. In Prod, stop the scheduled jobs, deploy, and schedule them again.
@@ -496,13 +496,16 @@ scripts/deploy-portal-routing.sh "$NAME"
 A permission set the user already holds prints a warning: that's fine, carry on.
 
 4. **Routing.** **Messaging Settings** → the channel → Routing Type **Omni-Flow**, Flow `Route_Patient_Portal_Chat`, Fallback Queue **Care Team Queue**.
-5. **The site's chat link.** From the deployment's code snippet, copy the site URL (it holds `ESW`). Put it in `Chat_Site_Url__c` in [`force-app/main/default/customMetadata/Patient_Portal_Setting.Default.md-meta.xml`](../force-app/main/default/customMetadata/Patient_Portal_Setting.Default.md-meta.xml), then:
+5. **The site's chat link.** From the deployment's code snippet, copy the site URL (it holds `ESW`).
 
-**Paste into your terminal.** Once per org. It commits the URL in your clone only (never push it: the deploy refuses uncommitted changes) and deploys Salesforce again.
+**Fill in first:**
+- `CHAT_SITE_URL='<the site URL>'`: the URL you just copied. Example: `CHAT_SITE_URL='https://yourdomain.my.site.com/ESWPatientPortalChat1700000000000'`. It is not a secret.
+
+**Paste into your terminal.** Once per org. It stores the URL in the org's `Patient_Portal_Setting.Default` record and touches no other setting. Nothing to commit, and later deploys keep it, because the repo's copy of the record does not name this field.
 
 ```bash
-git commit -am "Portal chat URL for my org"
-SF_TARGET_ORG="$NAME" scripts/deploy-salesforce.sh Dev
+CHAT_SITE_URL='<the site URL>'
+scripts/set-portal-chat-url.sh "$NAME" "$CHAT_SITE_URL"
 ```
 
 6. **CORS.** Setup → **CORS** → **New**: `https://<your My Domain>.my.site.com`. Publish the Embedded Service deployment again.
@@ -595,12 +598,11 @@ sf project retrieve start --metadata AiAuthoringBundle:Patient_Portal_Agent --ta
 **Fill in first:**
 - `BUNDLE=~/Downloads/bundle.json`: where you saved the bundle. Change it only if it's somewhere else.
 
-**Paste into your terminal.** Once per board. It writes the board's certificate and Wi-Fi to the board over USB, then deletes the bundle, which holds the board's private key.
+**Paste into your terminal.** Once per board. It writes the firmware to the board over USB (a new board has none), then the board's certificate and Wi-Fi. Only if that worked does it delete the bundle, which holds the board's private key. If a step fails, the bundle stays: fix what the message says and paste the block again.
 
 ```bash
 BUNDLE=~/Downloads/bundle.json
-./scripts/provision-device.sh "$BUNDLE"
-rm "$BUNDLE"
+./scripts/firmware.sh flash patient-monitor && ./scripts/provision-device.sh "$BUNDLE" && rm "$BUNDLE"
 ```
 
 Optional, a second Wi-Fi network such as your phone's hotspot. Close `scripts/firmware.sh monitor` first, since it holds the USB port.
