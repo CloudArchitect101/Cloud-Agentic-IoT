@@ -33,15 +33,36 @@ Not sure? **[Start here](START-HERE.md)** compares the paths. Only want to see i
 <div><b>Cost and limits</b>AWS spend and org limits on the app's Home tab</div>
 </div>
 
+## Platforms at a glance
+
+Each icon marks the platform a step or a page is about.
+
+<div class="lp-legend">
+<div><img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <b>Salesforce</b> <span>the app, Cases for the care team, Setup</span></div>
+<div><img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> <b>Agentforce</b> <span>the agents that answer</span></div>
+<div><img class="pi" src="images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> <b>Data Cloud</b> <span>readings for KPIs</span></div>
+<div><img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <b>Portal</b> <span>the React site on Experience Cloud</span></div>
+<div><img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <b>Slack</b> <span>status and the agent in chat</span></div>
+<div><img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <b>AWS</b> <span>your project with a spend limit</span></div>
+<div><img class="pi" src="images/platforms/iot-core.svg" alt="AWS IoT Core" title="AWS IoT Core" width="20" height="20"> <b>IoT Core</b> <span>device certificates and MQTT</span></div>
+<div><img class="pi" src="images/platforms/lambda.svg" alt="AWS Lambda" title="AWS Lambda" width="20" height="20"> <b>Lambda</b> <span>readings, commands, the relay</span></div>
+<div><img class="pi" src="images/platforms/dynamodb.svg" alt="DynamoDB and S3" title="DynamoDB and S3" width="20" height="20"> <b>DynamoDB and S3</b> <span>latest readings and the archive</span></div>
+<div><img class="pi" src="images/platforms/bedrock.svg" alt="Amazon Bedrock" title="Amazon Bedrock" width="20" height="20"> <b>Bedrock</b> <span>SOP search embeddings</span></div>
+<div><img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <b>ESP32</b> <span>the board and its firmware</span></div>
+<div><img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> <b>Electronics</b> <span>sensor, motor, wiring</span></div>
+<div><img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> <b>Git and GitHub</b> <span>code, pipelines, OTA releases</span></div>
+<div><img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <b>Terminal</b> <span>copy-paste command blocks</span></div>
+</div>
+
 ## What it does
 
 | Part | What happens |
 |---|---|
-| **Sense** | An ESP32 with a DHT11 sends readings to AWS IoT Core over mutual TLS. No secrets are compiled into the firmware, and every update after the first USB flash goes over the air. |
-| **Alert** | At 30 C the board's own motor turns at once (it works offline), and AWS flags the reading so Salesforce opens one Case for the care team. A ward board spins while that queue has work. |
-| **Act** | The Patient Care Agent (Agentforce, new builder) reads the device, cites the ward's SOPs found with Bedrock embeddings, and escalates only after you confirm. Guardrails and PII masking run outside the model. |
-| **Reach** | Patients sign in to a **React site on Salesforce** (Multi-Framework, React 19) and chat with their own care assistant through **Enhanced Chat v2**: a second Agentforce agent that only ever sees the signed-in patient's devices and can send a nurse request. Staff use **Slack**: `/patient-status <device>` answers with no Salesforce login (JWT integration user), and the Patient Care Agent answers in Slack DMs. |
-| **Measure** | The app's Home tab shows the month's AWS spend against its limit, the org's limits, and a Business Value dashboard: alert response, chat deflection, hours avoided and cost per device. |
+| <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> <img class="pi" src="images/platforms/iot-core.svg" alt="AWS IoT Core" title="AWS IoT Core" width="20" height="20"> **Sense** | An ESP32 with a DHT11 sends readings to AWS IoT Core over mutual TLS. No secrets are compiled into the firmware, and every update after the first USB flash goes over the air. |
+| <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/iot-core.svg" alt="AWS IoT Core" title="AWS IoT Core" width="20" height="20"> <img class="pi" src="images/platforms/service.svg" alt="Cases (Service)" title="Cases (Service)" width="20" height="20"> **Alert** | At 30 C the board's own motor turns at once (it works offline), and AWS flags the reading so Salesforce opens one Case for the care team. A ward board spins while that queue has work. |
+| <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> <img class="pi" src="images/platforms/bedrock.svg" alt="Amazon Bedrock" title="Amazon Bedrock" width="20" height="20"> **Act** | The Patient Care Agent (Agentforce, new builder) reads the device, cites the ward's SOPs found with Bedrock embeddings, and escalates only after you confirm. Guardrails and PII masking run outside the model. |
+| <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> **Reach** | Patients sign in to a **React site on Salesforce** (Multi-Framework, React 19) and chat with their own care assistant through **Enhanced Chat v2**: a second Agentforce agent that only ever sees the signed-in patient's devices and can send a nurse request. Staff use **Slack**: `/patient-status <device>` answers with no Salesforce login (JWT integration user), and the Patient Care Agent answers in Slack DMs. |
+| <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> **Measure** | The app's Home tab shows the month's AWS spend against its limit, the org's limits, and a Business Value dashboard: alert response, chat deflection, hours avoided and cost per device. |
 
 ## How it works
 
@@ -64,21 +85,21 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | Learn by doing | Get a task done |
 |---|---|
 | [Start here](START-HERE.md): the four paths (admin, device builder, developer, pipelines) | |
-| [Quick install](INSTALL.md): every feature, step by step | [Install guide](INSTALL-GUIDE.md): every step, explained |
-| [Try it](TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | [Setup](SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
-| [Platform primer](PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | [Development](DEVELOPMENT.md): laptop to Dev to Prod |
-| | [Migration runbook](MIGRATION-RUNBOOK.md): phased cutover with a rollback per phase |
+| <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> [Quick install](INSTALL.md): every feature, step by step | [Install guide](INSTALL-GUIDE.md): every step, explained |
+| <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Try it](TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> [Setup](SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
+| <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Platform primer](PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> [Development](DEVELOPMENT.md): laptop to Dev to Prod |
+| | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> [Migration runbook](MIGRATION-RUNBOOK.md): phased cutover with a rollback per phase |
 | | [Troubleshooting](TROUBLESHOOTING.md): what broke, why, and the fix |
 
 | Understand the design | Look something up |
 |---|---|
-| [The chapters](CHAPTERS.md): 14 capabilities, one system | [Data model](DATA-MODEL.md): why each object is standard or custom |
-| [How it connects](HOW-IT-CONNECTS.md) and [Architecture overview](ARCHITECTURE-OVERVIEW.md) | [Cost model](COST-MODEL.md): per device, per user, per customer |
-| [Device identity](DEVICE-IDENTITY.md): certificates and WiFi that survive OTA | [Spend and limits](SPEND-AND-LIMITS.md): the Home page's numbers |
-| [SOP grounding](SOP-GROUNDING.md) and [Guardrails and MCP](GUARDRAILS-AND-MCP.md) | [CI/CD and secrets](CI-CD-SECRETS.md): what is automated and the conventions |
-| [Patient portal](PATIENT-PORTAL.md): the React site, Enhanced Chat and the patient agent | [Agent evals](AGENT-EVALS.md): Testing Center specs and retrieval scores |
-| [Slack](CHAPTERS.md#04--headless-slack-integration): `/patient-status` with no login, and [the agent in Slack](SETUP.md#talk-to-the-agent-from-slack-optional) | [Business value](BUSINESS-VALUE.md): the KPI dashboard and its assumptions |
-| [Live status](LIVE-STATUS.md), [Data Cloud](DATA-CLOUD.md), [Scaling](SCALING.md) | |
+| [The chapters](CHAPTERS.md): 14 capabilities, one system | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Data model](DATA-MODEL.md): why each object is standard or custom |
+| [How it connects](HOW-IT-CONNECTS.md) and [Architecture overview](ARCHITECTURE-OVERVIEW.md) | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Cost model](COST-MODEL.md): per device, per user, per customer |
+| <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/iot-core.svg" alt="AWS IoT Core" title="AWS IoT Core" width="20" height="20"> [Device identity](DEVICE-IDENTITY.md): certificates and WiFi that survive OTA | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Spend and limits](SPEND-AND-LIMITS.md): the Home page's numbers |
+| <img class="pi" src="images/platforms/bedrock.svg" alt="Amazon Bedrock" title="Amazon Bedrock" width="20" height="20"> <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> [SOP grounding](SOP-GROUNDING.md) and [Guardrails and MCP](GUARDRAILS-AND-MCP.md) | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> [CI/CD and secrets](CI-CD-SECRETS.md): what is automated and the conventions |
+| <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> [Patient portal](PATIENT-PORTAL.md): the React site, Enhanced Chat and the patient agent | <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> <img class="pi" src="images/platforms/bedrock.svg" alt="Amazon Bedrock" title="Amazon Bedrock" width="20" height="20"> [Agent evals](AGENT-EVALS.md): Testing Center specs and retrieval scores |
+| <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> [Slack](CHAPTERS.md#04--headless-slack-integration): `/patient-status` with no login, and [the agent in Slack](SETUP.md#talk-to-the-agent-from-slack-optional) | <img class="pi" src="images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> [Business value](BUSINESS-VALUE.md): the KPI dashboard and its assumptions |
+| <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Live status](LIVE-STATUS.md), [Data Cloud](DATA-CLOUD.md), [Scaling](SCALING.md) | |
 
 ## KPIs and cost
 
