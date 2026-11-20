@@ -124,6 +124,20 @@ private class PatientDeviceServiceTest {
     }
 
     @IsTest
+    static void aCalloutThatNeverAnsweredGivesItsReason() {
+        List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
+        PatientDeviceService.Device device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];
+        DeviceApiClient.Result result = new DeviceApiClient.Result();
+        result.statusCode = 0;
+        result.body = 'You don\'t have read permissions on the User External Credential object.';
+
+        PatientDeviceService.addLatest(device, result);
+
+        Assert.isTrue(device.liveNote.contains('User External Credential'), device.liveNote);
+        Assert.isFalse(device.readings[0].live);
+    }
+
+    @IsTest
     static void noReadingAtAwsSaysSo() {
         List<PatientPortalTestData.Patient> both = PatientPortalTestData.twoPatients();
         PatientDeviceService.Device device = PatientDeviceService.devicesFor(both[0].account.Id, 5)[0];

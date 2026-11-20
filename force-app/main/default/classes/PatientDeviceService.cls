@@ -147,7 +147,11 @@ public without sharing class PatientDeviceService {
     @TestVisible
     private static void addLatest(Device device, DeviceApiClient.Result result) {
         if (!result.succeeded()) {
-            device.liveNote = 'The newest reading from AWS is unavailable (HTTP ' + result.statusCode + ').';
+            // Status 0 is a callout that never got an answer; its message
+            // (for example a missing credential permission) is the reason.
+            device.liveNote = 'The newest reading from AWS is unavailable ('
+                + (result.statusCode == 0 && String.isNotBlank(result.body)
+                    ? result.body.abbreviate(160) : 'HTTP ' + result.statusCode) + ').';
             return;
         }
         Map<String, Object> latest = (Map<String, Object>) ((Map<String, Object>) JSON.deserializeUntyped(result.body)).get('latest');
