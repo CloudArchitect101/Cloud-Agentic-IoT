@@ -249,7 +249,13 @@ that have no metadata, in order. Each one is also in
       needs Manage External Users, which System Administrator has.
     - For each Person Account: Enable Customer User (profile Customer
       Community User), and assign `Patient_Portal_User` and
-      `AWS_IoT_Relay_Callers` (INSTALL-GUIDE step 1 part d). The second one
+      `AWS_IoT_Relay_Callers` (INSTALL-GUIDE step 1 part d;
+      `deploy-salesforce.sh` assigns it to every holder of `Patient_Portal_User`
+      or `Patient_Portal_Agent` who lacks it, so a deploy after enabling
+      patients does it for you). Never add the credential's principal access
+      to `Patient_Portal_User` by hand instead: that set is in the repo, and
+      each deploy replaces it whole, which silently removes the access and
+      sends the page back to the last saved reading. The second one
       lets the My monitor page fetch the board's newest reading from AWS:
       Salesforce saves a reading only on an alert change, so without it the
       page shows the last saved one, which can be days old. The agent user
