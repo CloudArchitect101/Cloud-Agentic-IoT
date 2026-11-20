@@ -37,6 +37,32 @@ Setting up a new device? There are two ways, by where its identity was made:
   `./scripts/setup-device.sh` compiles, flashes, and provisions in one
   interactive pass. See [`docs/DEVICE-IDENTITY.md`](../docs/DEVICE-IDENTITY.md).
 
+## Wiring
+
+Six jumper wires on a monitored device, three on a corp ticket gauge. The board
+is drawn as you hold it with its printed pin names facing you (USB down, 3.3V
+top right); with the metal shield up the two rows swap sides, so go by the
+printed names. One plug per pin: the sensor and the servo each get their own
+GND.
+
+![Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers](../docs/images/wiring-monitored-device.svg)
+
+![Corp ticket gauge wiring: the same ESP32 and an SG90 servo only. Servo orange to P5, red to 5V, brown to GND; no wire goes to the bell](../docs/images/wiring-corp-gauge.svg)
+
+| From | Board pin | Jumper |
+|---|---|---|
+| DHT11 leg 1 (VCC) | 3.3V | red |
+| DHT11 leg 2 (DATA) | P4 (GPIO 4, `DHT_PIN`) | yellow |
+| DHT11 leg 4 (GND) | GND, left row | black |
+| 10 kΩ resistor | soldered across DHT11 legs 1 and 2 | |
+| Servo orange | P5 (GPIO 5, `SERVO_PIN`) | orange |
+| Servo red | 5V | red |
+| Servo brown | GND, right row | brown |
+
+The drawings come from `scripts/draw-wiring.js` (`node scripts/draw-wiring.js`
+after a pin change); `test/config/wiring-diagrams.test.js` fails if they drift
+from the sketches' pins.
+
 ## The safety check that matters
 
 Each sketch declares its own name, which must match its folder:

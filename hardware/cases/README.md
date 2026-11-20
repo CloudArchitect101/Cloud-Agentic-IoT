@@ -8,7 +8,9 @@ Concept models, made in OpenSCAD (open the `.scad` to change any size, then expo
 
 ## Wiring, and how the needle rings the bell
 
-![wiring](wiring-and-bell.png)
+![Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers](../../docs/images/wiring-monitored-device.svg)
+
+![Corp ticket gauge wiring: the same ESP32 and an SG90 servo only. Servo orange to P5, red to 5V, brown to GND; no wire goes to the bell](../../docs/images/wiring-corp-gauge.svg)
 
 Monitored device: DHT11 leg 1 to 3.3V, leg 2 to P4 (GPIO 4), leg 4 to GND, 10 kΩ across legs 1 and 2 inside the pod. Servo orange to P5 (GPIO 5), red to 5V, brown to GND. Corp gauge: same servo wiring inside the box; no wire goes to the bell, the needle's printed tip taps it.
 

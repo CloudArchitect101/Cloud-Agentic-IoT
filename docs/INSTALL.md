@@ -588,9 +588,11 @@ sf project retrieve start --metadata AiAuthoringBundle:Patient_Portal_Agent --ta
 
 ## 12. Add a board
 
-1. Get the parts (ESP32, DHT11, SG90 servo, a data USB cable): [Install guide, Stage 3](INSTALL-GUIDE.md#what-you-need). Wiring: [firmware/README.md](../firmware/README.md#build-and-flash).
+1. Get the parts (ESP32, DHT11, SG90 servo, a data USB cable): [Install guide, Stage 3](INSTALL-GUIDE.md#what-you-need). Wiring: [firmware/README.md](../firmware/README.md#wiring). Every wire ends on the pin it plugs onto; the pin names are the ones printed on the board.
 
-   ![Wiring for the monitored device: DHT11 leg 1 to 3.3V, leg 2 to P4, leg 4 to GND with a 10 kΩ resistor across legs 1 and 2; servo orange to P5, red to 5V, brown to GND](images/wiring-monitored-device.png)
+   ![Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers](images/wiring-monitored-device.svg)
+
+   A corp ticket gauge has the servo only: [its wiring](images/wiring-corp-gauge.svg).
 
 2. In the Cloud Agentic IoT app, create a **Wi-Fi Network**, then an **Asset** with Serial Number = the board's name. It turns **Provisioned** with a bundle link.
 3. Download the bundle, plug the board in by USB, and run:
