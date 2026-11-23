@@ -18,6 +18,12 @@
 > [!NOTE]
 > **Video walkthrough: coming soon.** A short video showing the end result (board, alerts, agent, portal) and where each part lives in this repository.
 
+<p align="center">
+  <a href="https://cloudarchitect101.github.io/Cloud-Agentic-IoT/"><img src="docs/images/start-here-button.svg" alt="Start Here: open the guide website" width="440" height="88"></a>
+  <br>
+  <sub>Opens the guide website: pick your path (Salesforce admin, device builder, developer or pipelines) and follow it step by step.</sub>
+</p>
+
 ## What it does
 
 | Part | What happens |
