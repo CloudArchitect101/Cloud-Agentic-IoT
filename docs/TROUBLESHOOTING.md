@@ -244,7 +244,7 @@ Check the install: `aws agent-toolkit list-available-skills --region us-east-1 -
 | When | Symptom | Root cause | Fix | What prevents it now |
 | --- | --- | --- | --- | --- |
 | Nov 23 | After the repository went public, a Troubleshooting row still named the try-it AWS project's real 12-digit account ID | The row quoted the account from an error message. An account ID is not a credential, but it tells anyone which account to target | The row now says "the try-it AWS project's account". Git history was kept as is: rewriting it would break every pull request link, and the ID alone grants no access | `test/config/public-repo-hygiene.test.js` fails on any 12-digit number other than the AWS docs placeholders (`111122223333` and friends) |
-| Nov 23 | 43 merged feature branches were still on GitHub, and links to a branch break once it is deleted | GitHub keeps a branch after its pull request merges unless "Automatically delete head branches" is on | Delete the merged branches and turn on "Automatically delete head branches" in the repository settings. Dev stays the one long-lived branch until Prod exists | The same test fails on any github.com link into this repository that names a branch other than `Dev` |
+| Nov 23 | 42 merged feature branches were still on GitHub, and links to a branch break once it is deleted | GitHub keeps a branch after its pull request merges unless "Automatically delete head branches" is on | Delete the merged branches and turn on "Automatically delete head branches" in the repository settings. Dev stays the one long-lived branch until Prod exists | The same test fails on any github.com link into this repository that names a branch other than `Dev` |
 
 ---
 
