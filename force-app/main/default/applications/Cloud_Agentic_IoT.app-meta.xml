@@ -46,14 +46,17 @@
         <type>Flexipage</type>
         <pageOrSobjectType>standard-home</pageOrSobjectType>
     </actionOverrides>
-    <!-- The app's icon in the App Launcher and the nav bar: the cloud from
-         the CloudArchitect101.com logo, a ContentAsset on a transparent
-         background, on the header colour. -->
+    <!-- The app's icon in the App Launcher and the nav bar: the pixel "101"
+         cloud (the CloudArchitect101 favicon), a ContentAsset on a transparent
+         background, on the header colour. shouldOverrideOrgTheme is the
+         "Use the app's image and color instead of the org's custom theme"
+         box: on, so an org theme cannot hide the logo or the colour.
+         logoVersion must match the ContentAsset's latest version number. -->
     <brand>
         <headerColor>#0B5CAB</headerColor>
         <logo>CloudAgenticIoTLogo</logo>
-        <logoVersion>1</logoVersion>
-        <shouldOverrideOrgTheme>false</shouldOverrideOrgTheme>
+        <logoVersion>2</logoVersion>
+        <shouldOverrideOrgTheme>true</shouldOverrideOrgTheme>
     </brand>
     <description>Devices, their readings, the commands sent to them and the Wi-Fi networks they join.</description>
     <formFactors>Small</formFactors>
