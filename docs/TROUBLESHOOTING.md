@@ -246,6 +246,12 @@ Check the install: `aws agent-toolkit list-available-skills --region us-east-1 -
 | Nov 23 | After the repository went public, a Troubleshooting row still named the try-it AWS project's real 12-digit account ID | The row quoted the account from an error message. An account ID is not a credential, but it tells anyone which account to target | The row now says "the try-it AWS project's account". Git history was kept as is: rewriting it would break every pull request link, and the ID alone grants no access | `test/config/public-repo-hygiene.test.js` fails on any 12-digit number other than the AWS docs placeholders (`111122223333` and friends) |
 | Nov 23 | 42 merged feature branches were still on GitHub, and links to a branch break once it is deleted | GitHub keeps a branch after its pull request merges unless "Automatically delete head branches" is on | Delete the merged branches and turn on "Automatically delete head branches" in the repository settings. Dev stays the one long-lived branch until Prod exists | The same test fails on any github.com link into this repository that names a branch other than `Dev` |
 
+## App branding (Nov 24)
+
+| When | Symptom | Root cause | Fix | What prevents it now |
+| --- | --- | --- | --- | --- |
+| Nov 24 | The new "101" cloud logo and the "Use the app's image and color instead of the org's custom theme" box were set by hand in App Manager, and the next deploy would put back the old logo and clear the box | The app's `<brand>` block in `Cloud_Agentic_IoT.app-meta.xml` still pointed at version 1 of the old cloud image and had `shouldOverrideOrgTheme` false. Metadata wins on every deploy, so UI-only changes do not last | The 48 px favicon is scaled 5x (nearest neighbour, so the pixel art stays sharp) into the 256 px `CloudAgenticIoTLogo` ContentAsset as version 2, `logoVersion` is 2 and `shouldOverrideOrgTheme` is true | `test/config/app-branding.test.js` checks the box is on, the colour is `#0B5CAB`, the logo names the ContentAsset and `logoVersion` matches its latest version |
+
 ---
 
 [← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md)
