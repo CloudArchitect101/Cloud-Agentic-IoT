@@ -41,8 +41,9 @@ per environment, in the order they come up below:
 12. Make the IAM user Salesforce signs its calls with and type its access key
     into Salesforce (INSTALL-GUIDE.md, Stage 2, step 1). IAM Roles Anywhere could
     remove that key later.
-13. On the `AWS_IoT_Relay` external credential, set **Additional Status Codes
-    for Token Refresh** to `403` (INSTALL-GUIDE.md, Stage 2, part b). API Gateway
+13. On the `AWS_IoT_Relay_Credential` external credential, check that **Additional Status Codes
+    for Token Refresh** is `403` (the one-time script sets it; a credential made
+    by hand needs it typed) (INSTALL-GUIDE.md, Stage 2, part b). API Gateway
     answers an expired STS session with 403, and without this every call
     fails from an hour after the first one.
 14. Optional: connect an MCP client to the Smart Ward MCP server (§6.5). The
@@ -64,13 +65,17 @@ per environment, in the order they come up below:
     and activate the agent again, so its active version runs the new topic
     (§8, step 3).
 
-Not code yet, and still by hand in Stage 2 of the Install guide (INSTALL-GUIDE.md): the `AWS_IoT_Relay`
-named and external credentials, the `AWS_IoT_Relay_Callers` permission set
-and its assignments to people (the deploy assigns it to the integration user
-once it exists), queue members, and which boards are indicators (an Asset
-record type, Internal Device, set per board). `Care_Team_Queue` itself ships
-as metadata. They
-depend on values from each org, and become per-org metadata next.
+One-time setup with placeholder values: the `AWS_IoT_Relay` named and
+external credentials and the `AWS_IoT_Relay_Callers` permission set ship in
+[`bootstrap/`](../bootstrap/README.md), outside what the pipeline deploys.
+`scripts/bootstrap-salesforce.sh` (run by `scripts/install.sh`) creates each
+one the org lacks and never changes one that exists; the access key and the
+role ARN are typed in Setup (INSTALL-GUIDE.md, Stage 2).
+
+Still by hand: the permission set's assignments to people (the deploy assigns
+it to the integration user once it exists), queue members, and which boards
+are indicators (an Asset record type, Internal Device, set per board).
+`Care_Team_Queue` itself ships as metadata.
 
 ---
 
