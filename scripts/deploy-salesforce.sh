@@ -192,7 +192,9 @@ if [ -n "$callers" ] && [ "$callers" != "0" ]; then
   # 1. Internal holders of AWS_IoT_Relay_Callers (and the Automated Process
   #    user) get the reader set. 2. Orgs set up before Nov 25 put the Read in
   #    AWS_IoT_Relay_Callers itself: take it out, now that 1 covers them,
-  #    or no portal patient can be given the set. 3. Portal users get it.
+  #    or no portal patient can be given the set. A set made in Setup records
+  #    that Read as ExternalDataConnector; metadata calls it
+  #    UserExternalCredential, so match both. 3. Portal users get it.
   apex_file=$(mktemp)
   cat > "$apex_file" <<'APEX'
 Id callers = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers' LIMIT 1].Id;
@@ -209,7 +211,8 @@ if (!readerSets.isEmpty()) {
     }
     insert readers;
     List<ObjectPermissions> inCallers = [SELECT Id, PermissionsRead FROM ObjectPermissions
-        WHERE ParentId = :callers AND SobjectType = 'UserExternalCredential' AND PermissionsRead = true];
+        WHERE ParentId = :callers AND SobjectType IN ('UserExternalCredential', 'ExternalDataConnector')
+        AND PermissionsRead = true];
     for (ObjectPermissions op : inCallers) { op.PermissionsRead = false; }
     update inCallers;
     System.debug(LoggingLevel.ERROR, 'AWS_IoT_Relay_Credential_Reader given to ' + readers.size()
