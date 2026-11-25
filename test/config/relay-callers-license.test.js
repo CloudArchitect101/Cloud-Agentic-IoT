@@ -40,3 +40,10 @@ test('the deploy hands out the reader and strips the Read before assigning porta
   const portal = script.indexOf("PermissionSet.Name IN ('Patient_Portal_User', 'Patient_Portal_Agent')");
   assert.ok(giveReader > 0 && strip > giveReader && portal > strip, 'reader, then strip, then portal users');
 });
+
+// A set made in Setup stores the Read as ExternalDataConnector, metadata as
+// UserExternalCredential: matching only one removed nothing (Nov 25).
+test('the deploy strips the Read under both of its object names', () => {
+  const script = read('scripts/deploy-salesforce.sh');
+  assert.match(script, /SobjectType IN \('UserExternalCredential', 'ExternalDataConnector'\)/);
+});
