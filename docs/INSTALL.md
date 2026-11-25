@@ -260,11 +260,12 @@ SF_TARGET_ORG="$NAME" DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader
 3. `check.sh`, the local tests.
 4. `deploy-aws.sh`: every stack, the guardrails, the MCP server, the Slack stack once its secret is in, and the SOP index for the agent.
 5. `deploy-salesforce.sh`: the app, the React portal, the agents' actions, the permission sets.
-6. Gives you `Device_Platform_Admin`, `Platform_Usage_Viewer` and `Patient_Care_Agent`, and gives the integration user `Device_Integration`.
-7. `publish-agent.sh`: publishes and activates the Patient Care Agent, on a first install only. When the org already runs a version of the agent, it is left as it is.
-8. Prints every value the next steps ask for: the role ARN and URL for step 7, the Slack Request URL, the Data Cloud bucket and the MCP endpoint.
+6. `bootstrap-salesforce.sh`: creates the `AWS_IoT_Relay` external credential, named credential and the `AWS_IoT_Relay_Callers` permission set with this project's URL and Region, each only when the org has none. It never changes one that exists, and it leaves the access key and the role ARN for you to type in step 7.
+7. Gives you `Device_Platform_Admin`, `Platform_Usage_Viewer`, `Patient_Care_Agent` and `AWS_IoT_Relay_Callers`, and gives the integration user `Device_Integration`.
+8. `publish-agent.sh`: publishes and activates the Patient Care Agent, on a first install only. When the org already runs a version of the agent, it is left as it is.
+9. Prints every value the next steps ask for: the role ARN and URL for step 7, the Slack Request URL, the Data Cloud bucket and the MCP endpoint.
 
-Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` never publishes the agent. `REPUBLISH_AGENT=yes` replaces a running agent with the repo's copy; that drops actions added by hand in Agentforce Builder (step 11), so retrieve and commit them first. If Bedrock is still held (step 2), run `SKIP_SOP_INDEX=yes scripts/install.sh Dev`. Everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force`.
+Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` never publishes the agent. `SKIP_BOOTSTRAP=yes` leaves the `AWS_IoT_Relay` credential for you to make in Setup (step 7, "By hand instead"). `REPUBLISH_AGENT=yes` replaces a running agent with the repo's copy; that drops actions added by hand in Agentforce Builder (step 11), so retrieve and commit them first. If Bedrock is still held (step 2), run `SKIP_SOP_INDEX=yes scripts/install.sh Dev`. Everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force`.
 
 > [!NOTE]
 > **A later deploy fails with `This schedulable class has jobs pending or in progress`.** Once the case queue monitor is scheduled, Salesforce refuses a deploy that touches the classes it uses. In a Dev or test org, turn on Setup → **Deployment Settings** → **Allow deployments of components when corresponding Apex jobs are pending or in progress**, then deploy again. In Prod, stop the scheduled jobs, deploy, and schedule them again.
@@ -327,7 +328,12 @@ aws iam create-access-key --user-name "$CALLER"
 
 `create-access-key` prints the key once. Type it into Salesforce in b and nowhere else.
 
-**b. External credential.** Setup → **Named Credentials** → **External Credentials** → **New**:
+**b. Type the key and the role into the external credential.** `scripts/install.sh` already created the external credential `AWS_IoT_Relay` in step 6, with your Region. Salesforce stores the key and the role ARN as credentials, not as settings a file can carry, so they are yours to type. Setup → **Named Credentials** → **External Credentials** → `AWS_IoT_Relay`:
+
+1. **Edit**: type the key from a into **STS Access Key** and **STS Access Secret**, then **Save**.
+2. Under **Principals**, edit `Caller`: type the role ARN that step 6 printed into **IAM Role ARN** (it has `:role/`, not `:user/`), then **Save**.
+
+While you are there, check what the script filled in:
 
 | Setting | Value |
 |---|---|
@@ -335,14 +341,41 @@ aws iam create-access-key --user-name "$CALLER"
 | Service | `execute-api` |
 | Region | Your project's Region |
 | Obtain Temporary IAM Credentials via STS | On, **IAM User Identified by Access Key** |
-| STS Access Key / STS Access Secret | The key from a |
+| STS Access Key / STS Access Secret | The key from a (you typed it just now) |
 | STS Duration | Empty, or 3600 or less |
 | Additional Status Codes for Token Refresh | `403` |
-| Principal → IAM Role ARN | The role ARN that step 6 printed (it has `:role/`, not `:user/`) |
+| Principal `Caller` → IAM Role ARN | The role ARN that step 6 printed (you typed it just now) |
 
-**c. Named credential.** **Named Credentials** → **New**: Name `AWS_IoT_Relay`, URL = the named credential URL that step 6 printed, the external credential from b, and **Enabled for Callouts** and **Generate Authorization Header** both on.
+The script could not read your Region when the Region here is `us-east-1` and yours is another: change it.
 
-**d. Who may use it.** Create a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal from b, and **Read** on **User External Credentials** (Object Settings). Then assign it to you, the integration user and the hidden Automated Process user:
+**c. Check the named credential.** **Named Credentials** → `AWS_IoT_Relay`: the URL is the named credential URL that step 6 printed, the external credential is the one from b, and **Enabled for Callouts** and **Generate Authorization Header** are both on. If the URL reads `https://dummy-replace-me.example.com`, the script could not read the real one from your stack: replace it.
+
+<details>
+<summary>By hand instead (step 6 said it could not create the credential, or you ran it with <code>SKIP_BOOTSTRAP=yes</code>)</summary>
+
+Either run the one-time script yourself, as an admin of the org:
+
+**Fill in first:**
+- `API_URL='<URL>'`: the line step 6 printed as "Step 7c, named credential URL". Example: `API_URL='https://abc123.execute-api.us-east-2.amazonaws.com/Dev'`.
+- `REGION='<Region>'`: your project's Region. Example: `REGION='us-east-2'`.
+
+**Paste into your terminal.** Once per org. It creates the external credential, the named credential and the permission set, each only when the org has none, and changes nothing that exists. Then do b and c above.
+
+```bash
+API_URL='<URL>'
+REGION='<Region>'
+scripts/bootstrap-salesforce.sh "$NAME" --url "$API_URL" --region "$REGION"
+```
+
+Or click it together: Setup → **Named Credentials** → **External Credentials** → **New** with the settings in the table in b and a principal named `Caller`; then **Named Credentials** → **New** with Name `AWS_IoT_Relay`, the URL from step 6, that external credential, and **Enabled for Callouts** and **Generate Authorization Header** both on; then a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal.
+
+Then run `scripts/install.sh Dev` again: it gives the permission set to you and to the hidden Automated Process user.
+
+</details>
+
+Why a script and not the pipeline: the files are in [`bootstrap/`](../bootstrap/README.md), outside what the pipeline deploys, so no later deploy can put a placeholder back over your values.
+
+**d. Who may use it.** The permission set `AWS_IoT_Relay_Callers` gives **External Credential Principal Access** to the principal from b. Step 6 created it and gave it to you and to the hidden Automated Process user. Give it to the integration user too:
 
 **Fill in first:**
 - `INTEGRATION_USER='<integration username>'`: the integration user's username from 5b. Example: `INTEGRATION_USER='integration@iot-dev.jsmith.com'`. To look it up, paste this into your terminal:
@@ -352,15 +385,11 @@ aws iam create-access-key --user-name "$CALLER"
     --query "SELECT Username FROM User WHERE Profile.Name = 'Salesforce API Only System Integrations' AND IsActive = true"
   ```
 
-**Paste into your terminal.** Once per org. It gives `AWS_IoT_Relay_Callers` to you, to the integration user and to the hidden Automated Process user.
+**Paste into your terminal.** Once per org. It gives `AWS_IoT_Relay_Callers` to the integration user.
 
 ```bash
 INTEGRATION_USER='<integration username>'
-sf org assign permset --name AWS_IoT_Relay_Callers --target-org "$NAME"
 sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$INTEGRATION_USER" --target-org "$NAME"
-echo "insert new PermissionSetAssignment(
-    AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' AND Username LIKE 'autoproc@%' LIMIT 1].Id,
-    PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'].Id);" | sf apex run --target-org "$NAME"
 ```
 
 Every care team member who uses the agent also needs it: `sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of '<username>' --target-org "$NAME"`.

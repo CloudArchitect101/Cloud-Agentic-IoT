@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AWS_IoT_Relay_Callers - who may call AWS through the AWS_IoT_Relay credential.
+
+  One-time setup: scripts/bootstrap-salesforce.sh creates it when the org has
+  none and never changes it afterwards. It is NOT in force-app/: a deploy
+  replaces a permission set whole, so access an org added here would vanish
+  on the next merge (bootstrap/README.md).
+
+  Principal access only. Read on User External Credentials, which a callout
+  also needs, is deliberately absent: portal patients hold this set, and the
+  Customer Community licence refuses that Read, so the set could not be
+  saved. Device_Integration and Patient_Portal_Agent grant the Read.
+-->
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>May call AWS through the AWS_IoT_Relay named credential. Created once by scripts/bootstrap-salesforce.sh; not deployed by the pipeline.</description>
+    <externalCredentialPrincipalAccesses>
+        <enabled>true</enabled>
+        <externalCredentialPrincipal>AWS_IoT_Relay-Caller</externalCredentialPrincipal>
+    </externalCredentialPrincipalAccesses>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>AWS IoT Relay Callers</label>
+</PermissionSet>

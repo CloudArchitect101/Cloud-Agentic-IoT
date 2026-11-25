@@ -18,7 +18,9 @@ import textwrap
 import unittest
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-CHAINED = ['seed-ssm.sh', 'check.sh', 'deploy-aws.sh', 'deploy-salesforce.sh', 'publish-agent.sh']
+ROLE = 'arn:aws:iam::123456789012:role/cloud-agentic-iot-salesforce-caller-Dev'
+CHAINED = ['seed-ssm.sh', 'check.sh', 'deploy-aws.sh', 'deploy-salesforce.sh', 'bootstrap-salesforce.sh',
+           'publish-agent.sh']
 
 STUB = textwrap.dedent('''\
     #!/usr/bin/env bash
@@ -48,6 +50,8 @@ FAKE_AWS = textwrap.dedent(r'''
     if args[:2] == ['cloudformation', 'describe-stacks']:
         key = re.search(r"OutputKey=='([^']+)'", opt('--query')).group(1)
         print(state['outputs'].get(opt('--stack-name') + '|' + key, 'None')); sys.exit(0)
+    if args[:3] == ['configure', 'get', 'region']:
+        print(state.get('region', '')); sys.exit(0)
     sys.stderr.write('fake aws: unexpected call\n'); sys.exit(2)
     ''').lstrip()
 
@@ -112,7 +116,9 @@ class InstallTest(unittest.TestCase):
         self.state = {
             'iam_users': [],
             'ssm': {'/cloud-agentic-iot/salesforce/username': 'integration@iot-dev.example.com'},
-            'outputs': {'cloud-agentic-iot-queue-relay-Dev|QueueDepthEndpoint': 'https://abc.execute-api.example/Dev'},
+            'outputs': {'cloud-agentic-iot-queue-relay-Dev|QueueDepthEndpoint': 'https://abc.execute-api.example/Dev',
+                        'cloud-agentic-iot-queue-relay-Dev|SalesforceCallerRoleArn': ROLE},
+            'region': 'us-east-2',
             'permsets': ['Device_Platform_Admin', 'Platform_Usage_Viewer', 'Patient_Care_Agent', 'Device_Integration'],
             'assigned': {},
         }
@@ -129,7 +135,7 @@ class InstallTest(unittest.TestCase):
         with open(os.path.join(self.state_dir, 'state.json'), 'w') as f:
             json.dump(self.state, f)
         open(os.path.join(self.state_dir, 'calls.log'), 'w').close()
-        environ = {k: v for k, v in os.environ.items() if not k.startswith(('SF_', 'DATA_CLOUD', 'SKIP_', 'REPUBLISH_', 'GITHUB_'))}
+        environ = {k: v for k, v in os.environ.items() if not k.startswith(('SF_', 'DATA_CLOUD', 'SKIP_', 'REPUBLISH_', 'GITHUB_', 'AWS_'))}
         environ.update({'PATH': self.bin + os.pathsep + environ['PATH'], 'FAKE_STATE': self.state_dir})
         environ.update(extra)
         result = subprocess.run(['bash', 'scripts/install.sh', env], cwd=self.repo, env=environ,
@@ -169,7 +175,35 @@ class InstallTest(unittest.TestCase):
 
     def test_skips_check_and_agent_when_asked(self):
         _, calls, _ = self.run_install(SKIP_CHECK='yes', SKIP_AGENT='yes')
-        self.assertEqual(self.chained(calls), ['seed-ssm.sh', 'deploy-aws.sh', 'deploy-salesforce.sh'])
+        self.assertEqual(self.chained(calls), ['seed-ssm.sh', 'deploy-aws.sh', 'deploy-salesforce.sh',
+                                               'bootstrap-salesforce.sh'])
+
+    def test_creates_the_credential_pieces_with_this_environments_values(self):
+        _, calls, _ = self.run_install(SF_TARGET_ORG='test-me')
+        call = next(c for c in calls if c.startswith('bootstrap-salesforce.sh'))
+        self.assertIn('test-me --url https://abc.execute-api.example/Dev --region us-east-2', call)
+        # Before the permission sets, so a first run can already assign AWS_IoT_Relay_Callers.
+        first_assign = next(i for i, c in enumerate(calls) if c.startswith('sf org assign permset'))
+        self.assertLess(calls.index(call), first_assign)
+
+    def test_values_the_stack_lacks_are_left_as_placeholders(self):
+        self.state['outputs'] = {}
+        self.state['region'] = ''
+        _, calls, _ = self.run_install(SF_TARGET_ORG='test-me')
+        call = next(c for c in calls if c.startswith('bootstrap-salesforce.sh'))
+        self.assertEqual(call.split(' org=')[0], 'bootstrap-salesforce.sh test-me')
+
+    def test_a_failed_bootstrap_does_not_stop_the_install(self):
+        self._write(os.path.join(self.repo, 'scripts', 'bootstrap-salesforce.sh'),
+                    STUB + 'exit 1\n')
+        result, calls, _ = self.run_install()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('publish-agent.sh', self.chained(calls))
+        self.assertIn('Make them in Setup', result.stdout + result.stderr)
+
+    def test_skip_bootstrap_leaves_the_credential_to_setup(self):
+        _, calls, _ = self.run_install(SKIP_BOOTSTRAP='yes')
+        self.assertNotIn('bootstrap-salesforce.sh', self.chained(calls))
 
     def test_an_org_that_already_runs_the_agent_keeps_it(self):
         self.state['agent_active'] = True

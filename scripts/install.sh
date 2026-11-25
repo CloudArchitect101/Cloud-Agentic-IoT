@@ -13,7 +13,10 @@
 # tree). Run it again after any Setup step: every part is safe to repeat (an
 # agent the org already runs is left as it is, see REPUBLISH_AGENT below). A
 # permission set that is already assigned is left alone, and one the org does
-# not have yet (AWS_IoT_Relay_Callers before step 6) is reported, not failed.
+# not have yet is reported, not failed. It also creates the AWS_IoT_Relay
+# credential pieces the org lacks (scripts/bootstrap-salesforce.sh), with this
+# environment's URL and Region; what exists is never changed, and the access
+# key and role ARN stay yours to type in Setup (docs/INSTALL.md, step 7).
 #
 #   SF_TARGET_ORG             the org alias (default iot-<env>-deploy, as the others)
 #   DATA_CLOUD_READER_USER    optional: the IAM user Data Cloud reads the bucket as.
@@ -21,6 +24,8 @@
 #   SKIP_CHECK=yes            skip scripts/check.sh (the local tests)
 #   SKIP_SOP_INDEX=yes        passed on to deploy-aws.sh: skip the Bedrock SOP index while
 #                             the account's Bedrock hold is open (docs/INSTALL.md, step 2)
+#   SKIP_BOOTSTRAP=yes        do not create the AWS_IoT_Relay credential pieces; make
+#                             them in Setup instead (docs/INSTALL.md, step 7)
 #   SKIP_AGENT=yes            never publish Patient_Care_Agent
 #   REPUBLISH_AGENT=yes       publish it even though the org already has an active
 #                             version. Without this a second run leaves the agent
@@ -111,6 +116,19 @@ if [ "${SKIP_CHECK:-}" != "yes" ]; then
 fi
 "$scripts/deploy-aws.sh" "$ENV"
 "$scripts/deploy-salesforce.sh" "$ENV"
+
+# The credential Salesforce calls AWS with: created once, with this
+# environment's values, when the org has none. Never fatal: an org where it
+# cannot be created is set up by hand, as before.
+if [ "${SKIP_BOOTSTRAP:-}" != "yes" ]; then
+  api_url=$(stack_output "$(stack_name queue-relay "$ENV")" QueueDepthEndpoint)
+  region="${AWS_REGION:-${AWS_DEFAULT_REGION:-$(aws configure get region 2>/dev/null || true)}}"
+  bootstrap_args=("$org")
+  case "$api_url" in https://*) bootstrap_args+=(--url "$api_url") ;; esac
+  if [ -n "$region" ]; then bootstrap_args+=(--region "$region"); fi
+  "$scripts/bootstrap-salesforce.sh" "${bootstrap_args[@]}" \
+    || warn "Could not create the AWS_IoT_Relay credential pieces in $org. Make them in Setup (docs/INSTALL.md, step 7) and run this script again."
+fi
 
 step "Permission sets"
 for set in Device_Platform_Admin Platform_Usage_Viewer Patient_Care_Agent AWS_IoT_Relay_Callers; do
