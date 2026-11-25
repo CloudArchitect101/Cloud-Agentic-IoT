@@ -87,7 +87,8 @@ FAKE_SF = textwrap.dedent(r'''
     if args[:2] == ['apex', 'run']:
         body = sys.stdin.read()
         assert 'AutomatedProcess' in body
-        state['assigned'].setdefault('AWS_IoT_Relay_Callers', []).append('autoproc')
+        name = re.search(r"FROM PermissionSet WHERE Name = '([^']+)'", body).group(1)
+        state['assigned'].setdefault(name, []).append('autoproc')
         json.dump(state, open(os.path.join(d, 'state.json'), 'w'))
         sys.exit(0)
     sys.stderr.write('fake sf: unexpected call\n'); sys.exit(2)
@@ -113,7 +114,8 @@ class InstallTest(unittest.TestCase):
             'iam_users': [],
             'ssm': {'/cloud-agentic-iot/salesforce/username': 'integration@iot-dev.example.com'},
             'outputs': {'cloud-agentic-iot-queue-relay-Dev|QueueDepthEndpoint': 'https://abc.execute-api.example/Dev'},
-            'permsets': ['Device_Platform_Admin', 'Platform_Usage_Viewer', 'Patient_Care_Agent', 'Device_Integration'],
+            'permsets': ['Device_Platform_Admin', 'Platform_Usage_Viewer', 'Patient_Care_Agent', 'Device_Integration',
+                         'AWS_IoT_Relay_Credential_Reader'],
             'assigned': {},
         }
 
@@ -208,7 +210,7 @@ class InstallTest(unittest.TestCase):
     def test_assigns_permission_sets_once_and_reports_a_missing_one(self):
         result, _, state = self.run_install()
         self.assertEqual(result.returncode, 0, result.stderr)
-        for name in ['Device_Platform_Admin', 'Platform_Usage_Viewer', 'Patient_Care_Agent']:
+        for name in ['Device_Platform_Admin', 'Platform_Usage_Viewer', 'Patient_Care_Agent', 'AWS_IoT_Relay_Credential_Reader']:
             self.assertEqual(state['assigned'][name], ['me'])
         self.assertEqual(state['assigned']['Device_Integration'], ['integration@iot-dev.example.com'])
         self.assertNotIn('AWS_IoT_Relay_Callers', state['assigned'])
@@ -222,6 +224,9 @@ class InstallTest(unittest.TestCase):
         self.assertEqual(state['assigned']['Device_Platform_Admin'], ['me'])
         self.assertEqual(state['assigned']['Device_Integration'], ['integration@iot-dev.example.com'])
         self.assertEqual(sorted(state['assigned']['AWS_IoT_Relay_Callers']), ['autoproc', 'me'])
+        # The Automated Process user's callouts need the credential Read too,
+        # which lives in the repo set, not in AWS_IoT_Relay_Callers.
+        self.assertEqual(sorted(state['assigned']['AWS_IoT_Relay_Credential_Reader']), ['autoproc', 'me'])
         self.assertIn('already holds Device_Platform_Admin', result.stdout)
 
         # A third run changes nothing.
