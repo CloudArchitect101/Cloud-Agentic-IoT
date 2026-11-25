@@ -10,7 +10,9 @@
   Principal access only. Read on User External Credentials, which a callout
   also needs, is deliberately absent: portal patients hold this set, and the
   Customer Community licence refuses that Read, so the set could not be
-  saved. Device_Integration and Patient_Portal_Agent grant the Read.
+  saved. The repo's AWS_IoT_Relay_Credential_Reader grants the Read to staff
+  (deploy-salesforce.sh assigns it), as do Device_Integration and
+  Patient_Portal_Agent.
 -->
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <description>May call AWS through the AWS_IoT_Relay named credential. Created once by scripts/bootstrap-salesforce.sh; not deployed by the pipeline.</description>

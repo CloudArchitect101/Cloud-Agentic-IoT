@@ -261,7 +261,7 @@ SF_TARGET_ORG="$NAME" DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader
 4. `deploy-aws.sh`: every stack, the guardrails, the MCP server, the Slack stack once its secret is in, and the SOP index for the agent.
 5. `deploy-salesforce.sh`: the app, the React portal, the agents' actions, the permission sets.
 6. `bootstrap-salesforce.sh`: creates the `AWS_IoT_Relay` external credential, named credential and the `AWS_IoT_Relay_Callers` permission set with this project's URL and Region, each only when the org has none. It never changes one that exists, and it leaves the access key and the role ARN for you to type in step 7.
-7. Gives you `Device_Platform_Admin`, `Platform_Usage_Viewer`, `Patient_Care_Agent` and `AWS_IoT_Relay_Callers`, and gives the integration user `Device_Integration`.
+7. Gives you `Device_Platform_Admin`, `Platform_Usage_Viewer`, `Patient_Care_Agent`, `AWS_IoT_Relay_Credential_Reader` and `AWS_IoT_Relay_Callers`, and gives the integration user `Device_Integration`.
 8. `publish-agent.sh`: publishes and activates the Patient Care Agent, on a first install only. When the org already runs a version of the agent, it is left as it is.
 9. Prints every value the next steps ask for: the role ARN and URL for step 7, the Slack Request URL, the Data Cloud bucket and the MCP endpoint.
 
@@ -375,7 +375,7 @@ Then run `scripts/install.sh Dev` again: it gives the permission set to you and 
 
 Why a script and not the pipeline: the files are in [`bootstrap/`](../bootstrap/README.md), outside what the pipeline deploys, so no later deploy can put a placeholder back over your values.
 
-**d. Who may use it.** The permission set `AWS_IoT_Relay_Callers` gives **External Credential Principal Access** to the principal from b. Step 6 created it and gave it to you and to the hidden Automated Process user. Give it to the integration user too:
+**d. Who may use it.** The permission set `AWS_IoT_Relay_Callers` gives **External Credential Principal Access** to the principal from b. It holds nothing else: do not add **Read** on **User External Credentials** to it, because portal patients hold this set too, and their Customer Community licence refuses that permission. The Read comes from the repo's `AWS_IoT_Relay_Credential_Reader`, which `deploy-salesforce.sh` gives to every internal holder of `AWS_IoT_Relay_Callers`. Step 6 created `AWS_IoT_Relay_Callers` and gave it to you and to the hidden Automated Process user. Give it to the integration user too:
 
 **Fill in first:**
 - `INTEGRATION_USER='<integration username>'`: the integration user's username from 5b. Example: `INTEGRATION_USER='integration@iot-dev.jsmith.com'`. To look it up, paste this into your terminal:
@@ -392,9 +392,9 @@ INTEGRATION_USER='<integration username>'
 sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$INTEGRATION_USER" --target-org "$NAME"
 ```
 
-Every care team member who uses the agent also needs it: `sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of '<username>' --target-org "$NAME"`.
+The next `scripts/deploy-salesforce.sh` run gives it `AWS_IoT_Relay_Credential_Reader`, the Read a callout needs. To have it before then, assign it the same way.
 
-A caller also needs **Read** on **User External Credentials**. System administrators have it from their profile, and the repo's permission sets give it to the integration user and the portal agent's user. A care team member who is not an administrator and sees "You don't have read permissions on the User External Credential object" needs it too: add that Read (Object Settings) to a permission set of your own for staff. Never add it to `AWS_IoT_Relay_Callers`: portal patients hold that set, and their licence refuses the Read, so the set would not save.
+Every care team member who uses the agent also needs it: `sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of '<username>' --target-org "$NAME"`.
 
 If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) lists each cause and its fix under "If a callout fails".
 

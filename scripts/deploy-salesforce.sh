@@ -186,9 +186,35 @@ callers=${callers:-$(sf data query --target-org "$org" --json \
   --query "SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'" 2>/dev/null | jq -r '.result.totalSize // 0' || echo 0)}
 if [ -n "$callers" ] && [ "$callers" != "0" ]; then
   step "Let portal patients and the portal agent call AWS"
+  # A callout needs Read on User External Credentials too, and the Customer
+  # Community licence refuses it ("Read ExternalDataConnector"), so it lives
+  # in the repo's AWS_IoT_Relay_Credential_Reader, never in the hand-made set.
+  # 1. Internal holders of AWS_IoT_Relay_Callers (and the Automated Process
+  #    user) get the reader set. 2. Orgs set up before Nov 25 put the Read in
+  #    AWS_IoT_Relay_Callers itself: take it out, now that 1 covers them,
+  #    or no portal patient can be given the set. 3. Portal users get it.
   apex_file=$(mktemp)
   cat > "$apex_file" <<'APEX'
 Id callers = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers' LIMIT 1].Id;
+List<PermissionSet> readerSets = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Credential_Reader' LIMIT 1];
+if (!readerSets.isEmpty()) {
+    Id reader = readerSets[0].Id;
+    List<PermissionSetAssignment> readers = new List<PermissionSetAssignment>();
+    for (User u : [SELECT Id FROM User WHERE IsActive = true
+            AND (UserType = 'Standard' OR (UserType = 'AutomatedProcess' AND Username LIKE 'autoproc@%'))
+            AND Id IN (SELECT AssigneeId FROM PermissionSetAssignment WHERE PermissionSetId = :callers)
+            AND Id NOT IN (SELECT AssigneeId FROM PermissionSetAssignment WHERE PermissionSetId = :reader)
+            LIMIT 9000]) {
+        readers.add(new PermissionSetAssignment(AssigneeId = u.Id, PermissionSetId = reader));
+    }
+    insert readers;
+    List<ObjectPermissions> inCallers = [SELECT Id, PermissionsRead FROM ObjectPermissions
+        WHERE ParentId = :callers AND SobjectType = 'UserExternalCredential' AND PermissionsRead = true];
+    for (ObjectPermissions op : inCallers) { op.PermissionsRead = false; }
+    update inCallers;
+    System.debug(LoggingLevel.ERROR, 'AWS_IoT_Relay_Credential_Reader given to ' + readers.size()
+        + ' user(s); Read removed from AWS_IoT_Relay_Callers: ' + !inCallers.isEmpty());
+}
 List<PermissionSetAssignment> missing = new List<PermissionSetAssignment>();
 for (User u : [SELECT Id FROM User WHERE IsActive = true
         AND Id IN (SELECT AssigneeId FROM PermissionSetAssignment

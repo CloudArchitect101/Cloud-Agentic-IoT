@@ -131,7 +131,7 @@ if [ "${SKIP_BOOTSTRAP:-}" != "yes" ]; then
 fi
 
 step "Permission sets"
-for set in Device_Platform_Admin Platform_Usage_Viewer Patient_Care_Agent AWS_IoT_Relay_Callers; do
+for set in Device_Platform_Admin Platform_Usage_Viewer Patient_Care_Agent AWS_IoT_Relay_Credential_Reader AWS_IoT_Relay_Callers; do
   assign "$set"
 done
 integration=$(aws ssm get-parameter --name "/$PROJECT/salesforce/username" --query Parameter.Value --output text 2>/dev/null || true)
@@ -152,6 +152,16 @@ EOF
     echo "  the Automated Process user now holds AWS_IoT_Relay_Callers"
   else
     echo "  the Automated Process user already holds AWS_IoT_Relay_Callers"
+  fi
+  # Its callouts also need Read on User External Credentials, which lives in
+  # the repo set, not in AWS_IoT_Relay_Callers (docs/INSTALL-GUIDE.md, part d).
+  if [ "$(count "SELECT Id FROM PermissionSetAssignment WHERE PermissionSet.Name = 'AWS_IoT_Relay_Credential_Reader' AND Assignee.UserType = 'AutomatedProcess' AND Assignee.Username LIKE 'autoproc@%'")" = "0" ]; then
+    sf apex run --target-org "$org" <<'EOF'
+insert new PermissionSetAssignment(
+    AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' AND Username LIKE 'autoproc@%' LIMIT 1].Id,
+    PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Credential_Reader'].Id);
+EOF
+    echo "  the Automated Process user now holds AWS_IoT_Relay_Credential_Reader"
   fi
 fi
 endstep
