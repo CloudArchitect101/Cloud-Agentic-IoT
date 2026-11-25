@@ -394,6 +394,8 @@ sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$INTEGRATION_
 
 Every care team member who uses the agent also needs it: `sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of '<username>' --target-org "$NAME"`.
 
+A caller also needs **Read** on **User External Credentials**. System administrators have it from their profile, and the repo's permission sets give it to the integration user and the portal agent's user. A care team member who is not an administrator and sees "You don't have read permissions on the User External Credential object" needs it too: add that Read (Object Settings) to a permission set of your own for staff. Never add it to `AWS_IoT_Relay_Callers`: portal patients hold that set, and their licence refuses the Read, so the set would not save.
+
 If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) lists each cause and its fix under "If a callout fails".
 
 > [!TIP]

@@ -39,27 +39,37 @@ test('bootstrap/ is not a package directory, so no sf deploy of the project incl
   }
 });
 
-test('nothing the pipeline runs mentions bootstrap/salesforce or its script', () => {
-  const pipeline = [
+test('no workflow and no other script touches bootstrap/ or runs the one-time script', () => {
+  // Every script but the two that are meant to: the one-time script itself,
+  // and install.sh, the laptop-only Quick install that calls it. Scanning all
+  // of them covers whatever a workflow runs, directly or through another script.
+  const allowed = new Set(['scripts/bootstrap-salesforce.sh', 'scripts/install.sh']);
+  const files = [
     ...walk('.github/workflows'),
-    'scripts/deploy-salesforce.sh',
-    'scripts/deploy-aws.sh',
-    'scripts/seed-ssm.sh',
-    'scripts/index-sops.sh',
-    'scripts/ota.sh',
-    'scripts/lib/common.sh',
+    ...walk('scripts').filter((f) => /\.(sh|ps1|mjs|py)$/.test(f) && !allowed.has(f)),
   ];
-  for (const file of pipeline) {
-    // Comments may explain the rule; commands may not break it.
-    const code = read(file).split('\n').filter((line) => !/^\s*#/.test(line)).join('\n');
-    assert.doesNotMatch(code, /bootstrap\/salesforce|bootstrap-salesforce/,
+  assert.ok(files.includes('scripts/deploy-salesforce.sh') && files.some((f) => f.endsWith('deploy.yml')));
+  for (const file of files) {
+    // Comments may explain the rule; commands may not break it. The AWS
+    // bootstrap (infra/bootstrap, bootstrap-aws.sh) is another thing.
+    const code = read(file).split('\n').filter((line) => !/^\s*#/.test(line)).join('\n')
+      .replace(/infra\/bootstrap|bootstrap-aws/g, '');
+    assert.doesNotMatch(code, /bootstrap-salesforce/, `${file} must not run the one-time script`);
+    // The folder as a path (bootstrap/...), or as the target of a deploy flag.
+    assert.doesNotMatch(code, /(?<![\w\/-])bootstrap\/|(--source-dir|--metadata-dir|--manifest)[ =]+["']?(\.\/)?bootstrap\b/,
       `${file} must not deploy the one-time setup`);
   }
 });
 
+test('install.sh, the one caller, is never run by a workflow', () => {
+  for (const file of walk('.github/workflows')) {
+    assert.doesNotMatch(read(file), /install\.sh/, `${file} would run the one-time setup through install.sh`);
+  }
+});
+
 test('the one-time script refuses to run in the pipeline, before it asks the org anything', () => {
-  const script = read('scripts/bootstrap-salesforce.sh');
-  const refusal = script.indexOf('in_ci && die');
+  const script = read('scripts/bootstrap-salesforce.sh').split('\n').filter((line) => !/^\s*#/.test(line)).join('\n');
+  const refusal = script.search(/^in_ci && die /m);
   assert.ok(refusal > 0, 'no in_ci refusal');
   assert.ok(refusal < script.indexOf('sf data query'), 'the refusal comes after the first org call');
   assert.ok(refusal < script.indexOf('sf project deploy'), 'the refusal comes after the deploy');

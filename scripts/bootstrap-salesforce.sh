@@ -149,8 +149,10 @@ stage() {  # stage <folder> <name> <suffix>
 } > "$work/package.xml"
 
 step "Create the missing pieces in $ORG${DRY:+ (dry run)}"
+# No test level: the package holds no Apex, so no tests run, and a production
+# org (which refuses NoTestRun) accepts it too.
 # shellcheck disable=SC2086  # DRY is empty or one flag
-sf project deploy start --metadata-dir "$work" --target-org "$ORG" --test-level NoTestRun --wait 10 $DRY
+sf project deploy start --metadata-dir "$work" --target-org "$ORG" --wait 10 $DRY
 endstep
 
 if [ -n "$DRY" ]; then

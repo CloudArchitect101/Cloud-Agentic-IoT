@@ -163,7 +163,7 @@ if [ "$paired" = true ]; then
   if [ -z "$integration" ] || [ "$integration" = "placeholder" ]; then
     warn "No integration username in SSM yet, so AWS_IoT_Relay_Callers was not assigned. Run scripts/seed-ssm.sh $ENV, then deploy again."
   elif [ "$callers" = "0" ]; then
-    warn "The org has no AWS_IoT_Relay_Callers permission set yet (docs/INSTALL-GUIDE.md, Stage 2 part d). Until it does and $integration holds it, a temperature alert Case cannot move the queue indicator: \"couldn't access the credential\"."
+    warn "The org has no AWS_IoT_Relay_Callers permission set yet (an admin creates it once, with one command: docs/INSTALL-GUIDE.md, Stage 2). Until it does and $integration holds it, a temperature alert Case cannot move the queue indicator: \"couldn't access the credential\"."
   else
     held=$(sf data query --target-org "$org" --json \
       --query "SELECT Id FROM PermissionSetAssignment WHERE PermissionSet.Name = 'AWS_IoT_Relay_Callers' AND Assignee.Username = '$integration'" 2>/dev/null | jq -r '.result.totalSize // 0' || echo 0)

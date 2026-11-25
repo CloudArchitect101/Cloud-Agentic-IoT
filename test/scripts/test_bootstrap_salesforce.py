@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import textwrap
 import unittest
+import xml.dom.minidom
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 URL = 'https://abc123.execute-api.us-east-2.amazonaws.com/Dev'
@@ -96,6 +97,17 @@ class BootstrapSalesforceTest(unittest.TestCase):
         self.assertIn('STS Access Key', result.stdout)
         self.assertIn('IAM Role ARN', result.stdout)
         self.assertIn(DUMMY_URL, result.stdout)
+
+    def test_every_file_is_well_formed_xml_before_and_after_staging(self):
+        # A fake sf accepts anything; Salesforce does not. "--" in a comment is enough to be refused.
+        source = os.path.join(REPO, 'bootstrap', 'salesforce')
+        found = [os.path.join(d, f) for d, _, files in os.walk(source) for f in files if f.endswith('.xml')]
+        self.assertEqual(len(found), 3)
+        for path in found:
+            xml.dom.minidom.parse(path)
+        self.assertEqual(self.run_script('my-org', '--url', URL, '--region', 'us-east-2').returncode, 0)
+        for name in self.deployed():
+            xml.dom.minidom.parse(os.path.join(self.state, 'deployed', name))
 
     def test_real_values_replace_the_placeholders(self):
         result = self.run_script('my-org', '--url', URL + '/', '--region', 'us-east-2')

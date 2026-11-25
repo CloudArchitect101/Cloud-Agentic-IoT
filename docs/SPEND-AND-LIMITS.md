@@ -158,7 +158,7 @@ Full figures: [COST-MODEL.md §7](COST-MODEL.md#7-patient-portal-react-site-enha
 - Only users who hold `Platform_Usage_Viewer` **and** View Setup and
   Configuration (from their profile or any permission set). The Apex checks
   both on every call; everyone else sees "Costs and limits are for admins".
-- The AWS half also needs the hand-made `AWS_IoT_Relay_Callers` permission set
+- The AWS half also needs the `AWS_IoT_Relay_Callers` permission set
   (INSTALL-GUIDE.md, Stage 2 part d).
 - `Device_Platform_Admin` gets neither the class nor the permission, so device
   operators never see costs.
