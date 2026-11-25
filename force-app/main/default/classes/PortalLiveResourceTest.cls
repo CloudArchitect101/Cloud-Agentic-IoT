@@ -34,9 +34,12 @@ private class PortalLiveResourceTest {
         User portal = patientB();
 
         PortalLiveResource.Answer answer;
+        // Callouts cannot follow the setup's uncommitted DML in the same context.
+        Test.startTest();
         System.runAs(portal) {
             answer = PortalLiveResource.start(ask(PatientPortalTestData.SERIAL_B));
         }
+        Test.stopTest();
 
         Assert.areEqual(200, answer.status, String.valueOf(answer.body));
         Map<String, Object> live = (Map<String, Object>) answer.body.get('live');
@@ -54,9 +57,12 @@ private class PortalLiveResourceTest {
         User portal = patientB();
 
         PortalLiveResource.Answer answer;
+        // Callouts cannot follow the setup's uncommitted DML in the same context.
+        Test.startTest();
         System.runAs(portal) {
             answer = PortalLiveResource.start(ask(PatientPortalTestData.SERIAL_A));
         }
+        Test.stopTest();
 
         Assert.areEqual(404, answer.status);
         Assert.isNull(answer.body.get('live'));
@@ -83,9 +89,12 @@ private class PortalLiveResourceTest {
         User portal = patientB();
 
         PortalLiveResource.Answer answer;
+        // Callouts cannot follow the setup's uncommitted DML in the same context.
+        Test.startTest();
         System.runAs(portal) {
             answer = PortalLiveResource.start(ask(PatientPortalTestData.SERIAL_B));
         }
+        Test.stopTest();
 
         Assert.areEqual(502, answer.status);
         Assert.isNull(answer.body.get('live'));

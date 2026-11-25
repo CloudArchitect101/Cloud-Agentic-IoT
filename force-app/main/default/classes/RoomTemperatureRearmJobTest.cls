@@ -59,6 +59,8 @@ private class RoomTemperatureRearmJobTest {
     @IsTest
     static void otherCasesAndAnAlreadyClosedCaseRearmNothing() {
         DeviceTestSettings.use();
+        // Closing the alert Case below starts a re-arm job, which calls out when the test ends.
+        Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
         Asset test8 = device('Test8');
         Case other = openCase(test8, 'Phone');
         Case alertCase = openCase(test8, ORIGIN);
