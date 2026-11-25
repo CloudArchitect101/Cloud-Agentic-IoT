@@ -2,7 +2,8 @@
  * CaseTriggerHandler.cls
  *
  * Routes Case trigger contexts to the queue monitoring service, which moves
- * the ward boards that follow the queue. (Patient boards no longer follow
+ * the ward boards that follow the queue, and closed temperature alert Cases
+ * to RoomTemperatureRearmJob. (Patient boards no longer follow
  * Cases: since firmware 2.5.0 their motor follows their own room.) Contains no
  * business logic of its own: its whole job is to translate trigger context
  * (Trigger.new, Trigger.old) into a plain collection the service can act on,
@@ -21,6 +22,8 @@ public with sharing class CaseTriggerHandler extends TriggerHandler {
         Set<Id> affectedOwnerIds = collectOwnerIdsFrom(Trigger.new);
         affectedOwnerIds.addAll(collectOwnerIdsFrom(Trigger.old));
         CaseQueueMonitorService.refreshQueueDepthFor(affectedOwnerIds);
+        // A temperature alert Case that closes re-arms its device in AWS.
+        RoomTemperatureRearmJob.startFor((List<Case>) Trigger.new, (Map<Id, Case>) Trigger.oldMap);
     }
 
     protected override void handleAfterDelete() {

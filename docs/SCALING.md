@@ -108,7 +108,7 @@ For boards made by the hundred thousand, provision on the factory line instead: 
 
 ## Salesforce at a million boards
 
-Salesforce receives state changes and reminders, never routine readings: about 82 million records a month out of 86.4 billion readings, a thousand times fewer. The API calls that carries are no concern (about 15,000 a day). The temperature alert demo rule (CHAPTERS.md, chapter 03), when it is on, adds at most one record per hot device per re-alert interval, plus one per crossing of 30 C: 96 a day for a device kept hot in Dev, 24 in Prod, where the rule is off anyway. Its 1 C hysteresis bounds the crossings.
+Salesforce receives state changes and reminders, never routine readings: about 82 million records a month out of 86.4 billion readings, a thousand times fewer. The API calls that carries are no concern (about 15,000 a day). The temperature alert demo rule (CHAPTERS.md, chapter 03), when it is on, adds one record per crossing of 30 C and, while the device stays hot, one more every `RoomTempRealertMinutes` (12 hours): about 2 a day for a device worn all day. Its 1 C hysteresis bounds the crossings, and closing the Case re-arms the device (below).
 
 **Storage is the constraint.** Salesforce counts most records as 2 KB, so 82 million records a month is about 160 GB a month, against a base allocation measured in gigabytes. Three ways to handle it, which is your call:
 
@@ -118,11 +118,50 @@ Salesforce receives state changes and reminders, never routine readings: about 8
 
 First contact writes one record per board, a million records once.
 
+## Salesforce API calls per device
+
+**One idle device makes close to zero Salesforce API calls a day.** Measured in test-cloudarchitect101 on Nov 25 2026 with Test8 running on its own and no deploys: about 400 of the Developer Edition's 15,000 daily requests in 24 hours (2.7%), most of them Salesforce's own integration users (Slack, the Agentforce platform, Data Cloud) and CLI sign-ins. No `Patient_Vitals__c` record was written for 16 days, because the board never crossed 30 C. On Nov 20, a day of deploys, the same org showed 1,106: deploys poll their status every few seconds, and that is what a demo-day number mostly is.
+
+What calls Salesforce's REST API (and so counts against *Daily API Requests*), per device:
+
+| Path | When | Calls | Batched |
+| --- | --- | --- | --- |
+| `salesforce-sync` → `Patient_Vitals__c` | a state change, a clinical reminder while AT_RISK or CRITICAL, a 30 C crossing, and a 12-hour safety repeat while hot | 1 per record | 200 records per call |
+| `device-presence` → Asset Online/Offline | a connect or disconnect | 1 per event | 10 per call in Dev, 100 in Prod |
+| `device-command-ack` → Device Command | the board answers a command | 1 per command | 10 per call |
+| Patient portal | the page opens, comes back into view after 5 minutes, or renews its live link every 10 minutes while visible | 1 each | no |
+| Slack slash command | a person asks | a few each | no |
+
+What does **not** count: everything a Lightning page does (the device live card's Apex, `getRecord`), every callout from Salesforce to AWS (live card, Device Commands, provisioning, the Home cost card, the re-arm below), Data Cloud's S3 data stream, and the live readings themselves, which go from AWS IoT straight to the browser. OAuth token requests do not count either.
+
+**Two fixes, Nov 25 2026, for 10,000 devices and more:**
+
+1. **The temperature alert reports a crossing, not every 15 minutes.** A device worn under the arm reads above 30 C all day, and the rule used to re-report it every `RealertIntervalMinutes` (15 in Dev): 96 records a day, each part of an API call and 2 KB of storage, while Salesforce ignored them because the Case was already open. Now a hot device is reported once when it crosses, then only every `RoomTempRealertMinutes` (720, as a safety net for a Case that failed to open). When the Case closes, `RoomTemperatureRearmJob` tells AWS by callout (`POST /device-live`, mode `rearm`), so a device that is still hot gets a new Case at its next reading, as before.
+2. **The patient portal takes its live readings from AWS IoT.** The Home page used to reload from Salesforce every 30 seconds: 120 API calls an hour for each open tab. It now loads once, then subscribes to the board's live topic the way the device card does (`PortalLiveResource` returns the 15-minute link). That costs 1 call when it opens and 6 an hour while visible, and nothing while the tab is hidden.
+
+Plus `PatientVitalsRetentionJob`, a nightly batch that deletes `Patient_Vitals__c` records older than `Vitals_Retention_Days__c` (90). Every reading stays in S3 and Data Cloud.
+
+**What that does at scale** (Prod settings: 200 records per call; a worn device always hot; a portal user with the page open 1 hour a day):
+
+| | Before, per day | After, per day |
+| --- | --- | --- |
+| 1 worn device | 96 records (Dev), 24 (Prod) | 2 records |
+| 10,000 worn devices | 240,000 records, ~1,200 calls, ~480 MB storage | 20,000 records, ~100 calls, ~40 MB |
+| 1,000,000 worn devices | 24 million records, ~120,000 calls, ~48 GB | 2 million records, ~10,000 calls, ~4 GB |
+| 10,000 portal users | 1.2 million calls | 70,000 calls |
+| An idle fleet of any size | ~0 | ~0 |
+
+With the 90-day window, a million worn devices settle at about 180 million records (360 GB). That is still too many for a real deployment, which takes option 1 of the previous section (one current-state record per device). The API calls, though, now fit any Enterprise or Unlimited org: those start at 100,000 a day plus 1,000 per Salesforce licence.
+
+**The demo answer** to "if one device uses up the limit, what about 100,000?": readings never go to Salesforce. A device calls Salesforce only when something happens (it crosses 30 C, goes online or offline, or answers a command), and AWS batches those 200 to a call. 100,000 devices that are all running hot make about 1,000 calls a day. A quiet fleet makes none.
+
+**KPIs to watch:** Salesforce API calls per 1,000 devices per day (Setup → *Company Information* → *API Requests, Last 24 Hours*, or `sf org list limits`, line `DailyApiRequests`); `Patient_Vitals__c` records created per day; data storage MB (Setup → *Storage Usage*); the `salesforce-sync` function's invocations in CloudWatch (one per batch). The cost they stand for: Salesforce sells extra API capacity and storage only as add-ons, so the right number for each is the one that never needs a purchase.
+
 ## Not done yet
 
 - Kinesis for telemetry (lever 2), when the bill justifies it.
 - Hysteresis on clinical state changes, so a reading hovering at a threshold cannot create a Salesforce record every interval. (The temperature alert demo rule has its own, 1 C.)
-- The Salesforce storage decision above.
+- The Salesforce storage decision above (the 90-day `PatientVitalsRetentionJob` is the stopgap).
 - Fleet provisioning for factory-scale onboarding.
 - A load test against a real account. The simulation measures this code's requests exactly, but not AWS latency or throttling; a few thousand simulated MQTT clients against Dev would.
 

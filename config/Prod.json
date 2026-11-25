@@ -10,6 +10,7 @@
       "RealertIntervalMinutes": 60,
       "RoomTempAlert": "false",
       "RoomTempAlertCelsius": 30,
+      "RoomTempRealertMinutes": 720,
       "IngestBatchSize": 1000,
       "IngestBatchWindowSeconds": 5,
       "IngestMaxConcurrency": 100,

@@ -85,6 +85,18 @@ public with sharing class DevicePlatformSettings {
         return value.intValue();
     }
 
+    /** How long Patient_Vitals__c records are kept; blank keeps them all (PatientVitalsRetentionJob does nothing). */
+    public static Integer vitalsRetentionDays() {
+        Decimal value = get().Vitals_Retention_Days__c;
+        if (value == null) {
+            return null;
+        }
+        if (value < 1) {
+            throw new SettingException('Device_Platform_Setting__mdt.Vitals_Retention_Days__c must be 1 or more, or blank, not ' + value + '.');
+        }
+        return value.intValue();
+    }
+
     /** How long DeviceProvisioningBatch leaves a just-edited device to the job its trigger started. */
     public static Integer sweepDelayMinutes() {
         Decimal value = get().Sweep_Delay_Minutes__c;

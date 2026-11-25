@@ -122,8 +122,8 @@ Parameters:
     MinValue: 1
     Description: >-
       While a patient stays AT_RISK or CRITICAL, how often Salesforce is
-      reminded and, with RoomTempAlert on, how often a device that stays at or
-      above RoomTempAlertCelsius is reported again.
+      reminded. (A device that stays hot under RoomTempAlert has its own,
+      much longer interval: RoomTempRealertMinutes.)
   RoomTempAlert:
     Type: String
     AllowedValues: ['true', 'false']
@@ -131,13 +131,25 @@ Parameters:
     Description: >-
       Demo rule, not clinical: when 'true', a temperature at or above
       RoomTempAlertCelsius is sent to Salesforce, flagged, on first crossing and
-      then at most every RealertIntervalMinutes while it stays there. Salesforce
-      opens one Case per episode from it. Deploy the Salesforce side first.
+      then at most every RoomTempRealertMinutes while it stays there. Salesforce
+      opens one Case per episode from it, and re-arms the device when that Case
+      closes. Deploy the Salesforce side first.
   RoomTempAlertCelsius:
     Type: Number
     Default: 30
     MinValue: 1
     Description: Threshold for RoomTempAlert, inclusive, in C.
+  RoomTempRealertMinutes:
+    Type: Number
+    Default: 720
+    MinValue: 0
+    Description: >-
+      While a device stays at or above RoomTempAlertCelsius, how often it is
+      reported to Salesforce again. Only a safety net for a Case that failed to
+      open: the open Case already says the device is hot, and closing it
+      re-arms the device. 0 reports once per episode. Each report is a
+      Patient_Vitals__c record, so this sets records per hot device per day
+      (720: 2; the old 15: 96).
 
   IngestBatchSize:
     Type: Number
@@ -586,6 +598,7 @@ Resources:
           REALERT_INTERVAL_MINUTES: !Ref RealertIntervalMinutes
           ROOM_TEMP_ALERT: !Ref RoomTempAlert
           ROOM_TEMP_ALERT_CELSIUS: !Ref RoomTempAlertCelsius
+          ROOM_TEMP_REALERT_MINUTES: !Ref RoomTempRealertMinutes
           KEEP_READINGS_IN_DYNAMODB: !Ref KeepReadingsInDynamoDB
           READING_RETENTION_DAYS: !Ref ReadingRetentionDays
           CONFIG_CACHE_SECONDS: !Ref ConfigCacheSeconds

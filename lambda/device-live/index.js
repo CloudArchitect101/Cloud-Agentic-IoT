@@ -5,7 +5,9 @@ const { IoTDataPlaneClient, PublishCommand } = require('@aws-sdk/client-iot-data
 const { IoTClient, DescribeEndpointCommand } = require('@aws-sdk/client-iot');
 const { STSClient, AssumeRoleCommand } = require('@aws-sdk/client-sts');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, QueryCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const {
+  DynamoDBDocumentClient, QueryCommand, GetCommand, UpdateCommand,
+} = require('@aws-sdk/lib-dynamodb');
 const {
   BadRequest, parseBody, respond, isThingName,
 } = require('@cloud-agentic-iot/shared/api');
@@ -42,7 +44,7 @@ class NoLiveLink extends Error {}
 /**
  * The live view of one board, for its card on the Asset in Salesforce.
  *
- *   { thingName, mode: 'start' | 'latest' }
+ *   { thingName, mode: 'start' | 'latest' | 'rearm' }
  *     -> 200 { thingName,
  *              live: { url, clientId, topic, expiresAt, seconds, minutes, commandPublished },
  *              latest: { temperature, humidity, at, heartRate?, spo2? } | null,
@@ -58,6 +60,13 @@ class NoLiveLink extends Error {}
  * ends, so a card that is closed costs nothing once its last window is over.
  * The card sends "start" again every 10 minutes while it is open, which
  * restarts the window and gets it a fresh link.
+ *
+ * mode "rearm" is sent by Salesforce when it closes a device's temperature
+ * alert Case: it stamps RearmRequestedAt on the board's STATE item, and
+ * patient-vitals then treats the board's next hot reading as a new crossing
+ * (a new Case) instead of waiting hours for its safety repeat. It answers
+ * 200 { thingName, rearmed } and touches nothing else; rearmed is false for a
+ * board with no STATE yet, which has no episode to end.
  *
  * mode "latest" only reads what is stored: the newest reading and the
  * patient's state, for a card whose browser cannot open the link. Prod keeps
@@ -82,13 +91,18 @@ exports.handler = async (event) => {
     // Checked before it goes into a topic, a client id or a policy.
     return respond(400, { error: 'thingName must be an AWS IoT Thing name: letters, digits, : _ and -, up to 128 characters.' });
   }
-  if (mode !== 'start' && mode !== 'latest') {
-    return respond(400, { error: 'mode must be "start" (the default) or "latest".' });
+  if (mode !== 'start' && mode !== 'latest' && mode !== 'rearm') {
+    return respond(400, { error: 'mode must be "start" (the default), "latest" or "rearm".' });
   }
 
   // Read before anything is sent, so a missing setting fails by name and
   // leaves the board as it was.
   const table = requiredEnv('TABLE_NAME');
+  if (mode === 'rearm') {
+    const rearmed = await rearm(table, thingName);
+    console.log('re-arm', { thingName, rearmed });
+    return respond(200, { thingName, rearmed });
+  }
   const settings = mode === 'start' ? liveSettings() : null;
 
   // Neither read ever fails the request: each answers null instead.
@@ -337,6 +351,28 @@ function hmac(key, text) {
  * readings PATIENT#<thing> / VITAL#<timestamp>, so the newest is the first in
  * reverse key order.
  */
+/**
+ * Stamps the re-arm on the board's STATE item. Only that attribute: the
+ * episode flag belongs to patient-vitals, whose next save would undo a
+ * change to it. Throws on a DynamoDB failure, so Salesforce hears a 5xx and
+ * logs it; the safety repeat still reports a device that stays hot.
+ */
+async function rearm(table, thingName) {
+  try {
+    await dynamodb.send(new UpdateCommand({
+      TableName: table,
+      Key: { PK: `PATIENT#${thingName}`, SK: 'STATE' },
+      UpdateExpression: 'SET RearmRequestedAt = :now',
+      ConditionExpression: 'attribute_exists(PK)',
+      ExpressionAttributeValues: { ':now': new Date().toISOString() },
+    }));
+    return true;
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') return false;
+    throw err;
+  }
+}
+
 async function newestReading(table, thingName) {
   try {
     const { Items = [] } = await dynamodb.send(new QueryCommand({
@@ -387,7 +423,9 @@ function toState(item) {
     // patient-vitals keeps RoomTempHot: true from a reading at or above the
     // temperature alert level until one drops 1 C below it. It is the
     // episode, which no single reading can tell.
-    temperatureAlert: item.RoomTempHot === true,
+    // A re-arm newer than the last sync has ended the episode too.
+    temperatureAlert: item.RoomTempHot === true && !(typeof item.RearmRequestedAt === 'string'
+      && item.RearmRequestedAt > (typeof item.LastSyncedAt === 'string' ? item.LastSyncedAt : '')),
   };
 }
 
