@@ -18,8 +18,8 @@
     <description>May call AWS through the AWS_IoT_Relay named credential. Created once by scripts/bootstrap-salesforce.sh; not deployed by the pipeline.</description>
     <externalCredentialPrincipalAccesses>
         <enabled>true</enabled>
-        <externalCredentialPrincipal>AWS_IoT_Relay-Caller</externalCredentialPrincipal>
+        <externalCredentialPrincipal>AWS_IoT_Relay_Credential-SalesforceCaller</externalCredentialPrincipal>
     </externalCredentialPrincipalAccesses>
     <hasActivationRequired>false</hasActivationRequired>
-    <label>AWS IoT Relay Callers</label>
+    <label>AWS_IoT_Relay_Callers</label>
 </PermissionSet>

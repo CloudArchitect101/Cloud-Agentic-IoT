@@ -8,7 +8,7 @@
 #   scripts/bootstrap-salesforce.sh iot-dev-admin
 #
 # What it creates, each only when the org has none by that name:
-#   - external credential AWS_IoT_Relay (AWS Signature Version 4, through STS)
+#   - external credential AWS_IoT_Relay_Credential (AWS Signature Version 4, through STS)
 #   - named credential    AWS_IoT_Relay
 #   - permission set      AWS_IoT_Relay_Callers (access to the credential)
 #
@@ -38,6 +38,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 USAGE="Usage: scripts/bootstrap-salesforce.sh <org alias> [--url <URL>] [--region <Region>] [--dry-run]"
 SRC="bootstrap/salesforce"
 CREDENTIAL=AWS_IoT_Relay
+EXTERNAL=AWS_IoT_Relay_Credential
 CALLERS=AWS_IoT_Relay_Callers
 # The placeholders, exactly as the files in bootstrap/salesforce/ spell them
 # (test/config/bootstrap-placeholders.test.js keeps the two in step).
@@ -86,7 +87,7 @@ has() {
 step "What $ORG already has"
 deploy_external=false; deploy_named=false; deploy_callers=false
 has_external=false
-if has "the external credential $CREDENTIAL" "SELECT Id FROM ExternalCredential WHERE DeveloperName = '$CREDENTIAL'"; then
+if has "the external credential $EXTERNAL" "SELECT Id FROM ExternalCredential WHERE DeveloperName = '$EXTERNAL'"; then
   has_external=true
 fi
 if has "the named credential $CREDENTIAL" "SELECT Id FROM NamedCredential WHERE DeveloperName = '$CREDENTIAL'"; then
@@ -97,10 +98,10 @@ else
   deploy_named=true
   echo "  named credential $CREDENTIAL: missing, will be created"
   if [ "$has_external" = true ]; then
-    echo "  external credential $CREDENTIAL: exists, left as it is"
+    echo "  external credential $EXTERNAL: exists, left as it is"
   else
     deploy_external=true
-    echo "  external credential $CREDENTIAL: missing, will be created"
+    echo "  external credential $EXTERNAL: missing, will be created"
   fi
 fi
 if has "the permission set $CALLERS" "SELECT Id FROM PermissionSet WHERE Name = '$CALLERS'"; then
@@ -109,9 +110,9 @@ elif [ "$has_external" = true ] || [ "$deploy_external" = true ]; then
   deploy_callers=true
   echo "  permission set $CALLERS: missing, will be created"
 else
-  # The set names the principal of an external credential called AWS_IoT_Relay;
+  # The set names the principal of an external credential called AWS_IoT_Relay_Credential;
   # this org's has another name, so the set would not deploy.
-  warn "$ORG has no permission set $CALLERS, and its external credential is not named $CREDENTIAL, so the set was not created. Make it in Setup (docs/INSTALL.md, step 7d)."
+  warn "$ORG has no permission set $CALLERS, and its external credential is not named $EXTERNAL, so the set was not created. Make it in Setup (docs/INSTALL.md, step 7d)."
 fi
 endstep
 
@@ -133,8 +134,8 @@ stage() {  # stage <folder> <name> <suffix>
   echo '<?xml version="1.0" encoding="UTF-8"?>'
   echo '<Package xmlns="http://soap.sforce.com/2006/04/metadata">'
   if [ "$deploy_external" = true ]; then
-    stage externalCredentials "$CREDENTIAL" externalCredential
-    echo "    <types><members>$CREDENTIAL</members><name>ExternalCredential</name></types>"
+    stage externalCredentials "$EXTERNAL" externalCredential
+    echo "    <types><members>$EXTERNAL</members><name>ExternalCredential</name></types>"
   fi
   if [ "$deploy_named" = true ]; then
     stage namedCredentials "$CREDENTIAL" namedCredential
@@ -162,10 +163,10 @@ fi
 
 note "Created in $ORG. What is left for you, in Setup -> Named Credentials (docs/INSTALL.md, step 7):"
 if [ "$deploy_external" = true ]; then
-  echo "  - External Credentials -> $CREDENTIAL: type the STS Access Key and STS Access Secret (step 7a prints them once)."
-  echo "  - External Credentials -> $CREDENTIAL -> principal Caller: type the IAM Role ARN that install.sh printed as \"Step 7b\" (it has :role/ in it)."
+  echo "  - External Credentials -> $EXTERNAL: type the STS Access Key and STS Access Secret (step 7a prints them once)."
+  echo "  - External Credentials -> $EXTERNAL -> principal SalesforceCaller: type the IAM Role ARN that install.sh printed as \"Step 7b\" (it has :role/ in it)."
   if [ -z "$REGION" ]; then
-    echo "  - External Credentials -> $CREDENTIAL: set the Region if yours is not $DUMMY_REGION."
+    echo "  - External Credentials -> $EXTERNAL: set the Region if yours is not $DUMMY_REGION."
   fi
 fi
 if [ "$deploy_named" = true ] && [ -z "$URL" ]; then

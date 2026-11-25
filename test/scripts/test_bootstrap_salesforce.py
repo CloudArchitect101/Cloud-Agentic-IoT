@@ -82,12 +82,12 @@ class BootstrapSalesforceTest(unittest.TestCase):
         result = self.run_script('my-org')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.deployed(), [
-            'externalCredentials/AWS_IoT_Relay.externalCredential',
+            'externalCredentials/AWS_IoT_Relay_Credential.externalCredential',
             'namedCredentials/AWS_IoT_Relay.namedCredential',
             'package.xml',
             'permissionsets/AWS_IoT_Relay_Callers.permissionset',
         ])
-        self.assertIn('>us-east-1<', self.deployed('externalCredentials/AWS_IoT_Relay.externalCredential'))
+        self.assertIn('>us-east-1<', self.deployed('externalCredentials/AWS_IoT_Relay_Credential.externalCredential'))
         self.assertIn(DUMMY_URL, self.deployed('namedCredentials/AWS_IoT_Relay.namedCredential'))
         package = self.deployed('package.xml')
         for kind in ('ExternalCredential', 'NamedCredential', 'PermissionSet'):
@@ -112,7 +112,7 @@ class BootstrapSalesforceTest(unittest.TestCase):
     def test_real_values_replace_the_placeholders(self):
         result = self.run_script('my-org', '--url', URL + '/', '--region', 'us-east-2')
         self.assertEqual(result.returncode, 0, result.stderr)
-        external = self.deployed('externalCredentials/AWS_IoT_Relay.externalCredential')
+        external = self.deployed('externalCredentials/AWS_IoT_Relay_Credential.externalCredential')
         self.assertNotIn('>us-east-1<', external)
         self.assertIn('>us-east-2<', external)
         named = self.deployed('namedCredentials/AWS_IoT_Relay.namedCredential')
@@ -123,7 +123,7 @@ class BootstrapSalesforceTest(unittest.TestCase):
         self.assertIn('IAM Role ARN', result.stdout)
 
     def test_an_org_that_has_everything_is_not_touched(self):
-        self.org(ExternalCredential=['AWS_IoT_Relay'], NamedCredential=['AWS_IoT_Relay'],
+        self.org(ExternalCredential=['AWS_IoT_Relay_Credential'], NamedCredential=['AWS_IoT_Relay'],
                  PermissionSet=['AWS_IoT_Relay_Callers'])
         result = self.run_script('my-org', '--url', URL)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -141,7 +141,7 @@ class BootstrapSalesforceTest(unittest.TestCase):
         self.assertIn('step 7d', result.stderr)
 
     def test_only_the_missing_permission_set_is_created(self):
-        self.org(ExternalCredential=['AWS_IoT_Relay'], NamedCredential=['AWS_IoT_Relay'])
+        self.org(ExternalCredential=['AWS_IoT_Relay_Credential'], NamedCredential=['AWS_IoT_Relay'])
         result = self.run_script('my-org')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.deployed(), ['package.xml', 'permissionsets/AWS_IoT_Relay_Callers.permissionset'])
@@ -150,7 +150,7 @@ class BootstrapSalesforceTest(unittest.TestCase):
         self.assertNotIn('NamedCredential', package)
 
     def test_only_the_missing_named_credential_is_created(self):
-        self.org(ExternalCredential=['AWS_IoT_Relay'], PermissionSet=['AWS_IoT_Relay_Callers'])
+        self.org(ExternalCredential=['AWS_IoT_Relay_Credential'], PermissionSet=['AWS_IoT_Relay_Callers'])
         result = self.run_script('my-org')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.deployed(), ['namedCredentials/AWS_IoT_Relay.namedCredential', 'package.xml'])

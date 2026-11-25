@@ -41,7 +41,7 @@ per environment, in the order they come up below:
 12. Make the IAM user Salesforce signs its calls with and type its access key
     into Salesforce (INSTALL-GUIDE.md, Stage 2, step 1). IAM Roles Anywhere could
     remove that key later.
-13. On the `AWS_IoT_Relay` external credential, check that **Additional Status Codes
+13. On the `AWS_IoT_Relay_Credential` external credential, check that **Additional Status Codes
     for Token Refresh** is `403` (the one-time script sets it; a credential made
     by hand needs it typed) (INSTALL-GUIDE.md, Stage 2, part b). API Gateway
     answers an expired STS session with 403, and without this every call

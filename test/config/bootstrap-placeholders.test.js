@@ -17,7 +17,7 @@ const root = path.join(__dirname, '../..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const noComments = (xml) => xml.replace(/<!--[\s\S]*?-->/g, '');
 const SRC = 'bootstrap/salesforce';
-const EXTERNAL = `${SRC}/externalCredentials/AWS_IoT_Relay.externalCredential-meta.xml`;
+const EXTERNAL = `${SRC}/externalCredentials/AWS_IoT_Relay_Credential.externalCredential-meta.xml`;
 const NAMED = `${SRC}/namedCredentials/AWS_IoT_Relay.namedCredential-meta.xml`;
 const CALLERS = `${SRC}/permissionsets/AWS_IoT_Relay_Callers.permissionset-meta.xml`;
 
@@ -128,12 +128,12 @@ test('the permission set grants the principal the external credential defines, a
     /<parameterGroup>([^<]+)<\/parameterGroup>\s*<parameterName>[^<]+<\/parameterName>\s*<parameterType>NamedPrincipal<\/parameterType>/);
   assert.ok(principal, 'the external credential has no named principal');
   const granted = [...callers.matchAll(/<externalCredentialPrincipal>([^<]+)<\/externalCredentialPrincipal>/g)].map((m) => m[1]);
-  assert.deepEqual(granted, [`AWS_IoT_Relay-${principal[1]}`]);
+  assert.deepEqual(granted, [`AWS_IoT_Relay_Credential-${principal[1]}`]);
   // Read on User External Credentials is not here: the Customer Community
   // licence refuses it, and portal patients hold this set (TROUBLESHOOTING).
   assert.doesNotMatch(callers, /<objectPermissions>|<userPermissions>|<classAccesses>/);
   // The named credential points at the external credential by its name.
-  assert.match(noComments(read(NAMED)), />AWS_IoT_Relay</);
+  assert.match(noComments(read(NAMED)), /<externalCredential>AWS_IoT_Relay_Credential<\/externalCredential>/);
 });
 
 test('the name Apex calls matches the named credential in bootstrap/', () => {
