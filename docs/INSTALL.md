@@ -342,7 +342,7 @@ aws iam create-access-key --user-name "$CALLER"
 
 **c. Named credential.** **Named Credentials** → **New**: Name `AWS_IoT_Relay`, URL = the named credential URL that step 6 printed, the external credential from b, and **Enabled for Callouts** and **Generate Authorization Header** both on.
 
-**d. Who may use it.** Create a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal from b, and **Read** on **User External Credentials** (Object Settings). Then assign it to you, the integration user and the hidden Automated Process user:
+**d. Who may use it.** Create a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal from b, and nothing else. Do not add **Read** on **User External Credentials** to it: portal patients hold this set too, and their Customer Community licence refuses that permission. The Read comes from the repo's `AWS_IoT_Relay_Credential_Reader`, which `deploy-salesforce.sh` gives to every internal holder of `AWS_IoT_Relay_Callers`. Then assign it to you, the integration user and the hidden Automated Process user:
 
 **Fill in first:**
 - `INTEGRATION_USER='<integration username>'`: the integration user's username from 5b. Example: `INTEGRATION_USER='integration@iot-dev.jsmith.com'`. To look it up, paste this into your terminal:
@@ -362,6 +362,8 @@ echo "insert new PermissionSetAssignment(
     AssigneeId = [SELECT Id FROM User WHERE UserType = 'AutomatedProcess' AND Username LIKE 'autoproc@%' LIMIT 1].Id,
     PermissionSetId = [SELECT Id FROM PermissionSet WHERE Name = 'AWS_IoT_Relay_Callers'].Id);" | sf apex run --target-org "$NAME"
 ```
+
+The next `scripts/deploy-salesforce.sh` run gives each of them `AWS_IoT_Relay_Credential_Reader`, the Read a callout needs. To have it before then, assign it the same way.
 
 Every care team member who uses the agent also needs it: `sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of '<username>' --target-org "$NAME"`.
 
