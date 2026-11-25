@@ -34,6 +34,7 @@ const NEEDS = {
   AssumeRole: 'sts:AssumeRole on !GetAtt LiveViewerRole.Arn',
   Query: `dynamodb:Query on ${TABLE}`,
   Get: `dynamodb:GetItem on ${TABLE}`,
+  Update: `dynamodb:UpdateItem on ${TABLE}`,
 };
 
 const indent = (line) => line.search(/\S/);

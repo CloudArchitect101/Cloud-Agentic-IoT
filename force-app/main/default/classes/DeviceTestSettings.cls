@@ -24,6 +24,7 @@ public class DeviceTestSettings {
             Max_Callout_Attempts__c     = 3,
             Retry_Delay_Minutes__c      = 1,
             Sweep_Delay_Minutes__c      = 15,
+            Vitals_Retention_Days__c    = 90,
             At_Risk_Score__c            = 40,
             Critical_Score__c           = 70,
             Max_Risk_Score__c           = 100,

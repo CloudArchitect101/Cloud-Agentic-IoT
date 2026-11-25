@@ -28,6 +28,7 @@ const ENV = {
   CONFIG_CACHE_SECONDS: '300',
   ROOM_TEMP_ALERT: 'false',
   ROOM_TEMP_ALERT_CELSIUS: '30',
+  ROOM_TEMP_REALERT_MINUTES: '720',
 };
 
 // What the IoT rule puts on the telemetry queue: exactly what the patient
@@ -574,6 +575,7 @@ test('timestamps from the device are normalised to ISO 8601', async (t) => {
 const ROOM_RULE_ON = { env: { ROOM_TEMP_ALERT: 'true' } };
 const ONE_MINUTE_EARLIER = '2025-10-27T15:59:00.000Z';
 const FIFTEEN_MINUTES_EARLIER = '2025-10-27T15:45:00.000Z';
+const TWELVE_HOURS_EARLIER = '2025-10-27T04:00:00.000Z';
 /** A STABLE device whose last reading was half a minute ago, hot or not. */
 const roomState = (RoomTempHot, LastSyncedAt = ONE_MINUTE_EARLIER) => ({
   ...stateItem('pm-1', 'STABLE', HALF_A_MINUTE_EARLIER, LastSyncedAt), RoomTempHot,
@@ -609,14 +611,68 @@ test('room rule: while hot, nothing more until the re-alert interval has passed'
   assert.equal(dynamo.count('UpdateCommand'), 0);        // nothing changed
 });
 
-test('room rule: while hot, reported again once the re-alert interval has passed', async (t) => {
+test('room rule: while hot, the clinical 15-minute interval does not repeat the report', async (t) => {
+  // The open Case already says the device is hot. A device worn all day was
+  // 96 records a day at 15 minutes; it is 2 at 720.
   captureConsole(t);
-  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(true, FIFTEEN_MINUTES_EARLIER)] });
+  const { handler, syncs, dynamo } = load(t, { ...ROOM_RULE_ON, items: [roomState(true, FIFTEEN_MINUTES_EARLIER)] });
+  await handler(queueBatch(dht11Message({ temperature: 31 })));
+  assert.equal(syncs().length, 0);
+  assert.equal(dynamo.count('UpdateCommand'), 0);        // nothing changed
+});
+
+test('room rule: while hot, reported again once ROOM_TEMP_REALERT_MINUTES have passed', async (t) => {
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, { ...ROOM_RULE_ON, items: [roomState(true, TWELVE_HOURS_EARLIER)] });
   await handler(queueBatch(dht11Message({ temperature: 31 })));
   assert.equal(flagged(syncs()).length, 1);
   assert.equal(syncs().length, 1);
   assert.equal(state().LastSyncedAt, RECEIVED_ISO);
   assert.equal(state().RoomTempHot, true);
+});
+
+test('room rule: ROOM_TEMP_REALERT_MINUTES 0 reports once per episode, however long it lasts', async (t) => {
+  captureConsole(t);
+  const { handler, syncs } = load(t, {
+    env: { ROOM_TEMP_ALERT: 'true', ROOM_TEMP_REALERT_MINUTES: '0' },
+    items: [roomState(true, '2025-10-20T00:00:00.000Z')],
+  });
+  await handler(queueBatch(dht11Message({ temperature: 31 })));
+  assert.equal(syncs().length, 0);
+});
+
+test('room rule: a re-arm after the last sync makes the next hot reading a new crossing', async (t) => {
+  // Salesforce closed the device's Case while it was still hot.
+  captureConsole(t);
+  const { handler, syncs, state } = load(t, {
+    ...ROOM_RULE_ON,
+    items: [{ ...roomState(true, FIFTEEN_MINUTES_EARLIER), RearmRequestedAt: ONE_MINUTE_EARLIER }],
+  });
+  await handler(queueBatch(dht11Message({ temperature: 31 })));
+  assert.equal(flagged(syncs()).length, 1);
+  assert.equal(state().LastSyncedAt, RECEIVED_ISO);       // newer than the re-arm: used up
+  assert.equal(state().RoomTempHot, true);
+  assert.equal(state().RearmRequestedAt, ONE_MINUTE_EARLIER);   // never written by this function
+});
+
+test('room rule: a re-arm older than the last sync is already used up', async (t) => {
+  captureConsole(t);
+  const { handler, syncs } = load(t, {
+    ...ROOM_RULE_ON,
+    items: [{ ...roomState(true, ONE_MINUTE_EARLIER), RearmRequestedAt: FIFTEEN_MINUTES_EARLIER }],
+  });
+  await handler(queueBatch(dht11Message({ temperature: 31 })));
+  assert.equal(syncs().length, 0);
+});
+
+test('room rule: a re-arm on a device that has cooled waits for a real crossing', async (t) => {
+  captureConsole(t);
+  const { handler, syncs } = load(t, {
+    ...ROOM_RULE_ON,
+    items: [{ ...roomState(true, FIFTEEN_MINUTES_EARLIER), RearmRequestedAt: ONE_MINUTE_EARLIER }],
+  });
+  await handler(queueBatch(dht11Message({ temperature: 29.5 })));
+  assert.equal(syncs().length, 0);
 });
 
 test('room rule: just below the line the episode goes on, silently (the 1 C margin)', async (t) => {

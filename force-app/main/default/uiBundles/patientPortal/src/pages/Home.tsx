@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { MessageCircleHeart, Mic, PhoneCall } from "lucide-react";
-import { getMyDevices, type MyDevices } from "../api/portal/portalApi";
+import { getMyDevices, type Device, type MyDevices } from "../api/portal/portalApi";
 import { RoomCard } from "../features/devices/RoomCard";
+import { status } from "../features/devices/format";
+import { useLiveReading, withLive } from "../features/live/useLiveReading";
 import { useAuth } from "../features/authentication/context/AuthContext";
 
-const REFRESH_MS = 30_000;
+/**
+ * The saved readings and connection status come from Salesforce, and each
+ * load is one Salesforce API call. They are loaded when the page opens and
+ * again when it comes back into view after this long; the live readings in
+ * between come from AWS IoT (useLiveReading). The page used to reload every
+ * 30 seconds: 120 calls an hour per open tab.
+ */
+const RELOAD_AFTER_HIDDEN_MS = 5 * 60 * 1000;
+
+function LiveRoomCard({ device }: { device: Device }) {
+	const live = useLiveReading(device.serialNumber, status(device) === "online");
+	return <RoomCard device={withLive(device, live)} />;
+}
 
 function greeting(now = new Date()): string {
 	const h = now.getHours();
@@ -26,9 +40,16 @@ export default function HomePage() {
 	}, []);
 
 	useEffect(() => {
+		let loadedAt = Date.now();
 		load();
-		const timer = window.setInterval(load, REFRESH_MS);
-		return () => window.clearInterval(timer);
+		const onVisibility = () => {
+			if (!document.hidden && Date.now() - loadedAt >= RELOAD_AFTER_HIDDEN_MS) {
+				loadedAt = Date.now();
+				load();
+			}
+		};
+		document.addEventListener("visibilitychange", onVisibility);
+		return () => document.removeEventListener("visibilitychange", onVisibility);
 	}, [load]);
 
 	const firstName = user?.name?.split(" ")[0];
@@ -41,7 +62,7 @@ export default function HomePage() {
 				{firstName ? `, ${firstName}` : ""}
 			</h1>
 			<p className="mt-2 text-muted-foreground">
-				Here is what your temperature sensor is reporting. It refreshes on its own.
+				Here is what your temperature sensor is reporting. Live readings arrive every few seconds while this page is open.
 			</p>
 
 			<section aria-label="My devices" className="mt-8 grid gap-6 md:grid-cols-2">
@@ -60,7 +81,7 @@ export default function HomePage() {
 						{data.message ?? "No monitoring device is linked to your account yet."}
 					</p>
 				)}
-				{data?.devices.map((device) => <RoomCard key={device.assetId} device={device} />)}
+				{data?.devices.map((device) => <LiveRoomCard key={device.assetId} device={device} />)}
 			</section>
 
 			<section aria-labelledby="help" className="mt-10 rounded-2xl bg-[var(--hero)] p-6 sm:p-8">

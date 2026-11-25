@@ -1,5 +1,5 @@
 /**
- * The patient portal's two Apex REST endpoints, called through the Data SDK
+ * The patient portal's three Apex REST endpoints, called through the Data SDK
  * so they run as the signed-in patient (the SDK adds the session and CSRF
  * handling). Both decide whose data it is from the session alone: nothing
  * sent from here can widen what comes back.
@@ -48,6 +48,22 @@ export interface ChatStart {
 	expiresAt?: number;
 }
 
+/** A 15-minute link to one board's live readings in AWS IoT (PortalLiveResource). */
+export interface LiveLink {
+	url: string;
+	clientId: string;
+	topic: string;
+	expiresAt: string;
+	/** How often the board sends while live, in seconds. */
+	seconds: number;
+}
+
+export interface LiveStart {
+	live: LiveLink | null;
+	temperatureAlert: boolean;
+	message?: string;
+}
+
 async function portalFetch(path: string, init?: RequestInit): Promise<Response> {
 	const sdk = await createDataSDK();
 	if (!sdk.fetch) {
@@ -69,4 +85,21 @@ export async function startChat(): Promise<ChatStart> {
 	const res = await portalFetch("chat-token", { method: "POST" });
 	const body = (await res.json()) as ChatStart;
 	return res.ok ? body : { enabled: false, message: body.message ?? `Chat unavailable (${res.status}).` };
+}
+
+/**
+ * Tells the board to send live readings for 15 minutes and returns the link
+ * the browser receives them on. One Salesforce API call; the readings
+ * themselves come from AWS IoT and cost Salesforce nothing.
+ */
+export async function startLive(serialNumber: string): Promise<LiveStart> {
+	const res = await portalFetch("live", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ serialNumber }),
+	});
+	const body = (await res.json()) as Partial<LiveStart>;
+	return res.ok && body.live
+		? { live: body.live, temperatureAlert: body.temperatureAlert === true }
+		: { live: null, temperatureAlert: false, message: body.message ?? `Live readings unavailable (${res.status}).` };
 }

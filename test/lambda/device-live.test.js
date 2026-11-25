@@ -453,3 +453,38 @@ test('no link, secret or token reaches the logs', async (t) => {
   assert.ok(logs.some((line) => line.includes('LIVE command not published')), text);
   assert.ok(logs.some((line) => line.includes('Could not assume the live viewer role')), text);
 });
+
+// mode rearm: Salesforce closed the board's temperature alert Case.
+
+test('rearm stamps RearmRequestedAt on the STATE item, and touches nothing else', async (t) => {
+  captureConsole(t);
+  const { handler, publishes, assumed, reads } = load(t);
+  const res = await handler(request({ thingName: 'Test7', mode: 'rearm' }));
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(answer(res), { thingName: 'Test7', rearmed: true });
+  assert.equal(publishes.length, 0);                     // the board is not contacted
+  assert.equal(assumed.length, 0);                       // no link is signed
+  const updates = reads.filter((call) => call.command === 'UpdateCommand');
+  assert.equal(updates.length, 1);
+  assert.deepEqual(updates[0].input.Key, { PK: 'PATIENT#Test7', SK: 'STATE' });
+  assert.equal(updates[0].input.UpdateExpression, 'SET RearmRequestedAt = :now');
+  assert.match(updates[0].input.ExpressionAttributeValues[':now'], /^\d{4}-\d\d-\d\dT/);
+});
+
+test('rearm on a board with no STATE yet answers rearmed false and creates nothing', async (t) => {
+  captureConsole(t);
+  const { handler } = load(t, { items: [] });
+  const res = await handler(request({ thingName: 'Test7', mode: 'rearm' }));
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(answer(res), { thingName: 'Test7', rearmed: false });
+});
+
+test('a re-arm newer than the last sync ends the temperature alert the card shows', async (t) => {
+  captureConsole(t);
+  const hot = { ...STATE, RoomTempHot: true };
+  const before = answer(await load(t, { items: [hot] }).handler(request({ thingName: 'Test7', mode: 'latest' })));
+  assert.equal(before.state.temperatureAlert, true);
+  const rearmed = { ...hot, RearmRequestedAt: '2026-11-06T05:10:00.000Z' };   // after LastSyncedAt
+  const after = answer(await load(t, { items: [rearmed] }).handler(request({ thingName: 'Test7', mode: 'latest' })));
+  assert.equal(after.state.temperatureAlert, false);
+});

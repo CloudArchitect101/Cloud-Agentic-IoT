@@ -32,8 +32,14 @@
  *     AT_RISK or CRITICAL. With the temperature alert demo rule on
  *     (ROOM_TEMP_ALERT), it also gets a reading flagged
  *     Room_Temperature_Alert__c when a device first reaches
- *     ROOM_TEMP_ALERT_CELSIUS, and again at most every re-alert interval while
- *     it stays there; Salesforce decides whether that opens a Case. The
+ *     ROOM_TEMP_ALERT_CELSIUS; Salesforce decides whether that opens a Case.
+ *     While the device stays hot it is reported again only every
+ *     ROOM_TEMP_REALERT_MINUTES (hours, not minutes: a safety net for a Case
+ *     that failed to open), because the open Case already says it. When that
+ *     Case is closed, Salesforce re-arms the device through device-live
+ *     (RearmRequestedAt on STATE), so a device still hot gets a new Case at
+ *     its next reading. A device worn all day is about 2 records a day, not
+ *     96 (docs/SCALING.md, "Salesforce API calls per device"). The
  *     write itself happens in salesforce-sync, at a concurrency Salesforce
  *     can take, so a Salesforce outage backs up the sync queue instead of
  *     telemetry.
@@ -112,9 +118,20 @@ function settings() {
     retentionSeconds: keepReadings ? numberEnv('READING_RETENTION_DAYS') * 86_400 : null,
     roomTempAlert,
     roomTempCelsius: roomTempAlert ? numberEnv('ROOM_TEMP_ALERT_CELSIUS') : null,
+    // 0: a hot device is reported once per episode, and again only after a re-arm.
+    roomTempRealertMs: roomTempAlert ? minutesOrZero('ROOM_TEMP_REALERT_MINUTES') * 60_000 : null,
     // Empty or unset: no Data Cloud copy, and the archive is all there is.
     dataCloudPrefix: process.env.DATA_CLOUD_EXPORT_PREFIX || '',
   };
+}
+
+/** Zero or a positive number of minutes; 0 is a setting here, not a mistake. */
+function minutesOrZero(name) {
+  const value = Number(requiredEnv(name));
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be 0 or a positive number of minutes, not "${process.env[name]}".`);
+  }
+  return value;
 }
 
 /** The telemetry queue's batch: one result for the whole batch, failures by message. */
@@ -237,14 +254,19 @@ function groupByDevice(readings) {
  *     REALERT_INTERVAL_MINUTES ago or more;
  *   - (temperature alert demo rule, ROOM_TEMP_ALERT on) hotDue: the reading is
  *     at or above ROOM_TEMP_ALERT_CELSIUS and either the device was not hot
- *     before (a crossing) or the re-alert interval has passed. The record is
- *     flagged Room_Temperature_Alert__c. An episode ends only when a reading
- *     drops below the threshold minus ROOM_TEMP_REARM_MARGIN_C; readings in
- *     between, and readings without a temperature, leave it as it is.
+ *     before (a crossing) or ROOM_TEMP_REALERT_MINUTES have passed (never,
+ *     when that is 0). The record is flagged Room_Temperature_Alert__c. An
+ *     episode ends only when a reading drops below the threshold minus
+ *     ROOM_TEMP_REARM_MARGIN_C; readings in between, and readings without a
+ *     temperature, leave it as it is.
+ *   A re-arm (RearmRequestedAt newer than LastSyncedAt, written by
+ *   device-live when Salesforce closes the device's Case) ends the episode
+ *   too, so the next hot reading is a crossing. A sync afterwards makes
+ *   LastSyncedAt newer, which uses the re-arm up. It is never written here,
+ *   so a STATE save racing the re-arm cannot undo it.
  * Still at most one sync per reading: a hot reading synced for a clinical
- * reason carries the flag too. All three share the LastSyncedAt clock, so any
- * sync resets LastSyncedAt, and a clinical sync while the sensor is hot can
- * delay the next room report by up to one interval.
+ * reason carries the flag too. All share the LastSyncedAt clock, so any sync
+ * resets LastSyncedAt.
  *
  * A reading no newer than the state already recorded is stored but decides
  * nothing: it is a retry, or it arrived late, and acting on it would report a
@@ -253,11 +275,12 @@ function groupByDevice(readings) {
 function planDevice(deviceId, readings, state, config) {
   const { realertMs } = config;
   const ruleOn = config.roomTempAlert === true;
+  const roomRealertMs = config.roomTempRealertMs || 0;
   let patientState = state ? state.PatientState : null;
   let updatedAt = state ? state.UpdatedAt : null;
   let lastSyncedAt = state ? state.LastSyncedAt || null : null;
   // A stored true with the rule off would keep re-syncing: force it off.
-  let hot = ruleOn && state ? state.RoomTempHot === true : false;
+  let hot = ruleOn && state ? state.RoomTempHot === true && !rearmPending(state) : false;
   const wasHotAtStart = hot;
   let latest = null;
   const syncs = [];
@@ -275,7 +298,9 @@ function planDevice(deviceId, readings, state, config) {
 
     const changed = vitals.patientState !== patientState;
     const reminderDue = vitals.patientState !== 'STABLE' && intervalPassed;
-    const hotDue = isHot && (!hot || intervalPassed);
+    const hotRepeatDue = roomRealertMs > 0 && (!lastSyncedAt
+      || Date.parse(vitals.timestamp) - Date.parse(lastSyncedAt) >= roomRealertMs);
+    const hotDue = isHot && (!hot || hotRepeatDue);
     if (changed || reminderDue || hotDue) {
       syncs.push(toSalesforceRecord(vitals, patientState, isHot));
       lastSyncedAt = vitals.timestamp;
@@ -473,6 +498,15 @@ async function enqueueSyncs(plans, queueUrl) {
     }
   });
   return notQueued;
+}
+
+/**
+ * True when Salesforce asked for a re-arm (its Case for this device closed)
+ * after the last sync went out. ISO 8601 UTC strings compare in time order.
+ */
+function rearmPending(state) {
+  return typeof state.RearmRequestedAt === 'string'
+    && state.RearmRequestedAt > (typeof state.LastSyncedAt === 'string' ? state.LastSyncedAt : '');
 }
 
 /**

@@ -445,11 +445,14 @@ Resources:
               - Effect: Allow
                 Action: iot:DescribeEndpoint
                 Resource: '*'
-              # The newest stored reading and the patient's state, read only.
+              # The newest stored reading and the patient's state, and the
+              # re-arm stamp (mode rearm), the one item this function
+              # writes: SET RearmRequestedAt on an existing STATE item.
               - Effect: Allow
                 Action:
                   - dynamodb:Query
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
                 Resource: !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PatientVitalsTableName}'
 
   # What a browser watching a board may do: connect as a live-* client and

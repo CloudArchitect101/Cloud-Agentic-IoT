@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <label>Patient Portal User</label>
-    <description>For patients (Customer Community users): API access, which the React site's Data SDK needs, and the portal's two Apex REST endpoints. Those read only the patient's own account; this grants no object access.</description>
+    <description>For patients (Customer Community users): API access, which the React site's Data SDK needs, and the portal's three Apex REST endpoints. Those read only the patient's own account; this grants no object access.</description>
     <hasActivationRequired>false</hasActivationRequired>
     <!-- Without it the site's /sf/api/ proxy answers API_DISABLED_FOR_ORG
          and the React app treats the patient as signed out. -->
@@ -15,6 +15,10 @@
     </classAccesses>
     <classAccesses>
         <apexClass>PortalChatTokenResource</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>PortalLiveResource</apexClass>
         <enabled>true</enabled>
     </classAccesses>
 </PermissionSet>

@@ -752,6 +752,25 @@ switched on by a person, not by a deploy.
      --on-behalf-of <care team member's username>
    ```
 
+Finally, schedule the nightly clean-up of old `Patient_Vitals__c` records
+(`PatientVitalsRetentionJob`, 02:00 in your time zone). It deletes records
+older than `Vitals_Retention_Days__c` (90 days, in the Default
+`Device_Platform_Setting__mdt` record), so Salesforce storage stays flat;
+every reading stays in S3 and Data Cloud. Run it once per org.
+
+Paste into your terminal (once per org; it schedules a nightly job):
+
+```bash
+sf apex run --target-org iot-dev-admin <<'APEX'
+System.schedule('Patient vitals retention', '0 0 2 * * ?', new PatientVitalsRetentionJob());
+APEX
+```
+
+The care team should hold `AWS_IoT_Relay_Callers` too (INSTALL-GUIDE.md,
+Stage 2 part d): closing a temperature alert Case re-arms its device in AWS
+with a callout as the person who closed it. Without it the re-arm is skipped
+and logged, and a device that stays hot is reported again after 12 hours.
+
 That is the end of setup. Everything after this ships through GitHub.
 
 ### 6.5 Optional: the guardrails and the MCP server
