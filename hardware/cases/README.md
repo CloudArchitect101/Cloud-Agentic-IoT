@@ -112,6 +112,16 @@ Why not everything on one bed: the tub (155 x 85) and dial plate (150 x 141) are
 
 The `pack*.py` and `x2d_*.py` scripts that made the beds read STLs from a local `out/stl/` folder; point `S` at `stl/` to rerun them here.
 
+## Licence
+
+The case designs (`.scad` sources, STL and 3MF files, print beds and renders) are under [CC BY 4.0](../../docs/LICENSE-CC-BY-4.0.txt). You can print, change, share and sell them, including prints and remixes, if you credit the original with a link and say what you changed, for example:
+
+```text
+Based on the Cloud-Agentic-IoT cases by Vitaly Makarkin (https://github.com/CloudArchitect101/Cloud-Agentic-IoT), CC BY 4.0. Changes: <what you changed, or "none">.
+```
+
+The `pack*.py` and `x2d_*.py` scripts are code, under the repo's [MIT licence](../../LICENSE). The bought parts (ESP32, DHT11, servo, bell) and their names belong to their makers. What each licence covers: [README, License](../../README.md#license).
+
 ---
 
 [← Device builder path](../../docs/PATH-DEVICE.md) · [Docs home](../../docs/index.md) · [Troubleshooting](../../docs/TROUBLESHOOTING.md)

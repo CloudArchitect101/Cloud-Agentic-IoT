@@ -14,6 +14,6 @@ Product names and logos belong to their owners. They are used to show what this 
 | ESP32 | Espressif mark (via `simple-icons`) | Espressif trademark; shown only to name the chip maker |
 | Git | [Git logo](https://git-scm.com/downloads/logos) by Jason Long | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) |
 | GitHub mark in the top menu | [Octicons](https://primer.style/octicons/) | MIT |
-| Agentforce, Data Cloud, Service, Portal, Electronics, Terminal | Drawn for this project | Same licence as the repo |
+| Agentforce, Data Cloud, Service, Portal, Electronics, Terminal | Drawn for this project by Vitaly Makarkin | [CC BY 4.0](../../LICENSE-CC-BY-4.0.txt), like the other docs and media |
 
 [Docs home](../../index.md)
