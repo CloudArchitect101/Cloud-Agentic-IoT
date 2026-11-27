@@ -675,6 +675,13 @@ SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
 
 ## 13. Check that it works
 
+When it all works, warming the monitored device to 30 C on the arm opens a Case, and the corp ticket gauge sweeps and rings its bell:
+
+<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px">
+<figure style="flex:1 1 300px;margin:0"><video src="videos/working-monitored-device.mp4" poster="videos/working-monitored-device.jpg" autoplay muted loop playsinline controls width="720" style="width:100%;height:auto" aria-label="Animation: the monitored device on the arm reaches 30 C and starts a temperature alert"></video><figcaption><code>PatientExternalESP32</code> on the arm</figcaption></figure>
+<figure style="flex:1 1 300px;margin:0"><video src="videos/working-corp-gauge.mp4" poster="videos/working-corp-gauge.jpg" autoplay muted loop playsinline controls width="720" style="width:100%;height:auto" aria-label="Animation: the corp ticket gauge sweeps its needle and rings the bell for an open ticket"></video><figcaption><code>CompanyInternalESP32</code> rings for the open Case</figcaption></figure>
+</div>
+
 | Check | Expect |
 |---|---|
 | The board's Asset | Connection `Online`, a reading every 2 s on the Live Status card |
