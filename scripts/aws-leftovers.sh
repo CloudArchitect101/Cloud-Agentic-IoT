@@ -5,7 +5,7 @@
 # functions of this project that no template declares. Read-only: it deletes
 # nothing, it prints what it finds and how to remove each one.
 #
-#   AWS_PROFILE=test-cloudarchitect101 scripts/aws-leftovers.sh Dev
+#   AWS_PROFILE=test-yourname scripts/aws-leftovers.sh Dev
 #
 # Why: the repo keeps one current version of everything, but a resource made
 # by an older template, by hand, or by a renamed stack stays in the account

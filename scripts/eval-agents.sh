@@ -2,7 +2,7 @@
 #
 # eval-agents.sh - run the agent evals against a real org and account.
 #
-#   SF_TARGET_ORG=test-cloudarchitect101 AWS_PROFILE=test-cloudarchitect101 scripts/eval-agents.sh Dev
+#   SF_TARGET_ORG=test-yourname AWS_PROFILE=test-yourname scripts/eval-agents.sh Dev
 #   scripts/eval-agents.sh Dev retrieval     only the Bedrock SOP retrieval eval (AWS only)
 #   scripts/eval-agents.sh Dev agents        only the Agentforce Testing Center tests (Salesforce only)
 #

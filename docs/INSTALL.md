@@ -407,6 +407,8 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
 
 ## 8. Slack
 
+`Test8` in this step and in step 13 stands for your own board's name: the Serial Number you give its Asset in step 12. A new org has no board called `Test8`, so use yours.
+
 **a. The `/patient-status` command** (the Ward Bot app from 5d):
 
 1. In the app: **Slash Commands** → **Create New Command**: Command `/patient-status`, Request URL = the Slack Request URL step 6 printed, usage hint `Test8`.
@@ -488,8 +490,10 @@ SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
 
 Each insight is created with its schedule from [`datacloud/calculated-insights.json`](../datacloud/calculated-insights.json): Room Device Silence (each board's last reading time) every hour, Room Out Of Range Daily every 6 hours, to spend fewer Data Cloud credits. Change one there, or on the insight in Data Cloud.
 
+**Who may ask the agent for a device's history.** The Patient Care Agent's **Get Device History** action queries Data Cloud as the person asking, and the `Patient_Care_Agent` permission set can't grant Data Cloud access. Give yourself, and every care team member who uses the agent (in Salesforce or in Slack), the standard **Data Cloud User** permission set: Setup → **Users** → the user → **Permission Set Assignments** → **Edit Assignments** → **Data Cloud User** → **Save**. Without it the agent answers that the history can't be read right now ([DATA-CLOUD.md](DATA-CLOUD.md#how-the-agent-reads-it)).
+
 > [!TIP]
-> **Check before you go on.** The data stream's last refresh succeeded, and its record count is above 0 once a board has sent readings. `scripts/data-cloud-insights.sh --dry-run` prints the two insights.
+> **Check before you go on.** The data stream's last refresh succeeded, and its record count is above 0 once a board has sent readings. `scripts/data-cloud-insights.sh --dry-run` prints the two insights. Once the insights have run, the agent answers "How long was Test8 at or above 30 C yesterday?" from Data Cloud.
 
 [← 8. Slack](#step-8) · [Step map](#step-map) · [10. Patient portal with Enhanced Chat →](#step-10)
 
@@ -526,6 +530,14 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
 
    A permission set the user already holds prints a warning: that's fine, carry on.
 
+   The agent user also needs `AWS_IoT_Relay_Callers` (from step 6) to read the board's newest reading from AWS for the chat.
+
+   **Paste into your terminal.** Once per org, in the same terminal as the block above. It gives the agent user `AWS_IoT_Relay_Callers`.
+
+   ```bash
+   sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$AGENT_USER" --target-org "$NAME"
+   ```
+
 4. **Routing.** **Messaging Settings** → the channel → Routing Type **Omni-Flow**, Flow `Route_Patient_Portal_Chat`, Fallback Queue **Care Team Queue**.
 5. **The site's chat link.** From the deployment's code snippet, copy the site URL (it holds `ESW`).
 
@@ -556,7 +568,10 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
    ```bash
    PATIENT_USER='<patient username>'
    sf org assign permset --name Patient_Portal_User --on-behalf-of "$PATIENT_USER" --target-org "$NAME"
+   sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$PATIENT_USER" --target-org "$NAME"
    ```
+
+   The second set lets the **My monitor** page fetch the board's newest reading from AWS; without it the page shows the last saved one, which can be days old. A later `scripts/install.sh Dev` gives it to any patient who lacks it.
 
    Put the patient's device on that account: its Asset's Account = the Person Account, record type **Patient Device**.
 
@@ -625,7 +640,16 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
 
    A corp ticket gauge has the servo only: [its wiring](images/wiring-corp-gauge.svg).
 
-2. In the Cloud Agentic IoT app, create a **Wi-Fi Network**, then an **Asset** with Serial Number = the board's name. It turns **Provisioned** with a bundle link.
+2. In the Cloud Agentic IoT app, create a **Wi-Fi Network** (the network the board joins), then an **Asset**:
+
+   | Field | Value |
+   |---|---|
+   | Record type | **Patient Device** for a monitored device; **Internal Device** for a corp ticket gauge |
+   | Asset Name and Serial Number | The board's name, for example `Test8`. Letters, digits, `-` and `_` only. It becomes the board's identity in AWS IoT |
+   | Account | A Patient Device: a patient's **Person Account** (Accounts → **New** → Person Account, if you have none yet). An Internal Device: a business account, for example your ward |
+   | Wi-Fi Network | The network you just created |
+
+   Salesforce refuses an Asset with no Account, and a Patient Device on a business account. Once saved, the Asset turns **Provisioned** with a bundle link within a minute (reload the page).
 3. Download the bundle, plug the board in by USB, and run:
 
 **Fill in first:**
@@ -666,7 +690,8 @@ Every later firmware update goes over the air: `scripts/ota.sh try Dev patient-m
 | The board's Asset | Connection `Online`, a reading every 2 s on the Live Status card |
 | **Send Command** → `RESTART` on the Asset | The Device Command goes `Sent`, then `Acked` |
 | Warm the sensor to 30 C (under an arm) | The board's motor sweeps, and a Case opens in Care_Team_Queue |
-| Ask the agent "what is Test8 reporting?" | The latest readings, and an SOP citation when you ask what to do |
+| Ask the agent "what is Test8 reporting?" (your board's name) | The latest readings, and an SOP citation when you ask what to do |
+| Ask the agent "How long was Test8 at or above 30 C yesterday?" (after step 9) | An answer from Data Cloud, with a note that the newest hour or two may be missing |
 | Ask any agent "What is the spec of the ESP32-S3-DevKitC-1?" (after 11b) | An answer from Espressif's catalogs, with a docs.espressif.com link for the rest |
 | The app's Home tab | This month's AWS spend against the limit, and the org's limits |
 | `/patient-status Test8` in Slack | The live reading |
