@@ -557,49 +557,107 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
 
 ## 12. Add the boards
 
-Two boards: the monitored device (this guide calls it `PatientExternalESP32`) and the corp ticket gauge (`CompanyInternalESP32`). Do 1 to 4 for each, then 5 once.
+Two different devices, each with its own ESP32: first the monitored device, then the corp ticket gauge, then 12c once for both.
 
-1. Take the parts and cases from [step 0](#step-0), wire them as drawn (each wire ends on the pin printed on the board), and put them in the cases as the [case assembly](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases#1-monitored-device-arm-cuff) shows.
+<a id="step-12a"></a>
 
-   ![Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers](images/wiring-monitored-device.svg)
+### 12a. Monitored device: `PatientExternalESP32`
 
-   The corp ticket gauge has the servo only: [its wiring](images/wiring-corp-gauge.svg).
+The arm cuff: a DHT11 temperature sensor and a servo. Click or tap the drawing to see it full size.
 
-2. In the Cloud Agentic IoT app, create a **Wi-Fi Network** (the network the board joins), then an **Asset**:
+<a href="images/wiring-monitored-device.svg"><img src="images/wiring-monitored-device.svg" alt="Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers" width="1720" style="width:100%;height:auto"></a>
 
-   | Field | Value |
-   |---|---|
-   | Record type | **Patient Device** for a monitored device; **Internal Device** for a corp ticket gauge |
-   | Asset Name and Serial Number | `PatientExternalESP32` for the monitored device, `CompanyInternalESP32` for the gauge |
-   | Account | A Patient Device: the test patient's **Person Account** from step 10. An Internal Device: a business account, for example your ward |
-   | Wi-Fi Network | The network you just created |
+**1. Wire it as drawn** (each wire ends on the pin printed on the board) and put it in the arm cuff:
 
-   Once saved, the Asset turns **Provisioned** with a bundle link within a minute (reload the page).
-3. Download the bundle, plug the board in by USB, and run:
+<video src="videos/assembly-monitored-device.mp4" poster="videos/assembly-monitored-device.jpg" autoplay muted loop playsinline controls width="720" style="width:100%;max-width:720px;height:auto" aria-label="Animation: how the electronics go into the arm cuff"></video>
+
+**2. In the Cloud Agentic IoT app,** create a **Wi-Fi Network** (the network the board joins), then an **Asset**:
+
+| Field | Value |
+|---|---|
+| Record type | **Patient Device** |
+| Asset Name and Serial Number | `PatientExternalESP32` |
+| Account | The test patient's **Person Account** from step 10 |
+| Wi-Fi Network | The network you just created |
+
+Once saved, the Asset turns **Provisioned** with a bundle link within a minute (reload the page).
+
+**3. Download the bundle,** plug the board in by USB, and run the block below.
 
 **Fill in first:**
 - `BUNDLE=~/Downloads/bundle.json`: where you saved the bundle. Change it only if it's somewhere else.
 
-**Paste into your terminal.** Once per board. It writes the firmware, the certificate and the Wi-Fi to the board, then deletes the bundle.
+**Paste into your terminal.** It writes the firmware, the certificate and the Wi-Fi to the board, then deletes the bundle.
 
 ```bash
 BUNDLE=~/Downloads/bundle.json
 ./scripts/firmware.sh flash patient-monitor && ./scripts/provision-device.sh "$BUNDLE" && rm "$BUNDLE"
 ```
 
-**4. Your phone's hotspot** as a second Wi-Fi network.
+**4. Add your phone's hotspot** as a second Wi-Fi network.
 
 **Fill in first:**
 - `HOTSPOT='<hotspot name>'`: the network's name. Example: `HOTSPOT='My iPhone'`.
 
-**Paste into your terminal.** Once per board. It asks for the hotspot's password, hidden.
+**Paste into your terminal.** It asks for the hotspot's password, hidden.
 
 ```bash
 HOTSPOT='<hotspot name>'
 ./scripts/update-wifi.sh "$HOTSPOT"
 ```
 
-**5. Data Cloud's calculated insights**, once the boards have sent readings for a few minutes.
+<a id="step-12b"></a>
+
+### 12b. Corp ticket gauge: `CompanyInternalESP32`
+
+The ticket gauge with the bell: a servo only, no sensor. Click or tap the drawing to see it full size.
+
+<a href="images/wiring-corp-gauge.svg"><img src="images/wiring-corp-gauge.svg" alt="Corp ticket gauge wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers" width="1720" style="width:100%;height:auto"></a>
+
+**1. Wire it as drawn** (each wire ends on the pin printed on the board) and put it in the gauge:
+
+<video src="videos/assembly-corp-gauge.mp4" poster="videos/assembly-corp-gauge.jpg" autoplay muted loop playsinline controls width="720" style="width:100%;max-width:720px;height:auto" aria-label="Animation: how the electronics go into the ticket gauge"></video>
+
+**2. In the Cloud Agentic IoT app,** create an **Asset**:
+
+| Field | Value |
+|---|---|
+| Record type | **Internal Device** |
+| Asset Name and Serial Number | `CompanyInternalESP32` |
+| Account | A business account, for example your ward |
+| Wi-Fi Network | The network you created in 12a |
+
+Once saved, the Asset turns **Provisioned** with a bundle link within a minute (reload the page).
+
+**3. Download its bundle,** plug the gauge's board in by USB, and run the block below.
+
+**Fill in first:**
+- `BUNDLE=~/Downloads/bundle.json`: where you saved the bundle. Change it only if it's somewhere else.
+
+**Paste into your terminal.** It writes the firmware, the certificate and the Wi-Fi to the board, then deletes the bundle.
+
+```bash
+BUNDLE=~/Downloads/bundle.json
+./scripts/firmware.sh flash patient-monitor && ./scripts/provision-device.sh "$BUNDLE" && rm "$BUNDLE"
+```
+
+**4. Add your phone's hotspot** as a second Wi-Fi network.
+
+**Fill in first:**
+- `HOTSPOT='<hotspot name>'`: the network's name. Example: `HOTSPOT='My iPhone'`.
+
+**Paste into your terminal.** It asks for the hotspot's password, hidden.
+
+```bash
+HOTSPOT='<hotspot name>'
+./scripts/update-wifi.sh "$HOTSPOT"
+```
+
+<a id="step-12c"></a>
+
+### 12c. Both boards: Data Cloud
+
+**Data Cloud's calculated insights**, once both boards have sent readings for a few minutes.
 
 **Paste into your terminal.** Once per org.
 
