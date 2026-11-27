@@ -22,6 +22,19 @@
 
 Two ESP32 boards in 3D-printed cases, AWS IoT, Salesforce with Agentforce and Data Cloud, all running together. Everything below comes from the [Quick Install Guide](https://cloudarchitect101.github.io/Cloud-Agentic-IoT/INSTALL), steps 12 and 13.
 
+**0. Tech stack**
+
+<table>
+<tr>
+<th width="50%"><img src="docs/images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Salesforce</th>
+<th width="50%"><img src="docs/images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> AWS</th>
+</tr>
+<tr>
+<td valign="top"><img src="docs/images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <b>Salesforce</b>: Service Cloud Cases, Apex, Lightning<br><img src="docs/images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> <b>Agentforce</b>: two agents, new builder<br><img src="docs/images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> <b>Data Cloud</b>: reading history and insights<br><img src="docs/images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <b>Slack</b>: slash command and agent DMs</td>
+<td valign="top"><img src="docs/images/platforms/iot-core.svg" alt="AWS IoT Core" title="AWS IoT Core" width="20" height="20"> <b>AWS IoT Core</b>: mutual TLS, rules, OTA jobs<br><img src="docs/images/platforms/lambda.svg" alt="AWS Lambda" title="AWS Lambda" width="20" height="20"> <b>Lambda</b>: alerts, commands, Salesforce sync<br><img src="docs/images/platforms/bedrock.svg" alt="Amazon Bedrock" title="Amazon Bedrock" width="20" height="20"> <b>Bedrock</b>: SOP search with embeddings<br><img src="docs/images/platforms/aws.svg" alt="Amazon S3" title="Amazon S3" width="20" height="20"> <b>S3</b>: reading archive and firmware</td>
+</tr>
+</table>
+
 **1. Build two devices** ([step 12](https://cloudarchitect101.github.io/Cloud-Agentic-IoT/INSTALL#step-12))
 
 <table>
