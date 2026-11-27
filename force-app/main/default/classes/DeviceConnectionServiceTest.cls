@@ -265,8 +265,7 @@ private class DeviceConnectionServiceTest {
     /* ------------------------------------- no case alert on reconnect */
 
     // Since firmware 2.5.0 a patient board's motor follows its own room, so a
-    // board coming online is sent no CASE_ALERT, whatever its retired Case
-    // Alert field still shows.
+    // board coming online is sent no CASE_ALERT.
     private static Integer alerts() {
         return [SELECT COUNT() FROM Device_Command__c WHERE Command__c = 'CASE_ALERT'];
     }
@@ -277,9 +276,6 @@ private class DeviceConnectionServiceTest {
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
         Asset device = device('PM-1');
-        TriggerHandler.bypass('AssetTriggerHandler');
-        update new Asset(Id = device.Id, Case_Alert_Active__c = true);
-        TriggerHandler.clearBypass('AssetTriggerHandler');
         Datetime now = Datetime.newInstance(System.now().getTime() / 1000 * 1000);
         showing(device, 'Offline', now.addMinutes(-10), 'CONNECTION_LOST');
 

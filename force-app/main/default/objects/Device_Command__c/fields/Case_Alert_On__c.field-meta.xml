@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
-    <fullName>Case_Alert_On__c</fullName>
-    <label>Case Alert On</label>
-    <description>Retired with firmware 2.5.0, kept for the history of old CASE_ALERT commands. Nothing reads or sets it.</description>
-    <defaultValue>false</defaultValue>
-    <type>Checkbox</type>
-</CustomField>
