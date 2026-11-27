@@ -47,9 +47,26 @@ build_one() {   # build_one <sketch> [folder to compile, firmware/<sketch> by de
   # --libraries is what finds <CloudAgenticDevice.h> in firmware/libraries.
   # Nothing secret is compiled in: Wi-Fi and the certificate live in the
   # board's NVS, so one binary serves every board of this type.
+  # arduino-cli prints nothing while it compiles, which on a laptop looks like
+  # a freeze. So say how long to expect, tick every 30 s while it works (only
+  # in a terminal: CI logs and tests need no ticks), and say how long it took.
+  echo "Compiling. Usually 1 to 3 minutes; the first build on a machine can take 5 to 10, while the ESP32 core compiles once and is cached. The compiler prints nothing until it is done."
+  local started ticker="" rc=0
+  started=$(date +%s)
+  if [ -t 2 ] && ! in_ci; then
+    # Stops by itself if this script is stopped (Ctrl-C): kill -0 checks the
+    # script is still running before each tick.
+    ( while sleep 30 && kill -0 $$ 2> /dev/null; do
+        printf '  still compiling %s: %d s so far\n' "$sketch" $(( $(date +%s) - started )) >&2
+      done ) &
+    ticker=$!
+  fi
   arduino-cli compile --fqbn "$FQBN" \
     --libraries "$REPO_ROOT/firmware/libraries" \
-    --output-dir "$BUILD_DIR/$sketch" "$dir"
+    --output-dir "$BUILD_DIR/$sketch" "$dir" || rc=$?
+  if [ -n "$ticker" ]; then kill "$ticker" 2> /dev/null || true; wait "$ticker" 2> /dev/null || true; fi
+  [ "$rc" -eq 0 ] || die "Compiling $sketch failed (exit $rc). The compiler's lines above say why."
+  echo "Compiled $sketch $version in $(( $(date +%s) - started )) s."
   endstep
 }
 
