@@ -57,3 +57,16 @@ test('links into this repository on github.com point to Dev, not a feature branc
   }
   assert.deepEqual(found, [], 'link to Dev (or a file on Dev); feature branches are deleted after merge');
 });
+
+test('no real Salesforce org username in a tracked file', () => {
+  // Orgs from signup and Trailhead name their first users like
+  // epic.out.<hex>@orgfarm.salesforce.com. A retrieved site or network file
+  // writes them as siteAdmin and guest record owner; they name a real org.
+  const orgUsername = /[A-Za-z0-9._%+-]+@(?:orgfarm\.salesforce\.com|[a-z0-9-]+\.(?:sandbox|develop|trailblaze)\.my\.salesforce\.com|[a-z0-9-]+-dev-ed\.org)\b/gi;
+  const found = [];
+  for (const { file, text } of files) {
+    if (file === 'test/config/public-repo-hygiene.test.js') continue;
+    for (const m of text.matchAll(orgUsername)) found.push(`${file}: …@${m[0].split('@')[1]}`);
+  }
+  assert.deepEqual(found, [], 'use a placeholder such as admin@example.com');
+});
