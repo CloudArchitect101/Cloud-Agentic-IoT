@@ -55,6 +55,9 @@ each one:
 Project rules the checks enforce:
 
 - A firmware change must raise `FIRMWARE_VERSION`, or the boards never get it.
+- One current version of everything: replace a file, never keep the old copy
+  beside it (no `-v2`, `-old`, `legacy`, `spare`). Git history keeps the old
+  one. After removing AWS infrastructure, run `scripts/aws-leftovers.sh <env>`.
 - New Agentforce agents use the new Agentforce Builder format (Agent Script,
   `AiAuthoringBundle`), not the legacy Bot or GenAiPlanner metadata.
 - More conventions are in [docs/CI-CD-SECRETS.md](docs/CI-CD-SECRETS.md#conventions-the-pipelines-enforce).

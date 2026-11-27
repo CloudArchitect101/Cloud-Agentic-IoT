@@ -17,6 +17,11 @@
   Device_Platform_Setting__mdt.Room_Temp_Dispense__c and
   Room_Temp_Dispense_Cooldown_Minutes__c: retired with firmware 2.6.0, which
   has no dispense. Deleted on Vitaly's OK (Nov 18).
+
+  Asset.Case_Alert_Active__c and Device_Command__c.Case_Alert_On__c: the
+  case alert's two fields, unused since firmware 2.5.0. Deleted on Vitaly's
+  OK (Nov 27), so a new install gets one current data model. The inactive
+  CASE_ALERT Command value stays for old Device Command records.
 -->
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
     <types>
@@ -40,6 +45,8 @@
     <types>
         <members>Device_Platform_Setting__mdt.Room_Temp_Dispense__c</members>
         <members>Device_Platform_Setting__mdt.Room_Temp_Dispense_Cooldown_Minutes__c</members>
+        <members>Asset.Case_Alert_Active__c</members>
+        <members>Device_Command__c.Case_Alert_On__c</members>
         <name>CustomField</name>
     </types>
     <version>65.0</version>

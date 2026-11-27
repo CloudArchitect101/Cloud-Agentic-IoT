@@ -116,11 +116,6 @@
     </fieldPermissions>
     <fieldPermissions>
         <editable>true</editable>
-        <field>Asset.Case_Alert_Active__c</field>
-        <readable>true</readable>
-    </fieldPermissions>
-    <fieldPermissions>
-        <editable>true</editable>
         <field>Asset.Certificate_Id__c</field>
         <readable>true</readable>
     </fieldPermissions>
@@ -199,11 +194,6 @@
     <fieldPermissions>
         <editable>true</editable>
         <field>Device_Command__c.Asset__c</field>
-        <readable>true</readable>
-    </fieldPermissions>
-    <fieldPermissions>
-        <editable>true</editable>
-        <field>Device_Command__c.Case_Alert_On__c</field>
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>

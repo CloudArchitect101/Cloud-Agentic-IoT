@@ -32,9 +32,6 @@
 // part = "plate" | "tub" | "needle" | "mast" | "hanger" | "bell" | "assembly"
 part = "assembly";
 bell_side = -1;          // -1 = bell on the left (default), +1 = on the right
-dial = "speed";          // dial face: "speed" = CLEAR mark + one sweep arc + "1 TICKET = SLOW RING" (matches
-                         // today's firmware); "levels" = the earlier face with 1..5+ and green/amber/red bands
-                         // (only meaningful if the firmware is changed to hold the needle at the ticket count)
 hanger_drop = 15;        // 5 for a bell about 43 mm tall incl. loop, 15 for about 33 (the printed bell), 25 for about 23
 bell_r = 13;             // radius of the bell you hang (only used to draw the assembly)
 fit = 0.3;
@@ -88,19 +85,16 @@ module bell_icon() {
 }
 
 // ---------- dial plate (local z: 0 = back, pt = front face, art above) ----------
-tier = [pt + 0.4, pt + 0.8, pt + 1.2];             // speed face: green, red, black tops
-tierL = [pt + 0.4, pt + 0.8, pt + 1.2, pt + 1.6];  // levels face: green, amber, red, black tops
-function bw(t) = 3 + 14*t;                      // levels face: band width along the sweep
-t_lvl = [for (L = [1 : 5]) 0.06 + L*0.18];      // levels face: where 1..5+ sit
+tier = [pt + 0.4, pt + 0.8, pt + 1.2];             // dial art: green, red, black tops
 module servo_hole_2d() { hull() { circle(d = 13.6); translate([0, -7]) circle(d = 7.4); } }
 module plate() {
   color("#f3f1ea") difference() {
     linear_extrude(pt) plate_outline();
     translate([0, 0, -1]) linear_extrude(pt + 2) servo_hole_2d();
   }
-  if (dial == "levels") art_levels(); else art_speed();
+  dial_art();
 }
-module art_speed() {
+module dial_art() {
   // art in three heights: change filament at each one, or paint the tops
   color("#2e9e5b") translate([0, 0, pt - 0.2]) linear_extrude(tier[0] - pt + 0.2) {
     rotate(ang(0)) translate([R - 15, -2]) square([12, 4]);          // where the needle parks
@@ -121,26 +115,6 @@ module art_speed() {
     translate([bell_side*38, -37]) text("TICKETS", size = 11.5, halign = "center", font = FONT);
     translate([bell_side*37, -47]) offset(delta = 0.15) text("1 TICKET = SLOW RING", size = 4, halign = "center", font = FONT);
     translate([bell_side*37, -55]) offset(delta = 0.15) text("5+ TICKETS = FAST RING", size = 4, halign = "center", font = FONT);
-  }
-}
-
-module art_levels() {
-  // coloured band in three steps (filament change at each height, or paint the tops)
-  color("#3cb371") translate([0, 0, pt - 0.2]) linear_extrude(tierL[0] - pt + 0.2) arc_band(0.05, 0.40, bw(0.05), bw(0.40), R - 4);
-  color("#f2b632") translate([0, 0, pt - 0.2]) linear_extrude(tierL[1] - pt + 0.2) arc_band(0.40, 0.70, bw(0.40), bw(0.70), R - 4);
-  color("#e5483c") translate([0, 0, pt - 0.2]) linear_extrude(tierL[2] - pt + 0.2) arc_band(0.70, 0.99, bw(0.70), bw(0.99), R - 4);
-  color("#1d2733") translate([0, 0, pt - 0.2]) linear_extrude(tierL[3] - pt + 0.2) {
-    arc_band(-0.02, 1.02, 1.6, 1.6, R - 1.2);                       // rim line
-    for (i = [0 : 4]) {                                             // level marks and numbers
-      rotate(ang(t_lvl[i])) translate([R - 4 - bw(t_lvl[i]) - 1, -1.3]) square([bw(t_lvl[i]) + 1, 2.6]);
-      translate((R - 32) * [cos(ang(t_lvl[i])), sin(ang(t_lvl[i]))])
-        text(i == 4 ? "5+" : str(i + 1), size = 11, halign = "center", valign = "center", font = FONT);
-    }
-    translate(46 * [cos(ang(-0.115)), sin(ang(-0.115))]) text("CLEAR", size = 7, halign = "center", valign = "center", font = FONT);
-    translate((R - 15) * [cos(ang(1.075)), sin(ang(1.075))]) bell_icon();
-    translate([bell_side*38.5, -22]) offset(delta = 0.15) text("HIGH TEMPERATURE", size = 4.8, halign = "center", font = FONT);
-    translate([bell_side*38, -41]) text("TICKETS", size = 11.5, halign = "center", font = FONT);
-    translate([bell_side*38, -52]) offset(delta = 0.15) text("MORE TICKETS = HIGHER", size = 4, halign = "center", font = FONT);
   }
 }
 

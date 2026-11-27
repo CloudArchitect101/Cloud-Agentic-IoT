@@ -47,7 +47,6 @@ A desk gauge about 155 mm wide, 81 mm deep and 145 mm tall (190 mm with the bell
 | Part | STL | Print | Notes |
 |---|---|---|---|
 | Dial plate | `stl/gauge-plate-bell-left.stl` | flat, art up | 150 x 141 mm. Green CLEAR mark, one red sweep arc with arrows toward the bell, a bell symbol, and "HIGH TEMPERATURE TICKETS / 1 TICKET = SLOW RING / 5+ TICKETS = FAST RING". Art is raised in 3 steps (green, red, black): change filament at 3.4, 3.8 and 4.2 mm, or paint the tops. |
-| Dial plate, levels version (spare) | `stl/gauge-plate-levels-bell-left.stl` | flat, art up | The earlier face with 1 to 5+ and green, amber and red bands (see `gauge-dial-face-levels.png`). Only use it if the firmware is changed so the needle stops at the ticket count. Same fit as the other plate. In the .scad file, set `dial = "levels"` (default `"speed"`). |
 | Tub | `stl/gauge-tub-bell-left.stl` | on its back | Servo posts, board cradle, USB hole, coin pocket for ballast under the bell side, front tray so it cannot tip. |
 | Needle | `stl/gauge-needle.stl` | flat | Pocket for the servo horn on the back, round cap hides the hole, hammer at the tip. |
 | Mast | `stl/gauge-mast-bell-left.stl` | flat | The stick. Plugs 24 mm into the sleeve in the tub's roof. Its arm has notches every 2 mm. |
