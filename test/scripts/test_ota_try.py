@@ -199,6 +199,9 @@ FAKE_ARDUINO = textwrap.dedent(r'''
         f.write(f'binary of {name} {version}\n')
     with open(os.path.join(os.environ['FAKE_AWS_STATE'], 'compiles.jsonl'), 'a') as f:
         f.write(json.dumps({'folder': folder, 'version': version}) + '\n')
+    if os.environ.get('FAKE_COMPILE_FAILS'):
+        sys.stderr.write('error: compilation failed\n')
+        sys.exit(1)
 ''').lstrip()
 
 
@@ -623,11 +626,26 @@ class BuildAsTest(ScriptFixture):
         [build] = self.compiles()
         self.assertEqual(build['version'], '9.9.9-try.4')
         self.assertFalse(os.path.exists(build['folder']), 'the copy is removed afterwards')
+        # arduino-cli is silent while it works: the script says how long to
+        # expect, and how long it took. No ticks outside a terminal.
+        self.assertIn('Usually 1 to 3 minutes', out)
+        self.assertRegex(out, r'Compiled patient-monitor 9\.9\.9-try\.4 in \d+ s\.')
+        self.assertNotIn('still compiling', out)
         with open(os.path.join(self.repo, 'build', 'firmware', 'patient-monitor', 'patient-monitor.ino.bin')) as f:
             self.assertEqual(f.read(), 'binary of patient-monitor 9.9.9-try.4\n')
         status = subprocess.run(['git', '-C', self.repo, 'status', '--porcelain', '--', 'firmware'],
                                 capture_output=True, text=True, check=True).stdout
         self.assertEqual(status, '')
+
+    def test_a_failed_compile_says_so_and_removes_the_copy(self):
+        os.environ['FAKE_COMPILE_FAILS'] = '1'
+        self.addCleanup(os.environ.pop, 'FAKE_COMPILE_FAILS', None)
+        code, out = self.build_as('patient-monitor', '9.9.9-try.5')
+        self.assertNotEqual(code, 0, out)
+        self.assertIn('Compiling patient-monitor failed (exit 1)', out)
+        self.assertNotIn('Compiled patient-monitor', out)
+        [build] = self.compiles()
+        self.assertFalse(os.path.exists(build['folder']), 'the copy is removed afterwards')
 
     def test_refuses_a_version_that_is_not_a_plain_version(self):
         for bad in ('2.1.0"; x', '2.1.0/1', '-2.1.0', '2.1.0 1'):
