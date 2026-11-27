@@ -4,7 +4,7 @@ Part of the [device builder path](../../docs/PATH-DEVICE.md). The `.scad` files 
 
 Version 2 replaces the first models. Both devices were redesigned after a design review found problems that would have stopped the first version from printing or fitting. Still **not test printed**: print one set, check the fit, then adjust the numbers at the top of the `.scad` files (OpenSCAD) and export again.
 
-Every case part is printed in rigid plastic (PLA, PETG or ABS). No flexible TPU, no supports. Not printed: ESP32, DHT11 with its 10 kΩ resistor, SG90 servo with its horn and screws, jumper wires, USB cable, and the optional bought bell.
+Every case part is printed in rigid plastic (PLA, PETG or ABS). No flexible TPU, no supports. Not printed: ESP32, DHT11 with its 10 kΩ resistor, SG90 servo with its horn and screws, jumper wires, USB cable, and the optional bought bell. The full parts list with links and prices: [Quick Install Guide, step 0](../../docs/INSTALL.md#step-0).
 
 ## Wiring
 
