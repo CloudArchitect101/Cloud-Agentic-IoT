@@ -182,6 +182,9 @@ sf data query --target-org "$NAME" \
 
 Everything the deploy asks for, made first, so step 6 needs no second run.
 
+> [!NOTE]
+> **What a script does for you, and what stays by hand.** The one-time setup in [`bootstrap/`](../bootstrap/README.md) (the `AWS_IoT_Relay` named credential, its external credential and the `AWS_IoT_Relay_Callers` permission set) needs no step of its own: `scripts/install.sh` runs it in step 6, with your URL and Region. The integration user (5b) and its External Client App (5c) are still made in Setup, because each holds something only this org can make: a username in your domain with its own licence, and a consumer key that Salesforce generates when the app is saved and that step 6 asks for. The access key and role ARN in step 7 stay typed by hand too, since Salesforce stores them as credentials, not as metadata a script can deploy.
+
 **a. The integration certificate.** AWS signs in to Salesforce with it (JWT), never with a password. `.gitignore` keeps `*.key` and `*.crt` out of Git.
 
 **Paste into your terminal.** Once per org. It makes `scripts/server-integration.key` (private, stays on your computer) and `scripts/server-integration.crt` (you upload it in 5c).
