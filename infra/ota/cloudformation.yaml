@@ -79,7 +79,7 @@ Resources:
                 Resource: !Sub '${FirmwareBucket.Arn}/firmware/*'
 
   # One hierarchy per device type, because each type runs its own binary: a
-  # patient monitor must never be offered queue-indicator firmware. Each sketch
+  # board must never be offered firmware built for another type. Each sketch
   # under firmware/ needs a pair here (scripts/check.sh fails without one).
   #
   # canary-<type> sits inside fleet-<type>. A job aimed at the fleet reaches
@@ -120,24 +120,6 @@ Resources:
       ParentGroupName: !Ref PatientMonitorFleet
       ThingGroupProperties:
         ThingGroupDescription: Ward boards (Salesforce Internal Device), on the patient-monitor build; inside fleet-patient-monitor.
-
-  # Retired: a new indicator is a patient-monitor board whose Asset is an
-  # Internal Device (firmware/README.md). The sketch and these groups stay for
-  # a board still flashed with it; scripts/check.sh wants a pair per sketch.
-  QueueIndicatorFleet:
-    Type: AWS::IoT::ThingGroup
-    Properties:
-      ThingGroupName: fleet-queue-indicator
-      ThingGroupProperties:
-        ThingGroupDescription: Every queue indicator in this environment.
-
-  QueueIndicatorCanary:
-    Type: AWS::IoT::ThingGroup
-    Properties:
-      ThingGroupName: canary-queue-indicator
-      ParentGroupName: !Ref QueueIndicatorFleet
-      ThingGroupProperties:
-        ThingGroupDescription: Queue indicators that take a Prod release before the rest of the fleet.
 
 Outputs:
   FirmwareBucketName:
