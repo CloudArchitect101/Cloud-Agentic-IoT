@@ -35,7 +35,7 @@ const ID = 'a0Bbm00000AbCdEFGH';
 // (commandId, operation, outcome and, when it has one, detail), the Thing
 // name from the topic, and AWS IoT's clock.
 const answer = (fields = {}) => ({
-  commandId: ID, operation: 'RESTART', outcome: 'done', thingName: 'Test7', answeredAtMillis: T, ...fields,
+  commandId: ID, operation: 'RESTART', outcome: 'done', thingName: 'CompanyInternalESP32', answeredAtMillis: T, ...fields,
 });
 
 const queueBatch = (bodies) => ({
@@ -107,7 +107,7 @@ test('each answer goes to DeviceCommandAckService as one input, in one call', as
     answer({ detail: 'restarting' }),
     answer({
       commandId: 'a0Bbm00000AbCdEFGI', operation: 'SET_TELEMETRY_INTERVAL', outcome: 'failed',
-      detail: 'seconds must be 5-86400', thingName: 'Test8', answeredAtMillis: T + 1000,
+      detail: 'seconds must be 5-86400', thingName: 'PatientExternalESP32', answeredAtMillis: T + 1000,
     }),
     answer({
       commandId: 'a0Bbm00000AbCdEFGJ', operation: 'CALIBRATE', outcome: 'refused',
@@ -124,9 +124,9 @@ test('each answer goes to DeviceCommandAckService as one input, in one call', as
   // No operation: the command has its own.
   assert.deepEqual(JSON.parse(request.body), {
     inputs: [
-      { commandId: ID, thingName: 'Test7', outcome: 'done', detail: 'restarting', answeredAtMillis: T },
+      { commandId: ID, thingName: 'CompanyInternalESP32', outcome: 'done', detail: 'restarting', answeredAtMillis: T },
       {
-        commandId: 'a0Bbm00000AbCdEFGI', thingName: 'Test8', outcome: 'failed',
+        commandId: 'a0Bbm00000AbCdEFGI', thingName: 'PatientExternalESP32', outcome: 'failed',
         detail: 'seconds must be 5-86400', answeredAtMillis: T + 1000,
       },
       {
@@ -252,10 +252,10 @@ test('a drop line says what it safely can of the answer, and never its detail', 
   const drops = lines.filter((line) => line.startsWith('Dropped a command answer: '));
   assert.deepEqual(drops.map(fields), [
     {
-      messageId: 'm-0', commandId: ID, thingName: 'Test7', operation: 'RESTART',
+      messageId: 'm-0', commandId: ID, thingName: 'CompanyInternalESP32', operation: 'RESTART',
     },
     { messageId: 'm-1', operation: 'x'.repeat(64) },
-    { messageId: 'm-2', thingName: 'Test7' },
+    { messageId: 'm-2', thingName: 'CompanyInternalESP32' },
   ]);
   assert.ok(!lines.some((line) => line.includes('c0ffee')), lines.join('\n'));
 });
@@ -269,7 +269,7 @@ test('a dropped answer plays no part, and the rest of the batch goes on', async 
     'not json',
     answer({ commandId: 'c-2', outcome: 'acked' }),
     answer({
-      commandId: 'c-3', thingName: 'Test8', outcome: 'refused', detail: 'unknown operation PING',
+      commandId: 'c-3', thingName: 'PatientExternalESP32', outcome: 'refused', detail: 'unknown operation PING',
     }),
     '[]',
   ]));
@@ -277,10 +277,10 @@ test('a dropped answer plays no part, and the rest of the batch goes on', async 
   assert.deepEqual(result, { batchItemFailures: [] });
   assert.deepEqual(inputs(), [
     {
-      commandId: 'c-1', thingName: 'Test7', outcome: 'done', detail: null, answeredAtMillis: T,
+      commandId: 'c-1', thingName: 'CompanyInternalESP32', outcome: 'done', detail: null, answeredAtMillis: T,
     },
     {
-      commandId: 'c-3', thingName: 'Test8', outcome: 'refused', detail: 'unknown operation PING', answeredAtMillis: T,
+      commandId: 'c-3', thingName: 'PatientExternalESP32', outcome: 'refused', detail: 'unknown operation PING', answeredAtMillis: T,
     },
   ]);
   assert.deepEqual(summary(lines).dropped, { malformed: 2, outcome: 1 });
@@ -328,10 +328,10 @@ test('a command its board answered twice goes on with the earliest answer, the o
 
   assert.deepEqual(inputs(), [
     {
-      commandId: ID, thingName: 'Test7', outcome: 'done', detail: 'restarting', answeredAtMillis: T,
+      commandId: ID, thingName: 'CompanyInternalESP32', outcome: 'done', detail: 'restarting', answeredAtMillis: T,
     },
     {
-      commandId: 'c-2', thingName: 'Test7', outcome: 'failed', detail: 'seconds must be 5-86400', answeredAtMillis: T + 100,
+      commandId: 'c-2', thingName: 'CompanyInternalESP32', outcome: 'failed', detail: 'seconds must be 5-86400', answeredAtMillis: T + 100,
     },
   ]);
 });
@@ -347,8 +347,8 @@ test('two boards answering one command are two inputs, so the wrong one never st
   captureConsole(t);
   const { handler, inputs } = load(t);
   // DeviceCommandAckService records the answer from the command's own device and skips the other.
-  await handler(queueBatch([answer({ thingName: 'Test8', answeredAtMillis: T - 50 }), answer()]));
-  assert.deepEqual(inputs().map(({ commandId, thingName }) => [commandId, thingName]), [[ID, 'Test8'], [ID, 'Test7']]);
+  await handler(queueBatch([answer({ thingName: 'PatientExternalESP32', answeredAtMillis: T - 50 }), answer()]));
+  assert.deepEqual(inputs().map(({ commandId, thingName }) => [commandId, thingName]), [[ID, 'PatientExternalESP32'], [ID, 'CompanyInternalESP32']]);
 });
 
 /* ---------------------------------------------------------------- chunks */
@@ -423,7 +423,7 @@ test('an input Salesforce answers with isSuccess false is logged with its errors
   });
 
   const result = await handler(queueBatch([
-    answer({ commandId: 'c-7' }), answer({ commandId: 'c-8', thingName: 'Test8' }), answer({ commandId: 'c-9' }),
+    answer({ commandId: 'c-7' }), answer({ commandId: 'c-8', thingName: 'PatientExternalESP32' }), answer({ commandId: 'c-9' }),
   ]));
 
   assert.deepEqual(result, { batchItemFailures: [] });
@@ -432,7 +432,7 @@ test('an input Salesforce answers with isSuccess false is logged with its errors
   assert.equal(logged.length, 1);
   assert.deepEqual(fields(logged[0]), {
     commandId: 'c-8',
-    thingName: 'Test8',
+    thingName: 'PatientExternalESP32',
     operation: 'RESTART',
     errors: [{ statusCode: 'UNKNOWN_EXCEPTION', message: 'Something went wrong in DeviceCommandAckService' }],
   });
@@ -473,20 +473,20 @@ test('an answer that changed no command is logged with its reason, counted by re
     answer({ commandId: 'c-1' }),
     answer({ commandId: 'c-2', operation: 'RESTART' }),
     answer({ commandId: 'c-3' }),
-    answer({ commandId: 'c-4', thingName: 'Test8' }),
+    answer({ commandId: 'c-4', thingName: 'PatientExternalESP32' }),
   ]));
 
   assert.deepEqual(result, { batchItemFailures: [] });
   const logged = lines.filter((line) => line.startsWith('An answer changed no Device Command '));
   assert.deepEqual(logged.map(fields), [
     {
-      commandId: 'c-2', thingName: 'Test7', operation: 'RESTART', reason: 'The command was answered already.',
+      commandId: 'c-2', thingName: 'CompanyInternalESP32', operation: 'RESTART', reason: 'The command was answered already.',
     },
     {
-      commandId: 'c-3', thingName: 'Test7', operation: 'RESTART', reason: 'The command was answered already.',
+      commandId: 'c-3', thingName: 'CompanyInternalESP32', operation: 'RESTART', reason: 'The command was answered already.',
     },
     {
-      commandId: 'c-4', thingName: 'Test8', operation: 'RESTART', reason: 'No Device Command has this Id.',
+      commandId: 'c-4', thingName: 'PatientExternalESP32', operation: 'RESTART', reason: 'No Device Command has this Id.',
     },
   ]);
   assert.deepEqual(summary(lines), {

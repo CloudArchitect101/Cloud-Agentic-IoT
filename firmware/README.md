@@ -94,13 +94,13 @@ A board stores a reading every telemetry interval whether anyone looks or not. W
 From then on the board publishes a reading every `seconds` to `device/<thing>/live`, the first one at once, until `minutes` have passed since the last LIVE command. The card sends it again every 10 minutes while it stays open, so the board streams while someone watches and stops by itself within 15 minutes of the card closing. Stored readings carry on exactly as before; live ones are extra, and nothing stores them.
 
 ```json
-{"deviceId":"Test7","temperature":22.5,"humidity":41,"firmware":"1.0.0","rssi":-61,"uptime":5321}
+{"deviceId":"CompanyInternalESP32","temperature":22.5,"humidity":41,"firmware":"1.0.0","rssi":-61,"uptime":5321}
 ```
 
 `rssi` is the Wi-Fi signal in dBm and `uptime` the whole seconds since the board started. When the DHT11 does not answer, the reading says so instead of going quiet, so the card can tell a board that is up but not sensing from one that is offline:
 
 ```json
-{"deviceId":"Test7","sensorError":"DHT read failed","firmware":"1.0.0","rssi":-61,"uptime":5323}
+{"deviceId":"CompanyInternalESP32","sensorError":"DHT read failed","firmware":"1.0.0","rssi":-61,"uptime":5323}
 ```
 
 - **Bounds.** `seconds` 1 to 60 and `minutes` 1 to 30 (`MIN_LIVE_SECONDS`, `MAX_LIVE_SECONDS` and `MAX_LIVE_MINUTES` in `DeviceTiming.h`). `{"operation":"LIVE","minutes":0}` ends it at once. Anything else is refused, changes nothing, and the console says `live: refused` with what is allowed; a LIVE that carries a `commandId` is answered `failed` (see [Commands](#commands-what-a-board-takes-and-how-it-answers)).

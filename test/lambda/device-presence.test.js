@@ -94,8 +94,8 @@ test('one input per Thing goes to DeviceConnectionService, in one call', async (
   const { handler, calls } = load(t);
 
   const result = await handler(queueBatch([
-    connected('Test7', T + 1000, 4),
-    disconnected('Test8', T + 2000, 9, 'MQTT_KEEP_ALIVE_TIMEOUT'),
+    connected('CompanyInternalESP32', T + 1000, 4),
+    disconnected('PatientExternalESP32', T + 2000, 9, 'MQTT_KEEP_ALIVE_TIMEOUT'),
   ]));
 
   assert.deepEqual(result, { batchItemFailures: [] });
@@ -106,8 +106,8 @@ test('one input per Thing goes to DeviceConnectionService, in one call', async (
   assert.equal(request.headers.Authorization, 'Bearer token-1');
   assert.deepEqual(JSON.parse(request.body), {
     inputs: [
-      { thingArn: `${PREFIX}Test7`, status: 'Online', changedAtMillis: T + 1000, disconnectReason: null },
-      { thingArn: `${PREFIX}Test8`, status: 'Offline', changedAtMillis: T + 2000, disconnectReason: 'MQTT_KEEP_ALIVE_TIMEOUT' },
+      { thingArn: `${PREFIX}CompanyInternalESP32`, status: 'Online', changedAtMillis: T + 1000, disconnectReason: null },
+      { thingArn: `${PREFIX}PatientExternalESP32`, status: 'Offline', changedAtMillis: T + 2000, disconnectReason: 'MQTT_KEEP_ALIVE_TIMEOUT' },
     ],
   });
   assert.deepEqual(summary(lines), {
@@ -119,15 +119,15 @@ test('an Online input never carries a reason: the Asset keeps the one it has', a
   captureConsole(t);
   const { handler, inputs } = load(t);
   // AWS IoT puts no reason on a connect; one that did would still send none.
-  await handler(queueBatch([{ ...connected('Test7'), disconnectReason: 'CONNECTION_LOST' }]));
-  assert.deepEqual(inputs(), [{ thingArn: `${PREFIX}Test7`, status: 'Online', changedAtMillis: T, disconnectReason: null }]);
+  await handler(queueBatch([{ ...connected('CompanyInternalESP32'), disconnectReason: 'CONNECTION_LOST' }]));
+  assert.deepEqual(inputs(), [{ thingArn: `${PREFIX}CompanyInternalESP32`, status: 'Online', changedAtMillis: T, disconnectReason: null }]);
 });
 
 test('a disconnect without a reason sends a null reason', async (t) => {
   captureConsole(t);
   const { handler, inputs } = load(t);
-  await handler(queueBatch([{ clientId: 'Test7', eventType: 'disconnected', timestamp: T, versionNumber: 1 }]));
-  assert.deepEqual(inputs(), [{ thingArn: `${PREFIX}Test7`, status: 'Offline', changedAtMillis: T, disconnectReason: null }]);
+  await handler(queueBatch([{ clientId: 'CompanyInternalESP32', eventType: 'disconnected', timestamp: T, versionNumber: 1 }]));
+  assert.deepEqual(inputs(), [{ thingArn: `${PREFIX}CompanyInternalESP32`, status: 'Offline', changedAtMillis: T, disconnectReason: null }]);
 });
 
 /* ------------------------------------------------------------- drop rules */
@@ -139,18 +139,18 @@ const DROPS = [
   ['a null body', 'null', 'malformed'],
   ['an event without a clientId', { eventType: 'connected', timestamp: T, versionNumber: 1 }, 'malformed'],
   ['an event with an empty clientId', connected(''), 'malformed'],
-  ['an event without an eventType', { clientId: 'Test7', timestamp: T, versionNumber: 1 }, 'malformed'],
-  ['an event without a timestamp', { clientId: 'Test7', eventType: 'connected', versionNumber: 1 }, 'malformed'],
-  ['an event whose timestamp is not epoch milliseconds', connected('Test7', '2026-11-06T05:00:00.000Z'), 'malformed'],
-  ['a subscribe event', { clientId: 'Test7', eventType: 'subscribed', timestamp: T, versionNumber: 1 }, 'otherEvent'],
-  ['an event type that is not a string', { clientId: 'Test7', eventType: 1, timestamp: T, versionNumber: 1 }, 'otherEvent'],
-  ['a live viewer connecting', connected('live-Test7-1a2b3c4d'), 'liveViewer'],
-  ['a live viewer disconnecting', disconnected('live-Test7-1a2b3c4d'), 'liveViewer'],
-  ['a client ID with a slash', connected('Test7/telemetry'), 'notThingName'],
+  ['an event without an eventType', { clientId: 'CompanyInternalESP32', timestamp: T, versionNumber: 1 }, 'malformed'],
+  ['an event without a timestamp', { clientId: 'CompanyInternalESP32', eventType: 'connected', versionNumber: 1 }, 'malformed'],
+  ['an event whose timestamp is not epoch milliseconds', connected('CompanyInternalESP32', '2026-11-06T05:00:00.000Z'), 'malformed'],
+  ['a subscribe event', { clientId: 'CompanyInternalESP32', eventType: 'subscribed', timestamp: T, versionNumber: 1 }, 'otherEvent'],
+  ['an event type that is not a string', { clientId: 'CompanyInternalESP32', eventType: 1, timestamp: T, versionNumber: 1 }, 'otherEvent'],
+  ['a live viewer connecting', connected('live-CompanyInternalESP32-1a2b3c4d'), 'liveViewer'],
+  ['a live viewer disconnecting', disconnected('live-CompanyInternalESP32-1a2b3c4d'), 'liveViewer'],
+  ['a client ID with a slash', connected('CompanyInternalESP32/telemetry'), 'notThingName'],
   ['a client ID with a space', connected('Test 7'), 'notThingName'],
   ['a client ID longer than 128 characters', connected('x'.repeat(129)), 'notThingName'],
   ['a client ID that is not a string', connected(7), 'notThingName'],
-  ['a DUPLICATE_CLIENTID disconnect', disconnected('Test7', T, 1, 'DUPLICATE_CLIENTID'), 'duplicateClientId'],
+  ['a DUPLICATE_CLIENTID disconnect', disconnected('CompanyInternalESP32', T, 1, 'DUPLICATE_CLIENTID'), 'duplicateClientId'],
 ];
 
 for (const [name, body, reason] of DROPS) {
@@ -176,8 +176,8 @@ test('a disconnect for any other reason is kept', async (t) => {
   captureConsole(t);
   const { handler, inputs } = load(t);
   await handler(queueBatch([
-    disconnected('Test7', T, 1, 'CLIENT_INITIATED_DISCONNECT'),
-    disconnected('Test8', T, 1, 'CONNECTION_LOST'),
+    disconnected('CompanyInternalESP32', T, 1, 'CLIENT_INITIATED_DISCONNECT'),
+    disconnected('PatientExternalESP32', T, 1, 'CONNECTION_LOST'),
   ]));
   assert.deepEqual(inputs().map((input) => input.disconnectReason), ['CLIENT_INITIATED_DISCONNECT', 'CONNECTION_LOST']);
 });
@@ -189,17 +189,17 @@ test('a dropped event plays no part in its Thing\'s state, and the rest of the b
   // The new connection's connect, then the old connection's disconnect,
   // which AWS IoT may stamp later.
   const result = await handler(queueBatch([
-    connected('Test7', T, 8),
-    disconnected('Test7', T + 40, 7, 'DUPLICATE_CLIENTID'),
+    connected('CompanyInternalESP32', T, 8),
+    disconnected('CompanyInternalESP32', T + 40, 7, 'DUPLICATE_CLIENTID'),
     'not json',
-    connected('live-Test7-1a2b3c4d', T + 50),
-    connected('Test8', T + 60, 2),
+    connected('live-CompanyInternalESP32-1a2b3c4d', T + 50),
+    connected('PatientExternalESP32', T + 60, 2),
   ]));
 
   assert.deepEqual(result, { batchItemFailures: [] });
   assert.deepEqual(inputs(), [
-    { thingArn: `${PREFIX}Test7`, status: 'Online', changedAtMillis: T, disconnectReason: null },
-    { thingArn: `${PREFIX}Test8`, status: 'Online', changedAtMillis: T + 60, disconnectReason: null },
+    { thingArn: `${PREFIX}CompanyInternalESP32`, status: 'Online', changedAtMillis: T, disconnectReason: null },
+    { thingArn: `${PREFIX}PatientExternalESP32`, status: 'Online', changedAtMillis: T + 60, disconnectReason: null },
   ]);
   assert.deepEqual(summary(lines).dropped, { duplicateClientId: 1, malformed: 1, liveViewer: 1 });
 });
@@ -220,21 +220,21 @@ test('per Thing, the latest event wins, in whatever order the events arrive', as
 
   await handler(queueBatch([
     // The greatest timestamp wins, even over a greater version number.
-    disconnected('Test7', T + 1000, 5),
-    connected('Test7', T + 3000, 2),
-    connected('Test7', T, 1),
+    disconnected('CompanyInternalESP32', T + 1000, 5),
+    connected('CompanyInternalESP32', T + 3000, 2),
+    connected('CompanyInternalESP32', T, 1),
     // And the same three the other way round.
-    connected('Test8', T, 1),
-    connected('Test8', T + 3000, 2),
-    disconnected('Test8', T + 1000, 5),
+    connected('PatientExternalESP32', T, 1),
+    connected('PatientExternalESP32', T + 3000, 2),
+    disconnected('PatientExternalESP32', T + 1000, 5),
     // A disconnect last.
     connected('Test9', T, 3),
     disconnected('Test9', T + 5000, 3, 'CONNECTION_LOST'),
   ]));
 
   assert.deepEqual(inputs(), [
-    { thingArn: `${PREFIX}Test7`, status: 'Online', changedAtMillis: T + 3000, disconnectReason: null },
-    { thingArn: `${PREFIX}Test8`, status: 'Online', changedAtMillis: T + 3000, disconnectReason: null },
+    { thingArn: `${PREFIX}CompanyInternalESP32`, status: 'Online', changedAtMillis: T + 3000, disconnectReason: null },
+    { thingArn: `${PREFIX}PatientExternalESP32`, status: 'Online', changedAtMillis: T + 3000, disconnectReason: null },
     { thingArn: `${PREFIX}Test9`, status: 'Offline', changedAtMillis: T + 5000, disconnectReason: 'CONNECTION_LOST' },
   ]);
 });
@@ -245,17 +245,17 @@ test('on the same millisecond, the greater version number wins', async (t) => {
 
   // The old connection (7) ends as the new one (8) starts: the board is online.
   await handler(queueBatch([
-    connected('Test7', T, 8),
-    disconnected('Test7', T, 7),
-    disconnected('Test8', T, 7),
-    connected('Test8', T, 8),
+    connected('CompanyInternalESP32', T, 8),
+    disconnected('CompanyInternalESP32', T, 7),
+    disconnected('PatientExternalESP32', T, 7),
+    connected('PatientExternalESP32', T, 8),
     // The other way: the newer connection is the one that ended.
     disconnected('Test9', T, 8),
     connected('Test9', T, 7),
   ]));
 
   assert.deepEqual(inputs().map(({ thingArn, status }) => [thingArn.slice(PREFIX.length), status]), [
-    ['Test7', 'Online'], ['Test8', 'Online'], ['Test9', 'Offline'],
+    ['CompanyInternalESP32', 'Online'], ['PatientExternalESP32', 'Online'], ['Test9', 'Offline'],
   ]);
 });
 
@@ -265,30 +265,30 @@ test('on the same millisecond and version number, the disconnect wins', async (t
 
   // A connection's disconnect follows its connect, and both carry its version.
   await handler(queueBatch([
-    connected('Test7', T, 6),
-    disconnected('Test7', T, 6, 'CLIENT_INITIATED_DISCONNECT'),
-    disconnected('Test8', T, 6, 'CLIENT_INITIATED_DISCONNECT'),
-    connected('Test8', T, 6),
+    connected('CompanyInternalESP32', T, 6),
+    disconnected('CompanyInternalESP32', T, 6, 'CLIENT_INITIATED_DISCONNECT'),
+    disconnected('PatientExternalESP32', T, 6, 'CLIENT_INITIATED_DISCONNECT'),
+    connected('PatientExternalESP32', T, 6),
   ]));
 
   assert.deepEqual(inputs(), [
-    { thingArn: `${PREFIX}Test7`, status: 'Offline', changedAtMillis: T, disconnectReason: 'CLIENT_INITIATED_DISCONNECT' },
-    { thingArn: `${PREFIX}Test8`, status: 'Offline', changedAtMillis: T, disconnectReason: 'CLIENT_INITIATED_DISCONNECT' },
+    { thingArn: `${PREFIX}CompanyInternalESP32`, status: 'Offline', changedAtMillis: T, disconnectReason: 'CLIENT_INITIATED_DISCONNECT' },
+    { thingArn: `${PREFIX}PatientExternalESP32`, status: 'Offline', changedAtMillis: T, disconnectReason: 'CLIENT_INITIATED_DISCONNECT' },
   ]);
 });
 
 test('an event without a version number loses a tie to one with', async (t) => {
   captureConsole(t);
   const { handler, inputs } = load(t);
-  const unversioned = { clientId: 'Test7', eventType: 'disconnected', timestamp: T, disconnectReason: 'CONNECTION_LOST' };
-  await handler(queueBatch([unversioned, connected('Test7', T, 0)]));
+  const unversioned = { clientId: 'CompanyInternalESP32', eventType: 'disconnected', timestamp: T, disconnectReason: 'CONNECTION_LOST' };
+  await handler(queueBatch([unversioned, connected('CompanyInternalESP32', T, 0)]));
   assert.deepEqual(inputs().map((input) => input.status), ['Online']);
 });
 
 test('an event delivered twice is one input', async (t) => {
   const lines = captureConsole(t);
   const { handler, inputs } = load(t);
-  await handler(queueBatch([connected('Test7'), connected('Test7')]));
+  await handler(queueBatch([connected('CompanyInternalESP32'), connected('CompanyInternalESP32')]));
   assert.equal(inputs().length, 1);
   assert.deepEqual(summary(lines), {
     events: 2, dropped: {}, things: 1, sent: 1, assetsUpdated: 1, unchanged: 0, failed: 0, returned: 0,
@@ -373,18 +373,18 @@ test('a call that never reaches Salesforce returns its messages too', async (t) 
 test('an input Salesforce answers with isSuccess false is logged with its errors, and not retried', async (t) => {
   const lines = captureConsole(t);
   const { handler, calls } = load(t, {
-    answer: (inputs) => jsonResponse(200, inputs.map((input) => (input.thingArn.endsWith(':thing/Test8')
+    answer: (inputs) => jsonResponse(200, inputs.map((input) => (input.thingArn.endsWith(':thing/PatientExternalESP32')
       ? refused('UNKNOWN_EXCEPTION', 'Something went wrong in DeviceConnectionService')
       : recorded(input)))),
   });
 
-  const result = await handler(queueBatch([connected('Test7'), connected('Test8'), connected('Test9')]));
+  const result = await handler(queueBatch([connected('CompanyInternalESP32'), connected('PatientExternalESP32'), connected('Test9')]));
 
   assert.deepEqual(result, { batchItemFailures: [] });
   assert.equal(calls().length, 1);
   const logged = lines.filter((line) => line.startsWith('Salesforce did not record a connection change'));
   assert.equal(logged.length, 1);
-  assert.match(logged[0], /"thingName":"Test8"/);
+  assert.match(logged[0], /"thingName":"PatientExternalESP32"/);
   assert.match(logged[0], /UNKNOWN_EXCEPTION/);
   assert.match(logged[0], /Something went wrong in DeviceConnectionService/);
   assert.deepEqual(summary(lines), {
@@ -395,7 +395,7 @@ test('an input Salesforce answers with isSuccess false is logged with its errors
 test('a result missing from the answer counts as not recorded, and is not retried', async (t) => {
   const lines = captureConsole(t);
   const { handler } = load(t, { answer: (inputs) => jsonResponse(200, inputs.slice(1).map(recorded)) });
-  const result = await handler(queueBatch([connected('Test7'), connected('Test8')]));
+  const result = await handler(queueBatch([connected('CompanyInternalESP32'), connected('PatientExternalESP32')]));
   assert.deepEqual(result, { batchItemFailures: [] });
   assert.equal(summary(lines).failed, 1);
 });
@@ -424,14 +424,14 @@ test('the Thing ARN is THING_ARN_PREFIX and the client ID, in any partition', as
   captureConsole(t);
   const prefix = 'arn:aws-us-gov:iot:us-gov-west-1:210987654321:thing/';
   const { handler, inputs } = load(t, { env: { THING_ARN_PREFIX: prefix } });
-  await handler(queueBatch([connected('Test7')]));
-  assert.equal(inputs()[0].thingArn, 'arn:aws-us-gov:iot:us-gov-west-1:210987654321:thing/Test7');
+  await handler(queueBatch([connected('CompanyInternalESP32')]));
+  assert.equal(inputs()[0].thingArn, 'arn:aws-us-gov:iot:us-gov-west-1:210987654321:thing/CompanyInternalESP32');
 });
 
 test('a missing THING_ARN_PREFIX fails the batch by name, before any call', async (t) => {
   captureConsole(t);
   const { handler, requests } = load(t, { env: { THING_ARN_PREFIX: undefined } });
-  await assert.rejects(handler(queueBatch([connected('Test7')])), /THING_ARN_PREFIX is not set/);
+  await assert.rejects(handler(queueBatch([connected('CompanyInternalESP32')])), /THING_ARN_PREFIX is not set/);
   assert.equal(requests.length, 0);
 });
 
@@ -440,14 +440,14 @@ test('a THING_ARN_PREFIX that does not end in :thing/ fails the batch, before an
   // Without the slash, every ARN would be one no Asset holds, and no error
   // would ever say so.
   const { handler, requests } = load(t, { env: { THING_ARN_PREFIX: 'arn:aws:iot:us-east-2:123456789012:thing' } });
-  await assert.rejects(handler(queueBatch([connected('Test7')])), /THING_ARN_PREFIX must be arn:<partition>:iot:/);
+  await assert.rejects(handler(queueBatch([connected('CompanyInternalESP32')])), /THING_ARN_PREFIX must be arn:<partition>:iot:/);
   assert.equal(requests.length, 0);
 });
 
 test('the action is the one DEVICE_CONNECTION_ACTION names', async (t) => {
   captureConsole(t);
   const { handler, calls } = load(t, { env: { DEVICE_CONNECTION_ACTION: 'DeviceConnectionServiceV2' } });
-  await handler(queueBatch([connected('Test7')]));
+  await handler(queueBatch([connected('CompanyInternalESP32')]));
   assert.equal(calls()[0].url, `${INSTANCE}/services/data/v64.0/actions/custom/apex/DeviceConnectionServiceV2`);
 });
 
@@ -467,7 +467,7 @@ test('no whole payload is ever logged', async (t) => {
   const extra = { ipAddress: '192.0.2.44', principalIdentifier: 'principal-c0ffee', sessionIdentifier: 'session-c0ffee' };
   const bodies = [
     ...Array.from({ length: 201 }, (_, i) => ({ ...connected(`pm-${i}`), ...extra })),
-    { ...disconnected('Test7', T, 1, 'DUPLICATE_CLIENTID'), ...extra },
+    { ...disconnected('CompanyInternalESP32', T, 1, 'DUPLICATE_CLIENTID'), ...extra },
     { ...connected('Test 7'), ...extra },
     'not json, but private-c0ffee all the same',
   ];

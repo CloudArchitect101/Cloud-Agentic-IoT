@@ -97,7 +97,7 @@ async function acknowledge(event) {
 
   if (!COMMANDS.has(command)) return slackResponse(`Unknown command: ${command}`);
   if (!DEVICE_NAME.test(deviceId)) {
-    return slackResponse(`Name one device, for example \`${command} Test8\`.`);
+    return slackResponse(`Name one device, for example \`${command} PatientExternalESP32\`.`);
   }
   if (!SLACK_HOOKS.test(responseUrl)) {
     console.warn('refused: no Slack response_url', { command });

@@ -9,7 +9,7 @@ const HANDLER = path.join(__dirname, '../../lambda/ota-saga/index.js');
 const BUCKET = 'cloud-agentic-iot-ota-dev-firmwarebucket-abc123';
 const ROLE = 'arn:aws:iam::111122223333:role/cloud-agentic-iot-ota-Dev-OtaPresignRole-XYZ';
 
-const SAGA = { deviceId: 'Test8', sketch: 'patient-monitor', version: '2.5.0', runId: '20261109010000' };
+const SAGA = { deviceId: 'PatientExternalESP32', sketch: 'patient-monitor', version: '2.5.0', runId: '20261109010000' };
 
 function awsError(name) {
   const e = new Error(name);
@@ -56,24 +56,24 @@ test('a board that installs completes the saga: staged, marked, one job, then AC
   const res = await handler({ ...SAGA });
 
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(body(res), { status: 'COMPLETE', deviceId: 'Test8', version: '2.5.0' });
+  assert.deepEqual(body(res), { status: 'COMPLETE', deviceId: 'PatientExternalESP32', version: '2.5.0' });
   assert.deepEqual(names(), ['HeadObject', 'CopyObject', 'DescribeThing', 'UpdateThing', 'CreateJob',
     'DescribeJobExecution', 'UpdateThing', 'DeleteObject']);
 
   const copy = calls.find((c) => c.command === 'CopyObjectCommand').input;
   assert.equal(copy.CopySource, `${BUCKET}/firmware/patient-monitor/2.5.0.bin`);
-  assert.equal(copy.Key, 'firmware/saga/Test8/20261109010000.bin');
+  assert.equal(copy.Key, 'firmware/saga/PatientExternalESP32/20261109010000.bin');
 
   const job = calls.find((c) => c.command === 'CreateJobCommand').input;
-  assert.equal(job.jobId, 'saga-Test8-20261109010000');
-  assert.deepEqual(job.targets, ['arn:aws:iot:us-east-2:111122223333:thing/Test8']);
+  assert.equal(job.jobId, 'saga-PatientExternalESP32-20261109010000');
+  assert.deepEqual(job.targets, ['arn:aws:iot:us-east-2:111122223333:thing/PatientExternalESP32']);
   assert.deepEqual(job.presignedUrlConfig, { roleArn: ROLE, expiresInSec: 3600 });
   // The same document scripts/ota.sh sends, so the board needs nothing new.
   assert.deepEqual(JSON.parse(job.document), {
     operation: 'ota',
     sketch: 'patient-monitor',
     version: '2.5.0',
-    url: `\${aws:iot:s3-presigned-url:https://s3.us-east-2.amazonaws.com/${BUCKET}/firmware/saga/Test8/20261109010000.bin}`,
+    url: `\${aws:iot:s3-presigned-url:https://s3.us-east-2.amazonaws.com/${BUCKET}/firmware/saga/PatientExternalESP32/20261109010000.bin}`,
   });
   assert.deepEqual(otaStates(calls), [{ otaState: 'UPDATING' }, { otaState: 'ACTIVE', otaVersion: '2.5.0' }]);
 });
@@ -101,7 +101,7 @@ test('a board that fails the install unwinds every step, most recent first', asy
   const compensations = logs.filter((l) => l.startsWith('compensating')).map((l) => l.split(' ')[1]);
   assert.deepEqual(compensations, ['cancel_iot_job', 'mark_device_active', 'delete_staged_firmware']);
   assert.deepEqual(names().slice(-3), ['CancelJob', 'UpdateThing', 'DeleteObject']);
-  assert.equal(calls.find((c) => c.command === 'CancelJobCommand').input.jobId, 'saga-Test8-20261109010000');
+  assert.equal(calls.find((c) => c.command === 'CancelJobCommand').input.jobId, 'saga-PatientExternalESP32-20261109010000');
   assert.deepEqual(otaStates(calls), [{ otaState: 'UPDATING' }, { otaState: 'ACTIVE' }]);
 });
 
@@ -156,7 +156,7 @@ test('a firmware key outside the sketch, or a bad name, is refused before any AW
   for (const bad of [
     { firmwareKey: 'firmware/queue-indicator/1.0.0.bin' },
     { firmwareKey: 'firmware/patient-monitor/../../secret.bin' },
-    { deviceId: 'Test8/../x' },
+    { deviceId: 'PatientExternalESP32/../x' },
     { runId: '' },
   ]) {
     const { handler, names } = load(t);

@@ -13,7 +13,7 @@
 # Center reports an Agent Script agent's subagents by those names. Two names
 # come from the platform, not the file: Prompt_Injection (Agentforce's own
 # guard topic) and human (the built-in escalation to a person).
-# {{DEVICE}} is the demo device's serial number (EVAL_DEVICE, Test8 by default).
+# {{DEVICE}} is the demo device's serial number (EVAL_DEVICE, PatientExternalESP32 by default).
 #
 # The two-turn escalation case opens a real Case on {{DEVICE}} each run;
 # scripts/eval-agents.sh closes the Cases the run opened.

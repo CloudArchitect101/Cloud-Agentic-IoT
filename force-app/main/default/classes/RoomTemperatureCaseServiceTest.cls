@@ -97,20 +97,20 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void noRuleCaseYetOpensOneOwnedByTheQueueAndLinkedToTheAsset() {
         settings();
-        Asset test8 = device('Test8');
+        Asset monitored = device('PatientExternalESP32');
 
         Test.startTest();
-        insert hot('Test8');
+        insert hot('PatientExternalESP32');
         Test.stopTest();
 
         List<Case> cases = ruleCases();
         Assert.areEqual(1, cases.size(), 'One Case');
         Assert.areEqual(ORIGIN, cases[0].Origin, 'Marked as the rule\'s own');
         Assert.areEqual('High', cases[0].Priority, 'Priority');
-        Assert.areEqual(test8.Id, cases[0].AssetId, 'Linked to the device');
+        Assert.areEqual(monitored.Id, cases[0].AssetId, 'Linked to the device');
         Assert.areEqual(queueId(QUEUE), cases[0].OwnerId, 'Owned by the queue');
         Assert.isTrue(cases[0].Subject.contains('30.0'), cases[0].Subject);
-        Assert.isTrue(cases[0].Subject.contains('Test8'), cases[0].Subject);
+        Assert.isTrue(cases[0].Subject.contains('PatientExternalESP32'), cases[0].Subject);
         Assert.isTrue(cases[0].Subject.startsWith('High temperature'), cases[0].Subject);
         Assert.isTrue(cases[0].Description.contains('not a diagnosis'), cases[0].Description);
         Assert.isTrue(cases[0].Description.contains('SOP-WARD-001'), cases[0].Description);
@@ -119,11 +119,11 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void anOpenRuleCaseMeansNoNewOne() {
         settings();
-        device('Test8');
+        device('PatientExternalESP32');
 
         Test.startTest();
-        insert hot('Test8');
-        insert hot('Test8');
+        insert hot('PatientExternalESP32');
+        insert hot('PatientExternalESP32');
         Test.stopTest();
 
         Assert.areEqual(1, ruleCases().size(), 'Still one open Case');
@@ -132,11 +132,11 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void onlyClosedRuleCasesMeansANewOne() {
         settings();
-        Asset test8 = device('Test8');
-        insert new Case(Subject = 'Earlier', Origin = ORIGIN, AssetId = test8.Id, Status = 'Closed');
+        Asset monitored = device('PatientExternalESP32');
+        insert new Case(Subject = 'Earlier', Origin = ORIGIN, AssetId = monitored.Id, Status = 'Closed');
 
         Test.startTest();
-        insert hot('Test8');
+        insert hot('PatientExternalESP32');
         Test.stopTest();
 
         List<Case> cases = ruleCases();
@@ -147,11 +147,11 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void anOpenCaseWithAnotherOriginDoesNotCount() {
         settings();
-        Asset test8 = device('Test8');
-        insert new Case(Subject = 'Escalation', Origin = 'Agentforce', AssetId = test8.Id);
+        Asset monitored = device('PatientExternalESP32');
+        insert new Case(Subject = 'Escalation', Origin = 'Agentforce', AssetId = monitored.Id);
 
         Test.startTest();
-        insert hot('Test8');
+        insert hot('PatientExternalESP32');
         Test.stopTest();
 
         Assert.areEqual(1, ruleCases().size(), 'A rule Case is still opened');
@@ -160,10 +160,10 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void twoFlaggedReadingsOfOneDeviceInOneBatchOpenOneCase() {
         settings();
-        device('Test8');
+        device('PatientExternalESP32');
 
         Test.startTest();
-        insert new List<Patient_Vitals__c>{ hot('Test8'), reading('Test8', 31.0, true) };
+        insert new List<Patient_Vitals__c>{ hot('PatientExternalESP32'), reading('PatientExternalESP32', 31.0, true) };
         Test.stopTest();
 
         List<Case> cases = ruleCases();
@@ -175,19 +175,19 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void unflaggedReadingsCostNoQueryAndNoDml() {
         settings();
-        device('Test8');
+        device('PatientExternalESP32');
 
         Test.startTest();
         Integer queries = Limits.getQueries();
         Integer dml = Limits.getDmlStatements();
-        insert new List<Patient_Vitals__c>{ reading('Test8', 36.8, false), reading('Test8', 38.7, false) };
+        insert new List<Patient_Vitals__c>{ reading('PatientExternalESP32', 36.8, false), reading('PatientExternalESP32', 38.7, false) };
         Integer activeQueries = Limits.getQueries() - queries;
         Integer activeDml = Limits.getDmlStatements() - dml;
 
         TriggerHandler.bypass('PatientVitalsTriggerHandler');
         queries = Limits.getQueries();
         dml = Limits.getDmlStatements();
-        insert new List<Patient_Vitals__c>{ reading('Test8', 36.8, false), reading('Test8', 38.7, false) };
+        insert new List<Patient_Vitals__c>{ reading('PatientExternalESP32', 36.8, false), reading('PatientExternalESP32', 38.7, false) };
         Integer bypassedQueries = Limits.getQueries() - queries;
         Integer bypassedDml = Limits.getDmlStatements() - dml;
         TriggerHandler.clearBypass('PatientVitalsTriggerHandler');
@@ -201,12 +201,12 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void flaggedFalseIsTheAwsSideOf29point9() {
         settings();
-        device('Test8');
+        device('PatientExternalESP32');
 
         Test.startTest();
-        insert reading('Test8', 29.9, false);
+        insert reading('PatientExternalESP32', 29.9, false);
         Assert.areEqual(0, [SELECT COUNT() FROM Case WHERE Origin = :ORIGIN], 'Not flagged: no Case');
-        insert reading('Test8', 30.0, true);
+        insert reading('PatientExternalESP32', 30.0, true);
         Test.stopTest();
 
         Assert.areEqual(1, ruleCases().size(), 'Flagged: one Case');
@@ -215,10 +215,10 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void flaggedWithNullTemperatureIsSkippedAndOthersStillOpen() {
         settings();
-        devices(new List<String>{ 'Test8', 'Test9' });
+        devices(new List<String>{ 'PatientExternalESP32', 'Test9' });
 
         Test.startTest();
-        insert new List<Patient_Vitals__c>{ reading('Test8', null, true), hot('Test9') };
+        insert new List<Patient_Vitals__c>{ reading('PatientExternalESP32', null, true), hot('Test9') };
         Test.stopTest();
 
         List<Case> cases = [SELECT Asset.SerialNumber FROM Case WHERE Origin = :ORIGIN];
@@ -241,15 +241,15 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void anAssetWhoseThingIsAnotherBoardIsNotMatched() {
         settings();
-        // Its serial number was edited after it was provisioned as Test7.
-        Asset renamed = device('Test7');
-        renamed.SerialNumber = 'Test8';
+        // Its serial number was edited after it was provisioned as CompanyInternalESP32.
+        Asset renamed = device('CompanyInternalESP32');
+        renamed.SerialNumber = 'PatientExternalESP32';
         TriggerHandler.bypass('AssetTriggerHandler');
         update renamed;
         TriggerHandler.clearBypass('AssetTriggerHandler');
 
         Test.startTest();
-        insert hot('Test8');
+        insert hot('PatientExternalESP32');
         Test.stopTest();
 
         Assert.areEqual(0, ruleCases().size(), 'Matched as Device Commands are: serial number and Thing name');
@@ -258,10 +258,10 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void missingQueueFallsBackToTheDefaultOwner() {
         settings().Room_Temp_Case_Queue__c = 'NoSuchQueue';
-        device('Test8');
+        device('PatientExternalESP32');
 
         Test.startTest();
-        insert hot('Test8');
+        insert hot('PatientExternalESP32');
         Test.stopTest();
 
         List<Case> cases = ruleCases();
@@ -272,10 +272,10 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void aQueueThatDoesNotAcceptCasesFallsBackToTheDefaultOwner() {
         settings().Room_Temp_Case_Queue__c = NO_CASE_QUEUE;
-        device('Test8');
+        device('PatientExternalESP32');
 
         Test.startTest();
-        insert hot('Test8');
+        insert hot('PatientExternalESP32');
         Test.stopTest();
 
         List<Case> cases = ruleCases();
@@ -286,10 +286,10 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void aBlankSettingSkipsTheRuleButTheVitalsSave() {
         settings().Room_Temp_Case_Origin__c = '';
-        device('Test8');
+        device('PatientExternalESP32');
 
         Test.startTest();
-        Database.SaveResult result = Database.insert(hot('Test8'), false);
+        Database.SaveResult result = Database.insert(hot('PatientExternalESP32'), false);
         Test.stopTest();
 
         Assert.isTrue(result.isSuccess(), 'The reading saved');
@@ -299,7 +299,7 @@ private class RoomTemperatureCaseServiceTest {
     @IsTest
     static void worksAsTheIntegrationUser() {
         settings();
-        Asset test8 = device('Test8');
+        Asset monitored = device('PatientExternalESP32');
         User integration;
         System.runAs(new User(Id = UserInfo.getUserId())) {
             String who = 'room-temp-' + EncodingUtil.convertToHex(Crypto.generateAesKey(128)).left(8);
@@ -323,14 +323,14 @@ private class RoomTemperatureCaseServiceTest {
 
         System.runAs(integration) {
             Test.startTest();
-            insert hot('Test8');
+            insert hot('PatientExternalESP32');
             Test.stopTest();
         }
 
         List<Case> cases = ruleCases();
         Assert.areEqual(1, cases.size(), 'The Case is opened for the integration user');
         Assert.areEqual(queueId(QUEUE), cases[0].OwnerId, 'Owned by the queue');
-        Assert.areEqual(test8.Id, cases[0].AssetId, 'Linked to the device');
+        Assert.areEqual(monitored.Id, cases[0].AssetId, 'Linked to the device');
         Assert.areEqual(0, commands(), 'No command: the patient monitor\'s motor follows its own reading');
     }
 

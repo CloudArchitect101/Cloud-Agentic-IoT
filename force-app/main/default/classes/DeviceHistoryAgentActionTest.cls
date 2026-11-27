@@ -96,10 +96,10 @@ private class DeviceHistoryAgentActionTest {
 
     @IsTest
     static void aWeekAddsUpFromTheInsightsAndTheRawReadings() {
-        device('Test8');
+        device('PatientExternalESP32');
         FakeQuerier fake = weekOfHistory();
 
-        DeviceHistoryAgentAction.HistoryResult res = one('Test8', null, fake);
+        DeviceHistoryAgentAction.HistoryResult res = one('PatientExternalESP32', null, fake);
 
         Assert.isTrue(res.success, res.message);
         Assert.areEqual(3, fake.asked.size(), 'three queries, one per source');
@@ -115,7 +115,7 @@ private class DeviceHistoryAgentActionTest {
         Assert.areEqual(30.0, res.thresholdCelsius);
         Assert.areEqual('2026-11-27: about 10 minutes at or above 30.0 C (20 readings), highest 31.2 C\n'
             + '2026-11-25: about 35 minutes at or above 30.0 C (70 readings), highest 33.0 C', res.dailyLines);
-        Assert.areEqual('Test8, last 7 days: at or above 30.0 C on 2 days, about 45 minutes in all, highest 33.0 C. '
+        Assert.areEqual('PatientExternalESP32, last 7 days: at or above 30.0 C on 2 days, about 45 minutes in all, highest 33.0 C. '
             + 'Last 24 hours: 2880 readings, about 10 minutes at or above 30.0 C, highest 31.2 C. '
             + 'Newest reading in Data Cloud: 2026-11-27 17:30 UTC (30 minutes ago).', res.summary);
         Assert.areEqual(DeviceHistoryAgentAction.NOTICE, res.notice);
@@ -123,14 +123,14 @@ private class DeviceHistoryAgentActionTest {
 
     @IsTest
     static void theSqlNamesOnlyTheDeviceAndStartTimesApexWrote() {
-        device('Test8');
+        device('PatientExternalESP32');
         FakeQuerier fake = weekOfHistory();
 
-        one('Test8', 3, fake);
+        one('PatientExternalESP32', 3, fake);
 
         String daily = fake.asked[0];
         Assert.isTrue(daily.contains(' FROM Room_Out_Of_Range_Daily__cio '), daily);
-        Assert.isTrue(daily.contains('device_id__c = \'Test8\''), daily);
+        Assert.isTrue(daily.contains('device_id__c = \'PatientExternalESP32\''), daily);
         Assert.isTrue(daily.contains('reading_day__c >= TIMESTAMP \'2026-11-25 00:00:00\''), '3 days counting today: ' + daily);
         String raw = fake.asked[1];
         Assert.isTrue(raw.contains(' FROM Room_Readings__dlm '), raw);
@@ -144,28 +144,28 @@ private class DeviceHistoryAgentActionTest {
 
     @IsTest
     static void aQuietWeekSaysSo() {
-        device('Test8');
+        device('PatientExternalESP32');
         FakeQuerier fake = new FakeQuerier();
         fake.answers.put(DeviceHistoryAgentAction.SILENCE, new List<Map<String, Object>>{
             new Map<String, Object>{ 'last_reading_ts__c' => '2026-11-25T18:00:00.000Z' }
         });
 
-        DeviceHistoryAgentAction.HistoryResult res = one('Test8', 7, fake);
+        DeviceHistoryAgentAction.HistoryResult res = one('PatientExternalESP32', 7, fake);
 
         Assert.isTrue(res.success, res.message);
         Assert.areEqual(0, res.daysWithAlerts);
         Assert.areEqual(2880, res.lastReadingAgeMinutes, 'two days quiet');
-        Assert.areEqual('Test8, last 7 days: no reading at or above 30.0 C. No readings in the last 24 hours. '
+        Assert.areEqual('PatientExternalESP32, last 7 days: no reading at or above 30.0 C. No readings in the last 24 hours. '
             + 'Newest reading in Data Cloud: 2026-11-25 18:00 UTC (about 2 days ago).', res.summary);
     }
 
     @IsTest
     static void onePartFailingLeavesTheOthersAndSaysWhichIsMissing() {
-        device('Test8');
+        device('PatientExternalESP32');
         FakeQuerier fake = weekOfHistory();
         fake.failFor.add(DeviceHistoryAgentAction.DAILY);
 
-        DeviceHistoryAgentAction.HistoryResult res = one('Test8', 7, fake);
+        DeviceHistoryAgentAction.HistoryResult res = one('PatientExternalESP32', 7, fake);
 
         Assert.isTrue(res.success, res.message);
         Assert.isTrue(res.message.contains('without its daily totals'), res.message);
@@ -175,12 +175,12 @@ private class DeviceHistoryAgentActionTest {
 
     @IsTest
     static void dataCloudDownIsAFailureNotAnEmptyHistory() {
-        device('Test8');
+        device('PatientExternalESP32');
         FakeQuerier fake = weekOfHistory();
         fake.failFor.addAll(new List<String>{
             DeviceHistoryAgentAction.DAILY, DeviceHistoryAgentAction.RAW, DeviceHistoryAgentAction.SILENCE });
 
-        DeviceHistoryAgentAction.HistoryResult res = one('Test8', 7, fake);
+        DeviceHistoryAgentAction.HistoryResult res = one('PatientExternalESP32', 7, fake);
 
         Assert.isFalse(res.success);
         Assert.isTrue(res.message.contains('Data Cloud could not be queried'), res.message);
@@ -202,7 +202,7 @@ private class DeviceHistoryAgentActionTest {
     static void somethingThatIsNotASerialNumberNeverReachesTheSql() {
         FakeQuerier fake = weekOfHistory();
 
-        DeviceHistoryAgentAction.HistoryResult res = one('Test8\' OR 1=1 --', 7, fake);
+        DeviceHistoryAgentAction.HistoryResult res = one('PatientExternalESP32\' OR 1=1 --', 7, fake);
 
         Assert.isFalse(res.success);
         Assert.isTrue(res.message.startsWith('That is not a device serial number'), res.message);

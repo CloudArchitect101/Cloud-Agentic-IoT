@@ -26,7 +26,7 @@
  *     its Thing name, and a board does not need an Asset to take a command.
  *
  * Serial numbers and Thing names are compared exactly: AWS IoT Thing names
- * are case-sensitive, so Test7 and test7 are two boards, while SOQL compares
+ * are case-sensitive, so CompanyInternalESP32 and companyinternalesp32 are two boards, while SOQL compares
  * text regardless of case.
  *
  * With sharing: a command is linked only to an Asset its creator can see.

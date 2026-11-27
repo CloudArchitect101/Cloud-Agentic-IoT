@@ -9,6 +9,8 @@ them are in no single vendor doc, because they sit where two platforms meet
 
 **Firmware numbers below.** Rows before Nov 27 quote the prototype's firmware numbers (2.0.0 to 2.8.0). On Nov 27 the firmware was renumbered 1.0.0 for a fresh install on new boards, so read those numbers as history, not as versions to look for.
 
+**Board names below.** Dated rows quote the prototype boards by their real names: Test8 was the monitored device and Test7 the corp ticket gauge. Since Nov 27 the guides call them `PatientExternalESP32` and `CompanyInternalESP32`, so read Test7 and Test8 as history, not as names to type.
+
 The step-by-step "if a step fails" tables stay next to their feature:
 [SOP-GROUNDING.md](SOP-GROUNDING.md#if-a-step-fails) and
 [DATA-CLOUD.md](DATA-CLOUD.md#if-a-step-fails).
@@ -40,7 +42,7 @@ The step-by-step "if a step fails" tables stay next to their feature:
 | 7 | Step 6 said it could not create the credential, or you ran it with `SKIP_BOOTSTRAP=yes` | Make it by hand, [below](#relay-credential-by-hand) |
 | 7 | The Home tab's cost card shows an error, or a callout fails with `HTTP 0` or `403` | [Detailed Install Guide, Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach), "If a callout fails", lists each cause and its fix |
 | 8 | `/patient-status` answers with Slack's `dispatch_failed` | The Request URL is not the Slack Request URL step 6 printed, or the app was not reinstalled after adding the command |
-| 8 | `/patient-status Test8` answers with no reading | No board called `Test8` is sending yet (step 12), or yours has another name: use it |
+| 8 | `/patient-status PatientExternalESP32` answers with no reading | No board called `PatientExternalESP32` is sending yet (step 12), or yours has another name: use it |
 | 9 | The agent answers that the device history can't be read right now | The person asking lacks the **Data Cloud User** permission set (step 9), or the insights have not run yet ([DATA-CLOUD.md](DATA-CLOUD.md#how-the-agent-reads-it)) |
 | 10 | `sf org assign permset` prints a warning for a set the user already holds | That's fine: carry on |
 | 10 | The patient's **My monitor** page shows a reading that is days old | The patient lacks `AWS_IoT_Relay_Callers`. Assign it (step 10, item 8), or run `scripts/install.sh Dev`, which gives it to any patient who lacks it |

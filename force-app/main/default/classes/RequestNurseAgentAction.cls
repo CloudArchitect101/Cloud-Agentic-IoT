@@ -27,7 +27,7 @@ public without sharing class RequestNurseAgentAction {
         public String reason;
 
         @InvocableVariable(label='Device ID'
-            description='Optional: the serial number of the patient\'s device the request is about, for example Test8.')
+            description='Optional: the serial number of the patient\'s device the request is about, for example PatientExternalESP32.')
         public String deviceId;
     }
 

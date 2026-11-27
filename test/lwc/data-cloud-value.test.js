@@ -37,19 +37,19 @@ const answer = () => ({
   outOfRange: {
     error: null,
     rows: [
-      { device_id__c: 'Test8', reading_day__c: '2026-11-19T00:00:00.000Z', readings_out_of_range__c: 40, minutes_out_of_range__c: 20, max_temperature_c__c: 34.5 },
-      { device_id__c: 'Test7', reading_day__c: '2026-11-18T00:00:00.000Z', readings_out_of_range__c: 10, minutes_out_of_range__c: 5, max_temperature_c__c: 31 },
+      { device_id__c: 'PatientExternalESP32', reading_day__c: '2026-11-19T00:00:00.000Z', readings_out_of_range__c: 40, minutes_out_of_range__c: 20, max_temperature_c__c: 34.5 },
+      { device_id__c: 'CompanyInternalESP32', reading_day__c: '2026-11-18T00:00:00.000Z', readings_out_of_range__c: 10, minutes_out_of_range__c: 5, max_temperature_c__c: 31 },
       // Outside the 7-day window, inside the 14-day trend.
-      { device_id__c: 'Test8', reading_day__c: '2026-11-10T00:00:00.000Z', readings_out_of_range__c: 100, minutes_out_of_range__c: 50, max_temperature_c__c: 40 },
+      { device_id__c: 'PatientExternalESP32', reading_day__c: '2026-11-10T00:00:00.000Z', readings_out_of_range__c: 100, minutes_out_of_range__c: 50, max_temperature_c__c: 40 },
       // Outside both.
-      { device_id__c: 'Test8', reading_day__c: '2026-10-01T00:00:00.000Z', readings_out_of_range__c: 9, minutes_out_of_range__c: 999, max_temperature_c__c: 50 }
+      { device_id__c: 'PatientExternalESP32', reading_day__c: '2026-10-01T00:00:00.000Z', readings_out_of_range__c: 9, minutes_out_of_range__c: 999, max_temperature_c__c: 50 }
     ]
   },
   silence: {
     error: null,
     rows: [
-      { device_id__c: 'Test8', last_reading_ts__c: '2026-11-19T20:05:00.000Z', readings__c: 1200 },
-      { device_id__c: 'Test7', last_reading_ts__c: '2026-11-19T16:00:00.000Z', readings__c: 300 }
+      { device_id__c: 'PatientExternalESP32', last_reading_ts__c: '2026-11-19T20:05:00.000Z', readings__c: 1200 },
+      { device_id__c: 'CompanyInternalESP32', last_reading_ts__c: '2026-11-19T16:00:00.000Z', readings__c: 300 }
     ]
   },
   assumptions: ASSUMPTIONS
@@ -73,13 +73,13 @@ test('the 7-day totals count only the last 7 days', () => {
   assert.equal(w.minutes, 25);
   assert.equal(w.readings, 50);
   assert.equal(w.highest, 34.5);
-  assert.deepEqual(w.perDevice.get('Test8'), { minutes: 20, highest: 34.5 });
+  assert.deepEqual(w.perDevice.get('PatientExternalESP32'), { minutes: 20, highest: 34.5 });
 });
 
 test('a device is silent when its last reading in Data Cloud is over 2 hours old, and silent ones come first', () => {
   const w = value.windowOf(answer().outOfRange.rows, NOW);
   const devices = value.devicesOf(answer().silence.rows, w.perDevice, NOW, ...EN);
-  assert.deepEqual(devices.map((d) => [d.id, d.status]), [['Test7', 'Silent'], ['Test8', 'Reporting']]);
+  assert.deepEqual(devices.map((d) => [d.id, d.status]), [['CompanyInternalESP32', 'Silent'], ['PatientExternalESP32', 'Reporting']]);
   assert.equal(devices[1].ago, '25 min ago');
   assert.equal(devices[0].ago, '4 h 30 min ago');
   assert.equal(devices[1].highest, '34.5 °C');

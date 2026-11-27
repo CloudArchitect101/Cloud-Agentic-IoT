@@ -156,8 +156,8 @@ public without sharing class DeviceConnectionService {
 
     /**
      * The Assets each Thing ARN names, matched exactly. SOQL compares text
-     * regardless of case, while AWS IoT Thing names are case-sensitive: Test7
-     * and test7 are two boards. A Set or Map of Strings is case-sensitive, so
+     * regardless of case, while AWS IoT Thing names are case-sensitive: CompanyInternalESP32
+     * and companyinternalesp32 are two boards. A Set or Map of Strings is case-sensitive, so
      * a change only ever reaches the Assets whose Thing ARN is exactly its own.
      */
     private static Map<String, List<Asset>> assetsFor(List<Change> changes) {

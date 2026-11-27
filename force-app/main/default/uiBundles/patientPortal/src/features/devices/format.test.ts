@@ -4,7 +4,7 @@ import type { Device } from "../../api/portal/portalApi";
 
 const device = (connectionStatus: string | null): Device => ({
 	assetId: "02i",
-	serialNumber: "Test8",
+	serialNumber: "PatientExternalESP32",
 	name: "Room 4",
 	connectionStatus,
 	connectionSince: null,

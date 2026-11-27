@@ -24,8 +24,8 @@
 # explains each test and how to read the results.
 #
 # Settings (environment):
-#   EVAL_DEVICE             the staff agent's demo device              (Test8)
-#   EVAL_OTHER_DEVICE       a device that is not the test patient's    (Test7)
+#   EVAL_DEVICE             the staff agent's demo device              (PatientExternalESP32)
+#   EVAL_OTHER_DEVICE       a device that is not the test patient's    (CompanyInternalESP32)
 #   EVAL_PATIENT_USERNAME   the portal patient whose verified chat to use
 #                           (default: the newest verified portal chat)
 
@@ -42,8 +42,8 @@ need node "It fills in the specs and scores the results."
 cd "$REPO_ROOT"
 
 org="${SF_TARGET_ORG:-iot-$(tr '[:upper:]' '[:lower:]' <<< "$ENV")-deploy}"
-DEVICE="${EVAL_DEVICE:-Test8}"
-OTHER_DEVICE="${EVAL_OTHER_DEVICE:-Test7}"
+DEVICE="${EVAL_DEVICE:-PatientExternalESP32}"
+OTHER_DEVICE="${EVAL_OTHER_DEVICE:-CompanyInternalESP32}"
 OUT="test-results/evals"
 SUMMARY="${GITHUB_STEP_SUMMARY:-$OUT/summary.md}"
 rm -rf "$OUT"

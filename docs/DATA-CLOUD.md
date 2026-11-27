@@ -264,10 +264,10 @@ reads the two insights and the raw readings, so a nurse can ask:
 
 | A nurse asks | What the answer decides | SOP it feeds |
 | --- | --- | --- |
-| "Has Test8 been running hot this week, or is today a one-off?" | Escalate now, or recheck the device first | SOP-WARD-001 |
-| "How long was Test8 at or above 30 C yesterday?" | What goes into the shift handover | SOP-WARD-006 |
-| "When did Test7 last send anything?" | Treat it as a device fault, not a quiet patient | SOP-WARD-003 |
-| "Create a Case for Test8" | The Case reason carries the history's summary line | SOP-WARD-001 |
+| "Has PatientExternalESP32 been running hot this week, or is today a one-off?" | Escalate now, or recheck the device first | SOP-WARD-001 |
+| "How long was PatientExternalESP32 at or above 30 C yesterday?" | What goes into the shift handover | SOP-WARD-006 |
+| "When did CompanyInternalESP32 last send anything?" | Treat it as a device fault, not a quiet patient | SOP-WARD-003 |
+| "Create a Case for PatientExternalESP32" | The Case reason carries the history's summary line | SOP-WARD-001 |
 
 For one device it sends three Data Cloud ANSI SQL queries
 (`ConnectApi.CdpQuery`, through the same `Querier` the Home page's value card

@@ -6,7 +6,7 @@
       stays with Get Latest Device Readings; this one answers questions about
       time (docs/DATA-CLOUD.md, "How the agent reads it").
     -->
-    <description>Returns how a monitored device&apos;s temperature ran over the last days, from Data Cloud: the days and minutes at or above the temperature alert threshold, the highest reading, the last 24 hours and the newest reading Data Cloud holds. Use it whenever the user asks about a device over time (this week, yesterday, how long, how often, a pattern or a one-off, when it last reported), and before escalating a condition. Needs the device serial number, for example Test8: pass it exactly as written. Do not use it for what a device reads right now.</description>
+    <description>Returns how a monitored device&apos;s temperature ran over the last days, from Data Cloud: the days and minutes at or above the temperature alert threshold, the highest reading, the last 24 hours and the newest reading Data Cloud holds. Use it whenever the user asks about a device over time (this week, yesterday, how long, how often, a pattern or a one-off, when it last reported), and before escalating a condition. Needs the device serial number, for example PatientExternalESP32: pass it exactly as written. Do not use it for what a device reads right now.</description>
     <invocationTarget>DeviceHistoryAgentAction</invocationTarget>
     <invocationTargetType>apex</invocationTargetType>
     <!-- Read-only, so no confirmation, as with the readings action. -->

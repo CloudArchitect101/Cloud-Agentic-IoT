@@ -61,15 +61,15 @@ private class VitalAlertCaseServiceTest {
     @IsTest
     static void aCriticalAlertOpensOneCaseOnTheAssetInTheQueue() {
         settings();
-        Asset test8 = device('VitalTest8', null);
+        Asset monitored = device('VitalPatientExternalESP32', null);
 
-        deliver(new List<Patient_Vital_Alert__e>{ alert('VitalTest8', 'CRITICAL_VITALS'), alert('VitalTest8', 'CRITICAL_VITALS') });
+        deliver(new List<Patient_Vital_Alert__e>{ alert('VitalPatientExternalESP32', 'CRITICAL_VITALS'), alert('VitalPatientExternalESP32', 'CRITICAL_VITALS') });
 
-        List<Case> cases = casesOf(test8.Id);
+        List<Case> cases = casesOf(monitored.Id);
         System.assertEquals(1, cases.size(), 'two alerts in one batch make one Case');
         System.assertEquals(VitalAlertCaseService.ORIGIN, cases[0].Origin);
         System.assertEquals('High', cases[0].Priority);
-        System.assertEquals('Critical vitals on VitalTest8', cases[0].Subject);
+        System.assertEquals('Critical vitals on VitalPatientExternalESP32', cases[0].Subject);
         System.assertEquals([SELECT Id FROM Group WHERE DeveloperName = :QUEUE].Id, cases[0].OwnerId);
         System.assert(cases[0].Description.contains('Risk score: 90'), cases[0].Description);
     }
@@ -77,22 +77,22 @@ private class VitalAlertCaseServiceTest {
     @IsTest
     static void aDeviceWithAnOpenVitalAlertCaseGetsNoSecondOne() {
         settings();
-        Asset test8 = device('VitalTest8', null);
-        insert new Case(AssetId = test8.Id, Origin = VitalAlertCaseService.ORIGIN, Subject = 'Earlier alert');
+        Asset monitored = device('VitalPatientExternalESP32', null);
+        insert new Case(AssetId = monitored.Id, Origin = VitalAlertCaseService.ORIGIN, Subject = 'Earlier alert');
 
-        deliver(new List<Patient_Vital_Alert__e>{ alert('VitalTest8', 'CRITICAL_VITALS') });
+        deliver(new List<Patient_Vital_Alert__e>{ alert('VitalPatientExternalESP32', 'CRITICAL_VITALS') });
 
-        System.assertEquals(1, casesOf(test8.Id).size());
+        System.assertEquals(1, casesOf(monitored.Id).size());
     }
 
     @IsTest
     static void aWarningAnUnknownDeviceAndAnInternalDeviceOpenNothing() {
         settings();
-        Asset patient = device('VitalTest8', null);
-        Asset ward = device('VitalTest7', DeviceRoles.internalRecordTypeId());
+        Asset patient = device('VitalPatientExternalESP32', null);
+        Asset ward = device('VitalCompanyInternalESP32', DeviceRoles.internalRecordTypeId());
 
         deliver(new List<Patient_Vital_Alert__e>{
-            alert('VitalTest8', 'ABNORMAL_TREND'), alert('NoSuchDevice', 'CRITICAL_VITALS'), alert('VitalTest7', 'CRITICAL_VITALS')
+            alert('VitalPatientExternalESP32', 'ABNORMAL_TREND'), alert('NoSuchDevice', 'CRITICAL_VITALS'), alert('VitalCompanyInternalESP32', 'CRITICAL_VITALS')
         });
 
         System.assertEquals(0, casesOf(patient.Id).size(), 'a warning opens no Case');

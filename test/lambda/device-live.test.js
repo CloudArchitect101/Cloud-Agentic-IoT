@@ -53,7 +53,7 @@ const reading = (thing, at, values = {}) => ({
   ...values,
 });
 const STATE = {
-  PK: 'PATIENT#Test7',
+  PK: 'PATIENT#CompanyInternalESP32',
   SK: 'STATE',
   PatientState: 'AT_RISK',
   RiskScore: 25,
@@ -61,10 +61,10 @@ const STATE = {
   LastSyncedAt: '2026-11-06T05:00:00.000Z',
 };
 const ITEMS = [
-  reading('Test7', '2026-11-06T05:29:00.000Z', { Temperature: 22.1, Humidity: 40 }),
-  reading('Test7', '2026-11-06T05:29:30.000Z', { Temperature: 22.5, Humidity: 41 }),
+  reading('CompanyInternalESP32', '2026-11-06T05:29:00.000Z', { Temperature: 22.1, Humidity: 40 }),
+  reading('CompanyInternalESP32', '2026-11-06T05:29:30.000Z', { Temperature: 22.5, Humidity: 41 }),
   // Another board, whose name starts with this one's, and a newer reading.
-  reading('Test70', '2026-11-06T05:29:45.000Z', { Temperature: 30, Humidity: 90 }),
+  reading('CompanyInternalESP320', '2026-11-06T05:29:45.000Z', { Temperature: 30, Humidity: 90 }),
   STATE,
 ];
 
@@ -129,29 +129,29 @@ test('start tells the board to go live on its own command topic, at the pace and
   captureConsole(t);
   const { handler, publishes } = load(t);
 
-  const res = await handler(request({ thingName: 'Test7', mode: 'start' }));
+  const res = await handler(request({ thingName: 'CompanyInternalESP32', mode: 'start' }));
 
   assert.equal(res.statusCode, 200);
   assert.equal(publishes.length, 1);
-  assert.equal(publishes[0].input.topic, 'device/Test7/command');
+  assert.equal(publishes[0].input.topic, 'device/CompanyInternalESP32/command');
   assert.equal(publishes[0].input.qos, 1);
   assert.deepEqual(JSON.parse(publishes[0].input.payload.toString()), { operation: 'LIVE', seconds: 3, minutes: 20 });
   const { thingName, live } = answer(res);
-  assert.equal(thingName, 'Test7');
+  assert.equal(thingName, 'CompanyInternalESP32');
   assert.deepEqual(Object.keys(live).sort(), ['clientId', 'commandPublished', 'expiresAt', 'minutes', 'seconds', 'topic', 'url']);
   assert.equal(live.commandPublished, true);
   assert.equal(live.seconds, 3);
   assert.equal(live.minutes, 20);
-  assert.equal(live.topic, 'device/Test7/live');
+  assert.equal(live.topic, 'device/CompanyInternalESP32/live');
   // The presence rule leaves out live-* clients, so a viewer never marks the board Online.
-  assert.match(live.clientId, /^live-Test7-[0-9a-f]{8}$/);
+  assert.match(live.clientId, /^live-CompanyInternalESP32-[0-9a-f]{8}$/);
   assert.ok(live.url.startsWith(`wss://${ENDPOINT}/mqtt?X-Amz-Algorithm=AWS4-HMAC-SHA256&`), live.url);
 });
 
 test('a request that names no mode starts the live view, in either request shape', async (t) => {
   captureConsole(t);
   const { handler, publishes } = load(t);
-  for (const event of [request({ thingName: 'Test7' }), { thingName: 'Test7' }]) {
+  for (const event of [request({ thingName: 'CompanyInternalESP32' }), { thingName: 'CompanyInternalESP32' }]) {
     const res = await handler(event);
     assert.equal(res.statusCode, 200);
     assert.ok(answer(res).live.url);
@@ -163,8 +163,8 @@ test('a bad Thing name or mode is refused before anything is sent or read', asyn
   captureConsole(t);
   const { handler, publishes, lookups, assumed, reads } = load(t);
   const bodies = [
-    ...[undefined, '', 'Test7/../Test8', 'Test7/live', '#', 'pm+1', 'x'.repeat(129), 42, null].map((thingName) => ({ thingName })),
-    ...['stop', 'START', 'live', '', null, 1, ['start']].map((mode) => ({ thingName: 'Test7', mode })),
+    ...[undefined, '', 'CompanyInternalESP32/../PatientExternalESP32', 'CompanyInternalESP32/live', '#', 'pm+1', 'x'.repeat(129), 42, null].map((thingName) => ({ thingName })),
+    ...['stop', 'START', 'live', '', null, 1, ['start']].map((mode) => ({ thingName: 'CompanyInternalESP32', mode })),
   ];
   for (const body of bodies) {
     const res = await handler(request(body));
@@ -181,7 +181,7 @@ test('a LIVE command IoT Core does not take is logged and answered as commandPub
   const logs = captureConsole(t);
   const { handler } = load(t, { publish: () => { throw awsError('ThrottlingException', 'Rate exceeded'); } });
 
-  const res = await handler(request({ thingName: 'Test7' }));
+  const res = await handler(request({ thingName: 'CompanyInternalESP32' }));
 
   assert.equal(res.statusCode, 200);
   const { live, latest, state } = answer(res);
@@ -195,7 +195,7 @@ test("the viewer's credentials last 15 minutes and reach only this client id and
   captureConsole(t);
   const { handler, assumed } = load(t);
 
-  const { live } = answer(await handler(request({ thingName: 'Test7' })));
+  const { live } = answer(await handler(request({ thingName: 'CompanyInternalESP32' })));
 
   assert.equal(assumed.length, 1);
   const {
@@ -211,8 +211,8 @@ test("the viewer's credentials last 15 minutes and reach only this client id and
     Version: '2012-10-17',
     Statement: [
       { Effect: 'Allow', Action: 'iot:Connect', Resource: `arn:aws:iot:us-east-2:${ACCOUNT}:client/${live.clientId}` },
-      { Effect: 'Allow', Action: 'iot:Subscribe', Resource: `arn:aws:iot:us-east-2:${ACCOUNT}:topicfilter/device/Test7/live` },
-      { Effect: 'Allow', Action: 'iot:Receive', Resource: `arn:aws:iot:us-east-2:${ACCOUNT}:topic/device/Test7/live` },
+      { Effect: 'Allow', Action: 'iot:Subscribe', Resource: `arn:aws:iot:us-east-2:${ACCOUNT}:topicfilter/device/CompanyInternalESP32/live` },
+      { Effect: 'Allow', Action: 'iot:Receive', Resource: `arn:aws:iot:us-east-2:${ACCOUNT}:topic/device/CompanyInternalESP32/live` },
     ],
   });
 });
@@ -220,7 +220,7 @@ test("the viewer's credentials last 15 minutes and reach only this client id and
 test('two people watching one board connect as two clients', async (t) => {
   captureConsole(t);
   const { handler } = load(t);
-  const [first, second] = await Promise.all([1, 2].map(async () => answer(await handler(request({ thingName: 'Test7' }))).live));
+  const [first, second] = await Promise.all([1, 2].map(async () => answer(await handler(request({ thingName: 'CompanyInternalESP32' }))).live));
   assert.notEqual(first.clientId, second.clientId);
 });
 
@@ -250,7 +250,7 @@ test('the link is signed for the endpoint, the Region and the viewer credentials
   t.mock.timers.enable({ apis: ['Date'], now: NOW });
   const { handler, presignMqttUrl } = load(t);
 
-  const { live } = answer(await handler(request({ thingName: 'Test7' })));
+  const { live } = answer(await handler(request({ thingName: 'CompanyInternalESP32' })));
 
   assert.equal(live.url, presignMqttUrl({
     host: ENDPOINT,
@@ -268,7 +268,7 @@ test('the link is signed for the endpoint, the Region and the viewer credentials
   assert.equal(live.expiresAt, '2026-11-06T05:44:59.000Z');
 
   const later = load(t, { assumeRole: () => ({ Credentials: { ...CREDENTIALS, Expiration: new Date('2026-11-06T05:50:00Z') } }) });
-  assert.equal(answer(await later.handler(request({ thingName: 'Test7' }))).live.expiresAt, '2026-11-06T05:45:00.000Z');
+  assert.equal(answer(await later.handler(request({ thingName: 'CompanyInternalESP32' }))).live.expiresAt, '2026-11-06T05:45:00.000Z');
 });
 
 test('when STS refuses the viewer credentials, the answer is a 502 that says what to check', async (t) => {
@@ -281,7 +281,7 @@ test('when STS refuses the viewer credentials, the answer is a 502 that says wha
   });
   assert.equal(typeof presignMqttUrl, 'function');
 
-  const res = await handler(request({ thingName: 'Test7' }));
+  const res = await handler(request({ thingName: 'CompanyInternalESP32' }));
 
   assert.equal(res.statusCode, 502);
   const body = answer(res);
@@ -296,7 +296,7 @@ test('when STS refuses the viewer credentials, the answer is a 502 that says wha
 test('the IoT endpoint is looked up once per container', async (t) => {
   captureConsole(t);
   const { handler, lookups } = load(t);
-  for (const thingName of ['Test7', 'Test8', 'Test7']) {
+  for (const thingName of ['CompanyInternalESP32', 'PatientExternalESP32', 'CompanyInternalESP32']) {
     const res = await handler(request({ thingName }));
     assert.ok(answer(res).live.url.startsWith(`wss://${ENDPOINT}/mqtt?`));
   }
@@ -314,11 +314,11 @@ test('a failed endpoint lookup answers 502 and is asked again by the next reques
     },
   });
 
-  const failed = await handler(request({ thingName: 'Test7' }));
+  const failed = await handler(request({ thingName: 'CompanyInternalESP32' }));
   assert.equal(failed.statusCode, 502);
   assert.match(answer(failed).error, /^No AWS IoT endpoint for the live view \(ThrottlingException\)\. Try again/);
-  assert.equal((await handler(request({ thingName: 'Test7' }))).statusCode, 200);
-  assert.equal((await handler(request({ thingName: 'Test7' }))).statusCode, 200);
+  assert.equal((await handler(request({ thingName: 'CompanyInternalESP32' }))).statusCode, 200);
+  assert.equal((await handler(request({ thingName: 'CompanyInternalESP32' }))).statusCode, 200);
   assert.equal(lookups.length, 2);
 });
 
@@ -327,23 +327,23 @@ test('both modes read the newest stored reading and the patient state, as number
   for (const mode of ['start', 'latest']) {
     const { handler, reads } = load(t);
 
-    const res = await handler(request({ thingName: 'Test7', mode }));
+    const res = await handler(request({ thingName: 'CompanyInternalESP32', mode }));
 
     assert.equal(res.statusCode, 200, mode);
     assert.deepEqual(reads.map((call) => call.command).sort(), ['GetCommand', 'QueryCommand']);
     assert.deepEqual(reads.find((call) => call.command === 'QueryCommand').input, {
       TableName: TABLE,
       KeyConditionExpression: 'PK = :device AND begins_with(SK, :reading)',
-      ExpressionAttributeValues: { ':device': 'PATIENT#Test7', ':reading': 'VITAL#' },
+      ExpressionAttributeValues: { ':device': 'PATIENT#CompanyInternalESP32', ':reading': 'VITAL#' },
       ScanIndexForward: false,
       Limit: 1,
     });
     assert.deepEqual(reads.find((call) => call.command === 'GetCommand').input, {
       TableName: TABLE,
-      Key: { PK: 'PATIENT#Test7', SK: 'STATE' },
+      Key: { PK: 'PATIENT#CompanyInternalESP32', SK: 'STATE' },
     });
     const { latest, state } = answer(res);
-    // The newest of this board's readings, not Test70's; no heart rate or SpO2 from a DHT11.
+    // The newest of this board's readings, not CompanyInternalESP320's; no heart rate or SpO2 from a DHT11.
     assert.deepEqual(latest, { temperature: 22.5, humidity: 41, at: '2026-11-06T05:29:30.000Z' });
     assert.deepEqual(state, { patientState: 'AT_RISK', riskScore: 25, updatedAt: '2026-11-06T05:29:30.000Z', temperatureAlert: false });
   }
@@ -352,9 +352,9 @@ test('both modes read the newest stored reading and the patient state, as number
 test('a reading with heart rate and SpO2 answers them too', async (t) => {
   captureConsole(t);
   const { handler } = load(t, {
-    items: [reading('Test7', '2026-11-06T05:29:30.000Z', { HeartRate: 72, SpO2: 97, Temperature: 36.8, Humidity: 0 })],
+    items: [reading('CompanyInternalESP32', '2026-11-06T05:29:30.000Z', { HeartRate: 72, SpO2: 97, Temperature: 36.8, Humidity: 0 })],
   });
-  const { latest, state } = answer(await handler(request({ thingName: 'Test7', mode: 'latest' })));
+  const { latest, state } = answer(await handler(request({ thingName: 'CompanyInternalESP32', mode: 'latest' })));
   assert.deepEqual(latest, {
     temperature: 36.8, humidity: 0, at: '2026-11-06T05:29:30.000Z', heartRate: 72, spo2: 97,
   });
@@ -365,14 +365,14 @@ test('a board with nothing stored answers null, as every board does for latest i
   captureConsole(t);
   // Prod keeps no readings in DynamoDB (KeepReadingsInDynamoDB false), only STATE.
   const prod = load(t, { items: [STATE] });
-  const inProd = answer(await prod.handler(request({ thingName: 'Test7' })));
+  const inProd = answer(await prod.handler(request({ thingName: 'CompanyInternalESP32' })));
   assert.equal(inProd.latest, null);
   assert.equal(inProd.state.patientState, 'AT_RISK');
   assert.ok(inProd.live.url);
 
   const empty = load(t, { items: [] });
-  const fresh = answer(await empty.handler(request({ thingName: 'Test7', mode: 'latest' })));
-  assert.deepEqual(fresh, { thingName: 'Test7', latest: null, state: null });
+  const fresh = answer(await empty.handler(request({ thingName: 'CompanyInternalESP32', mode: 'latest' })));
+  assert.deepEqual(fresh, { thingName: 'CompanyInternalESP32', latest: null, state: null });
 });
 
 test('a read DynamoDB refuses is logged and answered as null, never as a failed request', async (t) => {
@@ -386,7 +386,7 @@ test('a read DynamoDB refuses is logged and answered as null, never as a failed 
       },
     });
     for (const mode of ['start', 'latest']) {
-      const res = await handler(request({ thingName: 'Test7', mode }));
+      const res = await handler(request({ thingName: 'CompanyInternalESP32', mode }));
       assert.equal(res.statusCode, 200, `${refused} in ${mode}`);
       const { latest, state } = answer(res);
       assert.equal(latest === null, refused === 'QueryCommand', `latest when ${refused} fails`);
@@ -403,7 +403,7 @@ test('latest only reads: no command to the board, no credentials, no endpoint, n
     env: { LIVE_VIEWER_ROLE_ARN: undefined, LIVE_READING_SECONDS: undefined, LIVE_MINUTES: undefined },
   });
 
-  const res = await handler(request({ thingName: 'Test7', mode: 'latest' }));
+  const res = await handler(request({ thingName: 'CompanyInternalESP32', mode: 'latest' }));
 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(Object.keys(answer(res)).sort(), ['latest', 'state', 'thingName']);
@@ -424,7 +424,7 @@ test('a missing or out-of-range setting fails by name before the board is told a
   ];
   for (const [name, value, message] of cases) {
     const { handler, publishes, assumed, reads } = load(t, { env: { [name]: value } });
-    await assert.rejects(handler(request({ thingName: 'Test7' })), message, `${name}=${value}`);
+    await assert.rejects(handler(request({ thingName: 'CompanyInternalESP32' })), message, `${name}=${value}`);
     assert.deepEqual([publishes.length, assumed.length, reads.length], [0, 0, 0], `${name}=${value}`);
   }
 });
@@ -434,11 +434,11 @@ test('no link, secret or token reaches the logs', async (t) => {
   const links = [];
   // A start that works, one whose command fails, and one STS refuses.
   const works = load(t);
-  links.push(answer(await works.handler(request({ thingName: 'Test7' }))).live.url);
+  links.push(answer(await works.handler(request({ thingName: 'CompanyInternalESP32' }))).live.url);
   const noCommand = load(t, { publish: () => { throw awsError('ForbiddenException', 'Not allowed'); } });
-  links.push(answer(await noCommand.handler(request({ thingName: 'Test7' }))).live.url);
+  links.push(answer(await noCommand.handler(request({ thingName: 'CompanyInternalESP32' }))).live.url);
   const noCredentials = load(t, { assumeRole: () => { throw awsError('AccessDenied', 'Not allowed'); } });
-  assert.equal((await noCredentials.handler(request({ thingName: 'Test7' }))).statusCode, 502);
+  assert.equal((await noCredentials.handler(request({ thingName: 'CompanyInternalESP32' }))).statusCode, 502);
 
   const signatures = links.map((url) => url.match(/X-Amz-Signature=([0-9a-f]{64})/)[1]);
   const text = logs.join('\n');
@@ -459,14 +459,14 @@ test('no link, secret or token reaches the logs', async (t) => {
 test('rearm stamps RearmRequestedAt on the STATE item, and touches nothing else', async (t) => {
   captureConsole(t);
   const { handler, publishes, assumed, reads } = load(t);
-  const res = await handler(request({ thingName: 'Test7', mode: 'rearm' }));
+  const res = await handler(request({ thingName: 'CompanyInternalESP32', mode: 'rearm' }));
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(answer(res), { thingName: 'Test7', rearmed: true });
+  assert.deepEqual(answer(res), { thingName: 'CompanyInternalESP32', rearmed: true });
   assert.equal(publishes.length, 0);                     // the board is not contacted
   assert.equal(assumed.length, 0);                       // no link is signed
   const updates = reads.filter((call) => call.command === 'UpdateCommand');
   assert.equal(updates.length, 1);
-  assert.deepEqual(updates[0].input.Key, { PK: 'PATIENT#Test7', SK: 'STATE' });
+  assert.deepEqual(updates[0].input.Key, { PK: 'PATIENT#CompanyInternalESP32', SK: 'STATE' });
   assert.equal(updates[0].input.UpdateExpression, 'SET RearmRequestedAt = :now');
   assert.match(updates[0].input.ExpressionAttributeValues[':now'], /^\d{4}-\d\d-\d\dT/);
 });
@@ -474,17 +474,17 @@ test('rearm stamps RearmRequestedAt on the STATE item, and touches nothing else'
 test('rearm on a board with no STATE yet answers rearmed false and creates nothing', async (t) => {
   captureConsole(t);
   const { handler } = load(t, { items: [] });
-  const res = await handler(request({ thingName: 'Test7', mode: 'rearm' }));
+  const res = await handler(request({ thingName: 'CompanyInternalESP32', mode: 'rearm' }));
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(answer(res), { thingName: 'Test7', rearmed: false });
+  assert.deepEqual(answer(res), { thingName: 'CompanyInternalESP32', rearmed: false });
 });
 
 test('a re-arm newer than the last sync ends the temperature alert the card shows', async (t) => {
   captureConsole(t);
   const hot = { ...STATE, RoomTempHot: true };
-  const before = answer(await load(t, { items: [hot] }).handler(request({ thingName: 'Test7', mode: 'latest' })));
+  const before = answer(await load(t, { items: [hot] }).handler(request({ thingName: 'CompanyInternalESP32', mode: 'latest' })));
   assert.equal(before.state.temperatureAlert, true);
   const rearmed = { ...hot, RearmRequestedAt: '2026-11-06T05:10:00.000Z' };   // after LastSyncedAt
-  const after = answer(await load(t, { items: [rearmed] }).handler(request({ thingName: 'Test7', mode: 'latest' })));
+  const after = answer(await load(t, { items: [rearmed] }).handler(request({ thingName: 'CompanyInternalESP32', mode: 'latest' })));
   assert.equal(after.state.temperatureAlert, false);
 });

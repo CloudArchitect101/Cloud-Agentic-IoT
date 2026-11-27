@@ -20,7 +20,7 @@ public with sharing class MyDevicesAgentAction {
         public String messagingSessionId;
 
         @InvocableVariable(label='Device ID'
-            description='Optional: one of the patient\'s device serial numbers, for example Test8, to read only that device.')
+            description='Optional: one of the patient\'s device serial numbers, for example PatientExternalESP32, to read only that device.')
         public String deviceId;
 
         @InvocableVariable(label='Number of Readings'
