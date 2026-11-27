@@ -19,12 +19,12 @@ Only want to see what it does first? Watch the [step-by-step walkthrough](proces
 
 ## The install at a glance
 
-The [Quick install](INSTALL.md) is the one path everyone follows. The other install pages explain it, they do not replace it:
+The [Quick Install Guide](INSTALL.md) is the one path everyone follows. The other install pages explain it, they do not replace it:
 
 | Page | Use it for |
 |---|---|
-| [Quick install](INSTALL.md) | The steps, in order, with a check after each one |
-| [Install guide](INSTALL-GUIDE.md) | Why each step is done that way, and what to look at when one fails |
+| [Quick Install Guide](INSTALL.md) | The steps, in order, with a check after each one |
+| [Detailed Install Guide](INSTALL-GUIDE.md) | Why each step is done that way, and what to look at when one fails |
 | [Try it](TRY-IT.md) | The demos to run once it works: warm the sensor, the saga, Slack |
 | [Setup](SETUP.md) | Accounts, licences and secrets in detail, for the Dev and Prod pipelines |
 | [Troubleshooting](TROUBLESHOOTING.md) | Every problem met so far, with its cause and fix |
@@ -43,4 +43,4 @@ The Business Value card in Data Cloud after step 9 (sample data) is in [Business
 
 ---
 
-[Docs home](index.md) · [Quick install →](INSTALL.md)
+[Docs home](index.md) · [Quick Install Guide →](INSTALL.md)

@@ -130,4 +130,4 @@ scripts/deploy-salesforce.sh Dev --dry-run --with-tests   # then validate agains
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

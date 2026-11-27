@@ -1,7 +1,7 @@
 # Try it on your own AWS project and Salesforce org
 
 > [!TIP]
-> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick install](INSTALL.md) is the one list of steps; this page goes deeper.
+> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick Install Guide](INSTALL.md) is the one list of steps; this page goes deeper.
 
 Cloned this repo to learn or experiment? Run it on two things of your own: an
 AWS **project** with a spend limit, and a free Salesforce Developer Edition
@@ -213,10 +213,10 @@ The deploy user and the Deploy app aren't needed until the pipelines.
 
 **Salesforce to AWS** (provisioning, the queue indicator, Wi-Fi pushes) signs
 with the `AWS_IoT_Relay` named credential:
-[Install guide, Stage 2, step 1](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
+[Detailed Install Guide, Stage 2, step 1](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
 Make its IAM user as `<name>`, the profile you signed in with in step 2.
 
-Boards are provisioned as in the [Install guide, Stage 3](INSTALL-GUIDE.md#stage-3--hardware),
+Boards are provisioned as in the [Detailed Install Guide, Stage 3](INSTALL-GUIDE.md#stage-3--hardware),
 against the `<name>` project's IoT endpoint, and
 [DEVELOPMENT.md, "On your laptop"](DEVELOPMENT.md#1-on-your-laptop) covers
 flashing and watching one.
@@ -256,7 +256,7 @@ To send a board a command, open its Asset and choose **Send Command**, then
 seconds and `Acked` once the board answers, or `Failed`
 with the reason (a board that is offline is not sent anything). The command is
 sent as you, so you need the `AWS_IoT_Relay` principal access from
-[Install guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
+[Detailed Install Guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
 [DATA-MODEL.md](DATA-MODEL.md#device-command-lifecycle) explains each status.
 
 The card and Send Command both need a board provisioned from its Asset
@@ -332,7 +332,7 @@ sets it to `"true"`.
 - Your ward board's Asset has the Internal Device record type. Any such
   board follows Care_Team_Queue.
 - The integration user has the `AWS_IoT_Relay` principal access
-  ([Install guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach)):
+  ([Detailed Install Guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach)):
   the Case moves the ward board through a callout made as that user.
 - `Room Temperature Rule` (labelled Temperature Alert Rule) and `Agentforce` are Case Origin values: the
   deploy adds them (`standardValueSets/CaseOrigin`). A value you added to
@@ -571,4 +571,4 @@ move to regular AWS accounts:
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

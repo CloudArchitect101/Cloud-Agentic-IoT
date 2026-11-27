@@ -1,6 +1,6 @@
-# Quick install
+# Quick Install Guide
 
-Every feature, from a fresh clone to a working system, in order: copy each block, paste it, and go on. Why each step is done this way: the [Install guide](INSTALL-GUIDE.md#quick-install-explained).
+Every feature, from a fresh clone to a working system, in order: copy each block, paste it, and go on. Why each step is done this way: the [Detailed Install Guide](INSTALL-GUIDE.md#quick-install-explained).
 
 <a id="step-map"></a>
 
@@ -573,7 +573,7 @@ SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
 | `/patient-status Test8` in Slack | The live reading |
 | The portal, as a patient | The patient's own device, and the assistant answering "what is my temperature?" |
 
-The full checklist: [Install guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end).
+The full checklist: [Detailed Install Guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end).
 
 [← 12. Add the boards](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines →](#step-14)
 

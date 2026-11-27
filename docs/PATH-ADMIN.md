@@ -21,7 +21,7 @@ title: Clinic Salesforce admin
 <div class="lp-step"><div><p class="lp-pis"><img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> </p><h4><a href="INSTALL.md#step-8">Add Slack, Data Cloud and the portal</a></h4><p>Each has its own steps and check.</p><p class="lp-check">✓ Check: each feature's own check passes</p></div></div>
 <div class="lp-step"><div><p class="lp-pis"><img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/service.svg" alt="Cases (Service)" title="Cases (Service)" width="20" height="20"> <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> </p><h4><a href="INSTALL.md#step-13">Check that it works</a></h4><p>Warm the sensor, watch the Case open, and ask the agent about the device.</p><p class="lp-check">✓ Check: one Case on the care team queue</p></div></div>
 </div>
-<p>Each step links to its full instructions in the <a href="INSTALL.md">Quick install</a>, where the commands and the check box are.</p>
+<p>Each step links to its full instructions in the <a href="INSTALL.md">Quick Install Guide</a>, where the commands and the check box are.</p>
 </div>
 <div class="lp-side">
 <div class="lp-box"><h4>Before you start</h4><ul><li>A Salesforce Developer Edition org (free)</li><li>An AWS project with a spend limit, from $20 a month</li><li>A Mac, Linux or Windows computer with a terminal</li><li>About two hours</li></ul></div>
@@ -34,4 +34,4 @@ Other paths: [Device builder](PATH-DEVICE.md) · [Developer](PATH-DEVELOPER.md) 
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

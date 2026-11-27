@@ -19,11 +19,11 @@ title: Device builder
 <div class="lp-step"><div><p class="lp-pis"><img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/service.svg" alt="Cases (Service)" title="Cases (Service)" width="20" height="20"> </p><h4><a href="INSTALL.md#step-13">Test the alert</a></h4><p>Warm the sensor to 30 C, for example under your arm. The motor turns at once, even offline.</p><p class="lp-check">✓ Check: one Case opens on the care team queue</p></div></div>
 <div class="lp-step"><div><p class="lp-pis"><img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> </p><h4><a href="../hardware/cases/README.md">Print a case</a></h4><p>A rigid arm cuff with a slide-on hub, or a desk gauge with a bell. OpenSCAD sources and STLs.</p><p class="lp-check">✓ Check: the sensor grille faces the surface you measure</p></div></div>
 </div>
-<p>Each step links to its full instructions in the <a href="INSTALL.md">Quick install</a>, where the commands and the check box are.</p>
+<p>Each step links to its full instructions in the <a href="INSTALL.md">Quick Install Guide</a>, where the commands and the check box are.</p>
 </div>
 <div class="lp-side">
 <img src="images/wiring-monitored-device.svg" alt="Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers">
-<div class="lp-box"><h4>Before you start</h4><ul><li>Quick install steps 1 to 7 are done, so the app can provision the board</li><li>About $37 CAD of parts</li><li>No soldering except the resistor</li></ul></div>
+<div class="lp-box"><h4>Before you start</h4><ul><li>Quick Install Guide steps 1 to 7 are done, so the app can provision the board</li><li>About $37 CAD of parts</li><li>No soldering except the resistor</li></ul></div>
 <div class="lp-box"><h4>Going further</h4><a href="DEVICE-IDENTITY.md">Device identity</a>: certificates and Wi-Fi that survive updates. <a href="../firmware/README.md">Firmware</a>: live mode, commands and OTA.</div>
 <div class="lp-box"><h4>Stuck?</h4>Board problems and their fixes are in <a href="TROUBLESHOOTING.md#the-board-and-the-serial-scripts">Troubleshooting: the board</a>.</div>
 </div>
@@ -33,4 +33,4 @@ Other paths: [Clinic Salesforce admin](PATH-ADMIN.md) · [Developer](PATH-DEVELO
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

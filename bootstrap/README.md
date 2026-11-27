@@ -22,10 +22,10 @@ scripts/bootstrap-salesforce.sh <org alias> --url <URL> --region <Region>
 
 - It creates **only what the org does not have**. A piece that exists is never changed, so running it again is safe.
 - The two options are not secrets: `scripts/install.sh` prints the URL. Leave them out and the placeholders below go in, for you to replace in Setup.
-- `scripts/install.sh` runs it for you with the real values on a Quick install.
+- `scripts/install.sh` runs it for you with the real values on a Quick Install Guide.
 - It refuses to run in GitHub Actions, and it stops without deploying when it cannot tell whether a piece exists.
 
-After it runs, three values are always left for a person to type into the external credential in Setup ([Quick install, step 7](../docs/INSTALL.md#step-7)): the **STS Access Key**, the **STS Access Secret**, and the **IAM Role ARN** on the principal `SalesforceCaller`. Salesforce stores them as credentials, not as metadata, so no file can carry them, and no option or environment variable in this repo ever holds them.
+After it runs, three values are always left for a person to type into the external credential in Setup ([Quick Install Guide, step 7](../docs/INSTALL.md#step-7)): the **STS Access Key**, the **STS Access Secret**, and the **IAM Role ARN** on the principal `SalesforceCaller`. Salesforce stores them as credentials, not as metadata, so no file can carry them, and no option or environment variable in this repo ever holds them.
 
 ## The placeholders
 

@@ -72,9 +72,9 @@ Each icon marks the platform a step or a page is about.
 
 ## Install
 
-New here? **[Start here](START-HERE.md)** picks your path: clinic Salesforce admin, device builder, developer, or a team with pipelines. Everyone follows the Quick install, with a check after each step; the Install guide explains the why.
+New here? **[Start here](START-HERE.md)** picks your path: clinic Salesforce admin, device builder, developer, or a team with pipelines. Everyone follows the Quick Install Guide, with a check after each step; the Detailed Install Guide explains the why.
 
-| | [Quick install](INSTALL.md) | [Install guide](INSTALL-GUIDE.md) |
+| | [Quick Install Guide](INSTALL.md) | [Detailed Install Guide](INSTALL-GUIDE.md) |
 |---|---|---|
 | For | Getting it running | Understanding every step |
 | What you get | Every feature as execution steps in order, deployed in one run by `scripts/install.sh` | Each step, why it is done that way, and what to check when it fails |
@@ -87,7 +87,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | Learn by doing | Get a task done |
 |---|---|
 | [Start here](START-HERE.md): the four paths (admin, device builder, developer, pipelines) | |
-| <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> [Quick install](INSTALL.md): every feature, step by step | [Install guide](INSTALL-GUIDE.md): every step, explained |
+| <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> [Quick Install Guide](INSTALL.md): every feature, step by step | [Detailed Install Guide](INSTALL-GUIDE.md): every step, explained |
 | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Try it](TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> [Setup](SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
 | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> [Platform primer](PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> [Development](DEVELOPMENT.md): laptop to Dev to Prod |
 | | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> [Migration runbook](MIGRATION-RUNBOOK.md): phased cutover with a rollback per phase |

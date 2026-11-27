@@ -1,9 +1,9 @@
-# Install guide: every step, explained
+# Detailed Install Guide: every step, explained
 
 > [!TIP]
-> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick install](INSTALL.md) is the one list of steps; this page goes deeper.
+> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick Install Guide](INSTALL.md) is the one list of steps; this page goes deeper.
 
-This is the long version of the install: each step, plus **why** it is done that way and what to check when it fails. Want only the commands? Use the [Quick install](INSTALL.md); [Quick install, explained](#quick-install-explained) below follows its numbering. Want to know what you are installing first? Read [How the pieces connect](HOW-IT-CONNECTS.md), or the [README](../README.md) for the one-page overview.
+This is the long version of the install: each step, plus **why** it is done that way and what to check when it fails. Want only the commands? Use the [Quick Install Guide](INSTALL.md); [Quick Install Guide, explained](#quick-install-explained) below follows its numbering. Want to know what you are installing first? Read [How the pieces connect](HOW-IT-CONNECTS.md), or the [README](../README.md) for the one-page overview.
 
 Two ways to run it, same code:
 
@@ -25,11 +25,11 @@ Two ways to run it, same code:
 
 <a id="quick-install-explained"></a>
 
-## Quick install, explained
+## Quick Install Guide, explained
 
-The [Quick install](INSTALL.md) is commands only. This is the why behind each of its steps, in the same numbering. When a step shows something else than it says, see [If a Quick install step goes differently](TROUBLESHOOTING.md#install-steps).
+The [Quick Install Guide](INSTALL.md) is commands only. This is the why behind each of its steps, in the same numbering. When a step shows something else than it says, see [If a Quick Install Guide step goes differently](TROUBLESHOOTING.md#install-steps).
 
-**The name `test-cloud-agentic-iot`.** The Quick install calls the AWS CLI profile and the Salesforce CLI org alias `test-cloud-agentic-iot`, so every block pastes as it is. The name lives only on your computer: no AWS resource or Salesforce record is named after it (bucket names use the account ID and Region), so two people using the same name never collide. Any name of letters, digits and `-` works. Every `sf` command names its org with `--target-org "$NAME"`, so a command always goes to that org.
+**The name `test-cloud-agentic-iot`.** The Quick Install Guide calls the AWS CLI profile and the Salesforce CLI org alias `test-cloud-agentic-iot`, so every block pastes as it is. The name lives only on your computer: no AWS resource or Salesforce record is named after it (bucket names use the account ID and Region), so two people using the same name never collide. Any name of letters, digits and `-` works. Every `sf` command names its org with `--target-org "$NAME"`, so a command always goes to that org.
 
 **What a new terminal keeps** (the resume lines):
 
@@ -42,7 +42,7 @@ The [Quick install](INSTALL.md) is commands only. This is the why behind each of
 | Pipelines (step 14): `AWS_PROFILE=iot-dev`, `SF_TARGET_ORG=iot-dev-admin` | **Gone.** Run their `export` lines again |
 | Files you made: keys in `scripts/`, the portal key in `~/Downloads` | Kept. Nothing to do |
 
-**Step 2. The AWS project and the org.** A project on the paid plan has a hard monthly spend limit (the lowest is $20). Its advanced features stay off: activating them removes the spend limit for good, and they matter only for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts. Why a project, and what it costs: [TRY-IT.md](TRY-IT.md#why-a-project-and-what-it-costs-you). The Bedrock check comes first because the agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account can be held from Bedrock for up to 72 hours. A new Developer Edition org comes with Agentforce and Data Cloud (Data 360), which steps 8 to 11 use. Agentforce Voice in the portal's chat needs a licence a Developer Edition lacks, so the Quick install leaves it out ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)).
+**Step 2. The AWS project and the org.** A project on the paid plan has a hard monthly spend limit (the lowest is $20). Its advanced features stay off: activating them removes the spend limit for good, and they matter only for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts. Why a project, and what it costs: [TRY-IT.md](TRY-IT.md#why-a-project-and-what-it-costs-you). The Bedrock check comes first because the agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account can be held from Bedrock for up to 72 hours. A new Developer Edition org comes with Agentforce and Data Cloud (Data 360), which steps 8 to 11 use. Agentforce Voice in the portal's chat needs a licence a Developer Edition lacks, so the Quick Install Guide leaves it out ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)).
 
 **Step 3. The org's features.** One pass through Setup, all before the deploy. Each switch accepts terms or can't be turned off, so it is a click of yours, and the deploy in step 6 builds on it. The patient portal needs one Customer Community licence per test patient; step 4 lists them once the terminal knows your org.
 
@@ -398,4 +398,4 @@ Once it holds together on `Dev`, `Prod` is the same sequence against the second 
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

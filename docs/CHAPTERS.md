@@ -1,6 +1,6 @@
 # The chapters
 
-**These are explanations, not install steps.** They assume the system is installed ([Quick install](INSTALL.md) or the [Install guide](INSTALL-GUIDE.md)). Each chapter demonstrates one capability, and its article and video are published separately. The code for all of them lives together in the one repository layout shown in the [README](../README.md#whats-where), because it is one system.
+**These are explanations, not install steps.** They assume the system is installed ([Quick Install Guide](INSTALL.md) or the [Detailed Install Guide](INSTALL-GUIDE.md)). Each chapter demonstrates one capability, and its article and video are published separately. The code for all of them lives together in the one repository layout shown in the [README](../README.md#whats-where), because it is one system.
 
 | # | Chapter | # | Chapter |
 |---|---|---|---|
@@ -13,7 +13,7 @@
 | 06 | [Multi-Agent Orchestration (MCP)](#06--multi-agent-orchestration-mcp--agent2agent) | 13 | [Device Provisioning Automation](#13--device-provisioning-automation) |
 |  |  | + | [Patient Portal: React + Enhanced Chat](#patient-portal--react-site-and-enhanced-chat) |
 
-Where a chapter needs something from [Stage 2 of the Install guide](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) it says so, and where you can watch it working there is a **To see it work** line.
+Where a chapter needs something from [Stage 2 of the Detailed Install Guide](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) it says so, and where you can watch it working there is a **To see it work** line.
 
 
 ## 00 · IoT Device Provisioning
@@ -351,4 +351,4 @@ The patients' side of the system: a **React site on Salesforce** (Multi-Framewor
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
