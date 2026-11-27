@@ -10,6 +10,42 @@ title: Cloud-Agentic-IoT
 <img src="images/device-to-care.svg" alt="From a monitored device to the care team: sense, stream, alert, act">
 </div>
 
+## See what you build
+
+Two ESP32 boards in 3D-printed cases, AWS IoT, Salesforce with Agentforce and Data Cloud, all running together. Everything below comes from the [Quick Install Guide](INSTALL.md), steps 12 and 13.
+
+<h3 class="sw-step">0. Tech stack</h3>
+<div class="sw-grid">
+<div class="sw-cell"><p class="sw-head"><img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Salesforce</p><p><img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <b>Salesforce</b>: Service Cloud Cases, Apex, Lightning<br><img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> <b>Agentforce</b>: two agents, new builder<br><img class="pi" src="images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> <b>Data Cloud</b>: reading history and insights<br><img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <b>Slack</b>: slash command and agent DMs<br><img class="pi" src="images/platforms/portal.svg" alt="Salesforce Multi-Framework" title="Salesforce Multi-Framework" width="20" height="20"> <b>Multi-Framework React portal</b>: external patient site, React 19 on Salesforce<br><img class="pi" src="images/platforms/portal.svg" alt="Enhanced Chat v2" title="Enhanced Chat v2" width="20" height="20"> <b>Enhanced Chat v2</b>: the portal's verified chat with the patient agent<br><img class="pi" src="images/platforms/agentforce.svg" alt="MCP" title="MCP" width="20" height="20"> <b>MCP</b>: both agents use Espressif's MCP servers through Agentforce Registry</p></div>
+<div class="sw-cell"><p class="sw-head"><img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> AWS</p><p><img class="pi" src="images/platforms/iot-core.svg" alt="AWS IoT Core" title="AWS IoT Core" width="20" height="20"> <b>AWS IoT Core</b>: mutual TLS, rules, OTA jobs<br><img class="pi" src="images/platforms/lambda.svg" alt="AWS Lambda" title="AWS Lambda" width="20" height="20"> <b>Lambda</b>: alerts, commands, Salesforce sync<br><img class="pi" src="images/platforms/bedrock.svg" alt="Amazon Bedrock" title="Amazon Bedrock" width="20" height="20"> <b>Bedrock</b>: SOP search with embeddings<br><img class="pi" src="images/platforms/aws.svg" alt="Amazon S3" title="Amazon S3" width="20" height="20"> <b>S3</b>: reading archive and firmware</p></div>
+</div>
+
+<h3 class="sw-step">1. Build two devices (<a href="INSTALL.md#step-12">step 12</a>)</h3>
+<div class="sw-grid">
+<div class="sw-cell"><video src="videos/assembly-monitored-device.mp4" poster="videos/assembly-monitored-device.jpg" autoplay muted loop playsinline controls width="640" aria-label="Animation: the ESP32, DHT11 sensor and servo go into the 3D-printed arm cuff"></video><p><b>Monitored device</b> <code>PatientExternalESP32</code>: an ESP32, a DHT11 temperature sensor and a servo in a 3D-printed arm cuff.</p><a href="images/wiring-monitored-device.svg"><img src="images/wiring-monitored-device.svg" alt="Wiring of the monitored device: DHT11 to 3.3V, P4 and GND with a 10 kΩ pull-up; servo to P5, 5V and GND"></a><p>Wiring, drawn from the real parts: DHT11 on P4 with a 10 kΩ pull-up, servo on P5.</p></div>
+<div class="sw-cell"><video src="videos/assembly-corp-gauge.mp4" poster="videos/assembly-corp-gauge.jpg" autoplay muted loop playsinline controls width="640" aria-label="Animation: the ESP32 and servo go into the 3D-printed ticket gauge with its bell"></video><p><b>Corp ticket gauge</b> <code>CompanyInternalESP32</code>: an ESP32 and a servo that swings a needle and rings a bell for the care team.</p><a href="images/wiring-corp-gauge.svg"><img src="images/wiring-corp-gauge.svg" alt="Wiring of the corp ticket gauge: servo to P5, 5V and GND"></a><p>Wiring: one servo on P5. Saving the board's Asset in Salesforce gives it its own X.509 certificate, with no secrets in the firmware.</p></div>
+</div>
+
+<h3 class="sw-step">2. Watch it work (<a href="INSTALL.md#step-13">step 13</a>)</h3>
+<div class="sw-grid">
+<div class="sw-cell"><video src="videos/working-monitored-device.mp4" poster="videos/working-monitored-device.jpg" autoplay muted loop playsinline controls width="640" aria-label="Animation: the monitored device on the arm reaches 30 C and its servo starts to spin"></video><p><b>30 C on the arm.</b> The board's own servo spins within 5 s, even offline. AWS IoT Core flags the crossing, and Salesforce opens one Case for the care team.</p></div>
+<div class="sw-cell"><video src="videos/working-corp-gauge.mp4" poster="videos/working-corp-gauge.jpg" autoplay muted loop playsinline controls width="640" aria-label="Animation: the corp ticket gauge sweeps its needle and rings the bell for the open Case"></video><p><b>The office hears it.</b> The open Case drives the gauge through a platform event, an AWS callout and MQTT: its needle sweeps and its bell rings until someone closes the Case. The Patient Care Agent then reads the device and cites the ward's procedure.</p></div>
+</div>
+
+<h3 class="sw-step">3. Run it as a business (the app's Home tab)</h3>
+<div class="sw-grid">
+<div class="sw-cell"><img src="images/home-cost-card-preview.png" alt="Home tab cost and limits card: AWS spend this month against the budget, and the Salesforce org's most used limits"><p><b>Cost and limits.</b> This month's AWS spend against its budget (about $0.08 per device a month), and the org's limits: storage, API calls, async Apex, streaming events.</p></div>
+<div class="sw-cell"><img src="images/data-cloud-value-card-preview.png" alt="Data Cloud value card: out-of-range minutes, highest temperature, devices reporting, manual checks replaced, Data Cloud cost and return"><p><b>Data Cloud value.</b> Out-of-range minutes, the highest temperature, which devices went silent, and the manual checks the system replaces, measured against what Data Cloud costs.</p></div>
+</div>
+
+<p class="sw-note">The animations are renders of the real 3D models, and the Home cards show sample data. Real footage and org screenshots will replace them under the same file names.</p>
+
+<div align="center" class="cta" markdown="1">
+
+[![Start the install: open the Quick Install Guide](images/start-install-button.svg)](INSTALL.md)
+
+</div>
+
 ## Who are you? Pick your path
 
 <div class="lp-cards">

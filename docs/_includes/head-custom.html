@@ -70,6 +70,15 @@
   .markdown-body .cta{margin:20px 0 8px}
   .markdown-body .cta a{display:inline-block;border-radius:999px;transition:transform .15s,filter .15s}
   .markdown-body .cta a:hover,.markdown-body .cta a:focus{transform:translateY(-2px);filter:brightness(1.08)}
+  /* "See what you build" showcase on the docs home. */
+  .markdown-body h3.sw-step{margin:28px 0 10px;color:#115e59}
+  .markdown-body .sw-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:0 0 8px}
+  .markdown-body .sw-cell{border:1px solid #e2e8f0;border-radius:12px;padding:14px;background:#fff}
+  .markdown-body .sw-cell video,.markdown-body .sw-cell img:not(.pi){display:block;width:100%;height:auto;border-radius:8px;margin:0 0 8px}
+  .markdown-body .sw-cell p{margin:0 0 8px;line-height:1.5}
+  .markdown-body .sw-head{font-weight:700;font-size:17px}
+  .markdown-body .sw-note{font-size:13px;color:#59636e}
+  @media (max-width:760px){.markdown-body .sw-grid{grid-template-columns:1fr}}
   .markdown-body .cta img{display:block;width:560px;max-width:100%;height:auto;border:0;background:none}
   .markdown-body .step-done{display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:600;cursor:pointer}
   @media (prefers-color-scheme: dark){.step-rail,.step-rail a{background:#0d1117;color:#e6edf3}}
