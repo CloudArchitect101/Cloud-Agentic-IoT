@@ -111,6 +111,14 @@ FAKE_AWS = textwrap.dedent(r'''
         log(entry)
         keys = [k for k in state['objects'] if k.startswith(options['prefix'])]
         print(json.dumps(keys) if keys else 'null')
+    elif call == 's3api head-object':
+        log(entry)
+        if options['key'] not in state['objects']:
+            fail('An error occurred (404) when calling the HeadObject operation: Not Found')
+        print(json.dumps({'ContentLength': 1}))
+    elif call == 'iot describe-job':
+        log(entry)
+        print(json.dumps(state['job_details'][options['job-id']]))
     elif call == 's3 cp':
         source, target = positional[2], positional[3]
         with open(source) as f:
@@ -134,9 +142,12 @@ FAKE_AWS = textwrap.dedent(r'''
             with open(created) as f:
                 jobs += [json.loads(line) for line in f]
         prefix = re.search(r"starts_with\(jobId, '([^']*)'\)", options['query']).group(1)
-        print('\t'.join(j['jobId'] for j in jobs
-                        if j['status'] == options['status'] and j['group'] == options['thing-group-name']
-                        and j['jobId'].startswith(prefix)))
+        # Without --thing-group-name AWS lists the jobs of every group.
+        found = [j['jobId'] for j in jobs
+                 if j['status'] == options['status']
+                 and options.get('thing-group-name', j['group']) == j['group']
+                 and j['jobId'].startswith(prefix)]
+        print(json.dumps(found) if options.get('output') == 'json' else '\t'.join(found))
     elif call == 'iot cancel-job':
         log(entry)
         if state.get('cancel_fails'):
@@ -172,6 +183,9 @@ FAKE_ARDUINO = textwrap.dedent(r'''
     import json, os, re, sys
 
     args = sys.argv[1:]
+    if args[:2] == ['core', 'list']:
+        print('esp32:esp32 3.0.7 3.0.7 esp32')
+        sys.exit(0)
     if not args or args[0] != 'compile':
         sys.stderr.write('fake arduino-cli: only compile is prepared\n')
         sys.exit(2)
@@ -243,10 +257,12 @@ class ScriptFixture(unittest.TestCase):
                         'Test55 SUCCEEDED': 'rebooting'},
         }
 
-    def run_script(self, *args, minutes='1'):
+    def run_script(self, *args, minutes='1', ci=False):
         with open(os.path.join(self.state_dir, 'state.json'), 'w') as f:
             json.dump(self.state, f)
         env = {k: v for k, v in os.environ.items() if k not in ('GITHUB_ACTIONS', 'AWS_PROFILE')}
+        if ci:   # a release runs in the pipeline only
+            env['GITHUB_ACTIONS'] = 'true'
         env.update(PATH=self.bin + os.pathsep + os.environ['PATH'], AWS_REGION=REGION,
                    FAKE_AWS_STATE=self.state_dir, TRY_POLL_SECONDS='0', TRY_WATCH_MINUTES=minutes)
         result = subprocess.run(list(args), cwd=self.repo, env=env, capture_output=True, text=True, timeout=120)
