@@ -951,8 +951,9 @@ there.
    It sits outside `force-app/` on purpose: `scripts/deploy-salesforce.sh`
    deploys all of `force-app/` together, and a Data Cloud component another
    org refuses would fail that whole deploy. Deploying the kit to another org
-   is `sf project deploy start --source-dir datacloud/kit/source --target-org
-   <alias>`, after its connection exists there (steps 2 to 4): the
+   is
+   `sf project deploy start --source-dir datacloud/kit/source --target-org <alias>`,
+   after its connection exists there (steps 2 to 4): the
    connection's credential never travels with a kit. This repo does not ship
    a retrieved kit yet.
 
@@ -1033,12 +1034,12 @@ Salesforce side, as an admin:
 1. The agent must be active, as the newest version:
    `sf agent activate --api-name Patient_Care_Agent --target-org "$SF_TARGET_ORG" --json`
 2. The shipped Agent Script already ends with `connection slack:`, so a
-   published version is a Slack agent. An agent made in the legacy builder
-   offers no Slack under **Connections** (only Messaging and Agentforce
-   Mobile) until it is upgraded to the new builder; do not add those two to
-   an employee agent, as a connection cannot be removed.
+      published version is a Slack agent. An agent made in the legacy builder
+      offers no Slack under **Connections** (only Messaging and Agentforce
+      Mobile) until it is upgraded to the new builder; do not add those two to
+      an employee agent, as a connection cannot be removed.
 
-Slack side, as the workspace owner:
+   Slack side, as the workspace owner:
 
 3. **Tools & settings** → **Manage Salesforce Organizations** → **Connect
    Salesforce Org**: the org's My Domain URL, account mapping field
