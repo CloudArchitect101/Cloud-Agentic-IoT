@@ -315,7 +315,7 @@ void CloudAgenticDevice::handleJobDocument(byte* payload, unsigned int length) {
   bool restarted = started && strcmp(execution["statusDetails"]["detail"] | "", "rebooting") == 0;
 
   // The safety check that matters most. Device types have different pins and
-  // different logic; flashing a queue indicator with patient-monitor firmware
+  // different logic; flashing a board with another type's firmware
   // bricks it, and a bricked device cannot be fixed over the air. Thing Group
   // targeting should prevent this, but a mis-targeted job must not be able to
   // destroy hardware - so the device refuses anything not built for it.
@@ -387,7 +387,7 @@ void CloudAgenticDevice::handleMessage(char* topic, byte* payload, unsigned int 
 
   // Copied before anything is carried out: the answer goes after, and with
   // ArduinoJson 6 the document's strings live in the MQTT client's buffer,
-  // which every publish reuses (the queue indicator publishes from its
+  // which every publish reuses (a sketch may publish from its
   // handler). An invalid commandId is dropped and the command still carried
   // out: the id is for the answer, not a permission.
   char operation[cad::MAX_DETAIL_LENGTH + 1];

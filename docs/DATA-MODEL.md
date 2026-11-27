@@ -29,11 +29,11 @@ Rule applied: **reuse the platform until there is a written reason not to.** Eve
 
 ## Device roles
 
-Every board runs the same firmware (patient-monitor 2.4.0 and later); its Asset's record type decides what Salesforce tells it. `DeviceRoles` reads it.
+Every board runs the same firmware (patient-monitor); its Asset's record type decides what Salesforce tells it. `DeviceRoles` reads it.
 
 | Record type | Who it is for | Account | Its servo turns while | Temperature alert Case | Thing Group when provisioned with none named |
 |---|---|---|---|---|---|
-| `Patient_Device` (label Monitoring Device; the default), or none | Whatever its sensor monitors: a patient, a fridge, a room | The patient's, or the ward's | Its own DHT11 reads 30 C or more, decided on the board (firmware 2.5.0) | Yes | `Default_Thing_Group__c`, `fleet-patient-monitor` |
+| `Patient_Device` (label Monitoring Device; the default), or none | Whatever its sensor monitors: a patient, a fridge, a room | The patient's, or the ward's | Its own DHT11 reads 30 C or more, decided on the board | Yes | `Default_Thing_Group__c`, `fleet-patient-monitor` |
 | `Internal_Device` | The ward: a nurse-station indicator | The ward's own Account (Salesforce wants an Account or a Contact on every Asset; Person Accounts are off in this org) | Any open Case is owned by `Internal_Device_Queue__c` (Care_Team_Queue), on any device or none (`QUEUE_DEPTH`) | No | `Internal_Thing_Group__c`, `internal-devices` (inside `fleet-patient-monitor`, so every release reaches it) |
 
 Changing an Asset's record type tells its board at once: one that becomes internal gets the queue's depth; one that becomes a monitoring device gets a queue stop. Both record types are visible in `Device_Platform_Admin` and `Device_Integration`. The AWS Thing Group is set when the device is provisioned; to move a board that is already provisioned, `scripts/ota.sh join <env> <thing> patient-monitor internal`.
@@ -42,16 +42,16 @@ Changing an Asset's record type tells its board at once: one that becomes intern
 
 A Device Command is one instruction to one board, kept as a record so there is an audit trail of who asked for what and what the board said. It is created from the device's Asset (**Send Command**) or through the API. (Until Nov 10 Slack's `/dispense-medication` and the temperature rule also created `DISPENSE_MEDICATION` commands; that command is retired and its value inactive.)
 
-**Case alert (retired).** From firmware 2.3.0 to 2.4.0 a monitored board turned its servo while its device had an open Case in Care_Team_Queue, through `CASE_ALERT` Device Commands from `CaseAlertService`. Since 2.5.0 the board follows its own sensor's temperature instead; the deploy removes `CaseAlertService` (`manifest/destructiveChangesPost.xml`), `CASE_ALERT` is an inactive Command value kept for old records, and the deploy also deletes the two fields it used, `Asset.Case_Alert_Active__c` and `Device_Command__c.Case_Alert_On__c` (Nov 27, on Vitaly's OK).
+**No case alert.** A monitored board's servo follows its own sensor's temperature, never a Case. `CASE_ALERT` is an inactive Command value that nothing sends; a board answers it as done and ignores it.
 
 | Status | Set by | Means |
 |---|---|---|
 | `Pending` | The record's creation | Waiting to be sent. An Apex job sends it seconds later, as the user who created it. |
-| `Sent` | The send job, with `Sent_At__c` | AWS accepted the command for the board's topic. It stays here when the board is offline or on firmware older than 2.2.0, which carries commands out but never answers. |
+| `Sent` | The send job, with `Sent_At__c` | AWS accepted the command for the board's topic. It stays here while the board is offline. |
 | `Acked` | The board's answer, with `Answered_At__c` | The board carried it out. |
 | `Failed` | The send job, or the board's answer | Not sent (the device is not provisioned, its board is offline, AWS refused, or Salesforce would not start another job to send it), or the board could not carry it out or does not know the command. `Status_Detail__c` says which, in the board's own words where it gave some. A board's answer still applies to a command Salesforce marked Failed itself, since a send that timed out may have reached the board. |
 
-The board's answer travels back through AWS IoT (`device/<thing>/ack`), a queue and a Lambda into one Salesforce call per batch of up to 10 answers; it is accepted only from the board the command was for. A command reaches the board at most once: the send job never sends a record twice, and a board that receives one `commandId` twice carries it out once. The guardrails in device-command check every command on this path (a known command, its own settings, the ranges the board accepts; [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md)). [firmware/README.md](../firmware/README.md#commands-what-a-board-takes-and-how-it-answers-from-220) lists the commands a board takes and its answers.
+The board's answer travels back through AWS IoT (`device/<thing>/ack`), a queue and a Lambda into one Salesforce call per batch of up to 10 answers; it is accepted only from the board the command was for. A command reaches the board at most once: the send job never sends a record twice, and a board that receives one `commandId` twice carries it out once. The guardrails in device-command check every command on this path (a known command, its own settings, the ranges the board accepts; [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md)). [firmware/README.md](../firmware/README.md#commands-what-a-board-takes-and-how-it-answers) lists the commands a board takes and its answers.
 
 ## The one-line answers
 

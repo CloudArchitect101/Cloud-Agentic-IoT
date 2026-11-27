@@ -236,7 +236,7 @@ test('DeviceLiveRole may make every call the device-live function makes, and no 
 });
 
 // AWS IoT disconnects a board that publishes where its policy does not
-// allow, so a board on firmware 2.2.0 or later without this line would drop
+// allow, so a board without this line would drop
 // off every time its card is opened.
 test('each board may publish live readings to its own live topic, and to no other', () => {
   const statements = listOf(resource('DevicePolicy').Properties.PolicyDocument.Statement);

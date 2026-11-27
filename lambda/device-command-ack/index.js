@@ -10,7 +10,7 @@
  *   device/<thing>/ack --IoT rule--> answer queue (SQS) --batches--> this function
  *       --DeviceCommandAckService (invocable Apex), up to 200 answers a call--> Device_Command__c
  *
- * A board on firmware 2.2.0 or later answers a command that carried a
+ * A board answers a command that carried a
  * commandId (DeviceCommandSendJob sends the record's Id as one), once per
  * command. Answers are few, so the queue hands them over at once, at most 10
  * at a time: Salesforce hears one REST API call per batch of at most 10

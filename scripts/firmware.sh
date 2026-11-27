@@ -170,6 +170,12 @@ cmd_check_version() {
       echo "  $sketch: first versioned build, $new"
     elif [ "$new" != "$old" ] && [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" = "$new" ]; then
       echo "  $sketch: $old -> $new"
+    elif [ "$new" = "1.0.0" ] && [ "${old%%.*}" -ge 2 ] 2>/dev/null; then
+      # A renumber to 1.0.0 for a fresh start on new boards, allowed once:
+      # after it the base is 1.x, so this branch can never match again. A
+      # board still on the old number skips 1.0.0 as older and needs a USB
+      # flash (scripts/firmware.sh flash).
+      echo "  $sketch: renumbered $old -> $new (fresh start; boards already flashed with $old need a USB flash)"
     elif [ "$new" = "$old" ]; then
       warn "$sketch changed since $base, but FIRMWARE_VERSION is still $old. Raise it, or this change never reaches a board."
       failed=1

@@ -75,7 +75,7 @@ The bell must hang from a loop, be open at the bottom, and be 18 to 38 mm wide. 
 
 The hook takes a loop with a hole of 4 mm or more. If a bell's loop is smaller, hang it with a small key ring.
 
-### How the servo behaves today (firmware 2.7.0, unchanged)
+### How the servo behaves
 
 Full sweeps every time, faster with more open tickets: about 7 s per sweep at 1 ticket, about 1 s at 5 or more, parked with none. So the bell rings once per sweep: slowly with 1 ticket, fast with 5 or more. That is exactly what the dial says. A "hold at the level and ding once per new ticket" mode is a small firmware change that has not been made.
 

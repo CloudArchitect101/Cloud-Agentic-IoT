@@ -37,7 +37,7 @@ The simulation leaves out network latency, throttling (the unit tests exercise e
 
 | Stage | How it works | At a million boards |
 |---|---|---|
-| Boards → AWS IoT | MQTT over TLS. From firmware 2.1.0, readings go through [Basic Ingest](https://docs.aws.amazon.com/iot/latest/developerguide/iot-basic-ingest.html) straight to the rule, skipping the message broker. | 1,000,000 connections and 33,333 publishes a second: both above the default quotas. |
+| Boards → AWS IoT | MQTT over TLS. Readings go through [Basic Ingest](https://docs.aws.amazon.com/iot/latest/developerguide/iot-basic-ingest.html) straight to the rule, skipping the message broker. | 1,000,000 connections and 33,333 publishes a second: both above the default quotas. |
 | IoT rule → telemetry queue | One SQS message per reading. Errors go to a CloudWatch log group. | SQS standard queues have no practical throughput limit. This hop is the second-largest cost; see [Kinesis](#levers-in-order-of-effect). |
 | Ingest Lambda | Batches of up to 1,000 readings, 5 s batching window, at most 100 at once (`IngestMaxConcurrency`). Failures are reported per message. | About 33 batches a second; at roughly 300 ms each, about 10 run at once. |
 | DynamoDB | One `BatchGetItem` per 100 boards; a board's STATE item is written only when its state changes or a reminder goes out. Prod keeps readings in S3 only (`KeepReadingsInDynamoDB: false`). | About 16,700 read units a second, under the 40,000 a table gets by default. Writes are about 32 a second. |
@@ -64,7 +64,7 @@ The rest needs nothing: an account allows 1,000 concurrent Lambda executions by 
 
 US East list prices, before free tiers and discounts, for 1,000,000 boards. Check them in the AWS Pricing Calculator before quoting them to anyone.
 
-| Line | Rate | Firmware 2.0.x (broker) | 2.1.0 (Basic Ingest, this PR) | 2.1.0 and Kinesis |
+| Line | Rate | Through the broker | Basic Ingest (what the firmware does) | Basic Ingest and Kinesis |
 |---|---|---:|---:|---:|
 | IoT connectivity | $0.08 per million connection-minutes | $3,456 | $3,456 | $3,456 |
 | IoT messaging | $1.00, $0.80, then $0.70 per million (tiers at 1 and 5 billion) | $61,180 | $0 | $0 |
@@ -81,7 +81,7 @@ Archive storage starts near $100 a month and grows by about that much each month
 
 ## Levers, in order of effect
 
-1. **Basic Ingest** (done in this PR, firmware 2.1.0). Readings skip the broker, so AWS does not bill them as messaging: about $61,000 a month at a million boards. The device policy allows both topics, so boards on 2.0.x keep working while 2.1.0 rolls out. `test/firmware/contract.test.js` keeps the firmware's rule name, the rule and the policy in step.
+1. **Basic Ingest** (done). Readings skip the broker, so AWS does not bill them as messaging: about $61,000 a month at a million boards. `test/firmware/contract.test.js` keeps the firmware's rule name, the rule and the policy in step.
 2. **Kinesis Data Streams instead of SQS for telemetry** (not done). SQS bills per request and the IoT rule sends one message per reading; Kinesis bills per shard-hour and per 25 KB, which saves about $39,000 a month at this size. The cost is a design change: Kinesis retries a shard in order, so one bad reading holds up its shard until it is skipped or sent to a failure destination, where SQS retries each message on its own. Below a few hundred thousand boards the saving is smaller than the work; switch when the bill says so.
 3. **The reading interval** (done: a fleet setting now). Every board keeps it in NVS, and `scripts/ota.sh interval` (the "Fleet reading interval" workflow in Prod) changes it for a whole device type with one job. 60 seconds halves the volume-based lines. Whether patients can be watched at 60 s is a clinical decision, not an engineering one.
 4. **Two readings per message** (not done). The firmware could send two 30-second samples every minute in one message, halving rule and queue costs while keeping 30-second resolution, at the price of alerts arriving up to 30 seconds later.
@@ -91,12 +91,12 @@ EventBridge is deliberately not on the per-reading path: 86.4 billion events wou
 
 ## Reconnect storms
 
-When AWS IoT or a hospital's network drops, every board loses its connection in the same second. Firmware 2.0.x retried every second. 2.1.0 waits a random time that doubles after each failure, between 1 second and 5 minutes. `test/firmware/device_timing_test.cpp` simulates a million boards through a 10-minute outage against the default 3,000 connects a second:
+When AWS IoT or a hospital's network drops, every board loses its connection in the same second. Retrying every second would bring a million attempts a second. The firmware waits a random time that doubles after each failure, between 1 second and 5 minutes. `test/firmware/device_timing_test.cpp` simulates a million boards through a 10-minute outage against the default 3,000 connects a second:
 
 | | Busiest second after the first minute | Connection attempts in all | Every board back |
 |---|---:|---:|---:|
 | Retry every second (2.0.x) | 1,000,000 | 767 million | 333 s after AWS |
-| Backoff with full jitter (2.1.0) | 21,489 | 13 million | 538 s after AWS |
+| Backoff with full jitter (what the firmware does) | 21,489 | 13 million | 538 s after AWS |
 
 Backoff takes about 3 minutes longer to bring the last board back and asks AWS for 57 times fewer connections. A connect quota of 10,000 a second would bring the last board back sooner. After an outage, each board sends one reading when it reconnects, not one for every reading it missed.
 

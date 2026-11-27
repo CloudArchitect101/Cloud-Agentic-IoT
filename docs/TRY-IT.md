@@ -235,19 +235,17 @@ creates one AWS IoT job for `fleet-<type>` at the pace and with the abort rule
 of a Dev release, and prints each board's answer as it comes. A board that is
 offline takes the job when it next connects, and `scripts/ota.sh status Dev`
 shows where each one stands. A new try cancels an earlier one that a board has
-not started, so a board that was offline installs only the newest. A board on
-firmware 2.2.0 or later answers SUCCEEDED `running <version>` only once it has
-restarted into the new build and reconnected, and FAILED
-`came back on <version>` if the new build did not start. An older board answers SUCCEEDED
-`rebooting` just before it restarts, so for that first update to 2.2.0 the
-script points you to the serial console: first `OTA: complete, restarting`
-and, after the restart, `aws: connected, patient-monitor v<version>-try.<n>`.
-Either way the board keeps its Wi-Fi and certificate, which live in NVS,
+not started, so a board that was offline installs only the newest. A board
+answers SUCCEEDED `running <version>` only once it has restarted into the new
+build and reconnected, and FAILED `came back on <version>` if the new build did
+not start. On the serial console you see `OTA: complete, restarting` and, after
+the restart, `aws: connected, patient-monitor v<version>-try.<n>`.
+The board keeps its Wi-Fi and certificate, which live in NVS,
 outside the part of the flash an update rewrites. A try costs one upload and one job execution per board, a fraction
 of a cent.
 
 To watch a board, open its Asset in the Cloud Agentic IoT app. The Live Status
-card shows whether it is connected and, from firmware 2.2.0, a reading every 2
+card shows whether it is connected and a reading every 2
 seconds while the card is on screen, straight from AWS IoT to your browser.
 Readings never pass through Salesforce, and an hour of watching costs about a
 third of a cent in AWS. [LIVE-STATUS.md](LIVE-STATUS.md) has the speeds, the
@@ -255,7 +253,7 @@ costs and what to check when the card waits for the board.
 
 To send a board a command, open its Asset and choose **Send Command**, then
 `RESTART`. The Device Command shows `Sent` within
-seconds and, from firmware 2.2.0, `Acked` once the board answers, or `Failed`
+seconds and `Acked` once the board answers, or `Failed`
 with the reason (a board that is offline is not sent anything). The command is
 sent as you, so you need the `AWS_IoT_Relay` principal access from
 [Install guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
@@ -297,11 +295,10 @@ The temperature alert demo rule ([Chapters, chapter 03](CHAPTERS.md#temperature-
 the monitored device's DHT11 can sit wherever the temperature matters, against
 a patient (the demo puts it under an arm), in a medication fridge, in a room.
 When it reads 30 C or more, the board itself sweeps its servo back and forth to
-tell whoever is near, and stops at the first reading below 30 C (firmware
-2.5.0 and later; decided on the board, so closing the Case does not stop it,
+tell whoever is near, and stops at the first reading below 30 C (decided on the board, so closing the Case does not stop it,
 cooling the sensor does). Salesforce also opens a Case for the device in
 Care_Team_Queue, and the ward board moves. The motor only ever means
-"temperature high": since 2.6.0 there is no dose. It is a demo rule, not a
+"temperature high": there is no dose. It is a demo rule, not a
 clinical alert: a DHT11 is not a calibrated thermometer. It is on in Dev
 (`RoomTempAlert` in `config/Dev.json`) and off in Prod.
 
@@ -316,7 +313,7 @@ scripts/check.sh
 scripts/deploy-salesforce.sh Dev --with-tests
 # verify in the org: the list below, and Device_Integration has Temperature Alert
 scripts/deploy-aws.sh Dev            # patient-vitals with RoomTempAlert "true" from config/Dev.json
-scripts/ota.sh try Dev patient-monitor   # firmware 2.7.0: the alert sweep, no dose, ward boards ignore their own sensor
+scripts/ota.sh try Dev patient-monitor   # optional: send your working copy of the firmware over the air
 ```
 
 The pipeline deploys AWS before Salesforce (`.github/workflows/deploy.yml`),
@@ -332,9 +329,8 @@ sets it to `"true"`.
 - Care_Team_Queue lists Case as a supported object (Setup → Queues). If not,
   the Case lands with the integration user, an ERROR is logged, and the
   ward board does not count it.
-- Your ward board's Asset has the Internal Device record type, and the
-  board runs patient-monitor 2.4.0 or later. Any such board follows
-  Care_Team_Queue.
+- Your ward board's Asset has the Internal Device record type. Any such
+  board follows Care_Team_Queue.
 - The integration user has the `AWS_IoT_Relay` principal access
   ([Install guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach)):
   the Case moves the ward board through a callout made as that user.
@@ -363,8 +359,8 @@ sets it to `"true"`.
    once a reading went below 29 C in between.
 6. Unplug the board while it is warm, plug it back in: it sweeps again as
    soon as its first reading after the start is 30 C or more.
-7. If it does not sweep while warm, check the console: a board older than
-   2.5.0 follows Cases, not its sensor (`scripts/ota.sh try Dev patient-monitor`).
+7. If it does not sweep while warm, check the console for the temperature
+   it reads and for `motor turning`.
    SOP-WARD-004 is the procedure for a motor that does not follow the
    temperature.
 
@@ -439,7 +435,7 @@ undoes it. Use a build that is already published, for example the last try
 (`scripts/ota.sh status Dev` names it):
 
 ```bash
-scripts/ota-saga.sh send Dev Test8 patient-monitor 2.5.0-try.1
+scripts/ota-saga.sh send Dev Test8 patient-monitor 1.0.0-try.1
 scripts/ota-saga.sh status Dev Test8
 ```
 
@@ -489,9 +485,7 @@ demo apart from any team's. Slash commands work on the free plan.
    ```
 4. **Add the command.** In the app, **Slash Commands** → **Create New
    Command**, with that address as **Request URL**: `/patient-status`
-   (hint `Test8`). An app made before Nov 10 also has `/dispense-medication`:
-   delete it there (**Slash Commands**, the pencil, **Delete**); the function
-   now answers it with `Unknown command`.
+   (hint `Test8`).
 5. **Install it.** **Install App** → **Install to Workspace** → **Allow**.
 6. **Try it.** In any channel: `/patient-status Test8`. The answer shows
    only to you: first "Looking up `Test8`…", then the live reading from AWS

@@ -2,12 +2,10 @@
 /**
  * CloudAgenticDevice — the runtime every device type in this project shares.
  *
- * Two device types exist (patient monitor, queue indicator). They differ only
- * in what they sense and actuate. Identity, connectivity, provisioning and
- * over-the-air updates are identical, so they live here rather than being
- * copy-pasted into each sketch and drifting apart — which is exactly what had
- * happened: one sketch could be provisioned but not updated, the other could
- * be updated but not provisioned.
+ * Every board runs one sketch today (patient-monitor). Identity,
+ * connectivity, provisioning and over-the-air updates live here rather than
+ * in the sketch, so a new device type gets them as they are instead of a
+ * copy that drifts apart.
  *
  * Credentials live in NVS, never compiled in. That is what makes one binary
  * per device TYPE serve every device of that type, which is the precondition
@@ -37,10 +35,10 @@ class CloudAgenticDevice {
 public:
   /**
    * @param sketchName  MUST match the firmware/<dir> name. It is checked
-   *                    against every OTA job document: pushing queue-indicator
-   *                    firmware to a patient monitor would brick it (different
-   *                    pins, different logic), so a device refuses any image
-   *                    not built for it.
+   *                    against every OTA job document: firmware for another
+   *                    device type would brick a board (different pins,
+   *                    different logic), so a device refuses any image not
+   *                    built for it.
    * @param version     Semantic version, compared against the job to avoid
    *                    re-flashing an image the device already runs.
    * @param defaultTelemetrySeconds

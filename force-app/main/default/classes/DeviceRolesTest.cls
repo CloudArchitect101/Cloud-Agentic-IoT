@@ -83,7 +83,7 @@ private class DeviceRolesTest {
         return sent;
     }
 
-    /** Since firmware 2.5.0 no board is sent a case alert. */
+    /** No board is sent a case alert: a patient board follows its own sensor. */
     private static Integer alerts() {
         return [SELECT COUNT() FROM Device_Command__c WHERE Command__c = 'CASE_ALERT'];
     }

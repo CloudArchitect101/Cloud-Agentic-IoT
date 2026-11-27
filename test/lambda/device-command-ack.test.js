@@ -882,7 +882,7 @@ test('an answer that failed every retry raises an alarm, as a connection change 
 });
 
 // AWS IoT disconnects a board that publishes where its policy does not
-// allow, so a board on firmware 2.2.0 or later without this line would drop
+// allow, so a board without this line would drop
 // off each time it answered a command.
 test('each board may publish answers to its own ack topic, the one the rule reads, and to no other', () => {
   const statements = listOf(resource(RELAY, 'DevicePolicy').Properties.PolicyDocument.Statement);

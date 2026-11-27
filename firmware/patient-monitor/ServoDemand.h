@@ -11,16 +11,14 @@
  *     The board decides this itself, from every reading, with no Case and
  *     no cloud round trip, so it works while offline too. The positional
  *     servo sweeps once every SWEEP_PERIOD_MS (2 s) until a reading is
- *     below 30 C again. (Until 2.5.0 this came from the device's Cases,
- *     CASE_ALERT; the board now acknowledges that command and ignores it.)
+ *     below 30 C again.
  *   - QUEUE_DEPTH: an internal board (a nurse-station indicator) follows the
  *     whole queue. intensity 0-100 comes from the number of open Cases; 0
  *     stops it. The faster the queue fills, the faster the sweep, from about
- *     7 s a sweep at 1 Case of 5 to about 1 s at full speed, as on the retired
- *     queue-indicator firmware.
+ *     7 s a sweep at 1 Case of 5 to about 1 s at full speed.
  *
  * A board that has been sent QUEUE_DEPTH is an internal board, and from then
- * on its own DHT11 no longer turns the servo: only the queue does (2.7.0).
+ * on its own DHT11 no longer turns the servo: only the queue does.
  * Salesforce sends the queue's depth to internal boards only, every time one
  * connects, so after a restart an internal board with a warm sensor may turn
  * for the few seconds until that first message arrives. A monitored board is

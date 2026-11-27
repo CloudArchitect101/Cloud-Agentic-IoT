@@ -3,8 +3,8 @@
  *
  * Routes Case trigger contexts to the queue monitoring service, which moves
  * the ward boards that follow the queue, and closed temperature alert Cases
- * to RoomTemperatureRearmJob. (Patient boards no longer follow
- * Cases: since firmware 2.5.0 their motor follows their own room.) Contains no
+ * to RoomTemperatureRearmJob. (Patient boards do not follow Cases: their
+ * motor follows their own sensor.) Contains no
  * business logic of its own: its whole job is to translate trigger context
  * (Trigger.new, Trigger.old) into a plain collection the service can act on,
  * because a service that takes plain collections can be unit tested without

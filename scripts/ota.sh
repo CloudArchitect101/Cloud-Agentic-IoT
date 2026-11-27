@@ -107,9 +107,8 @@ create_job() {
 # So once a new job exists, the earlier ones of the same kind for the same
 # group are cancelled. Without --force: a board already installing one
 # finishes, only the boards that have not started it lose it. A failure here
-# never fails the run, because the new job is out either way, and from
-# patient-monitor 2.8.0 a board also skips a release older than its own build
-# (OtaVersion.h).
+# never fails the run, because the new job is out either way, and a board
+# also skips a release older than its own build (OtaVersion.h).
 cancel_superseded() {
   local group="$1" prefix="$2" keep="$3" kind="$4" plural olds old cancelled=0
   case "$kind" in try) plural=tries ;; *) plural="${kind}s" ;; esac
@@ -292,13 +291,13 @@ watch_job() {   # watch_job <job id> <number of boards> <sketch> <version>
     sleep "${TRY_POLL_SECONDS:-10}"
   done
   [ "$bad" -eq 0 ] || die "$bad board(s) did not install $version. The detail beside each one says why."
-  # From firmware 2.2.0 a board answers SUCCEEDED ("running <version>") only
-  # once the new build has started and reconnected, and FAILED when it came
-  # back on another build. Older builds answer SUCCEEDED ("rebooting") just
-  # before they restart, so for those the answer alone does not show that the
-  # new build started.
+  # A board answers SUCCEEDED ("running <version>") only once the new build
+  # has started and reconnected, and FAILED when it came back on another
+  # build. A SUCCEEDED "rebooting" comes from tooling or a build that answers
+  # before it restarts, so then the answer alone does not show that the new
+  # build started.
   [ -z "$restarting" ] \
-    || note "Answered just before restarting, as firmware older than 2.2.0 does:$restarting. The serial console shows whether the new build started: aws: connected, $sketch v$version"
+    || note "Answered just before restarting, before the new build started:$restarting. The serial console shows whether the new build started: aws: connected, $sketch v$version"
 }
 
 cmd_promote() {
@@ -317,7 +316,7 @@ cmd_promote() {
     || die "$sketch $version was never published, so there is nothing to promote."
 
   # The newest finished canary job for exactly this version. The trailing dash
-  # keeps 2.0.1 from matching a 2.0.10 job.
+  # keeps 1.0.1 from matching a 1.0.10 job.
   prefix="ota-$sketch-${version//./-}-"
   job=$(aws iot list-jobs --status COMPLETED \
           --query "jobs[?starts_with(jobId, '$prefix')].jobId" --output json | jq -r 'sort | last // empty')
@@ -393,8 +392,7 @@ cmd_status() {
 # type's fleet group carries the setting: boards that are offline get it when
 # they reconnect, boards added to the group later get it when they join, and
 # each keeps it in NVS. The group's previous interval job is cancelled once the
-# new one exists. Boards on firmware older than 2.1.0 cannot apply it and
-# answer FAILED, so send it once the fleet runs 2.1.0 (in Prod: after promote).
+# new one exists.
 cmd_interval() {
   local env="$1" sketch="${2:-}" seconds="${3:-}" group job_id doc old
   [ -n "$sketch" ] || die "Usage: scripts/ota.sh interval <Dev|Prod> <sketch> [seconds]"

@@ -34,12 +34,11 @@ const MAX_DEVICES_PER_REQUEST = 200;
 // the patient monitor also reads "command" as the operation, so an extra
 // field is not harmless padding, it can change what the board does.
 const OPERATIONS = {
-  // DISPENSE_MEDICATION was retired on Nov 10: the monitored device is a
-  // temperature alert, not a dispenser, so a stale Device Command asking for
-  // it is refused here as an unknown operation.
+  // The monitored device is a temperature alert, not a dispenser, so
+  // DISPENSE_MEDICATION is refused here as an unknown operation.
   RESTART: { fields: {} },
-  // Retired with firmware 2.5.0 (the motor follows the device's own sensor),
-  // still accepted so an old Device Command can be answered.
+  // The motor follows the device's own sensor; the board answers this as
+  // done and ignores it.
   CASE_ALERT: { fields: { active: { type: 'boolean', required: true } } },
   // WiFiCredentialPushJob: one network, every room on it. WPA2 passphrases are
   // 8 to 63 characters, or 64 hex digits; an open network has none.

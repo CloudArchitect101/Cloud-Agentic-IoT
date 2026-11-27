@@ -155,11 +155,11 @@ Resources:
             Condition:
               Bool:
                 iot:Connection.Thing.IsAttached: 'true'
-          # Firmware 2.1.0 sends readings through Basic Ingest, straight to the
+          # The firmware sends readings through Basic Ingest, straight to the
           # patient-vitals rule (TELEMETRY_RULE in CloudAgenticDevice.h; its
-          # RuleName in lambda/patient-vitals/cloudformation.yaml). Older
-          # firmware still publishes to device/<thing>/telemetry, so both stay
-          # allowed until every board runs 2.1.0 or later.
+          # RuleName in lambda/patient-vitals/cloudformation.yaml). The plain
+          # device/<thing>/telemetry topic, which the rule also reads, stays
+          # allowed too.
           - Effect: Allow
             Action: iot:Publish
             Resource:
@@ -167,12 +167,12 @@ Resources:
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/telemetry'
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/status'
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/$aws/things/${!iot:Connection.Thing.ThingName}/jobs/*'
-              # Firmware 2.2.0 live mode: a reading every few seconds while
+              # Live mode: a reading every few seconds while
               # someone has the board's card open in Salesforce. The browser
               # card subscribes to this topic itself, through LiveViewerRole.
               # No rule reads it, so nothing stores these readings.
               - !Sub 'arn:${AWS::Partition}:iot:${AWS::Region}:${AWS::AccountId}:topic/device/${!iot:Connection.Thing.ThingName}/live'
-              # Firmware 2.2.0 answers each command that carries a commandId
+              # The firmware answers each command that carries a commandId
               # here: done, failed or refused. The rule
               # cloud_agentic_iot_device_command_ack (patient-vitals stack)
               # reads it and records the answer on the Device Command.

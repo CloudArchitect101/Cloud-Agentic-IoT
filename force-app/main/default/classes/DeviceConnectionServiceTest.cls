@@ -264,7 +264,7 @@ private class DeviceConnectionServiceTest {
 
     /* ------------------------------------- no case alert on reconnect */
 
-    // Since firmware 2.5.0 a patient board's motor follows its own room, so a
+    // A patient board's motor follows its own sensor, so a
     // board coming online is sent no CASE_ALERT.
     private static Integer alerts() {
         return [SELECT COUNT() FROM Device_Command__c WHERE Command__c = 'CASE_ALERT'];
