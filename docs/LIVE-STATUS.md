@@ -192,7 +192,7 @@ The pieces ship with the rest of the project; this is what to check.
    publish to `device/<thing>/live`.
 3. **Flash the boards** with the current firmware (`scripts/firmware.sh
    flash patient-monitor`, once per board). Later builds reach them over the
-   air: in a trial project ([TRY-IT.md](TRY-IT.md)),
+   air: in an AWS project ([why](INSTALL-GUIDE.md#aws-project-or-regular-account)),
    `scripts/ota.sh try Dev patient-monitor`; through the pipelines, a release.
 4. **Permissions.** People who use the card need the **Device Platform Admin**
    permission set and **External Credential Principal Access** to the

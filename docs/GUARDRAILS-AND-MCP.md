@@ -185,7 +185,7 @@ it. It needs [`uv`](https://docs.astral.sh/uv/) (`brew install uv`).
 2. **Credentials.** The profile you deploy with can usually call the URL
    already: `iot-operator` holds `lambda:*` (`scripts/aws-project-policy.json`),
    and so does an AWS project's own `aws login` profile in
-   [TRY-IT.md](TRY-IT.md). For a client that should hold nothing else, add a
+   the [Quick Install Guide](INSTALL.md#step-4). For a client that should hold nothing else, add a
    profile that assumes `McpClientRole` to `~/.aws/config`. This has not been
    tried with an `aws login` profile as the `source_profile`. If the proxy
    cannot get credentials that way, pass the `aws login` profile directly:
