@@ -3,8 +3,8 @@
  * OtaVersion - whether an OTA job would take a board back to an older build.
  *
  * AWS IoT hands a board its pending jobs oldest first. A board that was
- * offline while two releases went out (2.7.0, then 2.8.0) would otherwise
- * install 2.7.0 and then 2.8.0, or, once it runs 2.8.0, get a stale 2.7.0 job
+ * offline while two releases went out (1.1.0, then 1.2.0) would otherwise
+ * install 1.1.0 and then 1.2.0, or, once it runs 1.2.0, get a stale 1.1.0 job
  * and go back. The pipeline cancels a release's older unstarted jobs
  * (scripts/ota.sh), and this is the board's own guard for what that cannot
  * reach: a job a board had already started, a job created by older tooling,
@@ -13,7 +13,7 @@
  * Only a plain release (MAJOR.MINOR.PATCH) is ever skipped. A try
  * (<version>-try.<n>, scripts/ota.sh try) is a person's deliberate test on a
  * Dev board, so it always installs. A release of the same number as the try a
- * board runs installs too: 2.8.0-try.3 is older than 2.8.0.
+ * board runs installs too: 1.2.0-try.3 is older than 1.2.0.
  *
  * Plain C++, no Arduino, so test/firmware checks it on any machine.
  */

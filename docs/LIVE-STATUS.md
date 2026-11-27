@@ -32,9 +32,8 @@ connect and disconnect events:
 They change only when the board connects or disconnects, so they work whether
 or not anyone has the card open, and a list view or report can filter on them.
 
-(A fourth, Case Alert, is retired: since firmware 2.5.0 a monitored board's
-servo follows its own sensor's temperature, not Cases. See
-[Chapters, chapter 03](CHAPTERS.md#temperature-alert-demo-rule).)
+(A monitored board's servo follows its own sensor's temperature, not Cases.
+See [Chapters, chapter 03](CHAPTERS.md#temperature-alert-demo-rule).)
 
 **On the card**, while it is on screen:
 
@@ -48,7 +47,7 @@ servo follows its own sensor's temperature, not Cases. See
 
 Two notices explain the cases where live readings do not arrive:
 
-- *Waiting for the board: it may be offline, or on firmware older than 2.2.0.*
+- *Waiting for the board: it may be offline.*
   The card is connected to AWS IoT but the board has sent nothing live.
 - *Live connection unavailable; showing stored readings every 5 s.* The
   browser could not hold its live connection, so the card shows the latest
@@ -89,7 +88,7 @@ The card becomes visible
        2. returns a signed WebSocket link, valid 15 minutes, that may only
           subscribe to device/<thing>/live, plus the latest stored reading
   -> the card connects to AWS IoT over MQTT on a WebSocket and subscribes
-Board (firmware 2.2.0): a reading to device/<thing>/live every 2 s for 15 min,
+Board: a reading to device/<thing>/live every 2 s for 15 min,
   on top of its stored reading every 30 s
 The card calls start again every 10 min while visible
 Tab hidden or card closed -> the card disconnects; the board stops by itself
@@ -104,7 +103,7 @@ exactly as before.
 The link is a credential until it expires, so it is scoped tightly: one
 client ID, subscribe and receive on one board's live topic, no publishing,
 15 minutes. Nothing logs it, in the Lambda, in Apex or in the browser. The
-firmware side is in [firmware/README.md, Live mode](../firmware/README.md#live-mode-readings-while-someone-watches-from-220).
+firmware side is in [firmware/README.md, Live mode](../firmware/README.md#live-mode-readings-while-someone-watches).
 
 ## Speeds
 
@@ -191,11 +190,10 @@ The pieces ship with the rest of the project; this is what to check.
    and Lambda. The `queue-relay` stack carries `POST /device-live`, the role
    behind the card's link, and the device policy line that lets a board
    publish to `device/<thing>/live`.
-3. **Update the boards to firmware 2.2.0.** Older boards ignore the LIVE
-   command, so their card waits (the connection fields work with any
-   firmware). In a trial project ([TRY-IT.md](TRY-IT.md)),
-   `scripts/ota.sh try Dev patient-monitor` sends the build to every board
-   over the air; through the pipelines, a release does.
+3. **Flash the boards** with the current firmware (`scripts/firmware.sh
+   flash patient-monitor`, once per board). Later builds reach them over the
+   air: in a trial project ([TRY-IT.md](TRY-IT.md)),
+   `scripts/ota.sh try Dev patient-monitor`; through the pipelines, a release.
 4. **Permissions.** People who use the card need the **Device Platform Admin**
    permission set and **External Credential Principal Access** to the
    AWS_IoT_Relay principal, the same access re-provisioning needs
@@ -212,8 +210,8 @@ The pieces ship with the rest of the project; this is what to check.
 
 | You see | Likely cause | Check |
 |---|---|---|
-| *Waiting for the board...* | The board is offline, runs firmware older than 2.2.0, or the `queue-relay` stack predates the `/live` policy line | The serial console prints `live: every 2 s for 15 min` when the card opens. If it does not, check `aws: connected, patient-monitor v2.2.0` after a restart |
-| *no sensor* on an Internal Device | Expected: a ward board usually has no DHT11. From 2.4.0 it streams anyway and says so | The serial console says `DHT11: no sensor answers` once |
+| *Waiting for the board...* | The board is offline, or the `queue-relay` stack predates the `/live` policy line | The serial console prints `live: every 2 s for 15 min` when the card opens. If it does not, check `aws: connected, patient-monitor v1.0.0` after a restart |
+| *no sensor* on an Internal Device | Expected: a ward board usually has no DHT11. It streams anyway and says so | The serial console says `DHT11: no sensor answers` once |
 | *Live connection unavailable; showing stored readings every 5 s* | The browser could not keep a WebSocket to AWS IoT: no Trusted URL for the Region, or a network that blocks it | The browser console shows a CSP error naming `wss://...iot...` |
 | *Live status is unavailable. Salesforce could not reach the device API...* | No principal access to the AWS_IoT_Relay external credential, or the device API is unreachable | Re-provisioning the same Asset fails the same way |
 | *...has no device-live route yet* | The `queue-relay` stack is older than this feature | Deploy it |
@@ -255,7 +253,7 @@ them.
 
 | Piece | Files |
 |---|---|
-| Board | `firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp` (`setLive`, `publishLive`), `DeviceTiming.h` (the limits), [firmware/README.md](../firmware/README.md#live-mode-readings-while-someone-watches-from-220) |
+| Board | `firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp` (`setLive`, `publishLive`), `DeviceTiming.h` (the limits), [firmware/README.md](../firmware/README.md#live-mode-readings-while-someone-watches) |
 | Presence | `lambda/device-presence/`, the presence section of `lambda/patient-vitals/cloudformation.yaml`, `force-app/main/default/classes/DeviceConnectionService.cls` |
 | Live link | `lambda/device-live/`, `LiveViewerRole` and the device policy in `lambda/queue-relay/cloudformation.yaml`, `force-app/main/default/classes/DeviceLiveController.cls` |
 | Card | `force-app/main/default/lwc/deviceLiveCard/` (`mqtt.js` is a small MQTT 3.1.1 client for the browser) |

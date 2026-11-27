@@ -462,7 +462,7 @@ class OtaTryTest(ScriptFixture):
         self.assertRegex(out, rf'Test7\s+SUCCEEDED\s+running {re.escape(version)}')
         self.assertRegex(out, rf'Test55\s+SUCCEEDED\s+running {re.escape(version)}')
         self.assertNotIn('aws: connected', out)
-        self.assertNotIn('older than 2.2.0', out)
+        self.assertNotIn('before the new build started', out)
 
     def test_names_only_the_boards_that_answered_before_restarting(self):
         version = f'{self.base}-try.1'
@@ -470,7 +470,7 @@ class OtaTryTest(ScriptFixture):
         self.state['details'] = {'Test7 SUCCEEDED': f'running {version}', 'Test55 SUCCEEDED': 'rebooting'}
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 0, out)
-        self.assertIn('as firmware older than 2.2.0 does: Test55.', out)
+        self.assertIn('Answered just before restarting, before the new build started: Test55.', out)
         self.assertIn(f'aws: connected, patient-monitor v{version}', out)
 
     def test_a_board_that_came_back_on_its_old_build_fails_the_try(self):

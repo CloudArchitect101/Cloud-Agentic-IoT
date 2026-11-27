@@ -831,8 +831,7 @@ Resources:
   # ------------------------------------------------------------------ command answers
 
   # What each board said about a command it was sent, on the Device Command
-  # record: Status Acked, or Failed with why. A board on firmware 2.2.0 or
-  # later answers a command that carries a commandId (DeviceCommandSendJob
+  # record: Status Acked, or Failed with why. A board answers a command that carries a commandId (DeviceCommandSendJob
   # sends the record's Id as one) on device/<thing>/ack, once per command.
   # The answers wait in a queue of their own, so an org that is down or out of
   # API calls delays them instead of losing them.

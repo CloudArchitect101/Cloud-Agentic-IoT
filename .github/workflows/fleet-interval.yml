@@ -8,8 +8,6 @@ name: Fleet reading interval
 # Run it from the branch of the environment to change, Dev or Prod. Left
 # empty, the interval comes from that branch's config/<env>.json
 # (devices.<sketch>.telemetrySeconds), so the reviewed file stays the record.
-# Boards on firmware older than 2.1.0 cannot apply it: in Prod, run it after
-# the 2.1.0 promote.
 on:
   workflow_dispatch:
     inputs:

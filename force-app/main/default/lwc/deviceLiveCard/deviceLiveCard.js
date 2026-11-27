@@ -43,7 +43,7 @@ const QUIET_MS = 15 * 1000;
 const CLOCK_MS = 1000;               // for "updated N s ago"
 const SOCKET_OPEN = 1;               // WebSocket.OPEN
 
-const WAITING = 'Waiting for the board: it may be offline, or on firmware older than 2.2.0.';
+const WAITING = 'Waiting for the board: it may be offline.';
 const FALLEN_BACK = 'Live connection unavailable; showing stored readings every 5 s';
 
 export default class DeviceLiveCard extends LightningElement {

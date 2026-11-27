@@ -16,7 +16,7 @@ Bulk (AliExpress, 100+): roughly half. Dev/demo software cost is $0 — Develope
 
 ## 2. AWS — per device per month (USD, us-east-1/west-2)
 
-86,400 readings a month per device. From firmware 2.1.0, boards send them through IoT Basic Ingest, and the pipeline handles them in batches of 1,000 (Prod settings), so most lines are now per batch rather than per reading. [SCALING.md](SCALING.md) has the same model for a million devices, with a simulation behind it.
+86,400 readings a month per device. Boards send them through IoT Basic Ingest, and the pipeline handles them in batches of 1,000 (Prod settings), so most lines are now per batch rather than per reading. [SCALING.md](SCALING.md) has the same model for a million devices, with a simulation behind it.
 
 | Line | Math | $/mo |
 |---|---|---|

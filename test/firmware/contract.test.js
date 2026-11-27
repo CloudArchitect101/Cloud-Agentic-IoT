@@ -125,7 +125,7 @@ test('presence leaves out the browsers that watch live readings', () => {
   assert.match(presenceLambda, /clientId\.startsWith\('live-'\)/);
 });
 
-// Device commands (firmware 2.2.0). A command from Salesforce carries its
+// Device commands. A command from Salesforce carries its
 // record's Id as commandId, and the board answers it on device/<thing>/ack;
 // the record shows Acked or Failed only once that answer reaches it. Nothing
 // at run time says the pieces drifted apart: an answer the device policy does
@@ -200,10 +200,10 @@ test('a commandId the board answers is one both command Lambdas take, and no oth
   }
 });
 
-// The case alert (firmware 2.3.0 to 2.4.0) is retired: Salesforce no longer
-// sends it, and since 2.5.0 the board answers it as done and ignores it, so
-// a command still sent through the device API is Acked, not Failed.
-test('CASE_ALERT is retired in Salesforce and acknowledged by the patient monitor', () => {
+// No case alert: Salesforce never sends one, and the board answers it as
+// done and ignores it, so a command sent through the device API is Acked,
+// not Failed.
+test('CASE_ALERT is never sent by Salesforce and acknowledged by the patient monitor', () => {
   const sketch = read('firmware/patient-monitor/patient-monitor.ino');
   const sendJob = read('force-app/main/default/classes/DeviceCommandSendJob.cls');
   const picklist = read('force-app/main/default/objects/Device_Command__c/fields/Command__c.field-meta.xml');
@@ -229,18 +229,7 @@ test('the patient monitor turns its motor from its own room at 30 C, not from Ca
   assert.doesNotMatch(sketch, /setCaseAlert/);
 });
 
-test('the namespace the patient monitor clears of an old case alert is its own', () => {
-  const sketch = read('firmware/patient-monitor/patient-monitor.ino');
-  const library = read('firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp');
-  const ours = sketch.match(/#define NVS_CASE_ALERT "([^"]+)"/)[1];
-  const theirs = [...library.matchAll(/#define NVS_\w+ +"([^"]+)"/g)].map((match) => match[1]);
-  assert.ok(theirs.length >= 3, 'the library names its NVS namespaces');
-  assert.ok(!theirs.includes(ours), `${ours} is one of the library's namespaces`);
-  // NVS namespace names are at most 15 characters.
-  assert.ok(ours.length <= 15, ours);
-});
-
-// One firmware for every board (2.4.0). The queue relay sends QUEUE_DEPTH to
+// One firmware for every board. The queue relay sends QUEUE_DEPTH to
 // every Internal Device board, and those boards run the patient-monitor
 // build: a field one side spells differently leaves the nurse station still.
 test('QUEUE_DEPTH and its fields are the same in the queue relay and the patient monitor', () => {

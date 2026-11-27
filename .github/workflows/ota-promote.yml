@@ -16,7 +16,7 @@ on:
         type: choice
         options: [patient-monitor]
       version:
-        description: Version the canary ran, e.g. 2.0.1
+        description: Version the canary ran, e.g. 1.0.1
         required: true
 
 permissions:

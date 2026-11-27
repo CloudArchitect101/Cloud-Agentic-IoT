@@ -10,7 +10,7 @@
  * in a fridge, in a room. On a ward's internal board such as a
  * nurse-station indicator, it turns while any Case waits in the queue, faster as
  * it fills (QUEUE_DEPTH, sent by CaseQueueMonitorService), and from its first
- * QUEUE_DEPTH on its own DHT11 no longer turns it (2.7.0). Which of these a
+ * QUEUE_DEPTH on its own DHT11 no longer turns it. Which of these a
  * board is told depends on its Asset's record type in Salesforce, not on its
  * firmware, so one OTA build serves every board. A board without a DHT11, as
  * an internal one is, says so once and sends no readings.
@@ -27,7 +27,6 @@
 #include <CloudAgenticDevice.h>
 #include <DHT.h>
 #include <ESP32Servo.h>
-#include <Preferences.h>
 #include "ServoSweep.h"
 #include "ServoDemand.h"
 #include "SensorPresence.h"
@@ -35,7 +34,7 @@
 // Raise this to ship a change. The pipeline publishes each version once and a
 // board installs only a version it is not already running, so a change under
 // the same number never reaches a board; the pull request checks fail it.
-#define FIRMWARE_VERSION "2.8.0"
+#define FIRMWARE_VERSION "1.0.0"
 
 // Seconds between readings until the fleet sets its own. The fleet's value
 // (scripts/ota.sh interval, or SET_TELEMETRY_INTERVAL through the device
@@ -60,13 +59,8 @@ DHT dht(DHT_PIN, DHT11);
 Servo motor;
 pm::SensorPresence sensor;
 
-// Up to 2.4.0 the board kept a Case alert here. 2.5.0 follows its own
-// sensor's temperature instead, so it clears what an older version left, once, at
-// start: a stale "on" must not keep the motor turning. The library's
-// namespaces are identity, wifi and config; this one was the sketch's own.
-// Nothing else is kept: the sensor is read again within seconds, and
-// Salesforce sends the queue's depth every time the board connects.
-#define NVS_CASE_ALERT "caseAlert"
+// The sketch keeps nothing in NVS: the sensor is read again within seconds,
+// and Salesforce sends the queue's depth every time the board connects.
 pm::ServoDemand demand;
 
 // How often the board reads its DHT11 for the motor, between the readings it
@@ -83,16 +77,6 @@ void park() {
 #else
   motor.write(0);
 #endif
-}
-
-void clearOldCaseAlert() {
-  Preferences old;
-  old.begin(NVS_CASE_ALERT, false);   // read-write creates the namespace, so no "not found" log
-  if (old.isKey("active")) {
-    old.clear();
-    Serial.println("case alert: retired in 2.5.0, the motor follows the sensor's temperature");
-  }
-  old.end();
 }
 
 // Sets the servo going, faster or slower, or stops it, for what the
@@ -154,11 +138,11 @@ void driveServo() {
 // does not know: the library answers the command with that, done or refused.
 bool onCommand(JsonDocument& doc) {
   const char* op = doc["operation"] | doc["command"] | "";
-  // DISPENSE_MEDICATION was retired in 2.6.0: this is a temperature alert,
-  // not a dispenser, so the board refuses it as an operation it does not know.
+  // This is a temperature alert, not a dispenser: an operation it does not
+  // know, such as DISPENSE_MEDICATION, is refused.
   if (strcmp(op, "CASE_ALERT") == 0) {
-    // Retired in 2.5.0: the motor follows the sensor, not the Cases. Answered
-    // as done, so an org that still sends it sees no failed command.
+    // The motor follows the sensor, not the Cases. Answered as done, so a
+    // command sent through the device API is not shown as failed.
     Serial.println("case alert: ignored, the motor follows the sensor's temperature");
     return true;
   }
@@ -195,7 +179,6 @@ void setup() {
   dht.begin();
   motor.attach(SERVO_PIN);
   park();
-  clearOldCaseAlert();
 
   device.onCommand(onCommand);
   if (!device.begin()) return;   // provisioning mode; begin() reboots on success

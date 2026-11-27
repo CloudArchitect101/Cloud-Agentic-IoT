@@ -10,18 +10,17 @@ const { checkCommand } = require('@cloud-agentic-iot/shared/guardrails');
 const iot = new IoTDataPlaneClient({});
 
 // A command's id: 1 to 40 letters, digits, _ or -, such as the 18-character
-// Id of the Device Command record DeviceCommandSendJob sends. A board on
-// firmware 2.2.0 or later answers a command that carries one on
+// Id of the Device Command record DeviceCommandSendJob sends. A board
+// answers a command that carries one on
 // device/<thing>/ack, and device-command-ack records the answer on the command
 // it names. The board (DeviceCommands.h) and device-command-ack hold the same
 // limits, and test/firmware/contract.test.js checks that all three agree.
 const COMMAND_ID = /^[A-Za-z0-9_-]{1,40}$/;
 exports.COMMAND_ID = COMMAND_ID;
 
-// Turns a patient monitor's motor on or off: { operation: 'CASE_ALERT',
-// active: true | false }. Salesforce sends it when a device's first Case in
-// the care team queue opens and when its last one leaves (CaseAlertService).
-// firmware/patient-monitor holds the same names, and
+// { operation: 'CASE_ALERT', active: true | false }. Salesforce does not send
+// it: a monitored board's motor follows its own sensor, and the board answers
+// it as done and ignores it. firmware/patient-monitor holds the same names, and
 // test/firmware/contract.test.js checks that they agree.
 const CASE_ALERT = 'CASE_ALERT';
 exports.CASE_ALERT = CASE_ALERT;

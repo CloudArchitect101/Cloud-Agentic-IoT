@@ -268,7 +268,7 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | Check | Where | Expect |
 |---|---|---|
 | Device is publishing | S3 → the patient-vitals archive bucket, `readings/date=<today>/`. Readings go through Basic Ingest, straight to the rule, so the MQTT test client does not see them | A new `.ndjson.gz` object for each batch |
-| Device is online | The device's Asset in the Cloud Agentic IoT app ([LIVE-STATUS.md](LIVE-STATUS.md)) | Connection `Online`, and on the Live Status card a reading every 2 s (firmware 2.2.0) |
+| Device is online | The device's Asset in the Cloud Agentic IoT app ([LIVE-STATUS.md](LIVE-STATUS.md)) | Connection `Online`, and on the Live Status card a reading every 2 s |
 | Costs and limits show | The app's Home tab | This month's AWS spend against its budget, and the org's limits by group, read when the page loads |
 | Device accepts commands | On the Asset, **Send Command** with `RESTART`. By hand: publish `{ "operation": "RESTART", "commandId": "by-hand-1" }` to `device/<thing>/command` | The board restarts. From the Asset, the Device Command goes `Sent`, then `Acked` within seconds. By hand, the board's answer shows on `device/<thing>/ack` in the MQTT test client; it answers only a command that carries a `commandId` |
 | Ingestion works | `Patient_Vitals__c` in Salesforce | Rows appearing |
@@ -276,7 +276,7 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
 | The agent acts | The agent's panel in Lightning, as a holder of `Patient_Care_Agent`: ask for a device's latest readings, then escalate | The readings, then a Case with `Origin = Agentforce` in Care_Team_Queue |
 | High temperature Case | Warm the DHT11 above 30 C, for example under an arm (with `RoomTempAlert` on, [TRY-IT.md](TRY-IT.md#warm-the-sensor-get-a-high-temperature-alert)) | A Case `High temperature ... C on <device>` with Origin `Room Temperature Rule` in Care_Team_Queue, no Device Command, and the board sweeping until a reading is below 30 C |
-| Temperature alert motor | Warm the DHT11 to 30 C on a monitored device (firmware 2.5.0 or later) | The board's servo sweeps back and forth within about 5 s, decided on the board with no Case, and stops at the first reading below 30 C |
+| Temperature alert motor | Warm the DHT11 to 30 C on a monitored device | The board's servo sweeps back and forth within about 5 s, decided on the board with no Case, and stops at the first reading below 30 C |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
 
 The Asset's Connection field, its Live Status card and **Send Command** need a device provisioned from Salesforce (chapter 13), whose Asset carries its Thing ARN. On an Asset made by hand in Stage 3, Connection stays *Not reported yet*, the card says the device has no AWS IoT Thing, and a command fails as not provisioned. The by-hand publish works either way.
