@@ -123,4 +123,23 @@ private class DataCloudValueControllerTest {
             '{"data":[["Test8"]],"metadata":{"device_id__c":{}}}');
         Assert.areEqual('Test8', rows[0].get('device_id__c'));
     }
+
+    @IsTest
+    static void rowsAreCopiedStraightFromTheQueryOutput() {
+        List<Object> data = new List<Object>{
+            new Map<String, Object>{ 'device_id__c' => 'Test8', 'readings__c' => 16739,
+                'last_reading_ts__c' => '2026-11-21T20:45:06.818Z', 'nested' => new Map<String, Object>{ 'a' => 1 } },
+            'not a row',
+            null
+        };
+
+        List<Map<String, Object>> rows = DataCloudValueController.copyRows(data);
+
+        Assert.areEqual(1, rows.size(), 'only rows that are maps');
+        Assert.areEqual('Test8', rows[0].get('device_id__c'));
+        Assert.areEqual(16739, rows[0].get('readings__c'));
+        Assert.areEqual('2026-11-21T20:45:06.818Z', rows[0].get('last_reading_ts__c'));
+        Assert.isTrue(rows[0].get('nested') instanceof String, 'a nested value becomes text');
+        Assert.areEqual(0, DataCloudValueController.copyRows(null).size());
+    }
 }
