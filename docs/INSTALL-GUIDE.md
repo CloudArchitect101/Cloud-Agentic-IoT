@@ -42,6 +42,10 @@ The [Quick Install Guide](INSTALL.md) is commands only. This is the why behind e
 | Pipelines (step 14): `AWS_PROFILE=iot-dev`, `SF_TARGET_ORG=iot-dev-admin` | **Gone.** Run their `export` lines again |
 | Files you made: keys in `scripts/`, the portal key in `~/Downloads` | Kept. Nothing to do |
 
+**Step 0. Parts and cases.** Every part is chosen for the code and the cases in this repo: the 38-pin ESP32 (about 55 x 28 mm) fits the hub's board bay and the gauge's cradle, the firmware reads the DHT11 on P4 and drives the servo on P5, and the bare 4-leg DHT11 fits the cuff's sensor pocket, which a breakout board does not. The bare sensor needs the 10 kΩ pull-up between its legs 1 and 2, so a soldering iron is on the list; nothing else is soldered. The packs hold spares: a DHT11 can fail after weeks of use, and three sensors cost less than one replacement shipped. Both boards run from one 2-port USB charger with a USB cable each, and the same cables flash them in step 12. The bell is iron, 36 mm across, open at the bottom, and hangs from a loop: the 36 mm hanger in the print files holds it so the needle's hammer strikes its rim. Kit cost: about CA$127 plus tax for both devices, plus about CA$20 for a spool of PLA, so about CA$75 per device. The photos in the parts table are freely licensed stand-ins ([credits](images/parts/CREDITS.md)).
+
+The print files hold the default set: the cuff for a 27 to 31 cm upper arm (`r46`), the bell on the left of the gauge and the 36 mm hanger. For another arm size (`r40` for 24 to 27 cm, `r52` for 31 to 35 cm), or a servo that turns clockwise and needs the `bell-right` parts, swap that part in the slicer: every part is also a single STL in [`hardware/cases/stl`](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases/stl). The [cases README](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases) explains each part, how to check the servo's direction before printing, and the assembly. PLA is enough, since nothing gets hot and nothing flexes; PETG or ABS also work. No part needs supports. The dial plate's art is raised in three steps (3.4, 3.8 and 4.2 mm): painting the tops is simplest, and a printer that changes filament mid-print can print them in colour instead.
+
 **Step 2. The AWS project and the org.** A project on the paid plan has a hard monthly spend limit (the lowest is $20). Its advanced features stay off: activating them removes the spend limit for good, and they matter only for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts. Why a project, and what it costs: [TRY-IT.md](TRY-IT.md#why-a-project-and-what-it-costs-you). The Bedrock check comes first because the agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account can be held from Bedrock for up to 72 hours. A new Developer Edition org comes with Agentforce and Data Cloud (Data 360), which steps 8 to 11 use. Agentforce Voice in the portal's chat needs a licence a Developer Edition lacks, so the Quick Install Guide leaves it out ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)).
 
 **Step 3. The org's features.** One pass through Setup, all before the deploy. Each switch accepts terms or can't be turned off, so it is a click of yours, and the deploy in step 6 builds on it. The patient portal needs one Customer Community licence per test patient; step 4 lists them once the terminal knows your org.
@@ -286,15 +290,7 @@ Only the device chapters (00, 03, 13) need hardware. Everything else is cloud-on
 
 ### What you need
 
-| Part | Notes |
-|---|---|
-| ESP32 development board | DOIT DEVKIT V1 or equivalent |
-| DHT11 temperature + humidity sensor | The patient-monitor's vitals source |
-| SG90 micro servo | Temperature alert motor (ch. 03) and queue indicator (ch. 03) |
-| Breadboard + jumper wires | — |
-| USB cable | Data, not charge-only — a charge-only cable is the most common "board not detected" cause |
-
-For a queue indicator that spins continuously rather than sweeping, add an **FS90R or SG90-360** continuous-rotation servo — see chapter 03.
+The parts list with links, prices and photos, and the print files for the cases: [Quick Install Guide, step 0](INSTALL.md#step-0). Why each part: [step 0 explained](#quick-install-explained) above.
 
 ### Create the Thing and its certificate
 

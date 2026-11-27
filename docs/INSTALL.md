@@ -8,6 +8,7 @@ Every feature, from a fresh clone to a working system, in order: copy each block
 
 | # | Step | Where you work |
 |---|---|---|
+| [0](#step-0) | [Order the parts and print the cases](#step-0) | <img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> Amazon + 3D printer |
 | [1](#step-1) | [Install the tools](#step-1) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Terminal |
 | [2](#step-2) | [Create the AWS project and the Salesforce org](#step-2) | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Browser |
 | [3](#step-3) | [Turn on the org's features](#step-3) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Setup |
@@ -24,7 +25,7 @@ Every feature, from a fresh clone to a working system, in order: copy each block
 | [14](#step-14) | [Dev and Prod pipelines](#step-14) | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> GitHub + terminal |
 
 > [!NOTE]
-> About two hours, plus about 20 minutes for each board.
+> About two hours, plus about 20 minutes for each board. Order and print (step 0) a few days before.
 
 > [!IMPORTANT]
 > **How to read a command block.** Every block starts with **Paste into your terminal** and how often to run it. Copy the whole block (the **Copy** button), paste it into the terminal in the `Cloud-Agentic-IoT` folder, and press Enter.
@@ -47,6 +48,61 @@ Every feature, from a fresh clone to a working system, in order: copy each block
 > export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
 > echo "AWS profile $AWS_PROFILE, org $SF_TARGET_ORG"
 > ```
+
+<a id="step-0"></a>
+
+## 0. Order the parts and print the cases
+
+Do this first: the parts take a few days to arrive, and step 12 puts them in the cases.
+
+### Parts for both devices
+
+The monitored device (arm cuff) and the corp ticket gauge (desk gauge with a bell). Prices on amazon.ca, checked Nov 27, 2026. Listings and prices change: when a link is gone, search for the part's name.
+
+| Photo | Part | Order | Used in | Price (CA$) |
+|---|---|---|---|---|
+| <img src="images/parts/esp32.jpg" alt="ESP32 development board" width="120"> | [ESP32 38-pin development board, ESP-WROOM-32, CP2102, USB-C, 2-pack](https://www.amazon.ca/dp/B0F5GG3R82) | 1 pack | both devices, 1 board each | 25.10 |
+| <img src="images/parts/dht11.jpg" alt="DHT11 temperature sensor" width="120"> | [DHT11 temperature and humidity sensor, bare 4-pin, 3 pcs](https://www.amazon.ca/dp/B0C2QBSDFQ) | 1 pack | monitored device | 6.49 |
+| <img src="images/parts/servo.jpg" alt="SG90 micro servo" width="120"> | [SG90 9 g micro servo with horns and screws, 4 pcs](https://www.amazon.ca/dp/B09CGYX76S) | 1 pack | both devices, 1 servo each | 12.99 |
+| <img src="images/parts/resistor.jpg" alt="10 kilo-ohm resistor" width="120"> | [10 kΩ 1/4 W resistor, 200 pcs](https://www.amazon.ca/dp/B0C2Q2JS7D) | 1 pack | monitored device, across DHT11 legs 1 and 2 | 7.99 |
+| <img src="images/parts/jumpers.jpg" alt="Dupont jumper wires" width="120"> | [ELEGOO 120 Dupont jumper wires, M-F, M-M, F-F, 20 cm](https://www.amazon.ca/dp/B01EV70C78) | 1 kit | both devices | 12.99 |
+| <img src="images/parts/usbc.jpg" alt="USB-C cable" width="120"> | [USB-A to USB-C cable, 3 ft, data and charging, 2-pack](https://www.amazon.ca/dp/B0BVLVLGJ2) | 1 pack | both devices: flashing and power | 8.35 |
+| <img src="images/parts/charger.jpg" alt="USB wall charger" width="120"> | [USB wall charger, 2 USB-A ports, 5 V 2.1 A](https://www.amazon.ca/dp/B0DM5T854F) | 1 | both devices: power | 11.99 |
+| <img src="images/parts/solder.jpg" alt="Soldering iron" width="120"> | [HANDSKIT 60 W soldering iron kit with solder and stand](https://www.amazon.ca/dp/B075KLBQCV) | 1 kit | monitored device: the resistor | 23.99 |
+| <img src="images/parts/bell.jpg" alt="Small metal bell" width="120"> | [PATIKIL mini cow bells, 36 mm, silver, 4 pcs](https://www.amazon.ca/dp/B0CWNGM2FJ) | 1 pack | corp ticket gauge | 17.39 |
+| | **Total** | | | **127.28** + tax |
+
+Photo credits: [part photos](images/parts/CREDITS.md).
+
+### Print the cases
+
+<img src="images/parts/printed-cuff.jpg" alt="Printed monitored device: arm cuff with the hub" width="240"> <img src="images/parts/printed-gauge.jpg" alt="Printed corp ticket gauge with the bell" width="240">
+
+1. Download the print file for your printer from [`hardware/cases/print-beds`](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases/print-beds). Each file holds every part, laid out:
+
+   | Printer | Open in Bambu Studio, OrcaSlicer or PrusaSlicer |
+   |---|---|
+   | Bambu Lab X2D | `x2d-one-plate/all-parts-x2d-plate-standing.3mf`: both devices in one print |
+   | Bambu Lab A1 mini (180 x 180 mm) | `a1mini-two-beds/a1mini-oneset-bed1.3mf` and `a1mini-oneset-bed2.3mf` |
+   | Any 220 x 220 mm bed | `cuff-220x220-bed1.3mf`, `gauge-220x220-bed1.3mf` and `gauge-220x220-bed2.3mf` |
+
+2. Slice with these settings and print:
+
+   | Setting | Value |
+   |---|---|
+   | Plastic | PLA, white: [ELEGOO PLA 1.75 mm, 1 kg](https://www.amazon.ca/dp/B0BM4QWPK9), CA$19.54. One spool covers both devices (about 270 g) |
+   | Layer height | 0.2 mm |
+   | Walls | 3 |
+   | Infill | 20% |
+   | Supports | Off |
+   | Brim | 8 to 10 mm on the standing dial plate |
+
+3. Paint the raised art on the dial plate: the CLEAR mark green, the sweep arc red, the words and bell black.
+
+> [!TIP]
+> **Check before you go on.** The parts are ordered, and you have the printed cuff, sensor lid, hub, hub lid and wiper, and the dial plate, tub, needle, mast and hanger.
+
+[Step map](#step-map) · [1. Install the tools →](#step-1)
 
 <a id="step-1"></a>
 
@@ -74,7 +130,7 @@ On Linux or Windows, the same tools: [SETUP.md §0](SETUP.md#0-prerequisites--in
 > [!TIP]
 > **Check before you go on.** Each of these prints a version at least as new as the table: `node --version`, `sf --version`, `aws --version`, `jq --version`, `uv --version`, `gh --version`. `arduino-cli core list` shows `esp32:esp32`.
 
-[Step map](#step-map) · [2. Create the AWS project and the Salesforce org →](#step-2)
+[← 0. Order the parts and print the cases](#step-0) · [Step map](#step-map) · [2. Create the AWS project and the Salesforce org →](#step-2)
 
 <a id="step-2"></a>
 
@@ -503,7 +559,7 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
 
 Two boards: the monitored device (this guide calls it `PatientExternalESP32`) and the corp ticket gauge (`CompanyInternalESP32`). Do 1 to 4 for each, then 5 once.
 
-1. Get the parts ([list](INSTALL-GUIDE.md#what-you-need)) and wire them as drawn: each wire ends on the pin printed on the board.
+1. Take the parts and cases from [step 0](#step-0), wire them as drawn (each wire ends on the pin printed on the board), and put them in the cases as the [case assembly](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases#1-monitored-device-arm-cuff) shows.
 
    ![Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers](images/wiring-monitored-device.svg)
 

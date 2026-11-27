@@ -77,7 +77,7 @@ test('every Quick install step has its anchor, a step map row and Previous / Nex
   for (const n of steps) {
     assert.match(s, new RegExp(`<a id="step-${n}"></a>\\s*\\n## ${n}\\. `), `step ${n} anchor sits right above its heading`);
     assert.match(s, new RegExp(`^\\| \\[${n}\\]\\(#step-${n}\\) \\|`, 'm'), `step ${n} has a step map row`);
-    if (n < steps.length) assert.ok(s.includes(`](#step-${n + 1})`), `step ${n} links on to step ${n + 1}`);
+    if (n < Math.max(...steps)) assert.ok(s.includes(`](#step-${n + 1})`), `step ${n} links on to step ${n + 1}`);
   }
 });
 
