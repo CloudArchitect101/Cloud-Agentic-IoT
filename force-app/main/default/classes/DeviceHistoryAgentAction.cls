@@ -299,7 +299,7 @@ public with sharing class DeviceHistoryAgentAction {
         parts.add(res.lastReadingAt == null
             ? 'Data Cloud holds no reading for this device.'
             : 'Newest reading in Data Cloud: ' + res.lastReadingAt.formatGmt('yyyy-MM-dd HH:mm') + ' UTC ('
-                + res.lastReadingAgeMinutes + ' minutes ago).');
+                + ago(res.lastReadingAgeMinutes) + ').');
         return String.join(parts, ' ');
     }
 
@@ -345,6 +345,18 @@ public with sharing class DeviceHistoryAgentAction {
         return at.formatGmt('yyyy-MM-dd HH:mm:ss');
     }
 
+    /** An age people read at a glance: minutes, then hours, then days. */
+    @TestVisible
+    private static String ago(Integer minutes) {
+        if (minutes == null || minutes < 90) {
+            return (minutes == null ? 0 : minutes) + ' minutes ago';
+        }
+        if (minutes < 48 * 60) {
+            return 'about ' + Decimal.valueOf(minutes).divide(60, 0, System.RoundingMode.HALF_UP) + ' hours ago';
+        }
+        return 'about ' + Decimal.valueOf(minutes).divide(24 * 60, 0, System.RoundingMode.HALF_UP) + ' days ago';
+    }
+
     private static String round(Decimal minutes) {
         return minutes == null ? '0' : String.valueOf(minutes.round(System.RoundingMode.HALF_UP));
     }
@@ -386,11 +398,12 @@ public with sharing class DeviceHistoryAgentAction {
         if (raw == null) {
             return null;
         }
-        if (raw instanceof Datetime) {
-            return (Datetime) raw;
-        }
+        // Date first: a Date is also instanceof Datetime in Apex.
         if (raw instanceof Date) {
             return Datetime.newInstanceGmt((Date) raw, Time.newInstance(0, 0, 0, 0));
+        }
+        if (raw instanceof Datetime) {
+            return (Datetime) raw;
         }
         String text = String.valueOf(raw).trim().replace(' ', 'T');
         if (text.length() == 10) {

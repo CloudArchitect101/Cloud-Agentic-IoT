@@ -156,7 +156,7 @@ private class DeviceHistoryAgentActionTest {
         Assert.areEqual(0, res.daysWithAlerts);
         Assert.areEqual(2880, res.lastReadingAgeMinutes, 'two days quiet');
         Assert.areEqual('Test8, last 7 days: no reading at or above 30.0 C. No readings in the last 24 hours. '
-            + 'Newest reading in Data Cloud: 2026-11-25 18:00 UTC (2880 minutes ago).', res.summary);
+            + 'Newest reading in Data Cloud: 2026-11-25 18:00 UTC (about 2 days ago).', res.summary);
     }
 
     @IsTest
@@ -208,6 +208,13 @@ private class DeviceHistoryAgentActionTest {
         Assert.isTrue(res.message.startsWith('That is not a device serial number'), res.message);
         Assert.isFalse(res.message.contains('OR 1=1'), 'the input is not echoed');
         Assert.areEqual(0, fake.asked.size());
+    }
+
+    @IsTest
+    static void agesReadAsMinutesHoursOrDays() {
+        Assert.areEqual('30 minutes ago', DeviceHistoryAgentAction.ago(30));
+        Assert.areEqual('about 2 hours ago', DeviceHistoryAgentAction.ago(120));
+        Assert.areEqual('about 6 days ago', DeviceHistoryAgentAction.ago(8478));
     }
 
     @IsTest

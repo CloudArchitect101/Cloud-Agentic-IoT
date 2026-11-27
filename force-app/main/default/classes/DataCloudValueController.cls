@@ -180,13 +180,14 @@ public with sharing class DataCloudValueController {
     // Times as ISO 8601 text in UTC, numbers and text as they are.
     @TestVisible
     private static Object plain(Object value) {
-        // A Date is also instanceof Datetime in Apex: tell them apart by the
-        // text, which is yyyy-MM-dd for a Date only.
-        if (value instanceof Datetime && String.valueOf(value).length() > 10) {
-            return ((Datetime) value).formatGmt('yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z\'');
-        }
+        // A Date is also instanceof Datetime in Apex, but a Datetime is not
+        // instanceof Date, so the Date check goes first (checked in the org,
+        // Nov 27).
         if (value instanceof Date) {
             return String.valueOf((Date) value);
+        }
+        if (value instanceof Datetime) {
+            return ((Datetime) value).formatGmt('yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z\'');
         }
         return value;
     }
