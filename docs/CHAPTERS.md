@@ -13,7 +13,7 @@
 | 06 | [Multi-Agent Orchestration (MCP)](#06--multi-agent-orchestration-mcp--agent2agent) | 13 | [Device Provisioning Automation](#13--device-provisioning-automation) |
 |  |  | + | [Patient Portal: React + Enhanced Chat](#patient-portal--react-site-and-enhanced-chat) |
 
-Where a chapter needs something from [Stage 2 of the Detailed Install Guide](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) it says so, and where you can watch it working there is a **To see it work** line.
+Where a chapter needs something set up by hand ([Detailed Install Guide, what stays by hand](INSTALL-GUIDE.md#why-these-stay-manual)) it says so, and where you can watch it working there is a **To see it work** line.
 
 
 ## 00 · IoT Device Provisioning
@@ -172,7 +172,7 @@ Two details that matter:
 
 **Key files:** `mulesoft/src/main/mule/device-telemetry-sync.xml`, `mulesoft/src/main/resources/dwl/telemetry-to-salesforce.dwl`
 
-This is the one optional piece of the system — step 8 of [Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach). Everything works without it; deploying it swaps the ingestion path rather than adding to it.
+This is the one optional piece of the system — an alternative the install leaves out ([Detailed Install Guide, step 6](INSTALL-GUIDE.md#step-6)). Everything works without it; deploying it swaps the ingestion path rather than adding to it.
 
 ## 08 · Knowledge Base RAG
 
@@ -335,7 +335,7 @@ All four Asset contexts live in **one `AssetTrigger`** rather than several, so e
 
 **Key files:** `objects/Wi_Fi_Network__c/`, `objects/Asset/fields/`, `classes/DeviceProvisioningService.cls`, `classes/DeviceReprovisionController.cls` and `lwc/reprovisionDevice/` (the Re-provision button), `classes/WiFiCredentialService.cls`, `triggers/AssetTrigger.trigger`, `lambda/device-provisioning/`, `lambda/device-reprovision/`, `lambda/device-teardown/`, `scripts/provision-device.sh` / `.ps1`
 
-**To see it work:** create a Wi-Fi Network record, then an Asset with a SerialNumber, and watch the Asset flip to **Provisioned** with a bundle link. The SigV4 Named Credential it uses is step 1 of [Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
+**To see it work:** create a Wi-Fi Network record, then an Asset with a SerialNumber, and watch the Asset flip to **Provisioned** with a bundle link. The SigV4 Named Credential it uses is [step 7 of the Detailed Install Guide](INSTALL-GUIDE.md#step-7).
 
 ## Patient Portal · React site and Enhanced Chat
 

@@ -1,6 +1,6 @@
 # Quick Install Guide
 
-Every feature, from a fresh clone to a working system, in order: copy each block, paste it, and go on. Why each step is done this way: the [Detailed Install Guide](INSTALL-GUIDE.md#quick-install-explained).
+Every feature, from a fresh clone to a working system, in order: copy each block, paste it, and go on. Why each step is done this way: the [Detailed Install Guide](INSTALL-GUIDE.md#quick-install-explained), same step numbers; each step ends with a link to its explanation.
 
 <a id="step-map"></a>
 
@@ -102,7 +102,7 @@ Photo credits: [part photos](images/parts/CREDITS.md).
 > [!TIP]
 > **Check before you go on.** The parts are ordered, and you have the printed cuff, sensor lid, hub, hub lid and wiper, and the dial plate, tub, needle, mast and hanger.
 
-[Step map](#step-map) · [1. Install the tools →](#step-1)
+[Step map](#step-map) · [1. Install the tools →](#step-1) · [Why: Detailed guide, step 0](INSTALL-GUIDE.md#step-0)
 
 <a id="step-1"></a>
 
@@ -130,7 +130,7 @@ On Linux or Windows, the same tools: [SETUP.md §0](SETUP.md#0-prerequisites--in
 > [!TIP]
 > **Check before you go on.** Each of these prints a version at least as new as the table: `node --version`, `sf --version`, `aws --version`, `jq --version`, `uv --version`, `gh --version`. `arduino-cli core list` shows `esp32:esp32`.
 
-[← 0. Order the parts and print the cases](#step-0) · [Step map](#step-map) · [2. Create the AWS project and the Salesforce org →](#step-2)
+[← 0. Order the parts and print the cases](#step-0) · [Step map](#step-map) · [2. Create the AWS project and the Salesforce org →](#step-2) · [Why: Detailed guide, step 1](INSTALL-GUIDE.md#step-1)
 
 <a id="step-2"></a>
 
@@ -150,7 +150,7 @@ aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text
 > [!TIP]
 > **Check before you go on.** The Bedrock playground answered "hello", AWS Settings shows the project with its spend limit, and you can sign in to the new Developer Edition org.
 
-[← 1. Install the tools](#step-1) · [Step map](#step-map) · [3. Turn on the org's features →](#step-3)
+[← 1. Install the tools](#step-1) · [Step map](#step-map) · [3. Turn on the org's features →](#step-3) · [Why: Detailed guide, step 2](INSTALL-GUIDE.md#step-2)
 
 <a id="step-3"></a>
 
@@ -168,7 +168,7 @@ aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text
 > [!TIP]
 > **Check before you go on.** Reload each Setup page in the table: every switch stays on. In the Accounts tab, **New** offers the **Person Account** record type.
 
-[← 2. Create the AWS project and the Salesforce org](#step-2) · [Step map](#step-map) · [4. Clone and sign in →](#step-4)
+[← 2. Create the AWS project and the Salesforce org](#step-2) · [Step map](#step-map) · [4. Clone and sign in →](#step-4) · [Why: Detailed guide, step 3](INSTALL-GUIDE.md#step-3)
 
 <a id="step-4"></a>
 
@@ -202,7 +202,7 @@ sf data query --target-org "$NAME" \
 > [!TIP]
 > **Check before you go on.** `aws sts get-caller-identity` prints your project's account, and `sf org display --target-org "$NAME"` shows **Connected Status** `Connected`. The licence query above lists at least one Customer Community licence.
 
-[← 3. Turn on the org's features](#step-3) · [Step map](#step-map) · [5. Make what the deploy reads →](#step-5)
+[← 3. Turn on the org's features](#step-3) · [Step map](#step-map) · [5. Make what the deploy reads →](#step-5) · [Why: Detailed guide, step 4](INSTALL-GUIDE.md#step-4)
 
 <a id="step-5"></a>
 
@@ -263,7 +263,7 @@ node scripts/portal-chat-jwk.mjs "$CRT" patient-portal-chat-1 > ~/Downloads/pati
 > [!TIP]
 > **Check before you go on.** `ls scripts/server-integration.key scripts/server-integration.crt` lists both files. In Setup, the Integration user is active with the **Salesforce Integration** licence, and you have the External Client App's **Consumer Key**, the Slack **Signing Secret**, and `~/Downloads/patient-portal-chat-key.json`.
 
-[← 4. Clone and sign in](#step-4) · [Step map](#step-map) · [6. Deploy everything in one run →](#step-6)
+[← 4. Clone and sign in](#step-4) · [Step map](#step-map) · [6. Deploy everything in one run →](#step-6) · [Why: Detailed guide, step 5](INSTALL-GUIDE.md#step-5)
 
 <a id="step-6"></a>
 
@@ -306,7 +306,7 @@ aws lambda get-function-configuration --function-name cloud-agentic-iot-salesfor
 > [!TIP]
 > **Check before you go on.** `scripts/install.sh` ends by printing the values for the next steps. The App Launcher shows **Cloud Agentic IoT**, and the last command prints the same integration username as the user in 5b.
 
-[← 5. Make what the deploy reads](#step-5) · [Step map](#step-map) · [7. Let Salesforce call AWS →](#step-7)
+[← 5. Make what the deploy reads](#step-5) · [Step map](#step-map) · [7. Let Salesforce call AWS →](#step-7) · [Why: Detailed guide, step 6](INSTALL-GUIDE.md#step-6)
 
 <a id="step-7"></a>
 
@@ -358,7 +358,7 @@ Every care team member who uses the agent also needs it: `sf org assign permset 
 > [!TIP]
 > **Check before you go on.** Open the app's **Home** tab: the cost card shows this month's AWS spend against your limit, as in the [picture on Start here](START-HERE.md#what-success-looks-like).
 
-[← 6. Deploy everything in one run](#step-6) · [Step map](#step-map) · [8. Slack →](#step-8)
+[← 6. Deploy everything in one run](#step-6) · [Step map](#step-map) · [8. Slack →](#step-8) · [Why: Detailed guide, step 7](INSTALL-GUIDE.md#step-7)
 
 <a id="step-8"></a>
 
@@ -395,7 +395,7 @@ Every care team member who uses the agent also needs it: `sf org assign permset 
 > [!TIP]
 > **Check before you go on.** `/patient-status` answers in the channel, and the agent answers your DM. Both show the board's live reading once you add it in step 12.
 
-[← 7. Let Salesforce call AWS](#step-7) · [Step map](#step-map) · [9. Data Cloud →](#step-9)
+[← 7. Let Salesforce call AWS](#step-7) · [Step map](#step-map) · [9. Data Cloud →](#step-9) · [Why: Detailed guide, step 8](INSTALL-GUIDE.md#step-8)
 
 <a id="step-9"></a>
 
@@ -429,7 +429,7 @@ Every care team member who uses the agent also needs it: `sf org assign permset 
 > [!TIP]
 > **Check before you go on.** The data stream is deployed, its mapping to `Room_Readings` is saved, and you hold **Data Cloud User**.
 
-[← 8. Slack](#step-8) · [Step map](#step-map) · [10. Patient portal with Enhanced Chat →](#step-10)
+[← 8. Slack](#step-8) · [Step map](#step-map) · [10. Patient portal with Enhanced Chat →](#step-10) · [Why: Detailed guide, step 9](INSTALL-GUIDE.md#step-9)
 
 <a id="step-10"></a>
 
@@ -505,7 +505,7 @@ Every care team member who uses the agent also needs it: `sf org assign permset 
 > [!TIP]
 > **Check before you go on.** Item 9 above works: the patient signs in to the portal, the assistant answers, and "I need a nurse" opens a Case on Care_Team_Queue.
 
-[← 9. Data Cloud](#step-9) · [Step map](#step-map) · [11. MCP servers →](#step-11)
+[← 9. Data Cloud](#step-9) · [Step map](#step-map) · [11. MCP servers →](#step-11) · [Why: Detailed guide, step 10](INSTALL-GUIDE.md#step-10)
 
 <a id="step-11"></a>
 
@@ -551,7 +551,7 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
 > [!TIP]
 > **Check before you go on.** `claude mcp list` shows `smart-ward`, item 4 of b works in both agents, and `node scripts/lib/mcp-probe.js` reports both servers answering.
 
-[← 10. Patient portal with Enhanced Chat](#step-10) · [Step map](#step-map) · [12. Add the boards →](#step-12)
+[← 10. Patient portal with Enhanced Chat](#step-10) · [Step map](#step-map) · [12. Add the boards →](#step-12) · [Why: Detailed guide, step 11](INSTALL-GUIDE.md#step-11)
 
 <a id="step-12"></a>
 
@@ -669,7 +669,7 @@ SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
 > [!TIP]
 > **Check before you go on.** Within a minute or two each board's Asset shows Connection `Online` and readings on the Live Status card. Data Cloud's data stream shows a record count above 0, and `scripts/data-cloud-insights.sh --dry-run` prints the two insights.
 
-[← 11. MCP servers](#step-11) · [Step map](#step-map) · [13. Check that it works →](#step-13)
+[← 11. MCP servers](#step-11) · [Step map](#step-map) · [13. Check that it works →](#step-13) · [Why: Detailed guide, step 12](INSTALL-GUIDE.md#step-12)
 
 <a id="step-13"></a>
 
@@ -690,9 +690,9 @@ When it all works, warming the monitored device to 30 C on the arm opens a Case,
 | The app's Home tab | This month's AWS spend against the limit, and the org's limits |
 
 > [!TIP]
-> **Next: test every feature.** [After install: use case scenarios](TRY-IT.md) walks through each feature end to end, one real situation at a time, with what you should see: the temperature alert and its Case, both boards, the agents (SOP answers, device history), Slack, the portal, over-the-air updates and the cost. The Detailed Install Guide's [Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end) explains what each check proves.
+> **Next: test every feature.** [After install: use case scenarios](TRY-IT.md) walks through each feature end to end, one real situation at a time, with what you should see: the temperature alert and its Case, both boards, the agents (SOP answers, device history), Slack, the portal, over-the-air updates and the cost. The Detailed Install Guide's [step 13](INSTALL-GUIDE.md#step-13) explains what each check proves.
 
-[← 12. Add the boards](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines →](#step-14)
+[← 12. Add the boards](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines →](#step-14) · [Why: Detailed guide, step 13](INSTALL-GUIDE.md#step-13)
 
 <a id="step-14"></a>
 
@@ -814,7 +814,7 @@ Two environments, Dev and Prod, each with its own branch, GitHub Environment, re
 
 7. **Branch rules.** Settings → **Branches** → add a rule for `Dev` and one for `Prod`: require a pull request, and require the checks to pass (Lambda tests, CloudFormation templates, Shell scripts, Salesforce metadata, Firmware, Patient portal (React)).
 
-[← 13. Check that it works](#step-13) · [Step map](#step-map) · [Docs home](index.md)
+[← 13. Check that it works](#step-13) · [Step map](#step-map) · [Docs home](index.md) · [Why: Detailed guide, step 14](INSTALL-GUIDE.md#step-14)
 
 ---
 

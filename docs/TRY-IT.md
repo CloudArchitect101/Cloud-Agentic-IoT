@@ -352,7 +352,7 @@ aws ssm get-parameters --names /cloud-agentic-iot/deployed-commit/aws /cloud-age
 3. Every alarm `OK` (a dead-letter queue that is filling, or `telemetry-falling-behind`, points at the hop that fails); the presence log shows the disconnect for `CompanyInternalESP32`; `ota.sh status` lists each board's firmware and any job still waiting; the last lines name the commits AWS and Salesforce run.
 4. Connection `Online` again within a few seconds, and readings on the card.
 
-Each symptom found while building this, with its cause and fix: [Troubleshooting](TROUBLESHOOTING.md). The hop-by-hop checklist: [Detailed Install Guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end).
+Each symptom found while building this, with its cause and fix: [Troubleshooting](TROUBLESHOOTING.md). The hop-by-hop checklist: [Detailed Install Guide, step 13](INSTALL-GUIDE.md#step-13).
 
 **Value and cost.** The KPI is coverage: a silent device is a gap in monitoring, and here it shows within a minute instead of at the next manual round. Reading alarms and logs costs nothing extra; the alarms email whoever `ALARM_EMAIL` named.
 
