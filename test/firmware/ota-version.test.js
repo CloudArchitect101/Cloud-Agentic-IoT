@@ -1,0 +1,42 @@
+'use strict';
+
+// Compiles and runs ota_version_test.cpp: when a board skips a stale OTA
+// release (OtaVersion.h) instead of going back to it. The header is plain C++,
+// so any host compiler will do; without one (a bare laptop) the test is
+// skipped, and CI always has one.
+
+const test = require('node:test');
+const assert = require('node:assert');
+const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const source = path.join(__dirname, 'ota_version_test.cpp');
+
+function compiler() {
+  for (const name of [process.env.CXX, 'c++', 'g++', 'clang++'].filter(Boolean)) {
+    if (spawnSync(name, ['--version'], { stdio: 'ignore' }).status === 0) return name;
+  }
+  return null;
+}
+
+test('firmware OTA: a board skips a release older than the build it runs', (t) => {
+  const cxx = compiler();
+  if (!cxx) {
+    t.skip('no C++ compiler on this machine');
+    return;
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ota-version-'));
+  try {
+    const binary = path.join(dir, 'ota_version_test');
+    const build = spawnSync(cxx, ['-std=c++11', '-O2', '-Wall', '-Wextra', '-Werror', '-o', binary, source], { encoding: 'utf8' });
+    assert.strictEqual(build.status, 0, `compile failed:\n${build.stderr}`);
+
+    const run = spawnSync(binary, [], { encoding: 'utf8', timeout: 120000 });
+    for (const line of run.stdout.trim().split('\n')) t.diagnostic(line);
+    assert.strictEqual(run.status, 0, run.stdout + run.stderr);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

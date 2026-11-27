@@ -100,6 +100,37 @@ create_job() {
   rm -f "$doc"
 }
 
+# cancel_superseded <group> <job id prefix> <new job id> <try|release|promotion>
+# A board takes its jobs oldest first. Left alone, a board that was offline
+# while two builds went out installs the older one, then the newer one: twice
+# the download, twice the restart, and for a moment a build nobody wants on it.
+# So once a new job exists, the earlier ones of the same kind for the same
+# group are cancelled. Without --force: a board already installing one
+# finishes, only the boards that have not started it lose it. A failure here
+# never fails the run, because the new job is out either way, and from
+# patient-monitor 2.8.0 a board also skips a release older than its own build
+# (OtaVersion.h).
+cancel_superseded() {
+  local group="$1" prefix="$2" keep="$3" kind="$4" plural olds old cancelled=0
+  case "$kind" in try) plural=tries ;; *) plural="${kind}s" ;; esac
+  olds=$(aws iot list-jobs --status IN_PROGRESS --thing-group-name "$group" \
+           --query "jobs[?starts_with(jobId, '$prefix')].jobId" --output text) \
+    || { warn "Could not list the earlier $plural; any still waiting for a board stay queued (scripts/ota.sh status)."; return 0; }
+  for old in $olds; do
+    [ "$old" != "$keep" ] && [ "$old" != None ] || continue
+    if aws iot cancel-job --job-id "$old" --comment "Replaced by $keep" > /dev/null; then
+      note "Cancelled the earlier $kind $old for every board that had not started it."
+      cancelled=$((cancelled + 1))
+    else
+      warn "Could not cancel the earlier $kind $old. A board that has not started it installs it first, then this one."
+    fi
+  done
+  # One line a log search can count: how often a release found older jobs
+  # still waiting, which is how many offline boards the cancel saved a
+  # needless download and restart.
+  [ "$cancelled" -eq 0 ] || echo "ota-metric superseded_jobs_cancelled=$cancelled kind=$kind group=$group"
+}
+
 cmd_release() {
   local env="$1" sketch version key bin group ring job_id sha published=0
   # Releases come from the pipeline only. A version published from a laptop is
@@ -140,6 +171,9 @@ cmd_release() {
     group="$ring-$sketch"
     job_id="ota-$sketch-${version//./-}-$(date +%s)"
     create_job "$job_id" "$group" "$sketch" "$version" "$key" first-ring "$env"
+    # Only earlier releases of this type to this group: a try (ota-try-) and
+    # a promotion (ota-fleet-) are other kinds of job, with their own rules.
+    cancel_superseded "$group" "ota-$sketch-" "$job_id" release
     endstep
     note "$sketch $version is published; job $job_id is rolling out to $group."
     published=$((published + 1))
@@ -159,10 +193,11 @@ cmd_release() {
 #     still installs the release of the same number.
 # The job is the one a Dev release creates, sent to the same group (and the
 # groups inside it) at the same pace and with the same abort rule. A new try
-# cancels the earlier tries of that type that boards have not started, so a
-# board that was offline installs only the newest when it connects.
+# cancels the earlier tries of that type that boards have not started, as a
+# release and a promotion do with theirs (cancel_superseded), so a board that
+# was offline installs only the newest when it connects.
 cmd_try() {
-  local env="$1" sketch="${2:-}" label group boards count base prefix n version key bin sha job_id olds old
+  local env="$1" sketch="${2:-}" label group boards count base prefix n version key bin sha job_id
   [ "$env" = Dev ] || die "A try goes to Dev boards only. Prod boards take firmware from the pipeline: release, then promote."
   [ -n "$sketch" ] || die "Usage: scripts/ota.sh try Dev <sketch>"
   known_sketch "$sketch"
@@ -210,19 +245,7 @@ cmd_try() {
   aws s3 cp "$bin" "s3://$BUCKET/$key" --sse AES256 --metadata "git-sha=$sha" --only-show-errors
   job_id="ota-try-$sketch-${version//./-}-$(date +%s)"
   create_job "$job_id" "$group" "$sketch" "$version" "$key" first-ring Dev "$sha"
-  # A board takes its jobs oldest first: left alone, an earlier try would go
-  # in before this one on every board that has not started it yet.
-  olds=$(aws iot list-jobs --status IN_PROGRESS --thing-group-name "$group" \
-           --query "jobs[?starts_with(jobId, 'ota-try-$sketch-')].jobId" --output text) \
-    || { warn "Could not list the earlier tries; any still waiting for a board stay queued (scripts/ota.sh status Dev)."; olds=""; }
-  for old in $olds; do
-    [ "$old" != "$job_id" ] || continue
-    if aws iot cancel-job --job-id "$old" --comment "Replaced by $job_id" > /dev/null; then
-      note "Cancelled the earlier try $old for every board that had not started it."
-    else
-      warn "Could not cancel the earlier try $old. A board that has not started it installs it first, then this one."
-    fi
-  done
+  cancel_superseded "$group" "ota-try-$sketch-" "$job_id" try
   endstep
   note "Job $job_id sends $sketch $version ($sha) to $group: $(paste -s -d ' ' - <<< "$boards")"
   watch_job "$job_id" "$count" "$sketch" "$version"
@@ -312,6 +335,7 @@ cmd_promote() {
   job_id="ota-fleet-$sketch-${version//./-}-$(date +%s)"
   step "Promote $sketch $version to fleet-$sketch"
   create_job "$job_id" "fleet-$sketch" "$sketch" "$version" "$key" fleet "$env"
+  cancel_superseded "fleet-$sketch" "ota-fleet-$sketch-" "$job_id" promotion
   endstep
   note "Canary $job: $ok board(s) updated cleanly. Job $job_id is rolling $sketch $version out to fleet-$sketch."
 }

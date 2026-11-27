@@ -18,7 +18,7 @@
 #include <ESP32Servo.h>
 
 // Raise to ship a change - see patient-monitor.ino.
-#define FIRMWARE_VERSION "2.2.0"
+#define FIRMWARE_VERSION "2.2.1"
 
 CloudAgenticDevice device("queue-indicator", FIRMWARE_VERSION);
 
