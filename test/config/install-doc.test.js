@@ -75,3 +75,24 @@ test('no command block loops over permission sets: one line each is easier to re
     assert.ok(!body.some((l) => /^for\s/.test(l)), `docs/INSTALL.md:${line}: a for loop`);
   }
 });
+
+// Vitaly, Nov 27: the Quick install is one straight path that deploys
+// everything, with no choices and no failure branches. Recovery notes live in
+// docs/TROUBLESHOOTING.md (#install-steps), the why in docs/INSTALL-GUIDE.md.
+test('the Quick install reads as one straight path: no optional steps, choices or failure branches', () => {
+  const text = fs.readFileSync(file, 'utf8');
+  const banned = [
+    /\boptional\b/i, /(?<!\*\*)\bskip (this|it|if|without)\b/i, /\(skip /i, /\bif you (want|wish|plan|prefer)\b/i,
+    /\bBy hand instead\b/, /\bif (it|this|a step|a command|that) fails\b/i, /\bSKIP_[A-Z_]+=yes\b/,
+    /test-yourname/,
+  ];
+  const lines = text.split('\n');
+  for (const re of banned) {
+    const hit = lines.findIndex((l) => re.test(l));
+    assert.equal(hit, -1, `docs/INSTALL.md:${hit + 1}: ${re} - ${lines[hit] || ''}`);
+  }
+  assert.match(text, /NAME='test-cloud-agentic-iot'/);
+  assert.ok(text.indexOf('<a id="resume"></a>') < text.indexOf('<a id="step-1"></a>'), 'the resume lines come before step 1');
+  assert.match(fs.readFileSync(path.join(__dirname, '../../docs/TROUBLESHOOTING.md'), 'utf8'), /<a id="install-steps"><\/a>/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../../docs/INSTALL-GUIDE.md'), 'utf8'), /<a id="quick-install-explained"><\/a>/);
+});

@@ -19,7 +19,7 @@ title: Developer
 <div class="lp-step"><div><p class="lp-pis"><img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> </p><h4><a href="INSTALL.md#step-7">Connect and add a board</a></h4><p>The named credential, then a board over USB.</p><p class="lp-check">✓ Check: the Asset shows Online</p></div></div>
 <div class="lp-step"><div><p class="lp-pis"><img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> </p><h4><a href="CHAPTERS.md">Read the code</a></h4><p>Fourteen chapters, each a capability with its code and its tests. <code>scripts/check.sh</code> runs them all.</p><p class="lp-check">✓ Check: <code>scripts/check.sh</code> passes</p></div></div>
 </div>
-<p>Each step links to its full instructions in the <a href="INSTALL.md">Quick install</a>, where the commands and the check box are.</p>
+<p>Each step links to its full instructions in the <a href="INSTALL.md">Quick Install Guide</a>, where the commands and the check box are.</p>
 </div>
 <div class="lp-side">
 <div class="lp-box"><h4>Where things live</h4><ul><li><code>firmware/</code>: the ESP32 sketch</li><li><code>lambda/</code> and <code>infra/</code>: AWS</li><li><code>force-app/</code>: Salesforce and the agents</li><li><code>scripts/</code>: install, deploy, OTA</li></ul></div>
@@ -32,4 +32,4 @@ Other paths: [Clinic Salesforce admin](PATH-ADMIN.md) · [Device builder](PATH-D
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

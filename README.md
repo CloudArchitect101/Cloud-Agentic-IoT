@@ -87,9 +87,9 @@ More diagrams and the reasoning behind each piece: [How the pieces connect](docs
 
 ## Install
 
-**New here? [Start here](docs/START-HERE.md)** picks your path in one table: clinic Salesforce admin, device builder, developer, or a team with pipelines. Everyone follows the Quick install step by step, with a check after each step; open the Install guide beside it when you want the why behind a step.
+**New here? [Start here](docs/START-HERE.md)** picks your path in one table: clinic Salesforce admin, device builder, developer, or a team with pipelines. Everyone follows the Quick Install Guide step by step, with a check after each step; open the Detailed Install Guide beside it when you want the why behind a step.
 
-| | [**Quick install**](docs/INSTALL.md) | [**Install guide**](docs/INSTALL-GUIDE.md) |
+| | [**Quick Install Guide**](docs/INSTALL.md) | [**Detailed Install Guide**](docs/INSTALL-GUIDE.md) |
 |---|---|---|
 | For | Getting it running | Understanding every step |
 | What you get | Every feature as execution steps in order, deployed in one run by `scripts/install.sh` | Each step, why it is done that way, and what to check when it fails |
@@ -123,7 +123,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 
 | Learn by doing | Get a task done |
 |---|---|
-| [Quick install](docs/INSTALL.md): every feature, step by step | [Install guide](docs/INSTALL-GUIDE.md): every step, explained |
+| [Quick Install Guide](docs/INSTALL.md): every feature, step by step | [Detailed Install Guide](docs/INSTALL-GUIDE.md): every step, explained |
 | [Try it](docs/TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | [Setup](docs/SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
 | [Platform primer](docs/PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | [Development](docs/DEVELOPMENT.md): laptop to Dev to Prod |
 | | [Migration runbook](docs/MIGRATION-RUNBOOK.md): phased cutover with a rollback per phase |

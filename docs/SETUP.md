@@ -1,7 +1,7 @@
 # Setup: Accounts, Identities, Credentials
 
 > [!TIP]
-> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick install](INSTALL.md) is the one list of steps; this page goes deeper.
+> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick Install Guide](INSTALL.md) is the one list of steps; this page goes deeper.
 
 Everything needed to go from nothing to a working Dev environment, in order.
 Run it once for **Dev**. **Prod is the identical sequence** against a second
@@ -416,7 +416,7 @@ The pipeline accounts are regular AWS accounts in `ca-central-1`. As root:
    policy attached. Create its access key for the CLI (§4).
 
 One more root step comes later: the IAM user Salesforce signs its calls with,
-in the Install guide's (INSTALL-GUIDE.md) Stage 2, step 1. `iot-operator` can't make it, because its
+in the Detailed Install Guide's (INSTALL-GUIDE.md) Stage 2, step 1. `iot-operator` can't make it, because its
 policy denies creating users and access keys.
 
 ### 3.2 The deploy role and the budget: `scripts/bootstrap-aws.sh`
@@ -1121,4 +1121,4 @@ environments into one and removes the entire point of having them.
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

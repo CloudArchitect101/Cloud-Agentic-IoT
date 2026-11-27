@@ -20,7 +20,7 @@ GitHub secrets are the wrong home for any of this: the firmware build in CI is a
 
 **Two things to do by hand, then one script.**
 
-1. **Create the Thing in AWS IoT Core.** Attach the least-privilege policy from [the Install guide's one-time AWS IoT setup](INSTALL-GUIDE.md#create-the-thing-and-its-certificate).
+1. **Create the Thing in AWS IoT Core.** Attach the least-privilege policy from [the Detailed Install Guide's one-time AWS IoT setup](INSTALL-GUIDE.md#create-the-thing-and-its-certificate).
 2. **Download all three files into one folder** — the certificate, the private key, and Amazon Root CA 1. `~/Downloads` is fine; keep the names AWS gives them.
 3. **Plug the ESP32 in and run the wizard:**
 
@@ -134,7 +134,7 @@ Each device gets its own X.509 keypair. `iot-dev` and `iot-prod` are separate AW
 **Bootstrap — what you do for the first 1–3 devices (this week):**
 1. AWS IoT Core → Manage → Things → Create single thing, named e.g. `ESP32-Patient-Monitor-01`
 2. Auto-generate certificate; download the cert, the private key, and Amazon Root CA 1
-3. Attach the least-privilege policy from [the Install guide's one-time AWS IoT setup](INSTALL-GUIDE.md#create-the-thing-and-its-certificate)
+3. Attach the least-privilege policy from [the Detailed Install Guide's one-time AWS IoT setup](INSTALL-GUIDE.md#create-the-thing-and-its-certificate)
 4. Put them in a bundle and send it over serial after flashing — the five steps in section 1
 
 Yes — for the first deploy you provide WiFi and certificates by hand. That is correct and expected; it is the manual step the runbook calls out.
@@ -183,4 +183,4 @@ IoT Job      →  the instruction       (job document: S3 URL + version)
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

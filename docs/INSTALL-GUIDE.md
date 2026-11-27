@@ -1,9 +1,9 @@
-# Install guide: every step, explained
+# Detailed Install Guide: every step, explained
 
 > [!TIP]
-> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick install](INSTALL.md) is the one list of steps; this page goes deeper.
+> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick Install Guide](INSTALL.md) is the one list of steps; this page goes deeper.
 
-This is the long version of the install: each step, plus **why** it is done that way and what to check when it fails. Want only the commands? Use the [Quick install](INSTALL.md). Want to know what you are installing first? Read [How the pieces connect](HOW-IT-CONNECTS.md), or the [README](../README.md) for the one-page overview.
+This is the long version of the install: each step, plus **why** it is done that way and what to check when it fails. Want only the commands? Use the [Quick Install Guide](INSTALL.md); [Quick Install Guide, explained](#quick-install-explained) below follows its numbering. Want to know what you are installing first? Read [How the pieces connect](HOW-IT-CONNECTS.md), or the [README](../README.md) for the one-page overview.
 
 Two ways to run it, same code:
 
@@ -22,6 +22,117 @@ Two ways to run it, same code:
 | 3 | Hardware — create the Thing, flash and provision each device | ~20 min per device |
 | 4 | Verify end to end | Minutes |
 | 5 | Promote `Dev` → `Prod` when it all holds | Per [MIGRATION-RUNBOOK.md](MIGRATION-RUNBOOK.md) |
+
+<a id="quick-install-explained"></a>
+
+## Quick Install Guide, explained
+
+The [Quick Install Guide](INSTALL.md) is commands only. This is the why behind each of its steps, in the same numbering. When a step shows something else than it says, see [If a Quick Install Guide step goes differently](TROUBLESHOOTING.md#install-steps).
+
+**The name `test-cloud-agentic-iot`.** The Quick Install Guide calls the AWS CLI profile and the Salesforce CLI org alias `test-cloud-agentic-iot`, so every block pastes as it is. The name lives only on your computer: no AWS resource or Salesforce record is named after it (bucket names use the account ID and Region), so two people using the same name never collide. Any name of letters, digits and `-` works. Every `sf` command names its org with `--target-org "$NAME"`, so a command always goes to that org.
+
+**What a new terminal keeps** (the resume lines):
+
+| What | After a restart |
+|---|---|
+| `NAME`, `AWS_PROFILE`, `SF_TARGET_ORG` (step 4) | **Gone.** Run the resume lines |
+| `sf` org login (step 4) | Kept on disk. Nothing to do |
+| `aws login` session (step 4) | Kept on disk for some hours. On a new day, run `aws login --profile "$NAME"` once |
+| Variables set inside one command block (`ACCOUNT`, `LIMIT`, `EMAIL`, `STACK`, `CALLER`, `ROLE_ARN`, `INTEGRATION_USER`, `MEMBER`, `AGENT_USER`, `PATIENT_USER`, `CRT`, `BUNDLE`, `MCP_URL`, `REGION`, `MY_DOMAIN`) | Used only in that block. In a new terminal, run the whole block again |
+| Pipelines (step 14): `AWS_PROFILE=iot-dev`, `SF_TARGET_ORG=iot-dev-admin` | **Gone.** Run their `export` lines again |
+| Files you made: keys in `scripts/`, the portal key in `~/Downloads` | Kept. Nothing to do |
+
+**Step 2. The AWS project and the org.** A project on the paid plan has a hard monthly spend limit (the lowest is $20). Its advanced features stay off: activating them removes the spend limit for good, and they matter only for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts. Why a project, and what it costs: [TRY-IT.md](TRY-IT.md#why-a-project-and-what-it-costs-you). The Bedrock check comes first because the agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account can be held from Bedrock for up to 72 hours. A new Developer Edition org comes with Agentforce and Data Cloud (Data 360), which steps 8 to 11 use. Agentforce Voice in the portal's chat needs a licence a Developer Edition lacks, so the Quick Install Guide leaves it out ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)).
+
+**Step 3. The org's features.** One pass through Setup, all before the deploy. Each switch accepts terms or can't be turned off, so it is a click of yours, and the deploy in step 6 builds on it. The patient portal needs one Customer Community licence per test patient; step 4 lists them once the terminal knows your org.
+
+**Step 4. Region.** An AWS project works in its own Region only: a command sent to another Region fails with `explicit deny in a service control policy`. So the profile is set to the project's Region right after the login.
+
+**Step 5. What the deploy reads.** The one-time setup in [`bootstrap/`](../bootstrap/README.md) (the `AWS_IoT_Relay` named credential, its external credential and the `AWS_IoT_Relay_Callers` permission set) needs no step of its own: `scripts/install.sh` runs it in step 6, with your URL and Region. The integration user (5b) and its External Client App (5c) are made in Setup, because each holds something only this org can make: a username in your domain with its own licence, and a consumer key that Salesforce generates when the app is saved and that step 6 asks for. The access key and role ARN in step 7 are typed by hand too, since Salesforce stores them as credentials, not as metadata a script can deploy. The integration certificate is how AWS signs in to Salesforce (JWT), never with a password; `.gitignore` keeps `*.key` and `*.crt` out of Git. The External Client App's consumer key exists as soon as the app is saved; its policy gets the permission set after the deploy (step 6). The Slack workspace is your own and free: slash commands and Agentforce in Slack both work on the free plan, and as its **owner** you install apps and connect a Salesforce org (steps 8a and 8b), which in a company workspace needs an admin. The portal's chat key (5e) is a public key: it goes to Salesforce in step 10, never to the repo.
+
+**Step 6. What `install.sh` does.** [`scripts/install.sh`](../scripts/install.sh) runs, in order:
+
+1. Creates Data Cloud's IAM reader user, `cloud-agentic-iot-data-cloud-reader`.
+2. `seed-ssm.sh`. It asks for the integration **username** (5b), the **consumer key** (5c), offers `scripts/server-integration.key` (5a), and asks for the **Slack signing secret** (5d). Type the values; nothing is shown.
+3. `check.sh`, the local tests.
+4. `deploy-aws.sh`: every stack, the guardrails, the MCP server, the Slack stack and the SOP index for the agent.
+5. `deploy-salesforce.sh`: the app, the React portal, the agents' actions, the permission sets.
+6. `bootstrap-salesforce.sh`: creates the `AWS_IoT_Relay_Credential` external credential, the `AWS_IoT_Relay` named credential and the `AWS_IoT_Relay_Callers` permission set with this project's URL and Region, and leaves the access key and the role ARN for you to type in step 7.
+7. Gives you `Device_Platform_Admin`, `Platform_Usage_Viewer`, `Patient_Care_Agent`, `AWS_IoT_Relay_Credential_Reader` and `AWS_IoT_Relay_Callers`, and gives the integration user `Device_Integration`.
+8. `publish-agent.sh`: publishes and activates the Patient Care Agent.
+9. Prints every value the next steps ask for: the role ARN and URL for step 7, the Slack Request URL, the Data Cloud bucket and the MCP endpoint.
+
+Every part is safe to run again. The budget gives the Home page's spend card a number to compare with: it equals the spend limit and emails you at 80% and when the forecast passes 100%. The Lambda check prints the username AWS signs in to Salesforce as, which must be the user from 5b and the one the app's policy allows.
+
+**Step 7. The `AWS_IoT_Relay` credential.** One named credential, `AWS_IoT_Relay`, signs every call from Salesforce to AWS (provisioning, commands, the live card, the Home page's spend, the agent's Find Procedure) with AWS Signature Version 4. `scripts/install.sh` created the external credential in step 6 with your Region; the access key and the role ARN are typed in Setup because Salesforce stores them as credentials, not as settings a file can carry. Why a script and not the pipeline: the files are in [`bootstrap/`](../bootstrap/README.md), outside what the pipeline deploys, so no later deploy can put a placeholder back over your values. The IAM user from 7a can do one thing: assume the role step 6 made. Its key is printed once and typed only into Salesforce. What the script fills in on the external credential:
+
+| Setting | Value |
+|---|---|
+| Authentication Protocol | **AWS Signature Version 4** |
+| Service | `execute-api` |
+| Region | Your project's Region |
+| Obtain Temporary IAM Credentials via STS | On, **IAM User Identified by Access Key** |
+| STS Access Key / STS Access Secret | The key from a (you typed it just now) |
+| STS Duration | Empty, or 3600 or less |
+| Additional Status Codes for Token Refresh | `403` |
+| Principal `SalesforceCaller` → IAM Role ARN | The role ARN that step 6 printed (you typed it just now) |
+
+`AWS_IoT_Relay_Callers` gives **External Credential Principal Access** to the principal and nothing else, because portal patients hold it too, and their Customer Community licence refuses **Read** on **User External Credentials**. That Read, which a callout also needs, comes from the repo's `AWS_IoT_Relay_Credential_Reader`, which `deploy-salesforce.sh` gives to every internal holder of `AWS_IoT_Relay_Callers`. The Home tab's cost card comes through `AWS_IoT_Relay`, so it proves the credential works.
+
+**Step 9. Data Cloud's reader user.** Nothing of its own: it has no IAM policy. The archive bucket's policy (`ArchiveBucketPolicy` in [`lambda/patient-vitals/cloudformation.yaml`](../lambda/patient-vitals/cloudformation.yaml)) gives it three permissions, and only when `DATA_CLOUD_READER_USER` named it:
+
+| Action | Resource | Condition |
+|---|---|---|
+| `s3:GetBucketLocation` | the archive bucket | none |
+| `s3:ListBucket` | the archive bucket | `s3:prefix` like `datacloud/*` |
+| `s3:GetObject` | `<bucket>/datacloud/*` | none |
+
+It cannot write, delete, read `readings/` or call any other AWS service, and the bucket accepts it over TLS only. To see that it holds nothing else: `aws iam list-attached-user-policies --user-name cloud-agentic-iot-data-cloud-reader` and `aws iam list-user-policies --user-name cloud-agentic-iot-data-cloud-reader` both print empty lists. The agent's **Get Device History** action queries Data Cloud as the person asking, and the `Patient_Care_Agent` permission set can't grant Data Cloud access, so each asker holds the standard **Data Cloud User** set ([DATA-CLOUD.md](DATA-CLOUD.md#how-the-agent-reads-it)).
+
+**Step 10. The portal.** The deploy brings the site, the React app, the Apex, the agent's actions and the permission sets; the Setup steps are the ones Salesforce keeps out of metadata. The portal agent user needs `AWS_IoT_Relay_Callers`, and so does each patient, so the chat and the **My monitor** page fetch the board's newest reading from AWS. `set-portal-chat-url.sh` stores the chat URL in the org's `Patient_Portal_Setting.Default` record; later deploys keep it, because the repo's copy of the record does not name that field.
+
+**Step 11. MCP servers.** **a.** lets Claude Code reach your devices; **b.** lets every agent answer generic ESP32 questions, with no sign-in. Background: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents).
+
+**Step 12. The boards.** Each board's Serial Number becomes its identity in AWS IoT (letters, digits, `-` and `_`). The bundle holds the board's private key, so the block deletes it once the board has it. Later firmware updates go over the air: `scripts/ota.sh try Dev patient-monitor`. Each insight is created with its schedule from [`datacloud/calculated-insights.json`](../datacloud/calculated-insights.json): Room Device Silence (each board's last reading time) every hour, Room Out Of Range Daily every 6 hours, to spend fewer Data Cloud credits. Change one there, or on the insight in Data Cloud. The insights wait for the boards because Data Cloud computes them from the readings the stream (step 9) has taken in.
+
+**Step 14. Dev and Prod.** Two environments, each with its own branch, GitHub Environment, AWS account and Salesforce org. The names are case-sensitive and must match exactly:
+
+| | Dev | Prod |
+|---|---|---|
+| Branch | `Dev`, the default branch (already exists) | `Prod`, created from `Dev` in 6 below, changed only by pull requests from `Dev` |
+| GitHub Environment | `Dev` | `Prod`, with you as the required reviewer |
+| AWS account | A regular account (not a project), `ca-central-1` | A second regular account |
+| Salesforce org | A new Developer Edition org | A separate org |
+| A push deploys when | `AUTO_DEPLOY` contains `Dev` | `AUTO_DEPLOY` contains `Prod`, and you approve the run |
+
+Why regular accounts: a project can't hold GitHub's OIDC provider, which the pipeline signs in to AWS with. Stacks don't move between accounts, so each board is provisioned again against the new one.
+
+`bootstrap-aws.sh` creates the OIDC provider, the `github-actions-deploy` role and the `cloud-agentic-iot-monthly` budget, and offers to store the role's ARN as `AWS_ROLE_ARN`. `setup-github-secrets.sh` creates the environment, limits it to its branch, makes you Prod's reviewer, and asks for each value below, hiding secrets and base64-encoding the key files itself. Data Cloud in a regular account reads the bucket through the org's identity provider, with no key. Why each piece stays manual: [DEVELOPMENT.md](DEVELOPMENT.md#what-stays-manual-and-why).
+
+Every value, per environment (Settings → **Environments** → `Dev` or `Prod`):
+
+| Name | Kind | Value, and where it comes from | Set by the script? |
+|---|---|---|---|
+| `AWS_ROLE_ARN` | Secret | `DeployRoleArn` of the bootstrap stack (2) | Yes, read from the stack |
+| `AWS_REGION` | Variable | `ca-central-1` | Yes |
+| `ALARM_EMAIL` | Variable | Who the CloudWatch alarms email | Yes |
+| `SF_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Deploy` (3) | Yes |
+| `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` (3) | Yes |
+| `SF_JWT_KEY` | Secret | `scripts/server-deploy.key`, base64-encoded (3) | Yes, from the file |
+| `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` | Yes |
+| `SF_INTEGRATION_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Integration` (5c) | Yes |
+| `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` (5b) | Yes |
+| `SF_INTEGRATION_JWT_KEY` | Secret | `scripts/server-integration.key`, base64-encoded (5a) | Yes, from the file |
+| `SLACK_SIGNING_SECRET` | Secret | The Slack app's signing secret (5d) | Yes |
+| `DATA_CLOUD_OIDC_PROVIDER_ARN` | Variable | For Data Cloud: the provider ARN from the commands below | **No, by hand** |
+| `DATA_CLOUD_EXTERNAL_ID` | Variable | For Data Cloud: the connection's External ID (9, step 2, with **Identity Provider (IdP) Based**) | **No, by hand** |
+
+And on the repository (Settings → **Secrets and variables** → **Actions** → **Variables**):
+
+| Name | Kind | Value | Set by the script? |
+|---|---|---|---|
+| `AUTO_DEPLOY` | Variable | `Dev`, later `Dev Prod`: which branches deploy on a push | Yes, when you answer `y` |
+| `EVAL_DEVICE`, `EVAL_OTHER_DEVICE`, `EVAL_PATIENT_USERNAME` | Variable | For the **Agent evals** workflow: the test patient's board, the corp ticket gauge, the test patient's username | **No, by hand**, below |
 
 ## Stage 1 — Push to `Dev`
 
@@ -119,7 +230,7 @@ A keyless alternative is the external credential's **Roles Anywhere** option, wh
 
 **3. Slack app.** Create it at api.slack.com, add the `/patient-status` slash command, and set its Request URL to the `SlackCommandsUrl` output of the Slack stack. Copy the Signing Secret into step 2's parameter.
 
-**4. Data Cloud ingestion.** Optional. Every room reading reaches Data Cloud through the S3 archive: with `DataCloudExport` on (Dev), `patient-vitals` also writes each batch as CSV under `datacloud/room-readings/`, and the `patient-vitals` stack lets Data Cloud list and read that folder and nothing else. What stays by hand is in [SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward), in order:
+**4. Data Cloud ingestion.** Every room reading reaches Data Cloud through the S3 archive: with `DataCloudExport` on (Dev), `patient-vitals` also writes each batch as CSV under `datacloud/room-readings/`, and the `patient-vitals` stack lets Data Cloud list and read that folder and nothing else. What stays by hand is in [SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward), in order:
 
 1. Turn the CSV copy on with the AWS deploy (step 1).
 2. Start the Amazon S3 connection in Data Cloud on the archive bucket, Parent Directory `datacloud/room-readings/` (step 2).
@@ -287,4 +398,4 @@ Once it holds together on `Dev`, `Prod` is the same sequence against the second 
 
 ---
 
-[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick install](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)
+[← Docs home](index.md) · [Start here](START-HERE.md) · [Quick Install Guide](INSTALL.md) · [Troubleshooting](TROUBLESHOOTING.md)

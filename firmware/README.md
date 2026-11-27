@@ -28,7 +28,7 @@ command.
 
 Setting up a new device? There are two ways, by where its identity was made:
 
-- **An Asset in Salesforce made it** (the Quick install, the usual way): flash,
+- **An Asset in Salesforce made it** (the Quick Install Guide, the usual way): flash,
   then send the bundle, in one line:
   `./scripts/firmware.sh flash patient-monitor && ./scripts/provision-device.sh <bundle.json>`
   ([INSTALL step 12](../docs/INSTALL.md#step-12)).

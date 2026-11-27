@@ -1,42 +1,52 @@
-# Quick install
+# Quick Install Guide
 
-Every feature, from a fresh clone to a working system: your own AWS project with a spend limit and a free Salesforce Developer Edition org, deployed from your laptop. Execution steps only, in order. Every Setup click that has to happen before the deploy is gathered in steps 3 and 5, so **step 6 deploys everything in one run**. The [Install guide](INSTALL-GUIDE.md) explains why each step is done that way and what to check when one fails.
+Every feature, from a fresh clone to a working system, in order: copy each block, paste it, and go on. Why each step is done this way: the [Detailed Install Guide](INSTALL-GUIDE.md#quick-install-explained).
 
 <a id="step-map"></a>
 
 **Step map.** Not sure which guide to follow? [Start here](START-HERE.md).
 
-| # | Step | Where you work | Required? |
-|---|---|---|---|
-| [1](#step-1) | [Install the tools](#step-1) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Terminal | Yes |
-| [2](#step-2) | [Create the AWS project and the Salesforce org](#step-2) | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Browser | Yes |
-| [3](#step-3) | [Turn on the org's features](#step-3) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Setup | Yes |
-| [4](#step-4) | [Clone and sign in](#step-4) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> Terminal | Yes |
-| [5](#step-5) | [Make what the deploy reads](#step-5) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Setup + terminal | Yes |
-| [6](#step-6) | [Deploy everything in one run](#step-6) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Terminal + Setup | Yes |
-| [7](#step-7) | [Let Salesforce call AWS](#step-7) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> Setup + terminal | Yes |
-| [8](#step-8) | [Slack](#step-8) | <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Slack + Setup | Optional |
-| [9](#step-9) | [Data Cloud](#step-9) | <img class="pi" src="images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> Data Cloud | Optional |
-| [10](#step-10) | [Patient portal with Enhanced Chat](#step-10) | <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Setup + terminal | Optional |
-| [11](#step-11) | [MCP servers](#step-11) | <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> Setup | Optional |
-| [12](#step-12) | [Add a board](#step-12) | <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> Board + terminal | For live readings |
-| [13](#step-13) | [Check that it works](#step-13) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> App, Slack, portal | Yes |
-| [14](#step-14) | [Dev and Prod pipelines (optional)](#step-14) | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> GitHub + terminal | Optional |
+| # | Step | Where you work |
+|---|---|---|
+| [1](#step-1) | [Install the tools](#step-1) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Terminal |
+| [2](#step-2) | [Create the AWS project and the Salesforce org](#step-2) | <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Browser |
+| [3](#step-3) | [Turn on the org's features](#step-3) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Setup |
+| [4](#step-4) | [Clone and sign in](#step-4) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> Terminal |
+| [5](#step-5) | [Make what the deploy reads](#step-5) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Setup + terminal |
+| [6](#step-6) | [Deploy everything in one run](#step-6) | <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Terminal + Setup |
+| [7](#step-7) | [Let Salesforce call AWS](#step-7) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> Setup + terminal |
+| [8](#step-8) | [Slack](#step-8) | <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> Slack + Setup |
+| [9](#step-9) | [Data Cloud](#step-9) | <img class="pi" src="images/platforms/data-cloud.svg" alt="Data Cloud" title="Data Cloud" width="20" height="20"> Data Cloud |
+| [10](#step-10) | [Patient portal with Enhanced Chat](#step-10) | <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Setup + terminal |
+| [11](#step-11) | [MCP servers](#step-11) | <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> Setup |
+| [12](#step-12) | [Add the boards](#step-12) | <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> Board + terminal |
+| [13](#step-13) | [Check that it works](#step-13) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> App, Slack, portal |
+| [14](#step-14) | [Dev and Prod pipelines](#step-14) | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> GitHub + terminal |
 
 > [!NOTE]
-> About two hours for everything, plus about 20 minutes for each board. Do step 2 first, on day one: if Bedrock needs a Support case, it can take up to 72 hours. Steps 1 to 7 and 13 make the core system. Steps 8 to 12 and 14 each add one feature, and you can skip any of them.
+> About two hours, plus about 20 minutes for each board.
 
 > [!IMPORTANT]
-> Restarted your computer or opened a new terminal partway through? See [Resuming after a restart](#resume) under step 4 first.
+> **How to read a command block.** Every block starts with **Paste into your terminal** and how often to run it. Copy the whole block (the **Copy** button), paste it into the terminal in the `Cloud-Agentic-IoT` folder, and press Enter.
 >
-> **How to read a command block.** Every block you run starts with **Paste into your terminal**, then says how often (once per computer, once per org, once per AWS account, or in every new terminal) and what it does. Copy the whole block (on the docs site, the **Copy** button), paste it into the terminal in the `Cloud-Agentic-IoT` folder, and press Enter.
->
-> **Fill in first.** A block that needs your own values keeps them on its first lines, as `NAME='value'`, with a **Fill in first** list above it that says where to find each one. Replace only the text between the quotes, including the `<` `>`. For example, `EMAIL='<your email>'` becomes `EMAIL='you@example.com'`. Everything below those lines runs as it is.
->
-> Every `sf` command names its org with `--target-org "$NAME"`, so a new terminal can't send it to another org. If `NAME` is empty, run the [resume lines](#resume) first.
+> **Fill in first.** A block that needs your own values has them on its first lines, with a **Fill in first** list above it. Replace only the text between the quotes, including the `<` `>`: `EMAIL='<your email>'` becomes `EMAIL='you@example.com'`.
 
 > [!WARNING]
 > Keys, passwords and tokens are typed only into your own terminal or into Salesforce Setup. Never paste them into a file in the repo, a chat or an issue.
+
+<a id="resume"></a>
+
+> [!NOTE]
+> **Coming back later, or in a new terminal.** Run these lines first, every time. Your logins, the repo and the files you made stay.
+>
+> **Paste into your terminal.** In every new terminal, before any other block. If you chose your own name in step 4, put it between the quotes.
+>
+> ```bash
+> NAME='test-cloud-agentic-iot'
+> cd ~/Cloud-Agentic-IoT        # or wherever you cloned it in step 4
+> export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
+> echo "AWS profile $AWS_PROFILE, org $SF_TARGET_ORG"
+> ```
 
 <a id="step-1"></a>
 
@@ -52,17 +62,17 @@ Every feature, from a fresh clone to a working system: your own AWS project with
 | uv | latest | `brew install uv` | MCP server (step 11) |
 | GitHub CLI `gh` | latest | `brew install gh` | pipelines (step 14) |
 
-**Paste into your terminal.** Once per computer. It installs the ESP32 board support and the four libraries the firmware needs (only for boards, step 12).
+**Paste into your terminal.** Once per computer. It installs the ESP32 board support and the four libraries the firmware needs for the boards in step 12.
 
 ```bash
 arduino-cli core install esp32:esp32
 arduino-cli lib install "PubSubClient" "ArduinoJson" "DHT sensor library" "ESP32Servo"
 ```
 
-Linux and Windows: [SETUP.md §0](SETUP.md#0-prerequisites--install-the-tooling).
+On Linux or Windows, the same tools: [SETUP.md §0](SETUP.md#0-prerequisites--install-the-tooling).
 
 > [!TIP]
-> **Check before you go on.** Each of these prints a version at least as new as the table: `node --version`, `sf --version`, `aws --version`, `jq --version`. For boards, `arduino-cli core list` shows `esp32:esp32`.
+> **Check before you go on.** Each of these prints a version at least as new as the table: `node --version`, `sf --version`, `aws --version`, `jq --version`, `uv --version`, `gh --version`. `arduino-cli core list` shows `esp32:esp32`.
 
 [Step map](#step-map) · [2. Create the AWS project and the Salesforce org →](#step-2)
 
@@ -70,20 +80,11 @@ Linux and Windows: [SETUP.md §0](SETUP.md#0-prerequisites--install-the-tooling)
 
 ## 2. Create the AWS project and the Salesforce org
 
-1. Create an AWS **project** in [AWS Settings](https://settings.aws.com) on the paid plan, and set a monthly spend limit (the lowest is $20). Note its Region.
-2. **Check that Bedrock works in the project, right away.** The agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account is often held from Bedrock until AWS lifts it. Signed in to the project, in its Region: open the [Amazon Bedrock console](https://console.aws.amazon.com/bedrock/) → **Playgrounds** → **Chat / Text**, pick any model, and send "hello".
-   - **It answers:** Bedrock works. Carry on.
-   - **It says `Operation not allowed`, or that the account isn't authorized:** open a free case now in the [Support Center](https://support.console.aws.amazon.com/support/home#/case/create) → **Account and billing** → **Account** (not Technical). Ask AWS to enable Amazon Bedrock for Titan Text Embeddings V2 in your Region, and say it's for a new account. Finish any account verification or payment-method notice in Billing first. It can take **up to 72 hours**. Carry on with the install meanwhile, and run step 6 with `SKIP_SOP_INDEX=yes` until the case is resolved.
+1. Create an AWS **project** in [AWS Settings](https://settings.aws.com) on the paid plan, and set a monthly spend limit (the lowest is $20). Keep it a plain project with its advanced features off: that is what keeps the spend limit in place. Note its Region.
+2. **Open Bedrock in the project.** Signed in to the project, in its Region: open the [Amazon Bedrock console](https://console.aws.amazon.com/bedrock/) → **Playgrounds** → **Chat / Text**, pick any model, and send "hello". It answers.
 3. Sign up for a free **Developer Edition** org at [developer.salesforce.com/signup](https://developer.salesforce.com/signup).
 
-> [!WARNING]
-> Use a plain AWS project and **do not activate its advanced features**. Activating them removes the spend limit for good and can't be undone. You don't need them here: they only matter for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts instead.
-
-Why a project, and what it costs: [TRY-IT.md](TRY-IT.md#why-a-project-and-what-it-costs-you).
-
-After step 4, the same Bedrock check from the terminal.
-
-**Paste into your terminal.** Once per AWS account, after step 4. It prints `AUTHORIZED` when Bedrock works.
+**Paste into your terminal.** Once per AWS account, after step 4. It prints `AUTHORIZED`.
 
 ```bash
 aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text-v2:0 \
@@ -91,7 +92,7 @@ aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text
 ```
 
 > [!TIP]
-> **Check before you go on.** The Bedrock playground answered "hello" (or your Support case is open), AWS Settings shows the project with its spend limit, and you can sign in to the new Developer Edition org.
+> **Check before you go on.** The Bedrock playground answered "hello", AWS Settings shows the project with its spend limit, and you can sign in to the new Developer Edition org.
 
 [← 1. Install the tools](#step-1) · [Step map](#step-map) · [3. Turn on the org's features →](#step-3)
 
@@ -99,18 +100,14 @@ aws bedrock get-foundation-model-availability --model-id amazon.titan-embed-text
 
 ## 3. Turn on the org's features
 
-One pass through Setup, all before the deploy. Each switch accepts terms or can't be turned off, so a deploy can't make it for you, and without it the deploy fails.
-
 | Setup page | Do |
 |---|---|
 | **Einstein Setup** | **Turn on Einstein** |
-| **Agentforce Agents** | Turn on **Agentforce** (if it's missing, wait a few minutes and reload) |
+| **Agentforce Agents** | Turn on **Agentforce** |
 | **Account Settings** | **Enable Person Accounts**. Then Profiles → your profile → Object Settings → Accounts → Record Types: make **Person Account** the default, keep Business available |
 | **Digital Experiences** → **Settings** | **Enable Digital Experiences**, pick a domain, then turn on **Allow using standard external profiles for self-registration, user creation, and login** |
 | **Omni-Channel Settings** | **Enable Omni-Channel** |
 | **Messaging Settings** | Turn on **Messaging** |
-
-The patient portal needs one Customer Community licence per test patient. You count them at the end of step 4, once the terminal knows your org.
 
 > [!TIP]
 > **Check before you go on.** Reload each Setup page in the table: every switch stays on. In the Accounts tab, **New** offers the **Person Account** record type.
@@ -121,58 +118,33 @@ The patient portal needs one Customer Community licence per test patient. You co
 
 ## 4. Clone and sign in
 
-Use one name for both CLIs, for example `test-<your GitHub name>`.
+This guide calls your AWS profile and org alias `test-cloud-agentic-iot`, for simplicity, so every block pastes as it is. Any name works (letters, digits and `-`): change it here and in the [resume lines](#resume).
 
 **Fill in first:**
-- `NAME='test-yourname'`: your own short name, used for both the AWS profile and the org alias. Letters, digits and `-` only. Example: `NAME='test-jsmith'`.
+- `REGION='us-east-2'`: your project's Region from step 2. Example: `REGION='ca-central-1'`.
 
-**Paste into your terminal.** Once per computer. It clones the repo, signs you in to AWS and to the org in your browser (one tab each), and sets `NAME` for this terminal.
+**Paste into your terminal.** Once per computer. It clones the repo and signs you in to AWS and to the org in your browser.
 
 ```bash
-NAME='test-yourname'
+NAME='test-cloud-agentic-iot'
+REGION='us-east-2'
 git clone https://github.com/CloudArchitect101/Cloud-Agentic-IoT.git
 cd Cloud-Agentic-IoT
 aws login --profile "$NAME"
+aws configure set region "$REGION" --profile "$NAME"
 sf org login web --alias "$NAME"
 export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
 ```
 
-An AWS project allows only its own Region, so a command in another Region fails with `explicit deny in a service control policy`. Check the profile's Region with `aws configure get region --profile "$NAME"`. If it prints nothing or another Region, set the one from step 2: `aws configure set region us-east-2 --profile "$NAME"` (with your Region).
-
-**Paste into your terminal.** Once per org, only if you plan the patient portal (step 10). It lists the org's Community licences and how many are used.
+**Paste into your terminal.** Once per org. It lists the Customer Community licences the patient portal (step 10) uses.
 
 ```bash
 sf data query --target-org "$NAME" \
   --query "SELECT Name, TotalLicenses, UsedLicenses FROM UserLicense WHERE Name LIKE '%Community%'"
 ```
 
-<a id="resume"></a>
-
-> [!WARNING]
-> **Resuming after a restart or in a new terminal.** A new terminal forgets every variable you set (`NAME=…`, `export …`). Your logins and the repo stay.
->
-> **Paste into your terminal.** In every new terminal, before any other block. Put your own name from step 4 between the quotes.
->
-> ```bash
-> NAME='test-yourname'
-> cd ~/Cloud-Agentic-IoT        # or wherever you cloned it in step 4
-> export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
-> echo "AWS profile $AWS_PROFILE, org $SF_TARGET_ORG"
-> ```
->
-> | What | After a restart |
-> |---|---|
-> | `NAME`, `AWS_PROFILE`, `SF_TARGET_ORG` (step 4) | **Gone.** Run the three lines above |
-> | `sf` org login (step 4) | Kept on disk. Nothing to do |
-> | `aws login` session (step 4) | Kept on disk, but it expires after some hours. If a command says the token or session expired, run `aws login --profile "$NAME"` again |
-> | Variables set inside one command block (`ACCOUNT`, `LIMIT`, `EMAIL`, `STACK`, `CALLER`, `ROLE_ARN`, `INTEGRATION_USER`, `MEMBER`, `AGENT_USER`, `PATIENT_USER`, `CRT`, `BUNDLE`, `MCP_URL`, `REGION`, `MY_DOMAIN`) | Used only in that block. If the terminal closed partway through a block, run the whole block again |
-> | Pipelines (step 14): `AWS_PROFILE=iot-dev`, `SF_TARGET_ORG=iot-dev-admin` | **Gone.** Run their `export` lines again |
-> | Files you made: keys in `scripts/`, the portal key in `~/Downloads` | Kept. Nothing to do |
->
-> `scripts/install.sh` is safe to run again from the start.
-
 > [!TIP]
-> **Check before you go on.** `aws sts get-caller-identity` prints your project's account, and `sf org display --target-org "$NAME"` shows **Connected Status** `Connected`. The licence query above lists at least one Customer Community licence if you plan the portal (step 10).
+> **Check before you go on.** `aws sts get-caller-identity` prints your project's account, and `sf org display --target-org "$NAME"` shows **Connected Status** `Connected`. The licence query above lists at least one Customer Community licence.
 
 [← 3. Turn on the org's features](#step-3) · [Step map](#step-map) · [5. Make what the deploy reads →](#step-5)
 
@@ -180,12 +152,7 @@ sf data query --target-org "$NAME" \
 
 ## 5. Make what the deploy reads
 
-Everything the deploy asks for, made first, so step 6 needs no second run.
-
-> [!NOTE]
-> **What a script does for you, and what stays by hand.** The one-time setup in [`bootstrap/`](../bootstrap/README.md) (the `AWS_IoT_Relay` named credential, its external credential and the `AWS_IoT_Relay_Callers` permission set) needs no step of its own: `scripts/install.sh` runs it in step 6, with your URL and Region. The integration user (5b) and its External Client App (5c) are still made in Setup, because each holds something only this org can make: a username in your domain with its own licence, and a consumer key that Salesforce generates when the app is saved and that step 6 asks for. The access key and role ARN in step 7 stay typed by hand too, since Salesforce stores them as credentials, not as metadata a script can deploy.
-
-**a. The integration certificate.** AWS signs in to Salesforce with it (JWT), never with a password. `.gitignore` keeps `*.key` and `*.crt` out of Git.
+**a. The integration certificate.**
 
 **Paste into your terminal.** Once per org. It makes `scripts/server-integration.key` (private, stays on your computer) and `scripts/server-integration.crt` (you upload it in 5c).
 
@@ -215,26 +182,22 @@ Then on the user's page: **Permission Set License Assignments** → Edit Assignm
 | OAuth | **Enable OAuth**, scopes `api` and `refresh_token, offline_access` |
 | JWT | **Enable JWT Bearer Flow**, upload `scripts/server-integration.crt` |
 
-Save, and copy its **Consumer Key** for step 6. The key exists as soon as the app is saved; its policy gets the permission set after the deploy.
+Save, and copy its **Consumer Key** for step 6.
 
-**d. The Slack app** (skip without Slack).
-
-No Slack workspace yet? Make a free one first (slash commands and Agentforce in Slack both work on the free plan):
+**d. The Slack app.** First a free Slack workspace of your own:
 
 1. Go to [slack.com/get-started#/createnew](https://slack.com/get-started#/createnew), enter your email, and type the code Slack emails you.
 2. **Create a workspace**: name it, for example `Smart Ward Demo`, and enter your name.
-3. Skip inviting people (**Skip this step**) and skip the paid trial. Slack opens the workspace.
-
-You're its **owner**, which steps 8a and 8b need: owners may install apps and connect a Salesforce org. In a company workspace you'd need an admin to do those parts, so a workspace of your own keeps the demo separate.
+3. At the invite page, click **Skip this step**, and leave the paid trial. Slack opens the workspace.
 
 Then the app: at [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**, name `Ward Bot`, pick your workspace → **Create App**. Then **Basic Information** → **App Credentials** → **Signing Secret** → **Show**. Step 6 asks for it.
 
-**e. The portal's chat certificate** (skip without the portal). Setup → **Certificate and Key Management** → **Create Self-Signed Certificate**: Label and Unique Name `Patient_Portal_Chat`, key size 2048, **Exportable Private Key off**. Download the `.crt`, then:
+**e. The portal's chat certificate.** Setup → **Certificate and Key Management** → **Create Self-Signed Certificate**: Label and Unique Name `Patient_Portal_Chat`, key size 2048, **Exportable Private Key off**. Download the `.crt`, then:
 
 **Fill in first:**
 - `CRT=~/Downloads/Patient_Portal_Chat.crt`: where your browser saved the certificate. Change it only if it isn't in `~/Downloads`.
 
-**Paste into your terminal.** Once per org. It turns the certificate into `~/Downloads/patient-portal-chat-key.json`, the public key you upload in step 10 (not to the repo).
+**Paste into your terminal.** Once per org. It makes `~/Downloads/patient-portal-chat-key.json`, which you upload in step 10.
 
 ```bash
 CRT=~/Downloads/Patient_Portal_Chat.crt
@@ -242,7 +205,7 @@ node scripts/portal-chat-jwk.mjs "$CRT" patient-portal-chat-1 > ~/Downloads/pati
 ```
 
 > [!TIP]
-> **Check before you go on.** `ls scripts/server-integration.key scripts/server-integration.crt` lists both files. In Setup, the Integration user is active with the **Salesforce Integration** licence, and you have the External Client App's **Consumer Key** (and the Slack **Signing Secret**, and `~/Downloads/patient-portal-chat-key.json`, if you do those features).
+> **Check before you go on.** `ls scripts/server-integration.key scripts/server-integration.crt` lists both files. In Setup, the Integration user is active with the **Salesforce Integration** licence, and you have the External Client App's **Consumer Key**, the Slack **Signing Secret**, and `~/Downloads/patient-portal-chat-key.json`.
 
 [← 4. Clone and sign in](#step-4) · [Step map](#step-map) · [6. Deploy everything in one run →](#step-6)
 
@@ -250,41 +213,23 @@ node scripts/portal-chat-jwk.mjs "$CRT" patient-portal-chat-1 > ~/Downloads/pati
 
 ## 6. Deploy everything in one run
 
-**Paste into your terminal.** Once per org, and safe to run again. It deploys AWS and Salesforce and asks for the values from step 5 as it goes (typing is hidden). Without Data Cloud, leave out the `DATA_CLOUD_READER_USER=…` part.
+**Paste into your terminal.** Once per org. It deploys AWS and Salesforce and asks for the values from step 5 as it goes (typing is hidden).
 
 ```bash
 SF_TARGET_ORG="$NAME" DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader scripts/install.sh Dev
 ```
 
-[`scripts/install.sh`](../scripts/install.sh) runs, in order:
-
-1. Creates Data Cloud's IAM reader user, if you named it (leave `DATA_CLOUD_READER_USER=` out without Data Cloud).
-2. `seed-ssm.sh`. It asks for the integration **username** (5b), the **consumer key** (5c), offers `scripts/server-integration.key` (5a), and asks for the **Slack signing secret** (5d). Type the values; nothing is shown. Press Enter to skip one.
-3. `check.sh`, the local tests.
-4. `deploy-aws.sh`: every stack, the guardrails, the MCP server, the Slack stack once its secret is in, and the SOP index for the agent.
-5. `deploy-salesforce.sh`: the app, the React portal, the agents' actions, the permission sets.
-6. `bootstrap-salesforce.sh`: creates the `AWS_IoT_Relay_Credential` external credential, the `AWS_IoT_Relay` named credential and the `AWS_IoT_Relay_Callers` permission set with this project's URL and Region, each only when the org has none. It never changes one that exists, and it leaves the access key and the role ARN for you to type in step 7.
-7. Gives you `Device_Platform_Admin`, `Platform_Usage_Viewer`, `Patient_Care_Agent`, `AWS_IoT_Relay_Credential_Reader` and `AWS_IoT_Relay_Callers`, and gives the integration user `Device_Integration`.
-8. `publish-agent.sh`: publishes and activates the Patient Care Agent, on a first install only. When the org already runs a version of the agent, it is left as it is.
-9. Prints every value the next steps ask for: the role ARN and URL for step 7, the Slack Request URL, the Data Cloud bucket and the MCP endpoint.
-
-Run it again whenever you like: each part is safe to repeat. `SKIP_CHECK=yes` skips the tests, `SKIP_AGENT=yes` never publishes the agent. `SKIP_BOOTSTRAP=yes` leaves the `AWS_IoT_Relay` credential for you to make in Setup (step 7, "By hand instead"). `REPUBLISH_AGENT=yes` replaces a running agent with the repo's copy; that drops actions added by hand in Agentforce Builder (step 11), so retrieve and commit them first. If Bedrock is still held (step 2), run `SKIP_SOP_INDEX=yes scripts/install.sh Dev`. Everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force`.
-
-> [!NOTE]
-> **A later deploy fails with `This schedulable class has jobs pending or in progress`.** Once the case queue monitor is scheduled, Salesforce refuses a deploy that touches the classes it uses. In a Dev or test org, turn on Setup → **Deployment Settings** → **Allow deployments of components when corresponding Apex jobs are pending or in progress**, then deploy again. In Prod, stop the scheduled jobs, deploy, and schedule them again.
-
-Then three clicks and one command:
+Then:
 
 1. **The app's policy.** External Client App Manager → `Cloud Agentic IoT Integration` → **Manage Policies**: **Admin approved users are pre-authorized**, permission set `Device_Integration`.
 2. **The queue.** Setup → **Queues** → `Care_Team_Queue` → add the members who should get the temperature alert Cases.
-3. **The spend card's budget.** The Home page shows this month's AWS spend against a budget equal to the spend limit:
+3. **The spend card's budget.**
 
 **Fill in first:**
-- `LIMIT='20'`: your project's monthly spend limit in US dollars, the same number you set in step 2. Example: `LIMIT='50'`. Keep `20` if you chose the lowest.
+- `LIMIT='20'`: your project's monthly spend limit in US dollars, from step 2. Example: `LIMIT='50'`.
 - `EMAIL='<your email>'`: the address AWS sends the budget alerts to. Example: `EMAIL='you@example.com'`.
-- `ACCOUNT` fills itself in.
 
-**Paste into your terminal.** Once per AWS account. It creates the `cloud-agentic-iot-monthly` budget the Home page compares spend with, emailing you at 80% and when the forecast passes 100%.
+**Paste into your terminal.** Once per AWS account. It creates the `cloud-agentic-iot-monthly` budget the Home page shows.
 
 ```bash
 LIMIT='20'
@@ -295,7 +240,7 @@ aws budgets create-budget --region us-east-1 --account-id "$ACCOUNT" \
   --notifications-with-subscribers "[{\"Notification\":{\"NotificationType\":\"ACTUAL\",\"ComparisonOperator\":\"GREATER_THAN\",\"Threshold\":80,\"ThresholdType\":\"PERCENTAGE\"},\"Subscribers\":[{\"SubscriptionType\":\"EMAIL\",\"Address\":\"$EMAIL\"}]},{\"Notification\":{\"NotificationType\":\"FORECASTED\",\"ComparisonOperator\":\"GREATER_THAN\",\"Threshold\":100,\"ThresholdType\":\"PERCENTAGE\"},\"Subscribers\":[{\"SubscriptionType\":\"EMAIL\",\"Address\":\"$EMAIL\"}]}]"
 ```
 
-**Paste into your terminal.** Any time. It prints the integration username AWS signs in as, so you can check it matches the user in 5b and the app policy in 1.
+**Paste into your terminal.** Once. It prints the integration username AWS signs in as: the user from 5b.
 
 ```bash
 aws lambda get-function-configuration --function-name cloud-agentic-iot-salesforce-sync \
@@ -303,7 +248,7 @@ aws lambda get-function-configuration --function-name cloud-agentic-iot-salesfor
 ```
 
 > [!TIP]
-> **Check before you go on.** `scripts/install.sh` ends by printing the values for the next steps, with no `Error` line above them. The App Launcher shows **Cloud Agentic IoT**, and the last command prints the same integration username as the user in 5b.
+> **Check before you go on.** `scripts/install.sh` ends by printing the values for the next steps. The App Launcher shows **Cloud Agentic IoT**, and the last command prints the same integration username as the user in 5b.
 
 [← 5. Make what the deploy reads](#step-5) · [Step map](#step-map) · [7. Let Salesforce call AWS →](#step-7)
 
@@ -311,74 +256,30 @@ aws lambda get-function-configuration --function-name cloud-agentic-iot-salesfor
 
 ## 7. Let Salesforce call AWS
 
-One named credential, `AWS_IoT_Relay`, signs every call from Salesforce to AWS (provisioning, commands, the live card, the Home page's spend, the agent's Find Procedure) with AWS Signature Version 4.
-
 **a. The caller IAM user and its key.**
 
-**Paste into your terminal.** Once per AWS account. It creates the IAM user `cloud-agentic-iot-salesforce-caller`, lets it assume the role step 6 made, and prints its access key once.
+**Paste into your terminal.** Once per AWS account. It creates the IAM user Salesforce signs its calls with and prints its access key once.
 
 ```bash
 STACK=cloud-agentic-iot-queue-relay-Dev
 CALLER=cloud-agentic-iot-salesforce-caller
 ROLE_ARN=$(aws cloudformation describe-stacks --stack-name "$STACK" \
   --query "Stacks[0].Outputs[?OutputKey=='SalesforceCallerRoleArn'].OutputValue" --output text)
-echo "$ROLE_ARN"   # must print an ARN; an empty line means a wrong stack name or Region
+echo "$ROLE_ARN"   # prints the role ARN
 aws iam create-user --user-name "$CALLER" > /dev/null
 aws iam put-user-policy --user-name "$CALLER" --policy-name assume-salesforce-caller-role \
   --policy-document "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"sts:AssumeRole\",\"Resource\":\"$ROLE_ARN\"}]}"
 aws iam create-access-key --user-name "$CALLER"
 ```
 
-`create-access-key` prints the key once. Type it into Salesforce in b and nowhere else.
-
-**b. Type the key and the role into the external credential.** `scripts/install.sh` already created the external credential `AWS_IoT_Relay_Credential` in step 6, with your Region. Salesforce stores the key and the role ARN as credentials, not as settings a file can carry, so they are yours to type. Setup → **Named Credentials** → **External Credentials** → `AWS_IoT_Relay_Credential`:
+**b. Type the key and the role into the external credential.** Setup → **Named Credentials** → **External Credentials** → `AWS_IoT_Relay_Credential`:
 
 1. **Edit**: type the key from a into **STS Access Key** and **STS Access Secret**, then **Save**.
 2. Under **Principals**, edit `SalesforceCaller`: type the role ARN that step 6 printed into **IAM Role ARN** (it has `:role/`, not `:user/`), then **Save**.
 
-While you are there, check what the script filled in:
+**c. Check the named credential.** **Named Credentials** → `AWS_IoT_Relay`: the URL is the named credential URL that step 6 printed, the external credential is the one from b, and **Enabled for Callouts** and **Generate Authorization Header** are both on.
 
-| Setting | Value |
-|---|---|
-| Authentication Protocol | **AWS Signature Version 4** |
-| Service | `execute-api` |
-| Region | Your project's Region |
-| Obtain Temporary IAM Credentials via STS | On, **IAM User Identified by Access Key** |
-| STS Access Key / STS Access Secret | The key from a (you typed it just now) |
-| STS Duration | Empty, or 3600 or less |
-| Additional Status Codes for Token Refresh | `403` |
-| Principal `SalesforceCaller` → IAM Role ARN | The role ARN that step 6 printed (you typed it just now) |
-
-The script could not read your Region when the Region here is `us-east-1` and yours is another: change it.
-
-**c. Check the named credential.** **Named Credentials** → `AWS_IoT_Relay`: the URL is the named credential URL that step 6 printed, the external credential is the one from b, and **Enabled for Callouts** and **Generate Authorization Header** are both on. If the URL reads `https://dummy-replace-me.example.com`, the script could not read the real one from your stack: replace it.
-
-<details markdown="1">
-<summary>By hand instead (step 6 said it could not create the credential, or you ran it with <code>SKIP_BOOTSTRAP=yes</code>)</summary>
-
-Either run the one-time script yourself, as an admin of the org:
-
-**Fill in first:**
-- `API_URL='<URL>'`: the line step 6 printed as "Step 7c, named credential URL". Example: `API_URL='https://abc123.execute-api.us-east-2.amazonaws.com/Dev'`.
-- `REGION='<Region>'`: your project's Region. Example: `REGION='us-east-2'`.
-
-**Paste into your terminal.** Once per org. It creates the external credential, the named credential and the permission set, each only when the org has none, and changes nothing that exists. Then do b and c above.
-
-```bash
-API_URL='<URL>'
-REGION='<Region>'
-scripts/bootstrap-salesforce.sh "$NAME" --url "$API_URL" --region "$REGION"
-```
-
-Or click it together: Setup → **Named Credentials** → **External Credentials** → **New** with Name `AWS_IoT_Relay_Credential`, the settings in the table in b and a principal named `SalesforceCaller`; then **Named Credentials** → **New** with Name `AWS_IoT_Relay`, the URL from step 6, that external credential, and **Enabled for Callouts** and **Generate Authorization Header** both on; then a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal.
-
-Then run `scripts/install.sh Dev` again: it gives the permission set to you and to the hidden Automated Process user.
-
-</details>
-
-Why a script and not the pipeline: the files are in [`bootstrap/`](../bootstrap/README.md), outside what the pipeline deploys, so no later deploy can put a placeholder back over your values.
-
-**d. Who may use it.** The permission set `AWS_IoT_Relay_Callers` gives **External Credential Principal Access** to the principal from b. It holds nothing else: do not add **Read** on **User External Credentials** to it, because portal patients hold this set too, and their Customer Community licence refuses that permission. The Read comes from the repo's `AWS_IoT_Relay_Credential_Reader`, which `deploy-salesforce.sh` gives to every internal holder of `AWS_IoT_Relay_Callers`. Step 6 created `AWS_IoT_Relay_Callers` and gave it to you and to the hidden Automated Process user. Give it to the integration user too:
+**d. Who may use it.** Give the integration user `AWS_IoT_Relay_Callers` and `AWS_IoT_Relay_Credential_Reader` (step 6 gave both to you):
 
 **Fill in first:**
 - `INTEGRATION_USER='<integration username>'`: the integration user's username from 5b. Example: `INTEGRATION_USER='integration@iot-dev.jsmith.com'`. To look it up, paste this into your terminal:
@@ -388,21 +289,18 @@ Why a script and not the pipeline: the files are in [`bootstrap/`](../bootstrap/
     --query "SELECT Username FROM User WHERE Profile.Name = 'Salesforce API Only System Integrations' AND IsActive = true"
   ```
 
-**Paste into your terminal.** Once per org. It gives `AWS_IoT_Relay_Callers` to the integration user.
+**Paste into your terminal.** Once per org.
 
 ```bash
 INTEGRATION_USER='<integration username>'
 sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$INTEGRATION_USER" --target-org "$NAME"
+sf org assign permset --name AWS_IoT_Relay_Credential_Reader --on-behalf-of "$INTEGRATION_USER" --target-org "$NAME"
 ```
-
-The next `scripts/deploy-salesforce.sh` run gives it `AWS_IoT_Relay_Credential_Reader`, the Read a callout needs. To have it before then, assign it the same way.
 
 Every care team member who uses the agent also needs it: `sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of '<username>' --target-org "$NAME"`.
 
-If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach) lists each cause and its fix under "If a callout fails".
-
 > [!TIP]
-> **Check before you go on.** Open the app's **Home** tab: the cost card shows this month's AWS spend against your limit, as in the [picture on Start here](START-HERE.md#what-success-looks-like). That number comes through `AWS_IoT_Relay`, so it proves the named credential works. An error on the card instead? See "If a callout fails" in the [Install guide](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
+> **Check before you go on.** Open the app's **Home** tab: the cost card shows this month's AWS spend against your limit, as in the [picture on Start here](START-HERE.md#what-success-looks-like).
 
 [← 6. Deploy everything in one run](#step-6) · [Step map](#step-map) · [8. Slack →](#step-8)
 
@@ -410,7 +308,7 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
 
 ## 8. Slack
 
-`Test8` in this step and in step 13 stands for your own board's name: the Serial Number you give its Asset in step 12. A new org has no board called `Test8`, so use yours.
+`Test8` is the name you give the monitored device in step 12.
 
 **a. The `/patient-status` command** (the Ward Bot app from 5d):
 
@@ -418,7 +316,7 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
 2. **Install App** → **Install to Workspace** → **Allow**.
 3. In any channel: `/patient-status Test8`.
 
-**b. The Patient Care Agent in Slack** (Agentforce in Slack, no code of ours):
+**b. The Patient Care Agent in Slack:**
 
 1. In Slack, as the workspace owner: **Tools & settings** → **Manage Salesforce Organizations** → **Connect Salesforce Org**: your My Domain URL, account mapping field **Email**, **Automatic account mapping** off → **Request Connection**.
 2. In Salesforce: Setup → Quick Find **Slack** → **Manage Slack Connection** → approve. Back in Slack's **Manage Salesforce Organizations**, open the pending connection → **Activate**.
@@ -427,7 +325,7 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
    **Fill in first:**
    - `MEMBER='<username>'`: that member's Salesforce username (Setup → **Users**, the **Username** column). Example: `MEMBER='nurse.lee@iot-dev.jsmith.com'`.
 
-   **Paste into your terminal.** Once per Slack member. It gives that member the two permission sets the agent in Slack needs.
+   **Paste into your terminal.** Once per Slack member.
 
    ```bash
    MEMBER='<username>'
@@ -439,7 +337,7 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
 5. DM the agent: "What is Test8 reading?"
 
 > [!TIP]
-> **Check before you go on.** `/patient-status` answers in the channel, not with Slack's `dispatch_failed`. Until a board exists (step 12) it can't show a reading yet. The agent answers your DM.
+> **Check before you go on.** `/patient-status` answers in the channel, and the agent answers your DM. Both show the board's live reading once you add it in step 12.
 
 [← 7. Let Salesforce call AWS](#step-7) · [Step map](#step-map) · [9. Data Cloud →](#step-9)
 
@@ -447,25 +345,13 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
 
 ## 9. Data Cloud
 
-Needs Data Cloud (Data 360) in the org, and you as an admin with **Data Cloud Architect** or System Administrator. Step 6 already turned the CSV copy on and created the reader user.
-
 1. **Its key**, typed into the connection in step 2 and nowhere else.
 
-   **Paste into your terminal.** Once per AWS account. It prints the reader user's access key and secret once: keep the tab open until step 2 has them.
+   **Paste into your terminal.** Once per AWS account. It prints the reader user's access key and secret once.
 
    ```bash
    aws iam create-access-key --user-name cloud-agentic-iot-data-cloud-reader
    ```
-
-   **What this user may do.** Nothing of its own: it has no IAM policy. The archive bucket's policy (`ArchiveBucketPolicy` in [`lambda/patient-vitals/cloudformation.yaml`](../lambda/patient-vitals/cloudformation.yaml)) gives it three permissions, and only when `DATA_CLOUD_READER_USER` named it:
-
-   | Action | Resource | Condition |
-   |---|---|---|
-   | `s3:GetBucketLocation` | the archive bucket | none |
-   | `s3:ListBucket` | the archive bucket | `s3:prefix` like `datacloud/*` |
-   | `s3:GetObject` | `<bucket>/datacloud/*` | none |
-
-   It cannot write, delete, read `readings/` or call any other AWS service, and the bucket refuses it without TLS. To confirm nothing else was attached by hand: `aws iam list-attached-user-policies --user-name cloud-agentic-iot-data-cloud-reader` and `aws iam list-user-policies --user-name cloud-agentic-iot-data-cloud-reader` both print empty lists.
 
 2. **Connection.** Data Cloud Setup → **Other Connectors** → **New** → **Amazon S3**: Name `Room Readings S3`, **Bucket Name** = the Data Cloud bucket step 6 printed, **Parent Directory** `datacloud/room-readings/`, **Access Key/Secret Based** with the key from 1. **Test Connection** → **Save**.
 3. **Data stream.** Data Streams → **New** → **Amazon S3** → `Room Readings S3`:
@@ -482,29 +368,16 @@ Needs Data Cloud (Data 360) in the org, and you as an admin with **Data Cloud Ar
    **Deploy**, then **Refresh Now**.
 
 4. **Mapping.** On the stream, **Start** the mapping → **New Custom Object** `Room_Readings`, every field under the same name, `reading_id` as primary key → Save.
-5. **Calculated insights**, once `Room_Readings__dlm` has rows (a board must have sent readings):
-
-**Paste into your terminal.** Once per org, and safe to run again. The first line prints what it would send; the second creates the two insights (one already there is left as it is).
-
-```bash
-SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh --dry-run
-SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
-```
-
-Each insight is created with its schedule from [`datacloud/calculated-insights.json`](../datacloud/calculated-insights.json): Room Device Silence (each board's last reading time) every hour, Room Out Of Range Daily every 6 hours, to spend fewer Data Cloud credits. Change one there, or on the insight in Data Cloud.
-
-**Who may ask the agent for a device's history.** The Patient Care Agent's **Get Device History** action queries Data Cloud as the person asking, and the `Patient_Care_Agent` permission set can't grant Data Cloud access. Give yourself, and every care team member who uses the agent (in Salesforce or in Slack), the standard **Data Cloud User** permission set: Setup → **Users** → the user → **Permission Set Assignments** → **Edit Assignments** → **Data Cloud User** → **Save**. Without it the agent answers that the history can't be read right now ([DATA-CLOUD.md](DATA-CLOUD.md#how-the-agent-reads-it)).
+5. **Who may ask the agent for a device's history.** Give yourself, and every care team member who uses the agent, the **Data Cloud User** permission set: Setup → **Users** → the user → **Permission Set Assignments** → **Edit Assignments** → **Data Cloud User** → **Save**.
 
 > [!TIP]
-> **Check before you go on.** The data stream's last refresh succeeded, and its record count is above 0 once a board has sent readings. `scripts/data-cloud-insights.sh --dry-run` prints the two insights. Once the insights have run, the agent answers "How long was Test8 at or above 30 C yesterday?" from Data Cloud.
+> **Check before you go on.** The data stream is deployed, its mapping to `Room_Readings` is saved, and you hold **Data Cloud User**.
 
 [← 8. Slack](#step-8) · [Step map](#step-map) · [10. Patient portal with Enhanced Chat →](#step-10)
 
 <a id="step-10"></a>
 
 ## 10. Patient portal with Enhanced Chat
-
-The deploy brought the site, the React app, the Apex, the agent's actions and the permission sets. Then:
 
 1. **Chat deployment.** Setup → **Embedded Service Deployments** → **New Deployment** → **Enhanced Chat** → Web. Name `Patient_Portal_Chat`, domain = the site's `*.my.site.com` domain, let it create the Messaging channel. Open it → **Switch to V2** → **Publish**.
 2. **User verification.** Setup → **Enhanced Chat User Verification** → **JSON Web Keys** → **New Key**: upload `patient-portal-chat-key.json` (5e). Then **JSON Web Keysets** → **New Keyset**: name `Patient_Portal_Keyset`, issuer `cloud-agentic-iot-patient-portal`, add the key. In **Messaging Settings**, open the channel: tick **Add User Verification**, save, then **User Verification Configuration** → **New** → `Patient_Portal_Keyset`.
@@ -518,7 +391,7 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
        --query "SELECT Username FROM User WHERE Profile.Name = 'Einstein Agent User' AND IsActive = true"
      ```
 
-   **Paste into your terminal.** Once per org. It gives the agent user its four permission sets, publishes and activates the portal's agent, then deploys the chat's routing flow. It takes a few minutes.
+   **Paste into your terminal.** Once per org. It takes a few minutes.
 
    ```bash
    AGENT_USER='<agent username>'
@@ -531,11 +404,7 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
    scripts/deploy-portal-routing.sh "$NAME"
    ```
 
-   A permission set the user already holds prints a warning: that's fine, carry on.
-
-   The agent user also needs `AWS_IoT_Relay_Callers` (from step 6) to read the board's newest reading from AWS for the chat.
-
-   **Paste into your terminal.** Once per org, in the same terminal as the block above. It gives the agent user `AWS_IoT_Relay_Callers`.
+   **Paste into your terminal.** Once per org, in the same terminal as the block above.
 
    ```bash
    sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$AGENT_USER" --target-org "$NAME"
@@ -545,9 +414,9 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
 5. **The site's chat link.** From the deployment's code snippet, copy the site URL (it holds `ESW`).
 
    **Fill in first:**
-   - `CHAT_SITE_URL='<the site URL>'`: the URL you just copied. Example: `CHAT_SITE_URL='https://yourdomain.my.site.com/ESWPatientPortalChat1700000000000'`. It is not a secret.
+   - `CHAT_SITE_URL='<the site URL>'`: the URL you just copied. Example: `CHAT_SITE_URL='https://yourdomain.my.site.com/ESWPatientPortalChat1700000000000'`.
 
-   **Paste into your terminal.** Once per org. It stores the URL in the org's `Patient_Portal_Setting.Default` record and touches no other setting. Nothing to commit, and later deploys keep it, because the repo's copy of the record does not name this field.
+   **Paste into your terminal.** Once per org.
 
    ```bash
    CHAT_SITE_URL='<the site URL>'
@@ -556,7 +425,7 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
 
 6. **CORS.** Setup → **CORS** → **New**: `https://<your My Domain>.my.site.com`. Publish the Embedded Service deployment again.
 7. **Guest user.** The site → **Administration** → **Pages** → **Public Access**: assign `Patient_Portal_Guest_Api`.
-8. **Patients.** Setup → **Users** → your user → **Edit** → Role **Care Team Administrator**. Then for each patient's Person Account: **Enable Customer User** (profile Customer Community User, its own plus-address email), and:
+8. **Patients.** Setup → **Users** → your user → **Edit** → Role **Care Team Administrator**. Then make the test patient: Accounts → **New** → **Person Account**, with its own plus-address email, for example `you+patient-a@example.com`. On it, **Enable Customer User** (profile Customer Community User, the same email), and:
 
    **Fill in first:**
    - `PATIENT_USER='<patient username>'`: the username Salesforce gave the patient's Customer Community user. Example: `PATIENT_USER='you+patient-a@example.com'`. To look it up, paste this into your terminal:
@@ -566,7 +435,7 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
        --query "SELECT Username, Contact.Name FROM User WHERE Profile.Name = 'Customer Community User' AND IsActive = true"
      ```
 
-   **Paste into your terminal.** Once per patient. It lets that patient use the portal.
+   **Paste into your terminal.** Once per patient.
 
    ```bash
    PATIENT_USER='<patient username>'
@@ -574,22 +443,17 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
    sf org assign permset --name AWS_IoT_Relay_Callers --on-behalf-of "$PATIENT_USER" --target-org "$NAME"
    ```
 
-   The second set lets the **My monitor** page fetch the board's newest reading from AWS; without it the page shows the last saved one, which can be days old. A later `scripts/install.sh Dev` gives it to any patient who lacks it.
 
-   Put the patient's device on that account: its Asset's Account = the Person Account, record type **Patient Device**.
-
-9. **Try it.** Sign in as the patient, ask the assistant "what is my temperature?", then "I need a nurse": a Case appears on Care_Team_Queue.
+9. **Try it.** Sign in as the patient and tell the assistant "I need a nurse": a Case appears on Care_Team_Queue.
 
 > [!TIP]
-> **Check before you go on.** Item 9 above works: the patient sees their own device, the assistant answers, and "I need a nurse" opens a Case on Care_Team_Queue.
+> **Check before you go on.** Item 9 above works: the patient signs in to the portal, the assistant answers, and "I need a nurse" opens a Case on Care_Team_Queue.
 
 [← 9. Data Cloud](#step-9) · [Step map](#step-map) · [11. MCP servers →](#step-11)
 
 <a id="step-11"></a>
 
 ## 11. MCP servers
-
-Optional. **a.** lets Claude Code reach your devices; **b.** lets every agent answer generic ESP32 questions, with no sign-in. Background: [GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents).
 
 **a. Our MCP server in Claude Code**
 
@@ -626,61 +490,70 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
    sf project retrieve start --metadata AiAuthoringBundle:Patient_Portal_Agent --target-org "$NAME"
    ```
 
-4. **Try it** in the agent panel, Slack or the portal: "What is the spec of the ESP32-S3-DevKitC-1?" The answer ends with a docs.espressif.com link. If it shows `URL_Redacted`, check Setup → **Trusted URLs** lists `docs.espressif.com` and `www.espressif.com` (step 6 deploys both).
+4. **Try it** in the agent panel, Slack or the portal: "What is the spec of the ESP32-S3-DevKitC-1?" The answer ends with a docs.espressif.com link.
 
 > [!TIP]
-> **Check before you go on.** Item 5 of b works in at least one agent, and `node scripts/lib/mcp-probe.js` reports both servers answering.
+> **Check before you go on.** `claude mcp list` shows `smart-ward`, item 4 of b works in both agents, and `node scripts/lib/mcp-probe.js` reports both servers answering.
 
-[← 10. Patient portal with Enhanced Chat](#step-10) · [Step map](#step-map) · [12. Add a board →](#step-12)
+[← 10. Patient portal with Enhanced Chat](#step-10) · [Step map](#step-map) · [12. Add the boards →](#step-12)
 
 <a id="step-12"></a>
 
-## 12. Add a board
+## 12. Add the boards
 
-1. Get the parts (ESP32, DHT11, SG90 servo, a data USB cable): [Install guide, Stage 3](INSTALL-GUIDE.md#what-you-need). Wiring: [firmware/README.md](../firmware/README.md#wiring). Every wire ends on the pin it plugs onto; the pin names are the ones printed on the board.
+Two boards: the monitored device (this guide calls it `Test8`) and the corp ticket gauge (`Test7`). Do 1 to 4 for each, then 5 once.
+
+1. Get the parts ([list](INSTALL-GUIDE.md#what-you-need)) and wire them as drawn: each wire ends on the pin printed on the board.
 
    ![Monitored device wiring, drawn from the real parts: the ESP32 held with its printed pin names facing you (USB down, 3.3V top right). DHT11 leg 1 to 3.3V (red), leg 2 to P4 (yellow), leg 4 to GND (black), 10 kΩ resistor soldered across legs 1 and 2. Servo orange to P5, red to 5V, brown to GND through 3 male-to-female jumpers](images/wiring-monitored-device.svg)
 
-   A corp ticket gauge has the servo only: [its wiring](images/wiring-corp-gauge.svg).
+   The corp ticket gauge has the servo only: [its wiring](images/wiring-corp-gauge.svg).
 
 2. In the Cloud Agentic IoT app, create a **Wi-Fi Network** (the network the board joins), then an **Asset**:
 
    | Field | Value |
    |---|---|
    | Record type | **Patient Device** for a monitored device; **Internal Device** for a corp ticket gauge |
-   | Asset Name and Serial Number | The board's name, for example `Test8`. Letters, digits, `-` and `_` only. It becomes the board's identity in AWS IoT |
-   | Account | A Patient Device: a patient's **Person Account** (Accounts → **New** → Person Account, if you have none yet). An Internal Device: a business account, for example your ward |
+   | Asset Name and Serial Number | `Test8` for the monitored device, `Test7` for the gauge |
+   | Account | A Patient Device: the test patient's **Person Account** from step 10. An Internal Device: a business account, for example your ward |
    | Wi-Fi Network | The network you just created |
 
-   Salesforce refuses an Asset with no Account, and a Patient Device on a business account. Once saved, the Asset turns **Provisioned** with a bundle link within a minute (reload the page).
+   Once saved, the Asset turns **Provisioned** with a bundle link within a minute (reload the page).
 3. Download the bundle, plug the board in by USB, and run:
 
 **Fill in first:**
 - `BUNDLE=~/Downloads/bundle.json`: where you saved the bundle. Change it only if it's somewhere else.
 
-**Paste into your terminal.** Once per board. It writes the firmware to the board over USB (a new board has none), then the board's certificate and Wi-Fi. Only if that worked does it delete the bundle, which holds the board's private key. If a step fails, the bundle stays: fix what the message says and paste the block again.
+**Paste into your terminal.** Once per board. It writes the firmware, the certificate and the Wi-Fi to the board, then deletes the bundle.
 
 ```bash
 BUNDLE=~/Downloads/bundle.json
 ./scripts/firmware.sh flash patient-monitor && ./scripts/provision-device.sh "$BUNDLE" && rm "$BUNDLE"
 ```
 
-Optional, a second Wi-Fi network such as your phone's hotspot. Close `scripts/firmware.sh monitor` first, since it holds the USB port.
+**4. Your phone's hotspot** as a second Wi-Fi network.
 
 **Fill in first:**
 - `HOTSPOT='<hotspot name>'`: the network's name. Example: `HOTSPOT='My iPhone'`.
 
-**Paste into your terminal.** Once per board and network. It asks for the network's password, hidden.
+**Paste into your terminal.** Once per board. It asks for the hotspot's password, hidden.
 
 ```bash
 HOTSPOT='<hotspot name>'
 ./scripts/update-wifi.sh "$HOTSPOT"
 ```
 
-Every later firmware update goes over the air: `scripts/ota.sh try Dev patient-monitor`.
+**5. Data Cloud's calculated insights**, once the boards have sent readings for a few minutes.
+
+**Paste into your terminal.** Once per org.
+
+```bash
+SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh --dry-run
+SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
+```
 
 > [!TIP]
-> **Check before you go on.** Within a minute or two the board's Asset shows Connection `Online` and readings on the Live Status card.
+> **Check before you go on.** Within a minute or two each board's Asset shows Connection `Online` and readings on the Live Status card. Data Cloud's data stream shows a record count above 0, and `scripts/data-cloud-insights.sh --dry-run` prints the two insights.
 
 [← 11. MCP servers](#step-11) · [Step map](#step-map) · [13. Check that it works →](#step-13)
 
@@ -694,39 +567,24 @@ Every later firmware update goes over the air: `scripts/ota.sh try Dev patient-m
 | **Send Command** → `RESTART` on the Asset | The Device Command goes `Sent`, then `Acked` |
 | Warm the sensor to 30 C (under an arm) | The board's motor sweeps, and a Case opens in Care_Team_Queue |
 | Ask the agent "what is Test8 reporting?" (your board's name) | The latest readings, and an SOP citation when you ask what to do |
-| Ask the agent "How long was Test8 at or above 30 C yesterday?" (after step 9) | An answer from Data Cloud, with a note that the newest hour or two may be missing |
-| Ask any agent "What is the spec of the ESP32-S3-DevKitC-1?" (after 11b) | An answer from Espressif's catalogs, with a docs.espressif.com link for the rest |
+| Ask the agent "How long was Test8 at or above 30 C yesterday?" (the day after step 12) | An answer from Data Cloud, with a note that the newest hour or two may be missing |
+| Ask any agent "What is the spec of the ESP32-S3-DevKitC-1?" | An answer from Espressif's catalogs, with a docs.espressif.com link for the rest |
 | The app's Home tab | This month's AWS spend against the limit, and the org's limits |
 | `/patient-status Test8` in Slack | The live reading |
-| The portal, as a patient | The patient's own device, and the assistant answering |
+| The portal, as a patient | The patient's own device, and the assistant answering "what is my temperature?" |
 
-The full checklist: [Install guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end). Something failed? [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+The full checklist: [Detailed Install Guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end).
 
-[← 12. Add a board](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines (optional) →](#step-14)
+[← 12. Add the boards](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines →](#step-14)
 
 <a id="step-14"></a>
 
-## 14. Dev and Prod pipelines (optional)
+## 14. Dev and Prod pipelines
 
-> [!NOTE]
-> **Optional.** Steps 1 to 13 already give you a complete, working system, deployed from your laptop. Do this step only when you want GitHub Actions to deploy for you, with a separate Prod.
+Two environments, Dev and Prod, each with its own branch, GitHub Environment, regular AWS account and Salesforce org. Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replace `dev` with `prod` in the names).
 
-**What it gives you.** Two environments, each with its own branch, GitHub Environment, AWS account and Salesforce org. The names are case-sensitive and must match exactly:
-
-| | Dev | Prod |
-|---|---|---|
-| Branch | `Dev`, the default branch (already exists) | `Prod`, created from `Dev` in 6 below, changed only by pull requests from `Dev` |
-| GitHub Environment | `Dev` | `Prod`, with you as the required reviewer |
-| AWS account | A regular account (not a project), `ca-central-1` | A second regular account |
-| Salesforce org | A Developer Edition org, or your step 2 org | A separate org |
-| A push deploys when | `AUTO_DEPLOY` contains `Dev` | `AUTO_DEPLOY` contains `Prod`, and you approve the run |
-
-Why regular accounts: a project can't hold GitHub's OIDC provider, which the pipeline signs in to AWS with. Stacks don't move between accounts, so each board is provisioned again against the new one.
-
-Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replace `dev` with `prod` in the names).
-
-1. **The AWS account, as root.** Create a regular AWS account and turn on MFA for root. IAM → **Policies** → **Create policy** → JSON: paste [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), name `cloud-agentic-iot-operator`. IAM → **Users** → **Create user** `iot-operator`, attach that policy, MFA on, then **Security credentials** → **Create access key** (CLI). Then do the Bedrock check from step 2 in this account too, and open its Support case at once if it is held.
-2. **The deploy role and the budget.** `bootstrap-aws.sh` creates the OIDC provider, the `github-actions-deploy` role and the `cloud-agentic-iot-monthly` budget, and offers to store the role's ARN as `AWS_ROLE_ARN`:
+1. **The AWS account, as root.** Create a regular AWS account and turn on MFA for root. IAM → **Policies** → **Create policy** → JSON: paste [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), name `cloud-agentic-iot-operator`. IAM → **Users** → **Create user** `iot-operator`, attach that policy, MFA on, then **Security credentials** → **Create access key** (CLI). Then do the Bedrock check from step 2 in this account too.
+2. **The deploy role and the budget.**
 
    **Fill in first:**
    - `aws configure` asks for `iot-operator`'s access key ID and secret (from 1). Type them at its prompts, Region `ca-central-1`, output `json`.
@@ -734,7 +592,7 @@ Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replac
    - `BUDGET_EMAIL='<your email>'`: where the budget alerts go. Example: `BUDGET_EMAIL='you@example.com'`.
    - For Prod, use `iot-prod` instead of `iot-dev` and `Prod` instead of `Dev`.
 
-   **Paste into your terminal.** Once per AWS account. `aws configure` and `gh auth login` ask questions; answer them, then the script makes the deploy role and the budget.
+   **Paste into your terminal.** Once per AWS account. `aws configure` and `gh auth login` ask questions: answer them.
 
    ```bash
    BUDGET_USD='20'
@@ -772,58 +630,38 @@ Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replac
 
    Create a second External Client App, `Cloud Agentic IoT Deploy`, as in 5c with `scripts/server-deploy.crt`, and set its policy: **Admin approved users are pre-authorized**, permission set `Metadata_Deploy`. Copy its **Consumer Key**.
 
-4. **GitHub secrets and variables.** The script creates the environment, limits it to its branch, makes you Prod's reviewer, and asks for each value below, hiding secrets and base64-encoding the key files itself:
+4. **GitHub secrets and variables.**
 
-   **Paste into your terminal.** Once per environment. It asks which environment (choose `Dev`) and each value below; answer `n` to `AUTO_DEPLOY` for now.
+   **Paste into your terminal.** Once per environment. Choose `Dev`, type each value it asks for, and answer `n` to `AUTO_DEPLOY` for now.
 
    ```bash
    ./scripts/setup-github-secrets.sh
    ```
 
-   Every value, per environment (Settings → **Environments** → `Dev` or `Prod`):
+   **Fill in first:**
+   - `EVAL_DEVICE='Test8'`: the test patient's board, its Asset's Serial Number from step 12.
+   - `EVAL_OTHER_DEVICE='Test7'`: the corp ticket gauge's Serial Number from step 12, a board that is not the test patient's.
+   - `EVAL_PATIENT_USERNAME='<patient username>'`: the test patient's username from step 10. Example: `EVAL_PATIENT_USERNAME='you+patient-a@example.com'`.
 
-   | Name | Kind | Value, and where it comes from | Set by the script? |
-   |---|---|---|---|
-   | `AWS_ROLE_ARN` | Secret | `DeployRoleArn` of the bootstrap stack (2) | Yes, read from the stack |
-   | `AWS_REGION` | Variable | `ca-central-1` | Yes |
-   | `ALARM_EMAIL` | Variable | Optional: who the CloudWatch alarms email | Yes, Enter skips |
-   | `SF_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Deploy` (3) | Yes |
-   | `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` (3) | Yes |
-   | `SF_JWT_KEY` | Secret | `scripts/server-deploy.key`, base64-encoded (3) | Yes, from the file |
-   | `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` | Yes |
-   | `SF_INTEGRATION_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Integration` (5c) | Yes |
-   | `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` (5b) | Yes |
-   | `SF_INTEGRATION_JWT_KEY` | Secret | `scripts/server-integration.key`, base64-encoded (5a) | Yes, from the file |
-   | `SLACK_SIGNING_SECRET` | Secret | Optional: the Slack app's signing secret (5d). Without it the Slack stack is skipped | Yes, Enter skips |
-   | `DATA_CLOUD_OIDC_PROVIDER_ARN` | Variable | Optional, for Data Cloud: the provider ARN from the commands below | **No, by hand** |
-   | `DATA_CLOUD_EXTERNAL_ID` | Variable | Optional, for Data Cloud: the connection's External ID (9, step 2, with **Identity Provider (IdP) Based**) | **No, by hand** |
-
-   And on the repository (Settings → **Secrets and variables** → **Actions** → **Variables**):
-
-   | Name | Kind | Value | Set by the script? |
-   |---|---|---|---|
-   | `AUTO_DEPLOY` | Variable | `Dev`, later `Dev Prod`: which branches deploy on a push | Yes, when you answer `y` |
-   | `EVAL_DEVICE`, `EVAL_OTHER_DEVICE`, `EVAL_PATIENT_USERNAME` | Variable | Optional, for the **Agent evals** workflow: a test patient's board (`Test8`), another board (`Test7`), the test patient's username | **No, by hand** |
-
-   To set or change any one value by hand, type it at the prompt, never on the command line.
-
-   **Paste into your terminal.** Only the line you need, any time. Each line sets one value.
+   **Paste into your terminal.** Once. It sets the three repository variables the **Agent evals** workflow reads.
 
    ```bash
-   gh secret set SF_CONSUMER_KEY --env Dev                               # asks for the value, hidden
-   base64 < scripts/server-deploy.key | gh secret set SF_JWT_KEY --env Dev
-   gh variable set AWS_REGION --env Dev --body ca-central-1
-   gh variable set EVAL_DEVICE --body Test8                              # a repository variable: no --env
+   EVAL_DEVICE='Test8'
+   EVAL_OTHER_DEVICE='Test7'
+   EVAL_PATIENT_USERNAME='<patient username>'
+   gh variable set EVAL_DEVICE --body "$EVAL_DEVICE"
+   gh variable set EVAL_OTHER_DEVICE --body "$EVAL_OTHER_DEVICE"
+   gh variable set EVAL_PATIENT_USERNAME --body "$EVAL_PATIENT_USERNAME"
    ```
 
-   Data Cloud in a regular account reads the bucket through the org's identity provider, with no key. As an AWS admin, with your My Domain (no `https://`) and the External ID:
+   **Data Cloud's sign-in to the bucket**, as an AWS admin:
 
    **Fill in first:**
    - `MY_DOMAIN='<your My Domain>'`: from Setup → **My Domain**, without `https://`. Example: `MY_DOMAIN='jsmith-dev-ed.develop.my.salesforce.com'`.
    - `EXTERNAL_ID='<External ID>'`: the External ID the Data Cloud connection showed (9, step 2).
    - For Prod, use `--env Prod`.
 
-   **Paste into your terminal.** Once per AWS account. It registers the org as an identity provider in AWS and stores both values for the pipeline.
+   **Paste into your terminal.** Once per AWS account.
 
    ```bash
    MY_DOMAIN='<your My Domain>'
@@ -858,8 +696,6 @@ Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replac
    From then on, a pull request from `Dev` into `Prod` deploys Prod after you approve the run in the Actions tab.
 
 7. **Branch rules.** Settings → **Branches** → add a rule for `Dev` and one for `Prod`: require a pull request, and require the checks to pass (Lambda tests, CloudFormation templates, Shell scripts, Salesforce metadata, Firmware, Patient portal (React)).
-
-Why each piece stays manual: [DEVELOPMENT.md](DEVELOPMENT.md#what-stays-manual-and-why).
 
 [← 13. Check that it works](#step-13) · [Step map](#step-map) · [Docs home](index.md)
 

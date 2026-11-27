@@ -23,9 +23,9 @@
 #                             Created when missing, then named to the AWS deploy.
 #   SKIP_CHECK=yes            skip scripts/check.sh (the local tests)
 #   SKIP_SOP_INDEX=yes        passed on to deploy-aws.sh: skip the Bedrock SOP index while
-#                             the account's Bedrock hold is open (docs/INSTALL.md, step 2)
+#                             the account's Bedrock hold is open (docs/TROUBLESHOOTING.md, Quick install step 2)
 #   SKIP_BOOTSTRAP=yes        do not create the AWS_IoT_Relay credential pieces; make
-#                             them in Setup instead (docs/INSTALL.md, step 7)
+#                             them in Setup instead (docs/TROUBLESHOOTING.md, "If a Quick install step goes differently")
 #   SKIP_AGENT=yes            never publish Patient_Care_Agent
 #   REPUBLISH_AGENT=yes       publish it even though the org already has an active
 #                             version. Without this a second run leaves the agent
@@ -127,7 +127,7 @@ if [ "${SKIP_BOOTSTRAP:-}" != "yes" ]; then
   case "$api_url" in https://*) bootstrap_args+=(--url "$api_url") ;; esac
   if [ -n "$region" ]; then bootstrap_args+=(--region "$region"); fi
   "$scripts/bootstrap-salesforce.sh" "${bootstrap_args[@]}" \
-    || warn "Could not create the AWS_IoT_Relay credential pieces in $org. Make them in Setup (docs/INSTALL.md, step 7) and run this script again."
+    || warn "Could not create the AWS_IoT_Relay credential pieces in $org. Make them in Setup (docs/TROUBLESHOOTING.md, Making the AWS_IoT_Relay credential by hand) and run this script again."
 fi
 
 step "Permission sets"
