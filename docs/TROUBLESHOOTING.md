@@ -13,6 +13,55 @@ The step-by-step "if a step fails" tables stay next to their feature:
 [SOP-GROUNDING.md](SOP-GROUNDING.md#if-a-step-fails) and
 [DATA-CLOUD.md](DATA-CLOUD.md#if-a-step-fails).
 
+<a id="install-steps"></a>
+
+## If a Quick install step goes differently
+
+[Quick install](INSTALL.md) is written as one straight path. What to do when a step shows something else is gathered here, step by step.
+
+| Step | What you see | What to do |
+| --- | --- | --- |
+| 2 | The Bedrock playground says `Operation not allowed`, or that the account isn't authorized; `aws bedrock get-foundation-model-availability` prints `NOT_AUTHORIZED` | A new account is often held from Bedrock. Finish any account verification or payment-method notice in Billing, then open a free case in the [Support Center](https://support.console.aws.amazon.com/support/home#/case/create) → **Account and billing** → **Account** (not Technical): ask AWS to enable Amazon Bedrock for Titan Text Embeddings V2 in your Region, for a new account. It can take up to 72 hours. Meanwhile run step 6 as `SKIP_SOP_INDEX=yes SF_TARGET_ORG="$NAME" DATA_CLOUD_READER_USER=cloud-agentic-iot-data-cloud-reader scripts/install.sh Dev`; everything else deploys and works. Once the case is resolved, build the index once with `scripts/index-sops.sh Dev --force` |
+| 2 | You are about to turn on the AWS project's advanced features | Leave them off. Activating them removes the spend limit for good and can't be undone. They matter only for GitHub OIDC, which step 14 uses with regular AWS accounts |
+| 3 | **Agentforce** is missing on the Agentforce Agents page | Wait a few minutes after **Turn on Einstein** and reload |
+| 4, any later | A command fails with `explicit deny in a service control policy` | An AWS project works in its own Region only. `aws configure get region --profile "$NAME"` must print the Region from step 2; set it with `aws configure set region <Region> --profile "$NAME"` |
+| any | `sf` says the target org is empty, or AWS says the token or session expired | Run the [resume lines](INSTALL.md#resume) in this terminal. For an expired AWS session, run `aws login --profile "$NAME"` again |
+| 6 | You want to re-run the deploy | `scripts/install.sh` is safe to run again: every part is safe to repeat. A permission set the user already holds is left alone. `SKIP_CHECK=yes` skips the local tests, `SKIP_AGENT=yes` never publishes the agent, `SKIP_BOOTSTRAP=yes` leaves the `AWS_IoT_Relay` credential for you to make by hand (below). `REPUBLISH_AGENT=yes` replaces a running agent with the repo's copy; that drops actions added in Agentforce Builder (step 11), so retrieve and commit them first |
+| 6 | `seed-ssm.sh` asks for a value you don't have yet | Press Enter to skip it, make it (step 5), then run `scripts/install.sh Dev` again |
+| 6 | `install.sh` says it could not tell whether `Patient_Care_Agent` already runs, so it did not publish it | Check that Agentforce is on (step 3), then run it again with `REPUBLISH_AGENT=yes` |
+| 6 or later | A deploy fails with `This schedulable class has jobs pending or in progress` | In a Dev or test org: Setup → **Deployment Settings** → **Allow deployments of components when corresponding Apex jobs are pending or in progress**, then deploy again. In Prod, stop the scheduled jobs, deploy, and schedule them again |
+| 6 | An `Error` line above the values `install.sh` prints at the end | Read the line: it names the part and what to fix. Fix it and run `scripts/install.sh Dev` again |
+| 7a | `echo "$ROLE_ARN"` prints an empty line | The stack name or the Region is wrong: check `aws configure get region` and that step 6 finished |
+| 7b | The external credential's Region is `us-east-1` while your project is elsewhere | The script could not read your Region. Change it on the credential |
+| 7c | The named credential's URL reads `https://dummy-replace-me.example.com` | The script could not read the real one from your stack. Replace it with the URL step 6 printed |
+| 7 | Step 6 said it could not create the credential, or you ran it with `SKIP_BOOTSTRAP=yes` | Make it by hand, [below](#relay-credential-by-hand) |
+| 7 | The Home tab's cost card shows an error, or a callout fails with `HTTP 0` or `403` | [Install guide, Stage 2](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach), "If a callout fails", lists each cause and its fix |
+| 8 | `/patient-status` answers with Slack's `dispatch_failed` | The Request URL is not the Slack Request URL step 6 printed, or the app was not reinstalled after adding the command |
+| 8 | `/patient-status Test8` answers with no reading | No board called `Test8` is sending yet (step 12), or yours has another name: use it |
+| 9 | The agent answers that the device history can't be read right now | The person asking lacks the **Data Cloud User** permission set (step 9), or the insights have not run yet ([DATA-CLOUD.md](DATA-CLOUD.md#how-the-agent-reads-it)) |
+| 10 | `sf org assign permset` prints a warning for a set the user already holds | That's fine: carry on |
+| 10 | The patient's **My monitor** page shows a reading that is days old | The patient lacks `AWS_IoT_Relay_Callers`. Assign it (step 10, item 8), or run `scripts/install.sh Dev`, which gives it to any patient who lacks it |
+| 11 | An agent's Espressif link shows as `URL_Redacted` | Setup → **Trusted URLs** must list `docs.espressif.com` and `www.espressif.com` (step 6 deploys both) |
+| 12 | Salesforce refuses to save the Asset | A Patient Device needs a Person Account, an Internal Device a business account; every Asset needs an Account and a Wi-Fi Network |
+| 12 | The flash or provisioning block stops partway | The bundle stays in `~/Downloads`. Fix what the message says, then paste the block again |
+| 12 | `update-wifi.sh` can't open the USB port | Close `scripts/firmware.sh monitor` first, since it holds the port |
+| 14 | The Bedrock check fails in a pipeline account | Open its Support case at once, as in step 2 above |
+| 14 | You want to set or change one GitHub value by hand | Type it at the prompt, never on the command line: `gh secret set SF_CONSUMER_KEY --env Dev` (asks for the value, hidden), `base64 < scripts/server-deploy.key \| gh secret set SF_JWT_KEY --env Dev`, `gh variable set AWS_REGION --env Dev --body ca-central-1` |
+
+<a id="relay-credential-by-hand"></a>
+
+**Making the `AWS_IoT_Relay` credential by hand.** Either run the one-time script yourself, as an admin of the org, with the URL step 6 printed as "Step 7c, named credential URL" and your Region:
+
+```bash
+API_URL='https://abc123.execute-api.us-east-2.amazonaws.com/Dev'   # yours, from step 6
+REGION='us-east-2'                                                 # yours
+scripts/bootstrap-salesforce.sh "$NAME" --url "$API_URL" --region "$REGION"
+```
+
+It creates the external credential, the named credential and the permission set, each only when the org has none, and changes nothing that exists. Then do steps 7b and 7c.
+
+Or click it together: Setup → **Named Credentials** → **External Credentials** → **New** with Name `AWS_IoT_Relay_Credential`, the settings in the table in step 7b and a principal named `SalesforceCaller`; then **Named Credentials** → **New** with Name `AWS_IoT_Relay`, the URL from step 6, that external credential, and **Enabled for Callouts** and **Generate Authorization Header** both on; then a permission set `AWS_IoT_Relay_Callers` with **External Credential Principal Access** to the principal (and nothing else). Then run `scripts/install.sh Dev` again: it gives the permission set to you and to the hidden Automated Process user.
+
 ## Salesforce to AWS: identity and permissions
 
 | When | Symptom | Root cause | Fix | What prevents it now |
@@ -254,6 +303,7 @@ Check the install: `aws agent-toolkit list-available-skills --region us-east-1 -
 | Nov 27 (desk check) | Following Quick install alone, the Patient Care Agent's Get Device History would answer "the device history is unavailable right now" | The action queries Data Cloud as the person asking, which needs a Data Cloud permission set such as **Data Cloud User**. Only DATA-CLOUD.md said so; the Quick install's Data Cloud step did not | Step 9 now gives Data Cloud User to you and every care team member who uses the agent, and step 13 checks a history question | Step 9's and step 13's checks ask a history question |
 | Nov 27 (desk check) | On a new org, Quick install step 12's "create an Asset with Serial Number = the board's name" stops with a required-field or validation error | The step named only the Serial Number. An Asset also needs an Account (a Person Account for a Patient Device, by the `Patient_Device_Needs_Person_Account` rule), a record type, and the Wi-Fi Network that starts provisioning | Step 12 now lists every field, per record type | The table in step 12 |
 | Nov 27 (desk check) | Quick install steps 8 and 13 asked for `/patient-status Test8` and "What is Test8 reading?" on a new org, which has no board called Test8 | The examples were written against the test environment's board | Step 8 now says `Test8` stands for your own board's name, chosen in step 12 | Nothing automatic: read it in the step |
+| Nov 27 | Quick install read as a menu: steps 8 to 11 and 14 were marked Optional, the reader picked an org name, and failure branches ("if it says…", "skip without Slack", "By hand instead") sat inside the steps, so a from-scratch run while recording kept stopping for decisions | The guide had grown a branch for every case met while building it | Quick install is one straight path that deploys everything, with the fixed name `test-cloud-agentic-iot` (any name works), the resume lines before step 1, two boards in step 12 and Data Cloud's insights after the boards send readings. Every failure branch moved to [If a Quick install step goes differently](#install-steps) above | `test/config/install-doc.test.js` fails on "optional", "skip this/if/without", "if you want" or "By hand instead" in Quick install |
 
 ## Public repository (Nov 23)
 
