@@ -3,7 +3,7 @@
 # publish-agent.sh - publish an Agent Script agent and activate its newest
 # version, leaving the checkout as it was.
 #
-#   SF_TARGET_ORG=test-cloudarchitect101 scripts/publish-agent.sh Dev [Patient_Care_Agent]
+#   SF_TARGET_ORG=test-yourname scripts/publish-agent.sh Dev [Patient_Care_Agent]
 #
 # Run it after scripts/deploy-salesforce.sh, which deploys the actions the
 # agent calls. `sf agent publish authoring-bundle` writes what Salesforce

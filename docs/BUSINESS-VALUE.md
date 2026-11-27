@@ -121,8 +121,8 @@ pass rate, cost per answer) are in
 After `scripts/deploy-salesforce.sh` has deployed it:
 
 ```sh
-sf org assign permset --name Business_Value_Viewer --target-org test-cloudarchitect101
-sf apex run --target-org test-cloudarchitect101 <<'APEX'
+sf org assign permset --name Business_Value_Viewer --target-org "$NAME"
+sf apex run --target-org "$NAME" <<'APEX'
 System.schedule('Business Value snapshot', '0 0 1 * * ?', new ValueSnapshotJob());
 ValueSnapshotService.takeSnapshot();
 APEX
