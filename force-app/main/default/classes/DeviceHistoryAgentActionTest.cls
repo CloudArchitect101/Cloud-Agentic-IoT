@@ -84,7 +84,8 @@ private class DeviceHistoryAgentActionTest {
         req.deviceId = deviceId;
         req.days = days;
         List<DeviceHistoryAgentAction.HistoryResult> results;
-        System.runAs([SELECT Id FROM User WHERE Username = :username('history-reader')]) {
+        User reader = [SELECT Id FROM User WHERE Username = :username('history-reader')];
+        System.runAs(reader) {
             Test.startTest();
             results = DeviceHistoryAgentAction.getHistory(new List<DeviceHistoryAgentAction.HistoryRequest>{ req });
             Test.stopTest();
