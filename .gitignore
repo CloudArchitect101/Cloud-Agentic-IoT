@@ -171,3 +171,6 @@ force-app/main/default/uiBundles/*/coverage/
 force-app/main/default/uiBundles/*/test-results/
 force-app/main/default/uiBundles/*/playwright-report/
 *.tsbuildinfo
+
+# Local Jekyll builds of docs/
+.sass-cache/
