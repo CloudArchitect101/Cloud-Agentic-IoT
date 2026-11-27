@@ -689,8 +689,13 @@ When it all works, warming the monitored device to 30 C on the arm opens a Case,
 | Each board's Asset (`PatientExternalESP32`, `CompanyInternalESP32`) | Connection `Online`, a reading every 2 s on the Live Status card |
 | The app's Home tab | This month's AWS spend against the limit, and the org's limits |
 
-> [!TIP]
-> **Next: test every feature.** [After install: use case scenarios](TRY-IT.md) walks through each feature end to end, one real situation at a time, with what you should see: the temperature alert and its Case, both boards, the agents (SOP answers, device history), Slack, the portal, over-the-air updates and the cost. The Detailed Install Guide's [step 13](INSTALL-GUIDE.md#step-13) explains what each check proves.
+<div align="center" class="cta" markdown="1">
+
+[![Test every feature: After install, use case scenarios](images/test-every-feature-button.svg)](TRY-IT.md)
+
+</div>
+
+Each feature end to end, one real situation at a time, with what you should see: the temperature alert and its Case, both boards, the agents (SOP answers, device history), Slack, the portal, over-the-air updates and the cost. The Detailed Install Guide's [step 13](INSTALL-GUIDE.md#step-13) explains what each check proves.
 
 [← 12. Add the boards](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines →](#step-14) · [Why: Detailed guide, step 13](INSTALL-GUIDE.md#step-13)
 
@@ -813,6 +818,14 @@ Two environments, Dev and Prod, each with its own branch, GitHub Environment, re
    From then on, a pull request from `Dev` into `Prod` deploys Prod after you approve the run in the Actions tab.
 
 7. **Branch rules.** Settings → **Branches** → add a rule for `Dev` and one for `Prod`: require a pull request, and require the checks to pass (Lambda tests, CloudFormation templates, Shell scripts, Salesforce metadata, Firmware, Patient portal (React)).
+
+**Installed. Now test what you built:**
+
+<div align="center" class="cta" markdown="1">
+
+[![Test every feature: After install, use case scenarios](images/test-every-feature-button.svg)](TRY-IT.md)
+
+</div>
 
 [← 13. Check that it works](#step-13) · [Step map](#step-map) · [Docs home](index.md) · [Why: Detailed guide, step 14](INSTALL-GUIDE.md#step-14)
 

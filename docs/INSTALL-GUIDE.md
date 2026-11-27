@@ -639,6 +639,12 @@ Expect the Wi-Fi and AWS IoT connection lines, then a reading line every 30 seco
 
 **After this step.** The Quick Install Guide's step 13 is a short check that the system is alive. Every feature, tested one real situation at a time with what you should see, is in [After install: use case scenarios](TRY-IT.md).
 
+<div align="center" class="cta" markdown="1">
+
+[![Test every feature: After install, use case scenarios](images/test-every-feature-button.svg)](TRY-IT.md)
+
+</div>
+
 **Why the checks are manual and also automated.** These checks are what a person sees. The same behaviour is pinned by tests that run on every pull request: the firmware contract, the guardrails, the fleet simulation, the Apex tests with two patients, and the agents' Testing Center specs in `test/agents/`, which `scripts/eval-agents.sh` and the **Agent evals** workflow run against an org ([AGENT-EVALS.md](AGENT-EVALS.md)).
 
 [Quick Install Guide, step 13](INSTALL.md#step-13) · [← 12. Add the boards](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines →](#step-14)
@@ -726,6 +732,14 @@ The evals need a board that is not the patient's to prove the portal agent refus
 **7. Branch rules.** A pull request and green checks are required on both branches, so nothing reaches an environment without passing the same checks you ran on your laptop.
 
 **Cost.** Both accounts and the GitHub workflows add next to nothing at this size: the AWS side is well under a dollar a month per account for a few boards, plus CloudWatch's few dollars of logs and alarms ([COST-MODEL.md §2](COST-MODEL.md#2-aws--per-device-per-month-usd-us-east-1west-2)). Each account's budget emails before it is spent.
+
+**Installed. Now test what you built:**
+
+<div align="center" class="cta" markdown="1">
+
+[![Test every feature: After install, use case scenarios](images/test-every-feature-button.svg)](TRY-IT.md)
+
+</div>
 
 [Quick Install Guide, step 14](INSTALL.md#step-14) · [← 13. Check that it works](#step-13) · [Step map](#step-map) · [Docs home](index.md)
 
