@@ -596,7 +596,12 @@ class OtaJoinTest(ScriptFixture):
             self.assertEqual(added, [('Test7', group)])
 
     def test_only_a_patient_monitor_can_be_internal(self):
-        code, out = self.join('Dev', 'QI1', 'queue-indicator', 'internal')
+        # Every board runs patient-monitor today, so a second sketch is made up.
+        other = os.path.join(self.repo, 'firmware', 'other-device')
+        os.makedirs(other)
+        with open(os.path.join(other, 'other-device.ino'), 'w') as f:
+            f.write('#define FIRMWARE_VERSION "1.0.0"\n')
+        code, out = self.join('Dev', 'OD1', 'other-device', 'internal')
         self.assertEqual(code, 1, out)
         self.assertIn('Only a patient-monitor board can be internal', out)
         self.assertEqual(self.calls(), [])

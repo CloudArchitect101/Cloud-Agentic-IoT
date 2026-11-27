@@ -5,7 +5,6 @@
 | Sketch | What it does | Thing Groups |
 |---|---|---|
 | `patient-monitor/` | Every board: DHT11 readings, the temperature alert motor at 30 C, and the queue indicator (QUEUE_DEPTH). What a board does is decided by its Asset's record type in Salesforce, not by its build | `canary-patient-monitor` and `internal-devices` inside `fleet-patient-monitor` |
-| `queue-indicator/` | **Retired** at 2.2.0: kept for a board already flashed with it. A new indicator is a patient-monitor board whose Asset is an Internal Device ([below](#one-firmware-for-every-board-patient-monitor-240)) | `canary-queue-indicator` → `fleet-queue-indicator` |
 | `libraries/CloudAgenticDevice/` | Shared: NVS credentials and settings, provisioning, WiFi, MQTT with backoff, OTA, live mode, commands and their answers | — |
 
 ## Why a shared library
@@ -72,9 +71,9 @@ Each sketch declares its own name, which must match its folder:
 CloudAgenticDevice device("patient-monitor", FIRMWARE_VERSION, DEFAULT_TELEMETRY_SECONDS);
 ```
 
-That name travels in every OTA job document, and **the device refuses any firmware built for a different type**. Thing Group targeting should already prevent a mismatch, but a mis-targeted job must not be able to destroy hardware: queue-indicator firmware on a patient monitor means wrong pins and wrong logic, and a bricked device cannot be fixed over the air — only by USB.
+That name travels in every OTA job document, and **the device refuses any firmware built for a different type**. Thing Group targeting should already prevent a mismatch, but a mis-targeted job must not be able to destroy hardware: firmware for another type means wrong pins and wrong logic, and a bricked device cannot be fixed over the air — only by USB.
 
-This is why the build every board runs is still called `patient-monitor`, internal boards included: every board in the field (Test7, Test8) runs `patient-monitor`, and it would refuse a build under a new name. Renaming would mean a USB flash of every board. A board still on the queue-indicator build refuses the patient-monitor build for the same reason; it moves over only by USB (`scripts/firmware.sh flash patient-monitor`).
+This is why the build every board runs is still called `patient-monitor`, internal boards included: every board in the field (Test7, Test8) runs `patient-monitor`, and it would refuse a build under a new name. Renaming would mean a USB flash of every board. The old `queue-indicator` sketch (retired at 2.2.0) was removed from the repo on Nov 27, 2026, since no board runs it. A board still on that build would refuse the patient-monitor build for the same reason, so it moves over only by USB (`scripts/firmware.sh flash patient-monitor`).
 
 ## Built for a fleet, not a desk
 
@@ -109,7 +108,7 @@ From then on the board publishes a reading every `seconds` to `device/<thing>/li
 - **RAM only.** Live mode is never written to NVS, so a restart ends it.
 - **A plain MQTT topic.** Live readings go through the message broker at QoS 0 rather than Basic Ingest, because the card subscribes to them and Basic Ingest reaches only rules. AWS bills them as messaging, which is why they flow only while someone watches.
 - **The console** says `live: every 2 s for 15 min` for each command and `live: off` when it ends, by itself or by `minutes` 0. Live readings print nothing, and `DHT read failed` appears on stored readings only, so the console stays readable.
-- **A board without a sensor**, such as an internal board, streams too: from 2.4.0 its live readings say `"sensorError":"no sensor"`. The retired queue indicator accepts the command, since the library handles it, but its sketch has no reading to send. Firmware older than 2.2.0 ignores the command.
+- **A board without a sensor**, such as an internal board, streams too: from 2.4.0 its live readings say `"sensorError":"no sensor"`. Firmware older than 2.2.0 ignores the command.
 
 `test/firmware/device_timing_test.cpp` checks the window on the host: the first reading at once, a second command extending the window, 0 minutes, and a window that straddles the `millis()` wrap.
 
@@ -125,7 +124,7 @@ Commands arrive on `device/<thing>/command`: from the device-command API (Device
 | `RESTART` | library | Restarts the board | done `restarting`, sent before it restarts |
 | `DISPENSE_MEDICATION` | patient-monitor up to 2.5.0; retired in 2.6.0 | 2.6.0 does not know it: the board is a temperature alert, not a dispenser | refused `unknown operation DISPENSE_MEDICATION` |
 | `CASE_ALERT` | patient-monitor 2.3.0 to 2.4.0; retired in 2.5.0 | 2.5.0 ignores it: the motor follows the board's own sensor (below) | done |
-| `QUEUE_DEPTH` | patient-monitor (2.4.0), queue-indicator | `intensity` 0-100 (kept to that range) and `openCaseCount`: the servo turns while it is above 0, faster as the queue fills, and stops at 0 unless the temperature is high (below). It publishes `{"deviceId","openCaseCount","intensity"}` on `device/<thing>/status` | none: the queue-depth API sends no `commandId` |
+| `QUEUE_DEPTH` | patient-monitor (2.4.0) | `intensity` 0-100 (kept to that range) and `openCaseCount`: the servo turns while it is above 0, faster as the queue fills, and stops at 0 unless the temperature is high (below). It publishes `{"deviceId","openCaseCount","intensity"}` on `device/<thing>/status` | none: the queue-depth API sends no `commandId` |
 | anything else | | Nothing | refused `unknown operation <operation>`, or `no operation` when it names none |
 
 The device-command API checks a command against this table before it publishes it ([`lambda/shared/guardrails.js`](../lambda/shared/guardrails.js)): an operation not listed, a setting the operation does not take, or a value outside the range the board accepts is refused there with a 400, so it never reaches the board. `QUEUE_DEPTH` is not among those it sends; the queue-depth API publishes it itself.
@@ -170,7 +169,7 @@ Every board runs the patient-monitor build, so one OTA reaches them all. What a 
 | Monitoring Device (API name `Patient_Device`; and an Asset with no record type, every Asset made before 2.4.0) | its own DHT11 reads 30 C or more (2.5.0; up to 2.4.0 its open Case, `CASE_ALERT`) | yes: the 30 C temperature alert opens a Case | `fleet-patient-monitor` |
 | Internal Device: a ward board, such as a nurse-station indicator, on the ward's Account | any open Case is owned by Care_Team_Queue, on any device or none, faster as the queue fills: `QUEUE_DEPTH` | none needed: an internal board usually has no DHT11, and if it has one, its readings open no Case and, from 2.7.0, do not turn its servo | `internal-devices`, inside `fleet-patient-monitor` |
 
-- **The servo turns if either asks.** Since 2.7.0 only a board's own role asks (the temperature on a monitored board, the queue on an internal one), so both are on only for the seconds after an internal board restarts warm; then it sweeps at the faster of the two: the temperature sweeps once every 2 s; the queue from about 7 s a sweep at 1 Case (intensity 20, with a full-speed depth of 5) to about 1 s at full speed, as the queue-indicator firmware did. It stops only when neither asks. `ServoDemand.h` holds the rule, `ServoSweep.h` the sweep, which can change speed without the arm jumping.
+- **The servo turns if either asks.** Since 2.7.0 only a board's own role asks (the temperature on a monitored board, the queue on an internal one), so both are on only for the seconds after an internal board restarts warm; then it sweeps at the faster of the two: the temperature sweeps once every 2 s; the queue from about 7 s a sweep at 1 Case (intensity 20, with a full-speed depth of 5) to about 1 s at full speed, as the old queue-indicator sketch did. It stops only when neither asks. `ServoDemand.h` holds the rule, `ServoSweep.h` the sweep, which can change speed without the arm jumping.
 - **A continuous-rotation servo** spins instead: about half speed for a case alert, and from just above standing still to full speed for the queue, the larger of the two.
 - **The queue's depth is not kept in NVS.** Salesforce sends it again each time an internal board connects (`DeviceConnectionService`), and at once when an Asset's record type changes. The case alert is still kept, as in 2.3.0.
 - **No sensor, no noise.** A board without a DHT11 prints `DHT read failed` for its first three readings, then `DHT11: no sensor answers, so this board sends no readings (normal on a ward board)` once, and nothing more. It keeps trying once per reading interval, silently, and says `DHT11: answering again, readings on` if a sensor is plugged in. A sensor that worked and stops says `DHT11: stopped answering` once. No reading is published without a sensor, so nothing in AWS or Salesforce reacts. Its live card shows `sensorError: "no sensor"`. `SensorPresence.h` holds the rule.

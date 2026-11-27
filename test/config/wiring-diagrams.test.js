@@ -29,12 +29,10 @@ test('the board has 38 pins in DevKitC order, 3.3V and 5V at the ends of one row
   assert.equal(draw.LEFT_ROW[18], 'CLK');
 });
 
-test('the sensor and servo pins match the sketches', () => {
+test('the sensor and servo pins match the sketch', () => {
   const monitor = read('firmware/patient-monitor/patient-monitor.ino');
-  const queue = read('firmware/queue-indicator/queue-indicator.ino');
   assert.equal(pinName(draw.WIRES.dhtData.pin), `P${define(monitor, 'DHT_PIN')}`);
   assert.equal(pinName(draw.WIRES.servoSig.pin), `P${define(monitor, 'SERVO_PIN')}`);
-  assert.equal(pinName(draw.WIRES.servoSig.pin), `P${define(queue, 'SERVO_PIN')}`);
 });
 
 test('each wire lands on the pin its label names, and no two share a pin', () => {

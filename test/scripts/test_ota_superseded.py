@@ -12,18 +12,20 @@ Run with: python3 -m unittest discover -s test/scripts
 import os
 import unittest
 
-from test_ota_try import ScriptFixture, ROLE, BUCKET, VERSION_RE
+from test_ota_try import ScriptFixture, ROLE, BUCKET
 
 PM = 'patient-monitor'
-QI = 'queue-indicator'
+QI = 'other-device'  # a made-up second device type: every board runs patient-monitor
 
 
 class SupersededFixture(ScriptFixture):
 
     def setUp(self):
         super().setUp()
-        with open(os.path.join(self.repo, 'firmware', QI, f'{QI}.ino')) as f:
-            self.qi = VERSION_RE.search(f.read()).group(1)
+        os.makedirs(os.path.join(self.repo, 'firmware', QI))
+        with open(os.path.join(self.repo, 'firmware', QI, f'{QI}.ino'), 'w') as f:
+            f.write('#define FIRMWARE_VERSION "2.1.0"\n')
+        self.qi = '2.1.0'
         # This version of the patient monitor is new; the queue indicator's is
         # already out, so a release publishes one sketch.
         self.state['objects'] = [f'firmware/{QI}/{self.qi}.bin']
@@ -48,7 +50,7 @@ class ReleaseTest(SupersededFixture):
             self.job('ota-try-patient-monitor-2-7-0-try-1-1793900100', f'fleet-{PM}'),
             self.job('ota-fleet-patient-monitor-2-6-0-1793900200', f'fleet-{PM}'),
             self.job('interval-patient-monitor-60-1793900300', f'fleet-{PM}'),
-            self.job('ota-queue-indicator-2-1-0-1793900400', f'fleet-{QI}'),
+            self.job('ota-other-device-2-1-0-1793900400', f'fleet-{QI}'),
         ]
         code, out = self.run_ota('release', 'Dev')
         self.assertEqual(code, 0, out)
@@ -127,7 +129,7 @@ class PromoteTest(SupersededFixture):
             self.job(self.canary, f'canary-{PM}', 'COMPLETED'),
             self.job(older, f'fleet-{PM}'),
             self.job('interval-patient-monitor-60-1793800100', f'fleet-{PM}'),
-            self.job('ota-fleet-queue-indicator-2-1-0-1793800200', f'fleet-{QI}'),
+            self.job('ota-fleet-other-device-2-1-0-1793800200', f'fleet-{QI}'),
         ]
         code, out = self.run_ota('promote', 'Prod', PM, self.version)
         self.assertEqual(code, 0, out)
