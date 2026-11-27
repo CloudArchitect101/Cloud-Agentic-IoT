@@ -197,7 +197,7 @@ The pieces ship with the rest of the project; this is what to check.
 4. **Permissions.** People who use the card need the **Device Platform Admin**
    permission set and **External Credential Principal Access** to the
    AWS_IoT_Relay principal, the same access re-provisioning needs
-   ([Detailed Install Guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach)).
+   ([Detailed Install Guide, step 7 part d](INSTALL-GUIDE.md#step-7)).
    The integration user that the Lambdas sign in as needs **Device
    Integration**, which now includes `DeviceConnectionService` and edit
    access to the three fields.
