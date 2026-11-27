@@ -6,7 +6,8 @@
 ![Salesforce](https://img.shields.io/badge/Salesforce-Agentforce%20%C2%B7%20Data%20Cloud-00A1E0)
 ![AWS](https://img.shields.io/badge/AWS-IoT%20Core%20%C2%B7%20Lambda%20%C2%B7%20Bedrock-FF9900)
 ![ESP32](https://img.shields.io/badge/Edge-ESP32-E7352C)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Code licence: MIT](https://img.shields.io/badge/code-MIT-blue)](LICENSE)
+[![Docs and media licence: CC BY 4.0](https://img.shields.io/badge/docs%20%26%20media-CC%20BY%204.0-lightgrey)](docs/LICENSE-CC-BY-4.0.txt)
 
 > A healthcare IoT + Agentforce system, built from scratch and in public. A physical ESP32 board measures temperature, AWS IoT streams it, Salesforce turns it into Cases, and an Agentforce agent answers from the readings and the ward's procedures, in Salesforce, Slack and a patient portal.
 
@@ -248,4 +249,29 @@ as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-[MIT](LICENSE)
+You can use, change, share and sell this project, as is or as a starting point for your own. The code is under the [MIT](LICENSE) licence. The docs, media and 3D case designs are under a licence that also asks for visible credit. Both allow commercial use.
+
+### What each licence covers
+
+| What | Licence | What it asks of you |
+|---|---|---|
+| **Code**: Apex, LWC, JavaScript, Python, C++ firmware, scripts, CloudFormation, Salesforce metadata, config, tests, and the code and commands shown inside the docs | [MIT](LICENSE) | Keep the copyright line and the MIT licence text in your copies |
+| **Docs and media**: the text of the Markdown docs (this README, `docs/`, the SOPs in `knowledge/`), diagrams, images, videos and GIFs, and the 3D case designs in `hardware/cases/` (`.scad` sources, STL and 3MF files, renders) | [CC BY 4.0](docs/LICENSE-CC-BY-4.0.txt) | Give visible credit with a link, name the licence, and say if you changed it |
+
+### Giving credit
+
+Credit line to copy, for example under a reused diagram, in your README or in a video description:
+
+```text
+Based on Cloud-Agentic-IoT by Vitaly Makarkin (https://github.com/CloudArchitect101/Cloud-Agentic-IoT), CC BY 4.0. Changes: <what you changed, or "none">.
+```
+
+### Not covered
+
+Third-party material keeps its own terms:
+
+- The part photos in `docs/images/parts/` are from Wikimedia Commons under their authors' licences (some CC BY-SA). See [Part photo credits](docs/images/parts/CREDITS.md).
+- Product names, logos and service icons (Salesforce, Agentforce, Slack, AWS, Espressif, Git and others) belong to their owners. See [Icon credits](docs/images/platforms/CREDITS.md).
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) points to the Contributor Covenant, which has its own licence.
+
+Neither licence grants rights to the project's name or logo as a brand, so don't present a copy as the original or as endorsed by the author.

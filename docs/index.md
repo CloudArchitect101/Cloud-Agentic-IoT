@@ -151,3 +151,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | Business value | Net value, deflection vs break-even, response time before vs after, hours avoided | [BUSINESS-VALUE.md](BUSINESS-VALUE.md) |
 | Retrieval quality | hit@1, hit@3 and MRR on every eval run | [AGENT-EVALS.md](AGENT-EVALS.md) |
 | Spend guard | An AWS project spend limit, shown on the Home tab | [SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md) |
+
+## Reuse and licence
+
+You can reuse this project, including commercially, as is or as a starting point. The code is under the [MIT licence](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/blob/Dev/LICENSE). These docs, the diagrams, images, videos and the 3D case designs are under [CC BY 4.0](LICENSE-CC-BY-4.0.txt): credit **Cloud-Agentic-IoT by Vitaly Makarkin** with a link to [the repository](https://github.com/CloudArchitect101/Cloud-Agentic-IoT) and say what you changed. Part photos and product logos keep their owners' terms: see the [part photo](images/parts/CREDITS.md) and [icon](images/platforms/CREDITS.md) credits, and [what each licence covers](https://github.com/CloudArchitect101/Cloud-Agentic-IoT#license).

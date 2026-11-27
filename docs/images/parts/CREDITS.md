@@ -17,6 +17,6 @@ The photos in the [Quick Install Guide, step 0](../../INSTALL.md#step-0) parts t
 | `charger.jpg` | [USB wall charger.JPG](https://commons.wikimedia.org/wiki/File:USB_wall_charger.JPG) | Alcide55 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
 | `solder.jpg` | [SH72 soldering iron with pen and ruler for scale.jpg](https://commons.wikimedia.org/wiki/File:SH72_soldering_iron_with_pen_and_ruler_for_scale.jpg) | Retired electrician | [CC0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | `bell.jpg` | [Bell, cow (AM 1954.89.3-1).jpg](https://commons.wikimedia.org/wiki/File:Bell,_cow_(AM_1954.89.3-1).jpg) (a large cow bell; the kit uses a 36 mm one) | Auckland Museum | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |
-| `printed-cuff.jpg`, `printed-gauge.jpg` | Renders of [`hardware/cases/`](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases) | This project | Same licence as the repo |
+| `printed-cuff.jpg`, `printed-gauge.jpg` | Renders of [`hardware/cases/`](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases) | Vitaly Makarkin (this project) | [CC BY 4.0](../../LICENSE-CC-BY-4.0.txt), like the other docs and media |
 
 [Docs home](../../index.md)
