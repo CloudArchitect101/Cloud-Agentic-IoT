@@ -18,6 +18,43 @@
 > [!NOTE]
 > **Video walkthrough: coming soon.** A short video showing the end result (board, alerts, agent, portal) and where each part lives in this repository.
 
+## See what you build
+
+Two ESP32 boards in 3D-printed cases, AWS IoT, Salesforce with Agentforce and Data Cloud, all running together. Everything below comes from the [Quick Install Guide](https://cloudarchitect101.github.io/Cloud-Agentic-IoT/INSTALL), steps 12 and 13.
+
+**1. Build two devices** ([step 12](https://cloudarchitect101.github.io/Cloud-Agentic-IoT/INSTALL#step-12))
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/images/showcase/build-monitored-device.gif" alt="Animation: the ESP32, DHT11 sensor and servo go into the 3D-printed arm cuff" width="100%"><br><b>Monitored device</b> <code>PatientExternalESP32</code>: an ESP32, a DHT11 temperature sensor and a servo in a 3D-printed arm cuff.</td>
+<td width="50%" valign="top"><img src="docs/images/showcase/build-corp-gauge.gif" alt="Animation: the ESP32 and servo go into the 3D-printed ticket gauge with its bell" width="100%"><br><b>Corp ticket gauge</b> <code>CompanyInternalESP32</code>: an ESP32 and a servo that swings a needle and rings a bell for the care team.</td>
+</tr>
+<tr>
+<td valign="top"><a href="docs/images/wiring-monitored-device.svg"><img src="docs/images/wiring-monitored-device.svg" alt="Wiring of the monitored device: DHT11 to 3.3V, P4 and GND with a 10 kΩ pull-up; servo to P5, 5V and GND" width="100%"></a><br>Wiring, drawn from the real parts: DHT11 on P4 with a 10 kΩ pull-up, servo on P5.</td>
+<td valign="top"><a href="docs/images/wiring-corp-gauge.svg"><img src="docs/images/wiring-corp-gauge.svg" alt="Wiring of the corp ticket gauge: servo to P5, 5V and GND" width="100%"></a><br>Wiring: one servo on P5. Saving the board's Asset in Salesforce gives it its own X.509 certificate, with no secrets in the firmware.</td>
+</tr>
+</table>
+
+**2. Watch it work** ([step 13](https://cloudarchitect101.github.io/Cloud-Agentic-IoT/INSTALL#step-13))
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/images/showcase/working-monitored-device.gif" alt="Animation: the monitored device on the arm reaches 30 C and its servo starts to spin" width="100%"><br><b>30 C on the arm.</b> The board's own servo spins within 5 s, even offline. AWS IoT Core flags the crossing, and Salesforce opens one Case for the care team.</td>
+<td width="50%" valign="top"><img src="docs/images/showcase/working-corp-gauge.gif" alt="Animation: the corp ticket gauge sweeps its needle and rings the bell for the open Case" width="100%"><br><b>The office hears it.</b> The open Case drives the gauge through a platform event, an AWS callout and MQTT: its needle sweeps and its bell rings until someone closes the Case. The Patient Care Agent then reads the device and cites the ward's procedure.</td>
+</tr>
+</table>
+
+**3. Run it as a business** (the app's Home tab)
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/images/home-cost-card-preview.png" alt="Home tab cost and limits card: AWS spend this month against the budget, and the Salesforce org's most used limits" width="100%"><br><b>Cost and limits.</b> This month's AWS spend against its budget (about $0.08 per device a month), and the org's limits: storage, API calls, async Apex, streaming events.</td>
+<td width="50%" valign="top"><img src="docs/images/data-cloud-value-card-preview.png" alt="Data Cloud value card: out-of-range minutes, highest temperature, devices reporting, manual checks replaced, Data Cloud cost and return" width="100%"><br><b>Data Cloud value.</b> Out-of-range minutes, the highest temperature, which devices went silent, and the manual checks the system replaces, measured against what Data Cloud costs.</td>
+</tr>
+</table>
+
+<sub>The animations are renders of the real 3D models, and the Home cards show sample data. Real footage and org screenshots will replace them under the same file names.</sub>
+
 <p align="center">
   <a href="https://cloudarchitect101.github.io/Cloud-Agentic-IoT/"><img src="docs/images/start-here-button.svg" alt="Start Here: open the guide website" width="440" height="88"></a>
   <br>
