@@ -118,13 +118,13 @@ private class DeviceCommandServiceTest {
     @IsTest
     static void aSerialNumberInAnotherCaseIsAnotherBoard() {
         // AWS IoT Thing names are case-sensitive; SOQL comparisons are not.
-        device('Test7', 'Test7');
-        Device_Command__c command = command('test7', null);
+        device('CompanyInternalESP32', 'CompanyInternalESP32');
+        Device_Command__c command = command('companyinternalesp32', null);
 
         DeviceCommandService.prepare(new List<Device_Command__c>{ command });
 
-        Assert.isNull(command.Asset__c, 'test7 is not Test7');
-        Assert.areEqual('test7', command.Device__c, 'Sent to test7 as given');
+        Assert.isNull(command.Asset__c, 'companyinternalesp32 is not CompanyInternalESP32');
+        Assert.areEqual('companyinternalesp32', command.Device__c, 'Sent to companyinternalesp32 as given');
     }
 
     @IsTest

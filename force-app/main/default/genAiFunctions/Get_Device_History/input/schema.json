@@ -6,7 +6,7 @@
   "properties": {
     "deviceId": {
       "title": "Device ID",
-      "description": "The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example Test8.",
+      "description": "The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example PatientExternalESP32.",
       "lightning:type": "lightning__textType",
       "lightning:isPII": false,
       "copilotAction:isUserInput": false

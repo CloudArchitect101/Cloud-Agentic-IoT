@@ -308,13 +308,13 @@ Every care team member who uses the agent also needs it: `sf org assign permset 
 
 ## 8. Slack
 
-`Test8` is the name you give the monitored device in step 12.
+`PatientExternalESP32` is the name you give the monitored device in step 12.
 
 **a. The `/patient-status` command** (the Ward Bot app from 5d):
 
-1. In the app: **Slash Commands** → **Create New Command**: Command `/patient-status`, Request URL = the Slack Request URL step 6 printed, usage hint `Test8`.
+1. In the app: **Slash Commands** → **Create New Command**: Command `/patient-status`, Request URL = the Slack Request URL step 6 printed, usage hint `PatientExternalESP32`.
 2. **Install App** → **Install to Workspace** → **Allow**.
-3. In any channel: `/patient-status Test8`.
+3. In any channel: `/patient-status PatientExternalESP32`.
 
 **b. The Patient Care Agent in Slack:**
 
@@ -334,7 +334,7 @@ Every care team member who uses the agent also needs it: `sf org assign permset 
    ```
 
 4. Slack **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**. Quit and reopen Slack.
-5. DM the agent: "What is Test8 reading?"
+5. DM the agent: "What is PatientExternalESP32 reading?"
 
 > [!TIP]
 > **Check before you go on.** `/patient-status` answers in the channel, and the agent answers your DM. Both show the board's live reading once you add it in step 12.
@@ -501,7 +501,7 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
 
 ## 12. Add the boards
 
-Two boards: the monitored device (this guide calls it `Test8`) and the corp ticket gauge (`Test7`). Do 1 to 4 for each, then 5 once.
+Two boards: the monitored device (this guide calls it `PatientExternalESP32`) and the corp ticket gauge (`CompanyInternalESP32`). Do 1 to 4 for each, then 5 once.
 
 1. Get the parts ([list](INSTALL-GUIDE.md#what-you-need)) and wire them as drawn: each wire ends on the pin printed on the board.
 
@@ -514,7 +514,7 @@ Two boards: the monitored device (this guide calls it `Test8`) and the corp tick
    | Field | Value |
    |---|---|
    | Record type | **Patient Device** for a monitored device; **Internal Device** for a corp ticket gauge |
-   | Asset Name and Serial Number | `Test8` for the monitored device, `Test7` for the gauge |
+   | Asset Name and Serial Number | `PatientExternalESP32` for the monitored device, `CompanyInternalESP32` for the gauge |
    | Account | A Patient Device: the test patient's **Person Account** from step 10. An Internal Device: a business account, for example your ward |
    | Wi-Fi Network | The network you just created |
 
@@ -566,11 +566,11 @@ SF_TARGET_ORG="$NAME" scripts/data-cloud-insights.sh
 | The board's Asset | Connection `Online`, a reading every 2 s on the Live Status card |
 | **Send Command** → `RESTART` on the Asset | The Device Command goes `Sent`, then `Acked` |
 | Warm the sensor to 30 C (under an arm) | The board's motor sweeps, and a Case opens in Care_Team_Queue |
-| Ask the agent "what is Test8 reporting?" (your board's name) | The latest readings, and an SOP citation when you ask what to do |
-| Ask the agent "How long was Test8 at or above 30 C yesterday?" (the day after step 12) | An answer from Data Cloud, with a note that the newest hour or two may be missing |
+| Ask the agent "what is PatientExternalESP32 reporting?" (your board's name) | The latest readings, and an SOP citation when you ask what to do |
+| Ask the agent "How long was PatientExternalESP32 at or above 30 C yesterday?" (the day after step 12) | An answer from Data Cloud, with a note that the newest hour or two may be missing |
 | Ask any agent "What is the spec of the ESP32-S3-DevKitC-1?" | An answer from Espressif's catalogs, with a docs.espressif.com link for the rest |
 | The app's Home tab | This month's AWS spend against the limit, and the org's limits |
-| `/patient-status Test8` in Slack | The live reading |
+| `/patient-status PatientExternalESP32` in Slack | The live reading |
 | The portal, as a patient | The patient's own device, and the assistant answering "what is my temperature?" |
 
 The full checklist: [Detailed Install Guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end).
@@ -639,15 +639,15 @@ Two environments, Dev and Prod, each with its own branch, GitHub Environment, re
    ```
 
    **Fill in first:**
-   - `EVAL_DEVICE='Test8'`: the test patient's board, its Asset's Serial Number from step 12.
-   - `EVAL_OTHER_DEVICE='Test7'`: the corp ticket gauge's Serial Number from step 12, a board that is not the test patient's.
+   - `EVAL_DEVICE='PatientExternalESP32'`: the test patient's board, its Asset's Serial Number from step 12.
+   - `EVAL_OTHER_DEVICE='CompanyInternalESP32'`: the corp ticket gauge's Serial Number from step 12, a board that is not the test patient's.
    - `EVAL_PATIENT_USERNAME='<patient username>'`: the test patient's username from step 10. Example: `EVAL_PATIENT_USERNAME='you+patient-a@example.com'`.
 
    **Paste into your terminal.** Once. It sets the three repository variables the **Agent evals** workflow reads.
 
    ```bash
-   EVAL_DEVICE='Test8'
-   EVAL_OTHER_DEVICE='Test7'
+   EVAL_DEVICE='PatientExternalESP32'
+   EVAL_OTHER_DEVICE='CompanyInternalESP32'
    EVAL_PATIENT_USERNAME='<patient username>'
    gh variable set EVAL_DEVICE --body "$EVAL_DEVICE"
    gh variable set EVAL_OTHER_DEVICE --body "$EVAL_OTHER_DEVICE"

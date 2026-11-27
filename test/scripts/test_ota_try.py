@@ -249,14 +249,14 @@ class ScriptFixture(unittest.TestCase):
             'region': REGION,
             'label': 'Dev',
             'stacks': {'cloud-agentic-iot-ota-Dev': {'FirmwareBucketName': BUCKET, 'OtaPresignRoleArn': ROLE}},
-            'groups': {'fleet-patient-monitor': ['Test7', 'Test55']},
+            'groups': {'fleet-patient-monitor': ['CompanyInternalESP32', 'Test55']},
             'objects': [f'firmware/patient-monitor/{self.base}.bin'],
             'executions': [
-                [('Test7', 'QUEUED'), ('Test55', 'QUEUED')],
-                [('Test7', 'IN_PROGRESS'), ('Test55', 'QUEUED')],
-                [('Test7', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')],
+                [('CompanyInternalESP32', 'QUEUED'), ('Test55', 'QUEUED')],
+                [('CompanyInternalESP32', 'IN_PROGRESS'), ('Test55', 'QUEUED')],
+                [('CompanyInternalESP32', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')],
             ],
-            'details': {'Test7 IN_PROGRESS': 'downloading', 'Test7 SUCCEEDED': 'rebooting',
+            'details': {'CompanyInternalESP32 IN_PROGRESS': 'downloading', 'CompanyInternalESP32 SUCCEEDED': 'rebooting',
                         'Test55 SUCCEEDED': 'rebooting'},
         }
 
@@ -347,34 +347,34 @@ class OtaTryTest(ScriptFixture):
         self.assertEqual(json.loads(job['options']['job-executions-rollout-config']), self.ota['firstRing']['rollout'])
         self.assertEqual(json.loads(job['options']['abort-config']), self.ota['firstRing']['abort'])
 
-        self.assertRegex(out, r'Test7\s+IN_PROGRESS\s+downloading')
-        self.assertRegex(out, r'Test7\s+SUCCEEDED\s+rebooting')
+        self.assertRegex(out, r'CompanyInternalESP32\s+IN_PROGRESS\s+downloading')
+        self.assertRegex(out, r'CompanyInternalESP32\s+SUCCEEDED\s+rebooting')
         self.assertRegex(out, r'Test55\s+SUCCEEDED\s+rebooting')
         self.assertNotIn('have not answered yet', out)
         self.assertIn(f'aws: connected, patient-monitor v{version}', out)
 
     def test_reaches_the_boards_in_the_groups_inside_the_fleet_group(self):
-        self.state['groups'] = {'fleet-patient-monitor': ['Test7'], 'canary-patient-monitor': ['Test55']}
+        self.state['groups'] = {'fleet-patient-monitor': ['CompanyInternalESP32'], 'canary-patient-monitor': ['Test55']}
         self.state['children'] = {'fleet-patient-monitor': ['canary-patient-monitor']}
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 0, out)
         [listing] = self.calls('iot list-things-in-thing-group')
         self.assertIs(listing['options'].get('recursive'), True)
         self.assertIn('2 board(s)', out)
-        self.assertIn('fleet-patient-monitor: Test7 Test55', out)
+        self.assertIn('fleet-patient-monitor: CompanyInternalESP32 Test55', out)
         self.assertRegex(out, r'Test55\s+SUCCEEDED')
 
     def test_reaches_the_internal_boards_with_the_one_build(self):
         # A ward board (Internal_Device in Salesforce) runs the patient-monitor
         # build too, from internal-devices inside the fleet group.
-        self.state['groups'] = {'fleet-patient-monitor': ['Test7'], 'internal-devices': ['Test55']}
+        self.state['groups'] = {'fleet-patient-monitor': ['CompanyInternalESP32'], 'internal-devices': ['Test55']}
         self.state['children'] = {'fleet-patient-monitor': ['internal-devices']}
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 0, out)
         [job] = self.calls('iot create-job')
         self.assertEqual(job['options']['targets'], f'arn:aws:iot:{REGION}:{ACCOUNT}:thinggroup/fleet-patient-monitor')
         self.assertEqual(job['document']['sketch'], 'patient-monitor')
-        self.assertIn('fleet-patient-monitor: Test7 Test55', out)
+        self.assertIn('fleet-patient-monitor: CompanyInternalESP32 Test55', out)
 
     def test_never_touches_what_a_release_reads_or_writes(self):
         code, out = self.try_('Dev', 'patient-monitor')
@@ -452,51 +452,51 @@ class OtaTryTest(ScriptFixture):
     def test_a_board_on_2_2_0_answers_once_it_runs_the_new_build_so_no_console_check_is_asked(self):
         version = f'{self.base}-try.1'
         self.state['executions'] = [
-            [('Test7', 'IN_PROGRESS'), ('Test55', 'IN_PROGRESS')],
-            [('Test7', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')],
+            [('CompanyInternalESP32', 'IN_PROGRESS'), ('Test55', 'IN_PROGRESS')],
+            [('CompanyInternalESP32', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')],
         ]
-        self.state['details'] = {'Test7 IN_PROGRESS': 'downloading', 'Test55 IN_PROGRESS': 'rebooting',
-                                 'Test7 SUCCEEDED': f'running {version}', 'Test55 SUCCEEDED': f'running {version}'}
+        self.state['details'] = {'CompanyInternalESP32 IN_PROGRESS': 'downloading', 'Test55 IN_PROGRESS': 'rebooting',
+                                 'CompanyInternalESP32 SUCCEEDED': f'running {version}', 'Test55 SUCCEEDED': f'running {version}'}
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 0, out)
-        self.assertRegex(out, rf'Test7\s+SUCCEEDED\s+running {re.escape(version)}')
+        self.assertRegex(out, rf'CompanyInternalESP32\s+SUCCEEDED\s+running {re.escape(version)}')
         self.assertRegex(out, rf'Test55\s+SUCCEEDED\s+running {re.escape(version)}')
         self.assertNotIn('aws: connected', out)
         self.assertNotIn('before the new build started', out)
 
     def test_names_only_the_boards_that_answered_before_restarting(self):
         version = f'{self.base}-try.1'
-        self.state['executions'] = [[('Test7', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')]]
-        self.state['details'] = {'Test7 SUCCEEDED': f'running {version}', 'Test55 SUCCEEDED': 'rebooting'}
+        self.state['executions'] = [[('CompanyInternalESP32', 'SUCCEEDED'), ('Test55', 'SUCCEEDED')]]
+        self.state['details'] = {'CompanyInternalESP32 SUCCEEDED': f'running {version}', 'Test55 SUCCEEDED': 'rebooting'}
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 0, out)
         self.assertIn('Answered just before restarting, before the new build started: Test55.', out)
         self.assertIn(f'aws: connected, patient-monitor v{version}', out)
 
     def test_a_board_that_came_back_on_its_old_build_fails_the_try(self):
-        self.state['executions'] = [[('Test7', 'FAILED'), ('Test55', 'SUCCEEDED')]]
-        self.state['details'] = {'Test7 FAILED': 'came back on 2.1.0', 'Test55 SUCCEEDED': 'running 2.2.0-try.1'}
+        self.state['executions'] = [[('CompanyInternalESP32', 'FAILED'), ('Test55', 'SUCCEEDED')]]
+        self.state['details'] = {'CompanyInternalESP32 FAILED': 'came back on 2.1.0', 'Test55 SUCCEEDED': 'running 2.2.0-try.1'}
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 1, out)
-        self.assertRegex(out, r'Test7\s+FAILED\s+came back on 2\.1\.0')
+        self.assertRegex(out, r'CompanyInternalESP32\s+FAILED\s+came back on 2\.1\.0')
         self.assertIn('1 board(s) did not install', out)
 
     def test_says_which_board_did_not_install_it_and_why(self):
-        self.state['executions'] = [[('Test7', 'FAILED'), ('Test55', 'SUCCEEDED')]]
-        self.state['details'] = {'Test7 FAILED': 'http 403', 'Test55 SUCCEEDED': 'rebooting'}
+        self.state['executions'] = [[('CompanyInternalESP32', 'FAILED'), ('Test55', 'SUCCEEDED')]]
+        self.state['details'] = {'CompanyInternalESP32 FAILED': 'http 403', 'Test55 SUCCEEDED': 'rebooting'}
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 1, out)
-        self.assertRegex(out, r'Test7\s+FAILED\s+http 403')
+        self.assertRegex(out, r'CompanyInternalESP32\s+FAILED\s+http 403')
         self.assertIn('1 board(s) did not install', out)
 
     def test_fails_when_a_board_refused_it_timed_out_or_lost_it(self):
         for status in ('REJECTED', 'TIMED_OUT', 'CANCELED', 'REMOVED'):
             with self.subTest(status=status):
                 self.forget_calls()
-                self.state['executions'] = [[('Test7', status), ('Test55', 'SUCCEEDED')]]
+                self.state['executions'] = [[('CompanyInternalESP32', status), ('Test55', 'SUCCEEDED')]]
                 code, out = self.try_('Dev', 'patient-monitor')
                 self.assertEqual(code, 1, out)
-                self.assertRegex(out, rf'Test7\s+{status}')
+                self.assertRegex(out, rf'CompanyInternalESP32\s+{status}')
                 self.assertIn('1 board(s) did not install', out)
 
     def test_keeps_watching_when_a_poll_fails(self):
@@ -504,11 +504,11 @@ class OtaTryTest(ScriptFixture):
         code, out = self.try_('Dev', 'patient-monitor')
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("Could not read the job's progress"), 1, out)
-        self.assertRegex(out, r'Test7\s+SUCCEEDED\s+rebooting')
+        self.assertRegex(out, r'CompanyInternalESP32\s+SUCCEEDED\s+rebooting')
         self.assertRegex(out, r'Test55\s+SUCCEEDED\s+rebooting')
 
     def test_stops_watching_a_board_that_is_offline_and_says_so(self):
-        self.state['executions'] = [[('Test7', 'SUCCEEDED'), ('Test55', 'QUEUED')]]
+        self.state['executions'] = [[('CompanyInternalESP32', 'SUCCEEDED'), ('Test55', 'QUEUED')]]
         code, out = self.try_('Dev', 'patient-monitor', minutes='0')
         self.assertEqual(code, 0, out)
         self.assertRegex(out, r'Test55\s+QUEUED')
@@ -581,22 +581,22 @@ class OtaJoinTest(ScriptFixture):
                  for c in self.calls('iot add-thing-to-thing-group')])
 
     def test_internal_leaves_the_other_groups_of_the_fleet_first(self):
-        code, out = self.join('Dev', 'Test7', 'patient-monitor', 'internal')
+        code, out = self.join('Dev', 'CompanyInternalESP32', 'patient-monitor', 'internal')
         self.assertEqual(code, 0, out)
         removed, added = self.moves()
-        self.assertEqual(sorted(removed), [('Test7', 'canary-patient-monitor'), ('Test7', 'fleet-patient-monitor')])
-        self.assertEqual(added, [('Test7', 'internal-devices')])
-        self.assertIn('Test7 is in internal-devices.', out)
+        self.assertEqual(sorted(removed), [('CompanyInternalESP32', 'canary-patient-monitor'), ('CompanyInternalESP32', 'fleet-patient-monitor')])
+        self.assertEqual(added, [('CompanyInternalESP32', 'internal-devices')])
+        self.assertIn('CompanyInternalESP32 is in internal-devices.', out)
 
     def test_fleet_and_canary_leave_internal_devices_too(self):
         for ring, group in (('canary', 'canary-patient-monitor'), (None, 'fleet-patient-monitor')):
             self.forget_calls()
-            code, out = self.join('Dev', 'Test7', 'patient-monitor', *([ring] if ring else []))
+            code, out = self.join('Dev', 'CompanyInternalESP32', 'patient-monitor', *([ring] if ring else []))
             self.assertEqual(code, 0, out)
             removed, added = self.moves()
-            self.assertIn(('Test7', 'internal-devices'), removed)
-            self.assertNotIn(('Test7', group), removed)
-            self.assertEqual(added, [('Test7', group)])
+            self.assertIn(('CompanyInternalESP32', 'internal-devices'), removed)
+            self.assertNotIn(('CompanyInternalESP32', group), removed)
+            self.assertEqual(added, [('CompanyInternalESP32', group)])
 
     def test_only_a_patient_monitor_can_be_internal(self):
         # Every board runs patient-monitor today, so a second sketch is made up.
@@ -610,7 +610,7 @@ class OtaJoinTest(ScriptFixture):
         self.assertEqual(self.calls(), [])
 
     def test_refuses_an_unknown_ring(self):
-        code, out = self.join('Dev', 'Test7', 'patient-monitor', 'ward')
+        code, out = self.join('Dev', 'CompanyInternalESP32', 'patient-monitor', 'ward')
         self.assertEqual(code, 1, out)
         self.assertEqual(self.calls(), [])
 

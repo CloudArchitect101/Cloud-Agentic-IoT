@@ -282,7 +282,7 @@ query shows the newest version `Active`. `Patient_Care_Agent` opens the agent to
 and gives its actions what they read and create; it is an employee agent, so
 it acts as you. Open it from the Lightning header, then:
 
-1. Ask what a device is reporting, by its serial number (Test8, say). It
+1. Ask what a device is reporting, by its serial number (PatientExternalESP32, say). It
    answers from the device's latest readings and connection status.
 2. Ask it to escalate a reading. It says which device and reading, and asks
    you to confirm.
@@ -323,7 +323,7 @@ sets it to `"true"`.
 
 **Before you start**
 
-- The board's Asset (Test8 here) has a SerialNumber equal to its Thing name,
+- The board's Asset (PatientExternalESP32 here) has a SerialNumber equal to its Thing name,
   and is Provisioned and Online. Without a matching Asset there is no Case,
   only a WARN in the debug log.
 - Care_Team_Queue lists Case as a supported object (Setup → Queues). If not,
@@ -346,7 +346,7 @@ sets it to `"true"`.
    about 5 s the board's servo starts sweeping (console:
    `temperature 30.0C: 30 C or more, motor turning`).
 2. Within 1 to 3 stored readings (about 30 s each) a Case appears in
-   Care_Team_Queue (Subject `High temperature ... C on Test8`) and the ward
+   Care_Team_Queue (Subject `High temperature ... C on PatientExternalESP32`) and the ward
    board moves. The servo goes on sweeping.
 3. Keep it warm: no new Case. AWS reports the device again every re-alert
    interval (15 minutes in Dev), and Salesforce sees the open Case and stops.
@@ -367,7 +367,7 @@ sets it to `"true"`.
 **For a live talk**, step 4 waits up to `RealertIntervalMinutes`. To shorten
 it, deploy Dev with `"RealertIntervalMinutes": 2` for the session and set it
 back after. That also speeds up the clinical reminders for devices that are
-not STABLE; Test8 on a desk is always STABLE.
+not STABLE; PatientExternalESP32 on a desk is always STABLE.
 
 **Check it**
 
@@ -416,15 +416,15 @@ reading with a heart rate of 135 and an SpO2 of 86, the way a wearable
 would, from the repository root and signed in as in step 2:
 
 ```bash
-scripts/streams-test.sh Dev Test8
+scripts/streams-test.sh Dev PatientExternalESP32
 ```
 
 It prints what the alert dispatcher decided (`CRITICAL_VITALS`). Within a few
-seconds Salesforce has a Case **Critical vitals on Test8**, Origin **Vital
-Alert**, in **Care Team Queue** on Test8's Asset, and the ward board starts
+seconds Salesforce has a Case **Critical vitals on PatientExternalESP32**, Origin **Vital
+Alert**, in **Care Team Queue** on PatientExternalESP32's Asset, and the ward board starts
 turning for it like for any other Case. Run it again while that Case is open
 and no second one opens; close it and the next run opens a new one.
-`scripts/streams-test.sh Dev Test8 warning` publishes an `ABNORMAL_TREND`
+`scripts/streams-test.sh Dev PatientExternalESP32 warning` publishes an `ABNORMAL_TREND`
 alert, which opens nothing, and `normal` is dropped in AWS. Nothing is
 written to the device's readings and no board is contacted.
 
@@ -435,8 +435,8 @@ undoes it. Use a build that is already published, for example the last try
 (`scripts/ota.sh status Dev` names it):
 
 ```bash
-scripts/ota-saga.sh send Dev Test8 patient-monitor 1.0.0-try.1
-scripts/ota-saga.sh status Dev Test8
+scripts/ota-saga.sh send Dev PatientExternalESP32 patient-monitor 1.0.0-try.1
+scripts/ota-saga.sh status Dev PatientExternalESP32
 ```
 
 `status` shows the Thing's `otaState` (`UPDATING` while the saga runs,
@@ -485,10 +485,10 @@ demo apart from any team's. Slash commands work on the free plan.
    ```
 4. **Add the command.** In the app, **Slash Commands** → **Create New
    Command**, with that address as **Request URL**: `/patient-status`
-   (hint `Test8`).
+   (hint `PatientExternalESP32`).
 5. **Install it.** **Install App** → **Install to Workspace** → **Allow**.
-6. **Try it.** In any channel: `/patient-status Test8`. The answer shows
-   only to you: first "Looking up `Test8`…", then the live reading from AWS
+6. **Try it.** In any channel: `/patient-status PatientExternalESP32`. The answer shows
+   only to you: first "Looking up `PatientExternalESP32`…", then the live reading from AWS
    (or "offline since" when the board has not sent for five minutes) and the
    last event Salesforce saved, which can be hours older because Salesforce
    keeps only state changes and alerts. Slack sends no commands to a board;

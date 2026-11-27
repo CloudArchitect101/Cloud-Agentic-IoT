@@ -54,7 +54,7 @@ KEY = ('-----BEGIN RSA PRIVATE KEY-----\n'
 PASSPHRASE = 'not-a-real-passphrase'
 
 BUNDLE = {
-    'thingName': 'Test7',
+    'thingName': 'CompanyInternalESP32',
     'endpoint': 'a1b2c3d4e5f6g7-ats.iot.us-east-2.amazonaws.com',
     'ssid': 'Home',
     'passphrase': PASSPHRASE,
@@ -381,7 +381,7 @@ class Session:
         self.text = '\n'.join(self.output)
 
 
-def write_bundle(directory, bundle=None, name='Test7-1793925455669.json'):
+def write_bundle(directory, bundle=None, name='CompanyInternalESP32-1793925455669.json'):
     path = os.path.join(directory, name)
     with open(path, 'w') as f:
         json.dump(BUNDLE if bundle is None else bundle, f, indent=2)
@@ -410,7 +410,7 @@ class ProvisionTest(unittest.TestCase):
         self.assertEqual(len(run.board.lines_read), 1)
         self.assertEqual(json.loads(run.board.lines_read[0]), BUNDLE)
         self.assertEqual(run.board.identity, IDENTITY)
-        self.assertIn('Online: Test7 is connected to AWS IoT.', run.text)
+        self.assertIn('Online: CompanyInternalESP32 is connected to AWS IoT.', run.text)
         self.assertNothingSecretShown(run)
 
     def test_the_simulated_board_loses_a_bundle_sent_in_one_burst(self):
@@ -462,7 +462,7 @@ class ProvisionTest(unittest.TestCase):
     def test_does_not_send_to_a_board_that_is_already_online_as_this_thing(self):
         run = self.provision(identity=IDENTITY, networks=['Home'])
         self.assertEqual(run.code, 0, run.text)
-        self.assertIn('already online as Test7', run.text)
+        self.assertIn('already online as CompanyInternalESP32', run.text)
         self.assertEqual(run.board.lines_read, [])
 
     def test_does_not_send_to_a_board_with_another_identity(self):

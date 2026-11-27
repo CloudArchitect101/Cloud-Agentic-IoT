@@ -276,9 +276,9 @@ that have no metadata, in order. Each one is also in
       `Patient_Device_Needs_Person_Account`).
     - Attach the patient's device: its Asset's Account is
     the Person Account, record type Patient Device. For the two-patient demo:
-    Test8 goes to patient A, and patient B gets a second Patient Device Asset,
+    PatientExternalESP32 goes to patient A, and patient B gets a second Patient Device Asset,
     which can be a placeholder with no board.
-12. **Try it.** Sign in as patient A. My monitor shows Test8. Ask the assistant
+12. **Try it.** Sign in as patient A. My monitor shows PatientExternalESP32. Ask the assistant
     "what is my temperature?", then "what does device <B's serial> say?" (it
     should answer that the device is not linked to your account). Then "I
     need a nurse": a Case with Origin Patient Portal appears on Care_Team_Queue

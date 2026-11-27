@@ -39,7 +39,7 @@ start_agent agent_router:
     reasoning:
         instructions: ->
             | Select the best tool to call based on conversation history and user's intent.
-              A question about a specific monitored device (named by its serial number, such as Test8), its readings, its history, its connection, a ward procedure or an escalation goes to Patient_Device_Monitoring.
+              A question about a specific monitored device (named by its serial number, such as PatientExternalESP32), its readings, its history, its connection, a ward procedure or an escalation goes to Patient_Device_Monitoring.
               A generic question about Espressif hardware or software that names no monitored device and no patient goes to ESP32_Hardware: ESP32 chips, modules and dev boards (for example ESP32-S3-DevKitC-1), their specs, peripherals and pins, and ESP-IDF components and drivers.
               If a message asks both, handle the device part in Patient_Device_Monitoring first.
 
@@ -67,7 +67,7 @@ subagent Patient_Device_Monitoring:
               
               Get Latest Device Readings returns two sources. The live reading (Live Message, Live Temperature, Live Humidity, Live Reading Age Minutes) is the newest reading the board stored in AWS; lead with it. The saved readings are only the ones Salesforce kept because they changed the patient's state or raised an alert; call the newest one the last saved event, not the current reading. Always say how old a reading is when it is more than 60 minutes old, from Live Reading Age Minutes or Latest Reading Age Minutes, for example "last reported 23 hours ago". Do not call a device online from its connection status alone when its newest reading is more than 60 minutes old; say it is connected but has not reported for that long. If Live Message says the live reading is unavailable, say so and answer from the saved readings.
               
-              Users name a device by its serial number, which is short, for example "Test8" or "ESP32-Patient-Monitor-01". Treat a device name the user gives as its serial number and pass it to the actions exactly as written, without asking first. Ask only if the action finds no such device, or if the user names a patient with more than one device. Always refer to a device by its serial number.
+              Users name a device by its serial number, which is short, for example "PatientExternalESP32" or "ESP32-Patient-Monitor-01". Treat a device name the user gives as its serial number and pass it to the actions exactly as written, without asking first. Ask only if the action finds no such device, or if the user names a patient with more than one device. Always refer to a device by its serial number.
               
               When the user asks about a device over time (this week, yesterday, how long, how often, whether it is a pattern or a one-off, when it last reported), call Get Device History with the device's serial number, and the number of days if the user gives one. Give the numbers from its Summary and Daily Lines as written, never add readings up yourself, and say once that they come from Data Cloud and may miss the newest hour or two. A day not listed had no reading at or above the threshold. If Get Device History fails (Success is false), say the history cannot be read right now, not that the device had no alerts. For what a device reads right now, use Get Latest Device Readings, not the history.
               
@@ -96,7 +96,7 @@ subagent Patient_Device_Monitoring:
 
     actions:
         Get_Device_Readings:
-            description: "Returns the latest readings a monitored device reported, newest first, and whether the device is connected. Use it whenever the user asks what a device is reporting, how its readings look, whether a device is online, or before escalating a condition. Needs the device serial number, which users give as the device's name, for example Test8: pass it exactly as written."
+            description: "Returns the latest readings a monitored device reported, newest first, and whether the device is connected. Use it whenever the user asks what a device is reporting, how its readings look, whether a device is online, or before escalating a condition. Needs the device serial number, which users give as the device's name, for example PatientExternalESP32: pass it exactly as written."
             label: "Get Latest Device Readings"
             require_user_confirmation: False
             include_in_progress_indicator: False
@@ -290,7 +290,7 @@ subagent Patient_Device_Monitoring:
                     filter_from_agent: False
 
         Get_Device_History:
-            description: "Returns how a monitored device's temperature ran over the last days, from Data Cloud: the days and minutes at or above the temperature alert threshold, the highest reading, the last 24 hours and the newest reading Data Cloud holds. Use it whenever the user asks about a device over time (this week, yesterday, how long, how often, a pattern or a one-off, when it last reported), and before escalating a condition. Needs the device serial number, for example Test8: pass it exactly as written. Do not use it for what a device reads right now."
+            description: "Returns how a monitored device's temperature ran over the last days, from Data Cloud: the days and minutes at or above the temperature alert threshold, the highest reading, the last 24 hours and the newest reading Data Cloud holds. Use it whenever the user asks about a device over time (this week, yesterday, how long, how often, a pattern or a one-off, when it last reported), and before escalating a condition. Needs the device serial number, for example PatientExternalESP32: pass it exactly as written. Do not use it for what a device reads right now."
             label: "Get Device History"
             require_user_confirmation: False
             include_in_progress_indicator: False
@@ -299,7 +299,7 @@ subagent Patient_Device_Monitoring:
 
             inputs:
                 "deviceId": string
-                    description: "The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example Test8."
+                    description: "The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example PatientExternalESP32."
                     label: "Device ID"
                     is_required: True
                     is_user_input: False

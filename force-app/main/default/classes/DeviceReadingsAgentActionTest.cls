@@ -116,14 +116,14 @@ private class DeviceReadingsAgentActionTest {
 
     @IsTest
     static void lastTelemetryFallsBackToTheNewestReading() {
-        Asset d = device('Test8');
+        Asset d = device('PatientExternalESP32');
         d.Last_Telemetry_At__c = null;
         TriggerHandler.bypass('AssetTriggerHandler');
         update d;
         TriggerHandler.clearBypass('AssetTriggerHandler');
-        insert new List<Patient_Vitals__c>{ reading('Test8', 1, 70), reading('Test8', 4, 72) };
+        insert new List<Patient_Vitals__c>{ reading('PatientExternalESP32', 1, 70), reading('PatientExternalESP32', 4, 72) };
 
-        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+        DeviceReadingsAgentAction.ReadingsResult res = one('PatientExternalESP32', 5);
 
         Assert.isTrue(res.success, res.message);
         Assert.areEqual(Datetime.newInstanceGmt(2026, 11, 6, 12, 4, 0), res.lastTelemetryAt,
@@ -132,30 +132,30 @@ private class DeviceReadingsAgentActionTest {
 
     @IsTest
     static void contactDetailsTypedOnTheAssetReachTheAgentMasked() {
-        Asset d = device('Test8');
+        Asset d = device('PatientExternalESP32');
         d.Name = 'Room 4 monitor, family 555-123-4567, nurse.lead@example.com';
         d.Last_Disconnect_Reason__c = 'Unplugged, call 555-123-4567';
         TriggerHandler.bypass('AssetTriggerHandler');
         update d;
         TriggerHandler.clearBypass('AssetTriggerHandler');
 
-        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+        DeviceReadingsAgentAction.ReadingsResult res = one('PatientExternalESP32', 5);
 
         Assert.areEqual('Room 4 monitor, family [PHONE_1], [EMAIL_1]', res.deviceName);
         Assert.areEqual('Unplugged, call [PHONE_1]', res.lastDisconnectReason);
-        Assert.areEqual('Test8', res.deviceId, 'The device ID is the key, never masked');
+        Assert.areEqual('PatientExternalESP32', res.deviceId, 'The device ID is the key, never masked');
     }
 
     @IsTest
     static void returnsTheLatestReadingsNewestFirstWithTheConnection() {
-        device('Test8');
+        device('PatientExternalESP32');
         List<Patient_Vitals__c> rows = new List<Patient_Vitals__c>();
         for (Integer minute = 0; minute < 8; minute++) {
-            rows.add(reading('Test8', minute, 70 + minute));
+            rows.add(reading('PatientExternalESP32', minute, 70 + minute));
         }
         insert rows;
 
-        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 3);
+        DeviceReadingsAgentAction.ReadingsResult res = one('PatientExternalESP32', 3);
 
         Assert.isTrue(res.success, res.message);
         Assert.areEqual(3, res.readingsReturned, 'Only as many as asked for');
@@ -163,7 +163,7 @@ private class DeviceReadingsAgentActionTest {
         Assert.areEqual(Datetime.newInstanceGmt(2026, 11, 6, 12, 7, 0), res.latestReadingAt, 'Newest timestamp');
         Assert.areEqual('STABLE', res.latestPatientState, 'State of the newest reading');
         Assert.areEqual('Online', res.connectionStatus, 'The Asset\'s connection status');
-        Assert.areEqual('Monitor Test8', res.deviceName, 'The Asset\'s name');
+        Assert.areEqual('Monitor PatientExternalESP32', res.deviceName, 'The Asset\'s name');
         Assert.areEqual(Datetime.newInstanceGmt(2026, 11, 6, 12, 30, 0), res.lastTelemetryAt, 'Last telemetry');
 
         List<String> lines = res.readings.split('\n');
@@ -192,10 +192,10 @@ private class DeviceReadingsAgentActionTest {
 
     @IsTest
     static void onlyTheNamedDevicesReadingsComeBack() {
-        device('Test8');
-        insert new List<Patient_Vitals__c>{ reading('Test8', 1, 72), reading('Other', 2, 140) };
+        device('PatientExternalESP32');
+        insert new List<Patient_Vitals__c>{ reading('PatientExternalESP32', 1, 72), reading('Other', 2, 140) };
 
-        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 10);
+        DeviceReadingsAgentAction.ReadingsResult res = one('PatientExternalESP32', 10);
 
         Assert.areEqual(1, res.readingsReturned, 'Another device\'s reading is not this one\'s');
         Assert.areEqual(72, res.latestHeartRate, 'This device\'s reading');
@@ -237,20 +237,20 @@ private class DeviceReadingsAgentActionTest {
 
     @IsTest
     static void aSerialNumberInAnotherCaseIsNotAMatch() {
-        device('test8');
+        device('patientexternalesp32');
 
-        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+        DeviceReadingsAgentAction.ReadingsResult res = one('PatientExternalESP32', 5);
 
         Assert.isFalse(res.success, 'Serial numbers are matched case-sensitively, like the rest of the device code');
     }
 
     @IsTest
     static void aBlankDeviceIdIsRejectedWithoutFailingTheBatch() {
-        device('Test8');
-        insert reading('Test8', 1, 72);
+        device('PatientExternalESP32');
+        insert reading('PatientExternalESP32', 1, 72);
 
         List<DeviceReadingsAgentAction.ReadingsResult> results = call(
-            new List<DeviceReadingsAgentAction.ReadingsRequest>{ req(' ', 5), req('Test8', 5) });
+            new List<DeviceReadingsAgentAction.ReadingsRequest>{ req(' ', 5), req('PatientExternalESP32', 5) });
 
         Assert.isFalse(results[0].success, 'Blank device ID');
         Assert.isTrue(results[0].message.contains('required'), results[0].message);
@@ -289,14 +289,14 @@ private class DeviceReadingsAgentActionTest {
 
     @IsTest
     static void theNewestReadingStoredInAwsComesWithItsAge() {
-        device('Test8');
-        insert reading('Test8', 1, 72);
+        device('PatientExternalESP32');
+        insert reading('PatientExternalESP32', 1, 72);
 
-        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+        DeviceReadingsAgentAction.ReadingsResult res = one('PatientExternalESP32', 5);
 
         Assert.isTrue(res.success, res.message);
         Assert.areEqual(new List<String>{ 'device-live' }, aws.paths, 'One callout, to POST /device-live');
-        Assert.areEqual('Test8', aws.bodies[0].get('thingName'), 'Asked about the named device');
+        Assert.areEqual('PatientExternalESP32', aws.bodies[0].get('thingName'), 'Asked about the named device');
         Assert.areEqual('latest', aws.bodies[0].get('mode'), 'Only reads: mode latest sends nothing to the board');
         Assert.areEqual(Datetime.newInstanceGmt(2026, 11, 6, 5, 29, 30), res.liveReadingAt, 'When the board took it');
         Assert.areEqual(22.5, res.liveTemperature, 'Live temperature');
@@ -308,12 +308,12 @@ private class DeviceReadingsAgentActionTest {
 
     @IsTest
     static void aFailedLiveCallStillReturnsTheSavedReadings() {
-        device('Test8');
-        insert reading('Test8', 1, 72);
+        device('PatientExternalESP32');
+        insert reading('PatientExternalESP32', 1, 72);
         aws = new DeviceApiMock();
         aws.statusCode = 503;
 
-        DeviceReadingsAgentAction.ReadingsResult res = one('Test8', 5);
+        DeviceReadingsAgentAction.ReadingsResult res = one('PatientExternalESP32', 5);
 
         Assert.isTrue(res.success, 'The saved readings do not depend on AWS: ' + res.message);
         Assert.areEqual(72, res.latestHeartRate, 'Saved reading still there');
@@ -329,15 +329,15 @@ private class DeviceReadingsAgentActionTest {
 
     @IsTest
     static void someoneWithoutThePermissionSetIsToldSo() {
-        device('Test8');
-        insert reading('Test8', 1, 72);
+        device('PatientExternalESP32');
+        insert reading('PatientExternalESP32', 1, 72);
         User outsider = [SELECT Id FROM User WHERE Username = :username('agent-outsider')];
 
         DeviceReadingsAgentAction.ReadingsResult res;
         System.runAs(outsider) {
             Test.startTest();
             res = DeviceReadingsAgentAction.getLatestReadings(
-                new List<DeviceReadingsAgentAction.ReadingsRequest>{ req('Test8', 5) })[0];
+                new List<DeviceReadingsAgentAction.ReadingsRequest>{ req('PatientExternalESP32', 5) })[0];
             Test.stopTest();
         }
 

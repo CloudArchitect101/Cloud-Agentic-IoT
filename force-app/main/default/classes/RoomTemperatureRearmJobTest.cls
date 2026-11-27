@@ -45,7 +45,7 @@ private class RoomTemperatureRearmJobTest {
         DeviceTestSettings.use();
         DeviceApiMock aws = new DeviceApiMock();
         Test.setMock(HttpCalloutMock.class, aws);
-        Case alertCase = openCase(device('Test8'), ORIGIN);
+        Case alertCase = openCase(device('PatientExternalESP32'), ORIGIN);
 
         Test.startTest();
         update new Case(Id = alertCase.Id, Status = 'Closed');
@@ -53,7 +53,7 @@ private class RoomTemperatureRearmJobTest {
 
         List<Map<String, Object>> sent = rearms(aws);
         Assert.areEqual(1, sent.size(), 'one re-arm for the closed Case');
-        Assert.areEqual('Test8', sent[0].get('thingName'));
+        Assert.areEqual('PatientExternalESP32', sent[0].get('thingName'));
     }
 
     @IsTest
@@ -61,9 +61,9 @@ private class RoomTemperatureRearmJobTest {
         DeviceTestSettings.use();
         // Closing the alert Case below starts a re-arm job, which calls out when the test ends.
         Test.setMock(HttpCalloutMock.class, new DeviceApiMock());
-        Asset test8 = device('Test8');
-        Case other = openCase(test8, 'Phone');
-        Case alertCase = openCase(test8, ORIGIN);
+        Asset monitored = device('PatientExternalESP32');
+        Case other = openCase(monitored, 'Phone');
+        Case alertCase = openCase(monitored, ORIGIN);
         update new Case(Id = alertCase.Id, Status = 'Closed');
 
         List<Case> after = [SELECT Id, IsClosed, AssetId, Origin FROM Case WHERE Id IN :new List<Id>{ other.Id, alertCase.Id }];
@@ -81,7 +81,7 @@ private class RoomTemperatureRearmJobTest {
         DeviceApiMock aws = new DeviceApiMock();
         aws.statusCode = 500;
         Test.setMock(HttpCalloutMock.class, aws);
-        Case alertCase = openCase(device('Test8'), ORIGIN);
+        Case alertCase = openCase(device('PatientExternalESP32'), ORIGIN);
 
         Test.startTest();
         update new Case(Id = alertCase.Id, Status = 'Closed');

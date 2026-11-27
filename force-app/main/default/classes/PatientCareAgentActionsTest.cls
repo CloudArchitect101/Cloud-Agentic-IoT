@@ -182,16 +182,16 @@ private class PatientCareAgentActionsTest {
     @IsTest
     static void theCaseIsLinkedToTheDevicesAsset() {
         settings();
-        Asset test8 = device('Test8');
+        Asset monitored = device('PatientExternalESP32');
         Test.startTest();
         List<PatientCareAgentActions.EscalationResult> results =
             PatientCareAgentActions.escalate(new List<PatientCareAgentActions.EscalationRequest>{
-                req('Test8', 'Room at 30 C', 'MEDIUM')
+                req('PatientExternalESP32', 'Room at 30 C', 'MEDIUM')
             });
         Test.stopTest();
 
         Assert.isTrue(results[0].success, results[0].message);
-        Assert.areEqual(test8.Id, [SELECT AssetId FROM Case LIMIT 1].AssetId,
+        Assert.areEqual(monitored.Id, [SELECT AssetId FROM Case LIMIT 1].AssetId,
             'An agent escalation is the device\'s own Case');
     }
 

@@ -3,9 +3,9 @@
  *
  * The Patient Care Agent's Get Device History action: how a monitored
  * device's temperature has run over the last days, from Data Cloud. It
- * answers the questions the latest reading cannot: "has Test8 been running
+ * answers the questions the latest reading cannot: "has PatientExternalESP32 been running
  * hot this week, or is today a one-off?", "how long was it at or above
- * 30 C yesterday?", "when did Test7 last send anything?".
+ * 30 C yesterday?", "when did CompanyInternalESP32 last send anything?".
  *
  * Three Data Cloud ANSI SQL queries per device, all read-only, through the
  * same Querier the Home page's Data Cloud value card uses:
@@ -78,7 +78,7 @@ public with sharing class DeviceHistoryAgentAction {
 
     public class HistoryRequest {
         @InvocableVariable(required=true label='Device ID'
-            description='The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example Test8.')
+            description='The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example PatientExternalESP32.')
         public String deviceId;
 
         @InvocableVariable(label='Days'
@@ -139,7 +139,7 @@ public with sharing class DeviceHistoryAgentAction {
             }
             if (!SERIAL_PATTERN.matcher(serial).matches()) {
                 // Never echoed: it is not a serial number, and it may be anything.
-                res.message = 'That is not a device serial number. Use letters, digits, - and _ only, for example Test8.';
+                res.message = 'That is not a device serial number. Use letters, digits, - and _ only, for example PatientExternalESP32.';
                 continue;
             }
             if (wanted.size() >= MAX_DEVICES_PER_CALL && !wanted.contains(serial)) {

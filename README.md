@@ -166,7 +166,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | 00, 13 · Provisioning | Live: two boards provisioned from their Assets, one Monitoring Device and one Internal Device |
 | 01 · Data Cloud | The CSV copy is live in S3. The connection, stream and mapping are setup steps in the org, and the insights a script; not set up in the test org yet |
 | 02 · Streams | Deployed. Fired by `scripts/streams-test.sh`, since the boards send only temperature and humidity |
-| 03 · Queue indicator, 30 °C rule | Live on Test7 and Test8 since Nov 10 (the temperature alert motor). The one current firmware version is `FIRMWARE_VERSION` in [`firmware/patient-monitor/patient-monitor.ino`](firmware/patient-monitor/patient-monitor.ino) |
+| 03 · Queue indicator, 30 °C rule | Live on both boards since Nov 10 (the temperature alert motor). The one current firmware version is `FIRMWARE_VERSION` in [`firmware/patient-monitor/patient-monitor.ino`](firmware/patient-monitor/patient-monitor.ino) |
 | 04 · Slack | Live: `/patient-status`, and the Patient Care Agent answers in Slack DMs |
 | 05 · Agent | Live in the new Agentforce Builder: readings, procedures, escalation to a Case, in Salesforce and Slack |
 | 06 · MCP | Deployed; `get_room_status` tested by a signed call |

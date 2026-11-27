@@ -90,7 +90,7 @@ A demo rule, not a clinical one. The monitored device's DHT11 can sit wherever t
 
 A Slack slash-command bot that reads AWS and Salesforce data — `/patient-status <device-id>` — without any Slack user ever logging into Salesforce. A dedicated integration user authenticates via the JWT Bearer Flow: the same pattern as the CI/CD pipeline, but as a runtime service call rather than a deploy-time one.
 
-**What it answers:** `/patient-status Test8` gives the live reading from AWS (or "offline since") and the last event Salesforce saved. `/dispense-medication` was retired on Nov 10 with the dispenser: the device is a temperature alert now, and a command to a board is **Send Command** on its Asset, which creates a `Device_Command__c` that an Apex trigger sends through the device API and the guardrails; the board's answer marks it `Acked` or `Failed`.
+**What it answers:** `/patient-status PatientExternalESP32` gives the live reading from AWS (or "offline since") and the last event Salesforce saved. `/dispense-medication` was retired on Nov 10 with the dispenser: the device is a temperature alert now, and a command to a board is **Send Command** on its Asset, which creates a `Device_Command__c` that an Apex trigger sends through the device API and the guardrails; the board's answer marks it `Acked` or `Failed`.
 
 **Key files:** `lambda/slack-integration/index.js` (verifies the Slack signature — HMAC, replay-protected — answers within Slack's 3 seconds, then does the Salesforce work in an asynchronous call of itself and posts the result to the command's `response_url`), `lambda/shared/salesforce.js` (headless JWT auth), `cloudformation.yaml`
 
@@ -213,7 +213,7 @@ A saga that is still waiting when its attempts run out (20 looks, one a minute) 
 
 **Key files:** `lambda/ota-saga/` (function and template: the queue, its dead-letter queue and alarm), `scripts/ota-saga.sh`
 
-**To see it work:** `scripts/ota-saga.sh send Dev Test8 patient-monitor <a published version>`, then `scripts/ota-saga.sh status Dev Test8` and `aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow` for the step trace. Turn the board off first to watch the unwind ([TRY-IT.md, Update one board through the saga](TRY-IT.md#update-one-board-through-the-saga)). Releases to the fleet still go through `scripts/ota.sh`: the saga is for one board at a time.
+**To see it work:** `scripts/ota-saga.sh send Dev PatientExternalESP32 patient-monitor <a published version>`, then `scripts/ota-saga.sh status Dev PatientExternalESP32` and `aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow` for the step trace. Turn the board off first to watch the unwind ([TRY-IT.md, Update one board through the saga](TRY-IT.md#update-one-board-through-the-saga)). Releases to the fleet still go through `scripts/ota.sh`: the saga is for one board at a time.
 
 ## 10 · Einstein Trust Layer — PII Masking & Audit
 

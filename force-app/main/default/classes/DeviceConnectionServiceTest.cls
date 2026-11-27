@@ -143,14 +143,14 @@ private class DeviceConnectionServiceTest {
     @IsTest
     static void aThingArnInAnotherCaseIsAnotherThing() {
         // AWS IoT Thing names are case-sensitive; SOQL comparisons are not.
-        Asset device = device('Test7');
+        Asset device = device('CompanyInternalESP32');
 
         List<DeviceConnectionService.Outcome> outcomes = record(
-            new List<DeviceConnectionService.Change>{ event('test7', 'Online', AT, null) });
+            new List<DeviceConnectionService.Change>{ event('companyinternalesp32', 'Online', AT, null) });
 
-        Assert.areEqual(0, outcomes[0].assetsUpdated, 'test7 is not Test7');
+        Assert.areEqual(0, outcomes[0].assetsUpdated, 'companyinternalesp32 is not CompanyInternalESP32');
         Assert.isTrue(outcomes[0].skipped.contains('No Asset'), outcomes[0].skipped);
-        Assert.isNull(saved(device.Id).Connection_Status__c, 'Test7 is untouched');
+        Assert.isNull(saved(device.Id).Connection_Status__c, 'CompanyInternalESP32 is untouched');
     }
 
     @IsTest

@@ -38,24 +38,24 @@ function publish(topic, payload, header = null) {
 // ------------------------------------------------------------------ encoders
 
 test('CONNECT: MQTT 3.1.1, a clean session, a 60 s keep-alive and the client id', () => {
-  const clientId = 'live-Test7-1a2b3c4d';
+  const clientId = 'live-CompanyInternalESP32-1a2b3c4d';
   assert.deepEqual([...mqtt.encodeConnect(clientId)], [
-    0x10, 31,                                 // CONNECT, 31 bytes follow
+    0x10, 46,                                 // CONNECT, 46 bytes follow
     0x00, 0x04, ...ascii('MQTT'),             // protocol name
     0x04,                                     // protocol level 4 = 3.1.1
     0x02,                                     // clean session; no will, user name or password
     0x00, 0x3c,                               // keep-alive 60 s
-    0x00, 0x13, ...ascii(clientId),           // client id, 19 bytes
+    0x00, 0x22, ...ascii(clientId),           // client id, 34 bytes
   ]);
   assert.equal(mqtt.KEEP_ALIVE_SECONDS, 60);
 });
 
 test('SUBSCRIBE: one topic at QoS 0, with the flag bits the standard fixes', () => {
-  const topic = 'device/Test7/live';
+  const topic = 'device/CompanyInternalESP32/live';
   assert.deepEqual([...mqtt.encodeSubscribe(1, topic)], [
-    0x82, 22,                                 // SUBSCRIBE (flags 0010), 22 bytes follow
+    0x82, 37,                                 // SUBSCRIBE (flags 0010), 37 bytes follow
     0x00, 0x01,                               // packet identifier 1
-    0x00, 0x11, ...ascii(topic),              // topic filter, 17 bytes
+    0x00, 0x20, ...ascii(topic),              // topic filter, 32 bytes
     0x00,                                     // requested QoS 0
   ]);
 });
@@ -67,7 +67,7 @@ test('PINGREQ and DISCONNECT are two bytes each', () => {
 
 test('the encoders refuse what MQTT cannot carry', () => {
   assert.throws(() => mqtt.encodeConnect(''), /client identifier/);
-  assert.throws(() => mqtt.encodeSubscribe(0, 'device/Test7/live'), /packet identifier/);
+  assert.throws(() => mqtt.encodeSubscribe(0, 'device/CompanyInternalESP32/live'), /packet identifier/);
   assert.throws(() => mqtt.encodeSubscribe(1, ''), /topic filter/);
   assert.throws(() => mqtt.encodeRemainingLength(268435456), /remaining length/);
   assert.throws(() => mqtt.encodeRemainingLength(-1), /remaining length/);
@@ -95,7 +95,7 @@ test('remaining length: one to four bytes, seven bits each, lowest first', () =>
 
 test('remaining length: the reader takes back 127, 128, 16383 and 16384', () => {
   for (const [length, header] of LENGTHS.filter(([length]) => [127, 128, 16383, 16384].includes(length))) {
-    const topic = 'device/Test7/live';
+    const topic = 'device/CompanyInternalESP32/live';
     const payload = 'x'.repeat(length - 2 - topic.length);
     const packets = mqtt.createReader().push(arrayBuffer(publish(topic, payload, header)));
     assert.equal(packets.length, 1, `length ${length}`);
@@ -111,17 +111,17 @@ test('a remaining length of more than four bytes is malformed', () => {
 // -------------------------------------------------------------------- reader
 
 test('a PUBLISH: its topic, its UTF-8 payload and its QoS', () => {
-  const reading = '{"deviceId":"Test7","temperature":22.5,"humidity":41,"note":"22.5 °C"}';
-  const [packet] = mqtt.createReader().push(arrayBuffer(publish('device/Test7/live', reading)));
+  const reading = '{"deviceId":"CompanyInternalESP32","temperature":22.5,"humidity":41,"note":"22.5 °C"}';
+  const [packet] = mqtt.createReader().push(arrayBuffer(publish('device/CompanyInternalESP32/live', reading)));
   assert.deepEqual(packet, {
-    type: 'publish', topic: 'device/Test7/live', payload: reading,
+    type: 'publish', topic: 'device/CompanyInternalESP32/live', payload: reading,
     qos: 0, packetId: null, retain: false, dup: false,
   });
   assert.equal(JSON.parse(packet.payload).note, '22.5 °C');
 });
 
 test('a PUBLISH split across two chunks comes out once, when it is whole', () => {
-  const bytes = publish('device/Test7/live', '{"temperature":22.5}');
+  const bytes = publish('device/CompanyInternalESP32/live', '{"temperature":22.5}');
   const reader = mqtt.createReader();
   assert.deepEqual(reader.push(arrayBuffer(bytes.slice(0, 9))), []);
   const packets = reader.push(arrayBuffer(bytes.slice(9)));
@@ -130,7 +130,7 @@ test('a PUBLISH split across two chunks comes out once, when it is whole', () =>
 });
 
 test('a PUBLISH split inside its remaining length waits for the rest of it', () => {
-  const topic = 'device/Test7/live';
+  const topic = 'device/CompanyInternalESP32/live';
   const bytes = publish(topic, 'y'.repeat(200 - 2 - topic.length), [0xc8, 0x01]);   // 200
   const reader = mqtt.createReader();
   assert.deepEqual(reader.push(arrayBuffer(bytes.slice(0, 2))), []);   // the first length byte only
@@ -141,9 +141,9 @@ test('a PUBLISH split inside its remaining length waits for the rest of it', () 
 });
 
 test('two packets in one chunk both come out, in order, and a third may start there', () => {
-  const first = publish('device/Test7/live', '{"n":1}');
-  const second = publish('device/Test7/live', '{"n":2}');
-  const third = publish('device/Test7/live', '{"n":3}');
+  const first = publish('device/CompanyInternalESP32/live', '{"n":1}');
+  const second = publish('device/CompanyInternalESP32/live', '{"n":2}');
+  const third = publish('device/CompanyInternalESP32/live', '{"n":3}');
   const reader = mqtt.createReader();
   const packets = reader.push(arrayBuffer([...first, ...second, ...third.slice(0, 4)]));
   assert.deepEqual(packets.map((packet) => packet.payload), ['{"n":1}', '{"n":2}']);
@@ -188,7 +188,7 @@ test('PINGRESP, and a packet the card never asks for', () => {
 });
 
 test('a QoS 1 PUBLISH carries its packet identifier before the payload', () => {
-  const topic = [...Buffer.from('device/Test7/live')];
+  const topic = [...Buffer.from('device/CompanyInternalESP32/live')];
   const body = [0x00, topic.length, ...topic, 0x12, 0x34, ...Buffer.from('{}')];
   const [packet] = mqtt.createReader().push(arrayBuffer([0x33, body.length, ...body]));   // QoS 1, retain
   assert.equal(packet.qos, 1);
@@ -198,11 +198,11 @@ test('a QoS 1 PUBLISH carries its packet identifier before the payload', () => {
 });
 
 test('the reader takes typed arrays as well as ArrayBuffers, and copies what it keeps', () => {
-  const bytes = new Uint8Array(publish('device/Test7/live', '{"n":1}'));
+  const bytes = new Uint8Array(publish('device/CompanyInternalESP32/live', '{"n":1}'));
   const reader = mqtt.createReader();
   assert.deepEqual(reader.push(bytes.subarray(0, 5)), []);
   bytes.fill(0, 0, 5);                                   // the caller reuses its buffer
-  const packets = reader.push(new Uint8Array(publish('device/Test7/live', '{"n":1}')).subarray(5));
+  const packets = reader.push(new Uint8Array(publish('device/CompanyInternalESP32/live', '{"n":1}')).subarray(5));
   assert.equal(packets[0].payload, '{"n":1}');
 });
 

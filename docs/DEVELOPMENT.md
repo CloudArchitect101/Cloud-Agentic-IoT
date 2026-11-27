@@ -154,7 +154,7 @@ provisioned (AWS IoT allows one group per hierarchy, so it leaves fleet and
 canary first):
 
 ```bash
-scripts/ota.sh join Dev Test7 patient-monitor internal
+scripts/ota.sh join Dev CompanyInternalESP32 patient-monitor internal
 ```
 Every sketch needs its pair of groups in that template, and `scripts/check.sh`
 fails when one is missing.

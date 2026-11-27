@@ -1,7 +1,7 @@
 /*
  * PortalLiveResource.cls
  *
- * POST /services/apexrest/portal/live   { "serialNumber": "Test8" }
+ * POST /services/apexrest/portal/live   { "serialNumber": "PatientExternalESP32" }
  *
  * The patient portal's live view, the same one the device card on an Asset
  * uses (DeviceLiveController): one callout to POST /device-live (mode start),

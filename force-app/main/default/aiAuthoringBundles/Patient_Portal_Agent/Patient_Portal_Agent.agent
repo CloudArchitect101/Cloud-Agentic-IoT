@@ -78,7 +78,7 @@ subagent my_room:
                     is_required: True
                 deviceId: string
                     label: "Device ID"
-                    description: "Optional: one of the patient's device serial numbers, for example Test8, to read only that device."
+                    description: "Optional: one of the patient's device serial numbers, for example PatientExternalESP32, to read only that device."
                     is_required: False
             outputs:
                 success: boolean
@@ -124,7 +124,7 @@ subagent my_room:
                     is_required: True
                 deviceId: string
                     label: "Device ID"
-                    description: "Optional: the serial number of the patient's device the request is about, for example Test8."
+                    description: "Optional: the serial number of the patient's device the request is about, for example PatientExternalESP32."
                     is_required: False
             outputs:
                 success: boolean

@@ -10,7 +10,7 @@ private class PatientVitalsRetentionJobTest {
 
     private static Patient_Vitals__c reading(String key, Integer daysOld) {
         Patient_Vitals__c vital = new Patient_Vitals__c(
-            Device__c = 'Test8', Device_Reading_Id__c = 'Test8-' + key, Temperature__c = 22.5,
+            Device__c = 'PatientExternalESP32', Device_Reading_Id__c = 'PatientExternalESP32-' + key, Temperature__c = 22.5,
             Timestamp__c = Datetime.now().addDays(-daysOld), Patient_State__c = 'STABLE'
         );
         TriggerHandler.bypass('PatientVitalsTriggerHandler');

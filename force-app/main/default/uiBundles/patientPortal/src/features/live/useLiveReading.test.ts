@@ -23,7 +23,7 @@ class SilentSocket {
 	close() {}
 }
 
-const LINK = { url: "wss://x-ats.iot.us-east-2.amazonaws.com/mqtt?sig", clientId: "live-Test8-1", topic: "device/Test8/live", expiresAt: "", seconds: 2 };
+const LINK = { url: "wss://x-ats.iot.us-east-2.amazonaws.com/mqtt?sig", clientId: "live-PatientExternalESP32-1", topic: "device/PatientExternalESP32/live", expiresAt: "", seconds: 2 };
 
 function setHidden(hidden: boolean) {
 	Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
@@ -45,7 +45,7 @@ describe("live readings from AWS IoT", () => {
 	});
 
 	it("asks Salesforce once on open and once per 10 minutes, not every 30 seconds", async () => {
-		renderHook(() => useLiveReading("Test8", true));
+		renderHook(() => useLiveReading("PatientExternalESP32", true));
 		await act(async () => {});
 		expect(startLive).toHaveBeenCalledTimes(1);
 		expect(SilentSocket.opened).toBe(1);
@@ -66,7 +66,7 @@ describe("live readings from AWS IoT", () => {
 	});
 
 	it("asks nothing while the page is hidden, and starts again when it is shown", async () => {
-		renderHook(() => useLiveReading("Test8", true));
+		renderHook(() => useLiveReading("PatientExternalESP32", true));
 		await act(async () => {});
 		act(() => setHidden(true));
 		await act(async () => {
@@ -79,7 +79,7 @@ describe("live readings from AWS IoT", () => {
 	});
 
 	it("asks nothing for a device that is offline", async () => {
-		renderHook(() => useLiveReading("Test8", false));
+		renderHook(() => useLiveReading("PatientExternalESP32", false));
 		await act(async () => {
 			vi.advanceTimersByTime(REFRESH_MS * 3);
 		});
@@ -98,7 +98,7 @@ describe("live readings from AWS IoT", () => {
 
 	it("puts the live reading first, ahead of the saved ones", () => {
 		const device: Device = {
-			assetId: "02i", serialNumber: "Test8", name: "Room 4", connectionStatus: "Online", connectionSince: null,
+			assetId: "02i", serialNumber: "PatientExternalESP32", name: "Room 4", connectionStatus: "Online", connectionSince: null,
 			readings: [{ at: "2026-11-25T20:00:00Z", temperature: 22, humidity: 40, heartRate: null, spO2: null, patientState: "STABLE", roomTemperatureAlert: false }],
 		};
 		const merged = withLive(device, { reading: { temperature: 31, humidity: 41, at: "2026-11-25T21:00:00Z" }, connected: true, temperatureAlert: true });

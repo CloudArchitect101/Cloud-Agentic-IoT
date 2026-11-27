@@ -140,9 +140,9 @@ test('the topic tells the agent to cite the procedure it used, by SOP ID and ver
   assert.match(topic, /no ward procedure covers it/);
 });
 
-// Asked "Test8 reads 31 C, what do I do?" while the procedure index was
+// Asked "PatientExternalESP32 reads 31 C, what do I do?" while the procedure index was
 // unavailable, the agent answered only "I cannot access the procedure
-// details" and never read Test8. A named device's readings must not depend
+// details" and never read PatientExternalESP32. A named device's readings must not depend
 // on the procedure search.
 test('the topic tells the agent to report a named device\'s readings even when Find Procedure fails', () => {
   const topic = instructionsOf(agentScript(), 'Patient_Device_Monitoring');
@@ -151,7 +151,7 @@ test('the topic tells the agent to report a named device\'s readings even when F
   assert.match(topic, /offer to escalate/);
 });
 
-// Asked "What is Test8 reporting?" in Slack, the agent gave a day-old saved
+// Asked "What is PatientExternalESP32 reporting?" in Slack, the agent gave a day-old saved
 // reading as the latest while calling the device online, and called 30.0 C
 // "low" next to the other readings. It now gets the newest reading stored in
 // AWS with its age, and must say a reading's age and judge it by thresholds.

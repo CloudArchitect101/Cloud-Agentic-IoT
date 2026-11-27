@@ -1060,7 +1060,7 @@ Salesforce side, as an admin:
    `sf org assign permset --name SlackSalesCloud --on-behalf-of <username> --target-org "$SF_TARGET_ORG"`.
    Quit and reopen Slack after changing either.
 5. **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**.
-6. DM the agent, or mention it in a channel: "What is Test8 reading?"
+6. DM the agent, or mention it in a channel: "What is PatientExternalESP32 reading?"
 
 ## 9. Patient portal
 

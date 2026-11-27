@@ -86,8 +86,8 @@ test('the patient agent spec runs as a verified chat, refuses other devices, and
 
 test('render fills placeholders and maps subagents to the org names, and reports what is left', () => {
   const spec = 'utterance: "{{DEVICE}} now"\nexpectedTopic: Patient_Device_Monitoring\n  topic: off_topic\n';
-  const out = render(spec, { DEVICE: 'Test8' }, { Patient_Device_Monitoring: 'Patient_Device_Monitoring_16j' });
-  assert.equal(out.text, 'utterance: "Test8 now"\nexpectedTopic: Patient_Device_Monitoring_16j\n  topic: off_topic\n');
+  const out = render(spec, { DEVICE: 'PatientExternalESP32' }, { Patient_Device_Monitoring: 'Patient_Device_Monitoring_16j' });
+  assert.equal(out.text, 'utterance: "PatientExternalESP32 now"\nexpectedTopic: Patient_Device_Monitoring_16j\n  topic: off_topic\n');
   assert.deepEqual(out.missing, []);
   assert.deepEqual(render('a {{NOPE}} b', {}).missing, ['{{NOPE}}']);
   for (const specPath of Object.values(SPECS)) {

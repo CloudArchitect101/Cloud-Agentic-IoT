@@ -67,17 +67,17 @@ const asyncPayload = (invokes) => JSON.parse(Buffer.from(invokes[0].input.Payloa
 test('a signed command is answered at once and handed to an asynchronous call', async (t) => {
   captureConsole(t);
   const { handler, requests, invokes } = load(t);
-  const res = await handler(slackRequest({ command: '/patient-status', text: ' Test8 ' }));
+  const res = await handler(slackRequest({ command: '/patient-status', text: ' PatientExternalESP32 ' }));
 
   assert.equal(res.statusCode, 200);
-  assert.match(text(res), /Looking up `Test8`/);
+  assert.match(text(res), /Looking up `PatientExternalESP32`/);
   // Nothing slow before the answer: no Salesforce sign-in, no query.
   assert.equal(requests.length, 0);
   assert.equal(invokes.length, 1);
   assert.equal(invokes[0].input.InvocationType, 'Event');
   assert.equal(invokes[0].input.FunctionName, 'cloud-agentic-iot-slack-integration');
   assert.deepEqual(asyncPayload(invokes), {
-    slackCommand: { command: '/patient-status', deviceId: 'Test8', responseUrl: HOOK },
+    slackCommand: { command: '/patient-status', deviceId: 'PatientExternalESP32', responseUrl: HOOK },
   });
 });
 
@@ -85,7 +85,7 @@ test('the signature is checked against the decoded body, whether or not API Gate
   captureConsole(t);
   for (const base64 of [true, false]) {
     const { handler } = load(t);
-    const res = await handler(slackRequest({ command: '/patient-status', text: 'Test8' }, { base64 }));
+    const res = await handler(slackRequest({ command: '/patient-status', text: 'PatientExternalESP32' }, { base64 }));
     assert.equal(res.statusCode, 200, `base64 ${base64}`);
   }
 });
@@ -94,9 +94,9 @@ test('a wrong signature, a stale request or a missing header is refused before a
   captureConsole(t);
   const stale = Math.floor(Date.now() / 1000) - 600;
   for (const request of [
-    slackRequest({ command: '/patient-status', text: 'Test8' }, { secret: 'not-the-secret' }),
-    slackRequest({ command: '/patient-status', text: 'Test8' }, { at: stale }),
-    { ...slackRequest({ command: '/patient-status', text: 'Test8' }), headers: {} },
+    slackRequest({ command: '/patient-status', text: 'PatientExternalESP32' }, { secret: 'not-the-secret' }),
+    slackRequest({ command: '/patient-status', text: 'PatientExternalESP32' }, { at: stale }),
+    { ...slackRequest({ command: '/patient-status', text: 'PatientExternalESP32' }), headers: {} },
   ]) {
     const { handler, invokes } = load(t);
     const res = await handler(request);
@@ -107,7 +107,7 @@ test('a wrong signature, a stale request or a missing header is refused before a
 
 test('a missing or unsafe device name gets a usage hint and never reaches Salesforce', async (t) => {
   captureConsole(t);
-  for (const name of ['', "Test8' OR Name != '", 'two words']) {
+  for (const name of ['', "PatientExternalESP32' OR Name != '", 'two words']) {
     const { handler, invokes } = load(t);
     const res = await handler(slackRequest({ command: '/patient-status', text: name }));
     assert.match(text(res), /Name one device/, name);
@@ -118,38 +118,38 @@ test('a missing or unsafe device name gets a usage hint and never reaches Salesf
 test('an unknown command is named back', async (t) => {
   captureConsole(t);
   const { handler, invokes } = load(t);
-  const res = await handler(slackRequest({ command: '/reboot', text: 'Test8' }));
+  const res = await handler(slackRequest({ command: '/reboot', text: 'PatientExternalESP32' }));
   assert.equal(text(res), 'Unknown command: /reboot');
   assert.equal(invokes.length, 0);
 });
 
 const reading = (minutesAgo, temperature, humidity) => {
   const at = new Date(Date.now() - minutesAgo * 60_000).toISOString();
-  return { PK: 'PATIENT#Test8', SK: `VITAL#${at}`, CreatedAt: at, Temperature: temperature, Humidity: humidity };
+  return { PK: 'PATIENT#PatientExternalESP32', SK: `VITAL#${at}`, CreatedAt: at, Temperature: temperature, Humidity: humidity };
 };
 const SAVED = {
   Temperature__c: 35.5, Humidity__c: 33, Patient_State__c: 'NORMAL', Room_Temperature_Alert__c: true,
   CreatedDate: '2026-11-09T03:01:08.000+0000',
 };
-const STATUS = { slackCommand: { command: '/patient-status', deviceId: 'Test8', responseUrl: HOOK } };
+const STATUS = { slackCommand: { command: '/patient-status', deviceId: 'PatientExternalESP32', responseUrl: HOOK } };
 const replyText = (requests) => JSON.parse(requests.find((r) => r.url === HOOK).body).text;
 
 test('patient status: the live reading from AWS and the last saved event from Salesforce', async (t) => {
   captureConsole(t);
   const { handler, requests } = load(t, {
-    readings: [reading(30, 22.0, 40), reading(0.2, 24.1, 46), { PK: 'PATIENT#Test7', SK: 'VITAL#2099-01-01T00:00:00Z', Temperature: 99 }],
+    readings: [reading(30, 22.0, 40), reading(0.2, 24.1, 46), { PK: 'PATIENT#CompanyInternalESP32', SK: 'VITAL#2099-01-01T00:00:00Z', Temperature: 99 }],
     salesforce: () => jsonResponse(200, { records: [SAVED] }),
   });
   const res = await handler(STATUS);
 
   assert.deepEqual(res, { answered: true });
   const queryCall = requests.find((r) => r.url.startsWith(`${INSTANCE}/services/data/v64.0/query`));
-  assert.match(decodeURIComponent(queryCall.url), /WHERE Device__c = 'Test8' ORDER BY CreatedDate DESC LIMIT 1/);
+  assert.match(decodeURIComponent(queryCall.url), /WHERE Device__c = 'PatientExternalESP32' ORDER BY CreatedDate DESC LIMIT 1/);
   const reply = JSON.parse(requests.find((r) => r.url === HOOK).body);
   assert.equal(reply.response_type, 'ephemeral');
   assert.equal(reply.replace_original, true);
   assert.equal(reply.text, [
-    '*Test8*',
+    '*PatientExternalESP32*',
     'Live: 24.1°C, 46% humidity, 12 s ago (online).',
     'Last saved event: 35.5°C, 33% humidity, temperature alert, state NORMAL, at 2026-11-09 03:01 UTC.',
   ].join('\n'));
@@ -187,13 +187,13 @@ test('patient status: a device with no readings anywhere is named back', async (
   captureConsole(t);
   const { handler, requests } = load(t);
   await handler(STATUS);
-  assert.match(replyText(requests), /No readings for device `Test8` in AWS or Salesforce/);
+  assert.match(replyText(requests), /No readings for device `PatientExternalESP32` in AWS or Salesforce/);
 });
 
 test('the retired /dispense-medication is an unknown command and creates nothing', async (t) => {
   captureConsole(t);
   const { handler, invokes, requests } = load(t);
-  const res = await handler(slackRequest({ command: '/dispense-medication', text: 'Test8' }));
+  const res = await handler(slackRequest({ command: '/dispense-medication', text: 'PatientExternalESP32' }));
   assert.equal(text(res), 'Unknown command: /dispense-medication');
   assert.equal(invokes.length, 0);
   assert.equal(requests.length, 0);
@@ -213,7 +213,7 @@ test('the asynchronous half answers only on a Slack address', async (t) => {
   captureConsole(t);
   const { handler, requests } = load(t);
   await assert.rejects(handler({
-    slackCommand: { command: '/patient-status', deviceId: 'Test8', responseUrl: 'https://evil.example.com/' },
+    slackCommand: { command: '/patient-status', deviceId: 'PatientExternalESP32', responseUrl: 'https://evil.example.com/' },
   }));
   assert.equal(requests.length, 0);
 });

@@ -62,7 +62,7 @@ class StreamsTest(unittest.TestCase):
                 f.write(body)
             os.chmod(path, 0o755)
 
-    def run_script(self, *args, label='Dev', log="Alert dispatched to Salesforce { deviceId: 'Test8', alertType: 'CRITICAL_VITALS' }", router=True):
+    def run_script(self, *args, label='Dev', log="Alert dispatched to Salesforce { deviceId: 'PatientExternalESP32', alertType: 'CRITICAL_VITALS' }", router=True):
         with open(os.path.join(self.tmp, 'state.json'), 'w') as f:
             json.dump({'label': label, 'log': log, 'router': router}, f)
         env = dict(os.environ, PATH=self.bin + os.pathsep + os.environ['PATH'], FAKE_AWS_STATE=self.tmp)
@@ -74,19 +74,19 @@ class StreamsTest(unittest.TestCase):
         return json.load(open(os.path.join(self.tmp, 'payload.json')))
 
     def test_a_critical_reading_goes_to_the_router_labelled_synthetic(self):
-        result = self.run_script('Dev', 'Test8')
+        result = self.run_script('Dev', 'PatientExternalESP32')
         self.assertEqual(result.returncode, 0, result.stderr)
         sent = self.payload()
-        self.assertEqual(sent['deviceId'], 'Test8')
+        self.assertEqual(sent['deviceId'], 'PatientExternalESP32')
         self.assertEqual(sent['sourceSystem'], 'SYNTHETIC_TEST')
         thresholds = json.load(open(os.path.join(REPO, 'config', 'vital-thresholds.json')))
         hr = next(v for v in thresholds['vitals'] if v['field'] == 'heartRate')
         self.assertGreater(sent['heartRate'], hr['critical']['above'], 'critical must really be critical')
         self.assertIn('CRITICAL_VITALS', result.stdout)
-        self.assertIn('Critical vitals on Test8', result.stdout)
+        self.assertIn('Critical vitals on PatientExternalESP32', result.stdout)
 
     def test_a_normal_reading_is_inside_every_band(self):
-        result = self.run_script('Dev', 'Test8', 'normal', log="No alert for device { deviceId: 'Test8' }")
+        result = self.run_script('Dev', 'PatientExternalESP32', 'normal', log="No alert for device { deviceId: 'PatientExternalESP32' }")
         self.assertEqual(result.returncode, 0, result.stderr)
         thresholds = json.load(open(os.path.join(REPO, 'config', 'vital-thresholds.json')))
         sent = self.payload()
@@ -98,23 +98,23 @@ class StreamsTest(unittest.TestCase):
             self.assertFalse(value < warning.get('below', float('-inf')) or value > warning.get('above', float('inf')), vital['field'])
 
     def test_prod_is_refused(self):
-        result = self.run_script('Prod', 'Test8', label='Prod')
+        result = self.run_script('Prod', 'PatientExternalESP32', label='Prod')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Send it to Dev', result.stderr)
         self.assertFalse(os.path.exists(os.path.join(self.tmp, 'calls.jsonl')))
 
     def test_a_device_name_that_is_not_a_thing_name_is_refused(self):
-        result = self.run_script('Dev', 'Test8","heartRate":0')
+        result = self.run_script('Dev', 'PatientExternalESP32","heartRate":0')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('is not a Thing name', result.stderr)
 
     def test_a_silent_dispatcher_fails_with_where_to_look(self):
-        result = self.run_script('Dev', 'Test8', log='')
+        result = self.run_script('Dev', 'PatientExternalESP32', log='')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Nothing from cloud-agentic-iot-alert-dispatcher', result.stderr)
 
     def test_a_missing_router_says_to_deploy(self):
-        result = self.run_script('Dev', 'Test8', router=False)
+        result = self.run_script('Dev', 'PatientExternalESP32', router=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Deploy the streaming stack first', result.stderr)
 
