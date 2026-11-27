@@ -277,3 +277,23 @@ test('every board, internal ones included, is reached by the patient-monitor bui
     assert.match(read('force-app/main/default/classes/DeviceRoles.cls'), new RegExp(`= '${recordType}';`));
   }
 });
+
+// A board that was offline while two releases went out gets the older job
+// first. The firmware must ask OtaVersion.h before it downloads anything, and
+// the script's job ids must be the ones it cancels by prefix.
+test('a board checks for a stale release before it downloads', () => {
+  const device = read('firmware/libraries/CloudAgenticDevice/src/CloudAgenticDevice.cpp');
+  const handler = device.slice(device.indexOf('void CloudAgenticDevice::handleJobDocument'));
+  const skip = handler.indexOf('cad::isOlderRelease(ver.c_str(), _version)');
+  const apply = handler.indexOf('applyFirmware(jobId, url);');
+  assert.ok(skip > 0, 'handleJobDocument must call cad::isOlderRelease');
+  assert.ok(skip < apply, 'the stale-release check must come before applyFirmware');
+  assert.match(handler.slice(skip, apply), /reportJobStatus\(jobId, "SUCCEEDED", "skipped, already on "/);
+});
+
+test('release and promote cancel the job ids they create, and nothing else', () => {
+  assert.match(ota, /job_id="ota-\$sketch-\$\{version\/\/\.\/-\}-\$\(date \+%s\)"/);
+  assert.match(ota, /cancel_superseded "\$group" "ota-\$sketch-" "\$job_id"/);
+  assert.match(ota, /job_id="ota-fleet-\$sketch-\$\{version\/\/\.\/-\}-\$\(date \+%s\)"/);
+  assert.match(ota, /cancel_superseded "fleet-\$sketch" "ota-fleet-\$sketch-" "\$job_id"/);
+});

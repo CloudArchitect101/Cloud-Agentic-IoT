@@ -35,7 +35,7 @@
 // Raise this to ship a change. The pipeline publishes each version once and a
 // board installs only a version it is not already running, so a change under
 // the same number never reaches a board; the pull request checks fail it.
-#define FIRMWARE_VERSION "2.7.0"
+#define FIRMWARE_VERSION "2.8.0"
 
 // Seconds between readings until the fleet sets its own. The fleet's value
 // (scripts/ota.sh interval, or SET_TELEMETRY_INTERVAL through the device

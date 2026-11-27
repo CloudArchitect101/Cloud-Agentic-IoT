@@ -1,4 +1,5 @@
 #include "CloudAgenticDevice.h"
+#include "OtaVersion.h"
 
 // esp_random() moved headers between ESP-IDF 4 (Arduino core 2.x) and 5 (3.x).
 #if __has_include(<esp_random.h>)
@@ -332,6 +333,16 @@ void CloudAgenticDevice::handleJobDocument(byte* payload, unsigned int length) {
       Serial.println("OTA: already on this version");
       reportJobStatus(jobId, "SUCCEEDED", "already current");
     }
+    return;
+  }
+  if (cad::isOlderRelease(ver.c_str(), _version)) {
+    // A release older than this build: a job left over from before a newer
+    // release reached this board (OtaVersion.h). Going back would only be
+    // undone by the newer job, or worse, leave the board on the old build.
+    // SUCCEEDED, not REJECTED: the board is where the fleet wants it, and a
+    // refusal would count toward the job's abort rule and block promotion.
+    Serial.printf("OTA: skipping %s, this device already runs newer %s\n", ver.c_str(), _version);
+    reportJobStatus(jobId, "SUCCEEDED", "skipped, already on " + String(_version));
     return;
   }
   if (restarted) {
