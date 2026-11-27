@@ -12,7 +12,7 @@ Description: >-
 # and the pipeline never pick it up. scripts/check.sh lints it all the same.
 #
 # The same template serves an AWS project with a spend limit (the laptop
-# setup in docs/TRY-IT.md): a project blocks IAM identity providers, so there
+# setup in docs/INSTALL.md): a project blocks IAM identity providers, so there
 # it is deployed with CreateGitHubDeploy=false and holds only the budget.
 #
 # The policy below is what scripts/deploy-aws.sh, scripts/seed-ssm.sh,

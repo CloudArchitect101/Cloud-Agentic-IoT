@@ -1,573 +1,360 @@
-# Try it on your own AWS project and Salesforce org
+# After install: use case scenarios
 
 > [!TIP]
-> New here? [Start here](START-HERE.md) shows which guide to follow. The [Quick Install Guide](INSTALL.md) is the one list of steps; this page goes deeper.
+> Not installed yet? Follow the [Quick Install Guide](INSTALL.md) first, to the end of [step 13](INSTALL.md#step-13). This page starts where it ends. New here? [Start here](START-HERE.md).
 
-Cloned this repo to learn or experiment? Run it on two things of your own: an
-AWS **project** with a spend limit, and a free Salesforce Developer Edition
-org. You deploy both from your laptop and skip the GitHub setup until you need
-it. At the limit AWS pauses the project instead of billing you more, so a bug or
-a loop cannot run up a large bill.
+This page is the end-to-end test of the whole system. Each step of the install guide ends with a check that only that step worked; here you use every feature the way the people it serves would, grouped by who you act as. Each scenario is one real situation: what you do (copy and paste), what you should see, and what it is worth and costs. Once all eleven give what they say, every feature works. Run them in this order: each one leaves the system ready for the next, and each one makes one short video.
 
-**Give both the same name.** Use one name for your AWS CLI profile and your
-Salesforce CLI alias, for example `test-<your GitHub name>`. This guide calls it
-`<name>`, and its commands read it from `NAME`. It is not called a sandbox here,
-because in Salesforce a sandbox is a copy of a production org, which a
-Developer Edition org is not.
+**You act as:** [At the device](#at-the-device) · [Internal user in Salesforce](#internal-user-salesforce) · [Internal user in Slack](#internal-user-slack) · [Patient in the portal](#patient-portal) · [Developer](#developer) · [Business owner](#owner) · [Sysadmin](#sysadmin)
 
-When you are ready for the pipelines, move to regular AWS accounts:
-[Moving to the pipelines](#moving-to-the-pipelines).
+**One user for every hat.** In this example the internal user, the business owner and the sysadmin are the same Salesforce user: you, the org's admin with the System Administrator profile, holding the permission sets the install gave you. Only the patient is a different login, the test patient from [step 10](INSTALL.md#step-10). You create no new users here.
 
-## Why a project, and what it costs you
+The monitored device's sensor reads the temperature of whatever it sits on: the demo puts it under an arm, but it could be a medication fridge, a server room or a shipping box. Nothing here is a clinical alert: a DHT11 is not a calibrated thermometer.
 
-| | Project with a spend limit | Regular AWS account |
-|---|---|---|
-| Spending | Capped. AWS pauses the project at the limit. | Not capped. A budget alert is your protection. |
-| Who deploys | You, from your laptop | GitHub Actions, signed in with OIDC |
-| GitHub OIDC | Not possible: projects block IAM identity providers | Yes |
-| Region | Set by your contact address (a Canadian address gets `us-east-2`) | Your choice |
-| Console | Your AWS Builder ID. IAM users are command line only. | IAM users with console access and MFA |
+| # | You act as | Scenario | What it tests | About |
+|---|---|---|---|---|
+| [1](#scenario-1) | [At the device](#at-the-device) | [A monitored device runs hot and the team is alerted](#scenario-1) | The board's own motor, the temperature alert Case, the gauge's needle and bell | 5 min |
+| [2](#scenario-2) | [Internal user in Salesforce](#internal-user-salesforce) | [A nurse asks the agent about a device](#scenario-2) | Agent answers from live readings, SOP search (Bedrock), a Case on request | 3 min |
+| [3](#scenario-3) | [Internal user in Salesforce](#internal-user-salesforce) | [A nurse asks whether a device ran hot this week](#scenario-3) | Get Device History from Data Cloud | 3 min |
+| [4](#scenario-4) | [Internal user in Salesforce](#internal-user-salesforce) | [A technician restarts a board from Salesforce](#scenario-4) | Live Status card, Send Command and its acknowledgement | 2 min |
+| [5](#scenario-5) | [Internal user in Salesforce](#internal-user-salesforce) | [A technician asks a hardware question](#scenario-5) | Espressif MCP servers in the agents | 1 min |
+| [6](#scenario-6) | [Internal user in Slack](#internal-user-slack) | [The team asks from Slack](#scenario-6) | `/patient-status` and the agent in Slack | 2 min |
+| [7](#scenario-7) | [Patient in the portal](#patient-portal) | [A patient checks their own device in the portal](#scenario-7) | Enhanced Chat, the portal agent, a nurse request | 3 min |
+| [8](#scenario-8) | [Developer](#developer) | [A new firmware build reaches the boards over the air](#scenario-8) | OTA to every board, then the saga to one, and its rollback | 5 min |
+| [9](#scenario-9) | [Developer](#developer) | [A wearable reports critical readings](#scenario-9) | The event stream: EventBridge to Platform Events to a Case | 2 min |
+| [10](#scenario-10) | [Business owner](#owner) | [The business owner reads what it is worth and what it costs](#scenario-10) | The Home spend card, org limits, the Business Value dashboard, the Data Cloud value card | 3 min |
+| [11](#scenario-11) | [Sysadmin](#sysadmin) | [A device goes quiet and the sysadmin finds out why](#scenario-11) | Offline status, the silence insight, alarms, logs, firmware and deployed versions | 4 min |
 
-**You can't have both in one account.** Activating a project's advanced
-features lifts the OIDC block, but it removes every spend limit for good, and it
-can't be undone. A regular account can't hand access to a project either,
-because a project only trusts accounts in its own organization. So this guide
-deploys from your laptop, and GitHub comes in only with the regular account.
+<a id="before-you-start"></a>
 
-## 1. Create the project and the org
+## Before you start
 
-1. Sign up through the new AWS experience, or add a project in
-   [AWS Settings](https://settings.aws.com).
-2. Upgrade to the paid plan, then set a monthly spend limit. The lowest is $20.
-   Do not activate the project's advanced features: that removes the spend limit
-   for good ([why](#why-a-project-and-what-it-costs-you)).
-3. Note the project's Region: AWS Settings, **Projects**, your project,
-   **Overview**, **Additional Info**.
-4. Sign up for a Developer Edition org at
-   [developer.salesforce.com/signup](https://developer.salesforce.com/signup), as in
-   [SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin). It is free.
-5. In the org, Setup → **Einstein Setup** → **Turn on Einstein**.
-6. Then Setup → **Agentforce Agents** → turn on **Agentforce**. If it is not
-   there yet, wait a few minutes after step 5 and reload.
-
-Steps 5 and 6 accept Salesforce's terms for generative AI and Agentforce, so
-whether to turn them on is the org admin's decision, which here is you. Do
-both before the first Salesforce deploy, in section 4 below: the deploy creates
-the Patient Care Agent, and an org without Agentforce is expected to refuse
-it, which fails the whole deploy. Neither costs anything in a Developer
-Edition org.
-
-## 2. Sign both CLIs in as `<name>`
-
-`aws login` needs AWS CLI 2.32.0 or later. It opens a browser, and you choose
-your project to finish signing in. Give the project's Region when it asks.
-`sf org login web` opens a browser too: sign in as the org's admin.
+**Paste into your terminal.** In every new terminal, before any block below (the same [resume lines](INSTALL.md#resume) as the Quick Install Guide).
 
 ```bash
-NAME=test-yourname
-aws login --profile "$NAME"
-sf org login web --alias "$NAME"
+NAME='test-cloud-agentic-iot'
+cd ~/Cloud-Agentic-IoT        # or wherever you cloned it
 export AWS_PROFILE="$NAME" SF_TARGET_ORG="$NAME"
-aws sts get-caller-identity
-sf org display
 ```
 
-Put your own `<name>` in the first line. The `export` holds for this shell only,
-as in [DEVELOPMENT.md](DEVELOPMENT.md), so set `NAME` and export again in each
-new terminal. The last two commands show the project's account ID, and the org
-with your admin username.
+> [!TIP]
+> **Ready when** both Assets, `PatientExternalESP32` (the monitored device) and `CompanyInternalESP32` (the corp ticket gauge), show Connection `Online` in the Cloud Agentic IoT app, and both boards run firmware `1.0.0`. Scenario 3 also needs a day of readings in Data Cloud ([step 12c](INSTALL.md#step-12c)).
 
-The AWS credentials refresh themselves and last up to 12 hours. Run the same
-`aws login` again when they expire. No access key is created, so there is none
-to leak.
+**For a recording**, shorten the wait between repeat alerts while you film: set `"RealertIntervalMinutes": 2` in `config/Dev.json`, run `scripts/deploy-aws.sh Dev`, and set it back to `15` afterwards. A monitored device on a desk reads as stable, so it gets no other reminders.
 
-## 3. Put the Salesforce settings in SSM
+<a id="at-the-device"></a>
 
-In a regular account the pipeline runs `scripts/seed-ssm.sh` with the GitHub
-secrets. Here you run the same script once:
+## At the device
+
+Anyone near the monitored device or the corp ticket gauge.
+
+<a id="scenario-1"></a>
+<a id="warm-the-sensor-get-a-high-temperature-alert"></a>
+
+### 1. A monitored device runs hot and the team is alerted
+
+**Situation.** Whatever the device measures gets warm: a patient's arm, a fridge whose door was left open. The people near the device and the care team both need to know, without anyone watching a screen.
+
+**Do.**
+
+1. Put the DHT11 under your arm (about 33 to 36 C there), or cup your hand around it, until it reads 30 C or more.
+2. Keep it warm for a minute.
+3. Take it out and let it cool below 30 C (a minute or two from body heat).
+4. Close the Case in Care_Team_Queue.
+
+**See.**
+
+1. Within about 5 s the monitored device's own servo starts sweeping. The board decides this itself, so it works even with the network down. Its console prints `temperature 30.0C: 30 C or more, motor turning`.
+2. Within 1 to 3 stored readings (about 30 s each) a Case `High temperature ... C on PatientExternalESP32` opens in Care_Team_Queue, and the corp ticket gauge sweeps its needle and rings its bell. While the sensor stays warm no second Case opens: Salesforce sees the open one.
+3. The device's sweep stops within about 5 s of the first reading below 30 C. The Case stays open, and the gauge keeps ringing until someone closes the Case or takes it from the queue.
+4. The gauge stops (when that was the queue's last Case). Warm the sensor again: the device sweeps at once, and a new Case opens once a reading went below 29 C in between.
+
+**Check it.** The Cases the rule opened:
+
+**Paste into your terminal.**
 
 ```bash
-scripts/seed-ssm.sh Dev
+sf data query --target-org "$NAME" \
+  --query "SELECT CaseNumber, Owner.Name, Asset.SerialNumber, Status, CreatedDate FROM Case WHERE Origin = 'Room Temperature Rule' ORDER BY CreatedDate DESC LIMIT 5"
 ```
 
-It checks that the project is labelled `Dev` (a fresh one gets the label),
-then asks for the integration username, consumer key and key file, and the
-Slack signing secret, hiding what you type. You won't have the integration
-values on a first deploy: press Enter at each. What you skip is written as
-`placeholder`, the login URL defaults to `https://login.salesforce.com`, and
-Slack is left out. The stacks then deploy, and only the calls to Salesforce
-fail until step 5 runs the script again with the real values.
+**Emergency stop.** Setup → **Custom Settings** → **Integration Control**, at org level: add `PatientVitalsTriggerHandler` to **Bypass Handlers**. No more Cases open, at once, with no deploy. The device's own sweep follows only its sensor: cool the sensor, or unplug the servo.
 
-## 4. Deploy and test
+**Value and cost.** The measured KPI is minutes from a high reading to someone acting on it: as is, a reading checked by hand every two hours goes unnoticed for about an hour on average; here the device signals in seconds and the Case opens in under two minutes. The [Business Value dashboard](BUSINESS-VALUE.md) tracks it. AWS costs about $0.08 per device per month for every reading ([COST-MODEL.md](COST-MODEL.md)), and only flagged readings reach Salesforce, so the org's daily API limit is not touched by normal readings.
 
-`scripts/check.sh` needs no credentials. `scripts/deploy-aws.sh Dev` deploys
-every stack and the real Lambda code, and `scripts/deploy-salesforce.sh Dev`
-deploys everything in `force-app/` and runs every local Apex test.
+When it doesn't behave: [Troubleshooting](TROUBLESHOOTING.md#install-steps). Why the rule works this way: [Chapters, chapter 03](CHAPTERS.md#temperature-alert-demo-rule).
 
-```bash
-scripts/check.sh && scripts/deploy-aws.sh Dev && scripts/deploy-salesforce.sh Dev
-```
+<a id="internal-user-salesforce"></a>
 
-Run them as one line joined by `&&`, so the first failure stops the rest.
-Pasted as separate lines, zsh and bash run every line even after one fails,
-so one environment can end up ahead of the other. Later deploys that add a
-field AWS writes go Salesforce first; see
-[Warm the sensor, get a high temperature alert](#warm-the-sensor-get-a-high-temperature-alert).
+## Internal user in Salesforce
 
-Both refuse uncommitted changes under `lambda/`, `infra/`, `force-app/`, `knowledge/`,
-`config/` and `scripts/`, because a laptop deploy would otherwise ship what no
-commit holds. Commit first; for a throwaway try, `ALLOW_DIRTY=yes` deploys
-anyway. Each records the commit it shipped in SSM, so you can see what the
-project runs:
+A nurse or technician in the Cloud Agentic IoT app and the Patient Care Agent.
 
-```bash
-aws ssm get-parameters --names /cloud-agentic-iot/deployed-commit/aws /cloud-agentic-iot/deployed-commit/salesforce \
-  --query 'Parameters[].[Name,Value]' --output text
-```
+<a id="scenario-2"></a>
+<a id="talk-to-the-agent"></a>
 
-To have the alarms emailed to you, `export ALARM_EMAIL='<your email>'` before
-`deploy-aws.sh`, then confirm the subscription in the email AWS sends.
+### 2. A nurse asks the agent about a device
 
-The `<name>` project is your Dev environment. Its first deploy labels the
-account `Dev` in SSM (`/cloud-agentic-iot/environment`), and every later deploy
-checks that label, so a wrong `AWS_PROFILE` stops before it changes anything.
-The first Salesforce deploy pairs the org with the project
-(`/cloud-agentic-iot/salesforce/org-id`), and every later one stops if
-`SF_TARGET_ORG` names another org, such as the pipeline's Dev org: both are
-labelled `Dev`, so the label alone can't tell them apart.
+**Situation.** A nurse wants to know what a monitored device reports, and what the ward's procedure says to do, without opening any records.
 
-The Salesforce deploy goes to the org in `SF_TARGET_ORG`, as your admin, and the
-script warns that you aren't the deploy user. That is expected here. The deploy
-user matters once a pipeline deploys, because an admin deploy can pass where the
-pipeline's would fail, and [Moving to the pipelines](#moving-to-the-pipelines)
-sets it up.
+**Do.** Open the **Patient Care Agent** from the Lightning header (the install published it and gave you `Patient_Care_Agent`). Ask, one at a time:
 
-Then give yourself the interface. The deploy adds the **Cloud Agentic IoT** app,
-with tabs, record pages and page layouts for devices, device readings, device
-commands and Wi-Fi networks, but the app and the device fields stay hidden
-until you hold the `Device_Platform_Admin` permission set. Being System
-Administrator isn't enough: fields deployed through the Metadata API come with
-no field access.
+1. "What is PatientExternalESP32 reporting?"
+2. "What should I do if a device reads above 30 C?"
+3. "Escalate the latest reading for PatientExternalESP32." Then confirm.
 
-```bash
-sf org assign permset --name Device_Platform_Admin
-sf org assign permset --name Platform_Usage_Viewer
-```
+**See.**
 
-That assigns the sets to you, in the org `SF_TARGET_ORG` names. The Home page
-shows the project's spend against its spend limit once Salesforce can call AWS
-(step 5) and the budget below exists. Open the app from
-the App Launcher. A **Patient Device** must belong to a **Person Account**: the
-validation rule `Patient_Device_Needs_Person_Account` refuses a business
-account. Person Accounts must be on before the deploy, and Person Account
-should be your profile's default Account record type, because **New Account**
-from the Asset form never asks which type
-([SETUP.md §2.1](SETUP.md#21-create-the-org-and-secure-the-admin), step 5). A
-ward board (**Internal Device**) sits on the ward's business account, created
-from the Accounts tab.
+1. The latest temperature and humidity, and whether the device is online.
+2. The ward procedure's steps, with the SOP it comes from (SOP-WARD-001, say), from the Bedrock SOP index.
+3. The agent names the device and reading and asks you to confirm. After you confirm, it gives a Case number. The Case (Origin `Agentforce`) is in Care_Team_Queue, and the corp ticket gauge sweeps and rings for it.
 
-## 5. Connect the org and the project
+Close that Case afterwards, so the gauge stops.
 
-Each direction has its own identity, made once.
+**Value and cost.** Each answer replaces a walk to the device or a search through binders. Each agent action is 20 Flex Credits, about $0.10 ([COST-MODEL.md](COST-MODEL.md)); the Bedrock SOP lookup adds a fraction of a cent.
 
-**AWS to Salesforce** (readings, alerts, whether a board is online, and the
-boards' answers to commands) signs in as the integration user:
+<a id="scenario-3"></a>
 
-1. Create the `integration@…` user from
-   [SETUP.md §2.2](SETUP.md#22-create-the-two-service-users), and the
-   Integration app with its certificate from
-   [§2.4](SETUP.md#24-two-external-apps-not-one).
-2. Give the user the **Salesforce API Integration** permission set license
-   (the user's page → Permission Set License Assignments → Edit Assignments),
-   then the `Device_Integration` permission set, which step 4 deployed.
-   Without that license, Salesforce refuses the permission set: "The user
-   license doesn't allow the permission: Create Assets".
-3. Replace the three placeholders and deploy again. Run the script, type the
-   username and consumer key when it asks, and give it the key file (it
-   offers `scripts/server-integration.key` when that exists):
+### 3. A nurse asks whether a device ran hot this week
 
-```bash
-scripts/seed-ssm.sh Dev
-scripts/deploy-aws.sh Dev
-```
+**Situation.** A device is hot today. Is that a one-off, or has it been running hot all week? The answer decides between escalating now and rechecking the device first.
 
-The deploy at the end is needed. Four functions sign in to Salesforce as the
-integration user: `cloud-agentic-iot-salesforce-sync` for readings,
-`cloud-agentic-iot-alert-dispatcher` for alerts,
-`cloud-agentic-iot-device-presence` for the Asset's Connection fields and
-`cloud-agentic-iot-device-command-ack` for the boards' answers to Device
-Commands, and `cloud-agentic-iot-slack-integration` too once Slack is set up.
-CloudFormation copies the username and consumer key from SSM into their
-settings only when it deploys, so until then they still hold `placeholder`.
-They read the private key from SSM each time they sign in, so it needs no
-deploy.
+**Do.** In the Patient Care Agent, ask:
 
-To check, this prints the integration username, not `placeholder`:
+1. "Has PatientExternalESP32 been running hot this week, or is today a one-off?"
+2. "How long was PatientExternalESP32 at or above 30 C yesterday?"
+3. "When did CompanyInternalESP32 last send anything?"
 
-```bash
-aws lambda get-function-configuration --function-name cloud-agentic-iot-salesforce-sync \
-  --query Environment.Variables.SALESFORCE_USERNAME --output text
-```
+**See.**
 
-The deploy user and the Deploy app aren't needed until the pipelines.
+1. Days and minutes at or above 30.0 C this week, and the highest reading, with a note that the numbers come from Data Cloud.
+2. Yesterday's minutes at or above 30 C, with a note that the newest hour or two may be missing (Data Cloud takes in the archive in batches).
+3. When the corp ticket gauge last reported, so a silent device reads as a device fault, not a quiet patient.
 
-**Salesforce to AWS** (provisioning, the queue indicator, Wi-Fi pushes) signs
-with the `AWS_IoT_Relay` named credential:
-[Detailed Install Guide, Stage 2, step 1](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
-Make its IAM user as `<name>`, the profile you signed in with in step 2.
+The agent quotes the numbers the **Get Device History** action returns; it never adds readings up itself. You need the standard **Data Cloud User** permission set, because the action queries Data Cloud as you ([DATA-CLOUD.md](DATA-CLOUD.md#how-the-agent-reads-it)). How the readings get there: [SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward).
 
-Boards are provisioned as in the [Detailed Install Guide, Stage 3](INSTALL-GUIDE.md#stage-3--hardware),
-against the `<name>` project's IoT endpoint, and
-[DEVELOPMENT.md, "On your laptop"](DEVELOPMENT.md#1-on-your-laptop) covers
-flashing and watching one.
+**Value and cost.** It turns a week of readings (2,880 a device a day) into the one line that goes into a shift handover. The cost follows questions, not devices: one agent action, about $0.10, plus Data Cloud query credits. Two nurses asking 5 a day is about $22 a month ([COST-MODEL.md §9](COST-MODEL.md#9-device-history-for-the-staff-agent-get-device-history)).
 
-The pipeline never deploys to `<name>`, so no release reaches its boards. To
-update them over the air, as every update after the first USB flash is meant to
-arrive, send your working copy to every board of a type:
+<a id="scenario-4"></a>
+
+### 4. A technician restarts a board from Salesforce
+
+**Situation.** A device looks stuck. A technician checks it live and restarts it, without going to it.
+
+**Do.**
+
+1. Open the `PatientExternalESP32` Asset in the Cloud Agentic IoT app and watch its **Live Status** card.
+2. Choose **Send Command** → `RESTART`.
+
+**See.**
+
+1. Connection `Online` and a new reading every 2 s while the card is on screen, straight from AWS IoT to your browser. Readings never pass through Salesforce.
+2. The Device Command shows `Sent` within seconds, then `Acked` once the board answers. The card shows the board offline for a few seconds and back. A board that is offline is sent nothing, and the command shows `Failed` with the reason ([DATA-MODEL.md](DATA-MODEL.md#device-command-lifecycle)).
+
+**Value and cost.** No site visit for a restart. An hour of watching the card costs about a third of a cent in AWS ([LIVE-STATUS.md](LIVE-STATUS.md)); a command is a few API calls.
+
+<a id="scenario-5"></a>
+
+### 5. A technician asks a hardware question
+
+**Situation.** A technician needs a fact about the hardware, for example to choose a replacement board.
+
+**Do.** Ask any agent: "What is the spec of the ESP32-S3-DevKitC-1?"
+
+**See.** An answer from Espressif's catalogs, with a docs.espressif.com link for the rest ([GUARDRAILS-AND-MCP.md](GUARDRAILS-AND-MCP.md#espressif-mcp-servers-for-the-agents)).
+
+**Value and cost.** No one leaves the conversation to search. Espressif's MCP servers are free and need no sign-in; each question is one or two agent actions, $0.10 to $0.20 ([COST-MODEL.md §8](COST-MODEL.md#8-espressif-mcp-servers-for-the-agents)).
+
+<a id="internal-user-slack"></a>
+
+## Internal user in Slack
+
+Anyone on the team, from the Slack workspace.
+
+<a id="scenario-6"></a>
+<a id="ask-the-ward-from-slack"></a>
+
+### 6. The team asks from Slack
+
+**Situation.** Someone on the team is in Slack, not Salesforce, and wants a device's status.
+
+**Do.** In any channel of your workspace (set up in [step 8](INSTALL.md#step-8)):
+
+1. `/patient-status PatientExternalESP32`
+2. DM the Patient Care Agent: "What is PatientExternalESP32 reading?"
+
+**See.**
+
+1. Only you see the answer: first "Looking up `PatientExternalESP32`…", then the live reading from AWS (or "offline since" when the board has not sent for five minutes) and the last event Salesforce saved, which can be hours older, because Salesforce keeps only state changes and alerts.
+2. The agent answers as it does in Salesforce, as your Salesforce user.
+
+Slack sends no commands to a board: that is [scenario 4](#scenario-4). If Slack says `dispatch_failed`: [Troubleshooting, Slack](TROUBLESHOOTING.md#slack).
+
+**Value and cost.** The answer goes where the team already works. Each `/patient-status` is well under a thousandth of a cent in AWS and one Salesforce API call; the free Slack plan is enough.
+
+<a id="patient-portal"></a>
+
+## Patient in the portal
+
+The test patient, signed in to the patient portal.
+
+<a id="scenario-7"></a>
+
+### 7. A patient checks their own device in the portal
+
+**Situation.** A patient wants to know what their device reads, and to call a nurse, from home.
+
+**Do.** Open the portal site and sign in as the test patient from [step 10](INSTALL.md#step-10). Open the chat and ask:
+
+1. "What is my temperature?"
+2. "I need a nurse."
+
+**See.**
+
+1. The **My monitor** page shows the patient's own device only, and the assistant answers from that device's newest reading.
+2. A Case opens in Care_Team_Queue, and the gauge rings for it.
+
+The portal agent sees only the signed-in patient's own device, and uses Salesforce's built-in model ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)).
+
+**Value and cost.** The KPI is chats the agent handled without a nurse, each one a nurse visit that did not happen ([BUSINESS-VALUE.md](BUSINESS-VALUE.md)). A portal member is about $10 a month, and each agent action about $0.10 ([COST-MODEL.md §7](COST-MODEL.md#7-patient-portal-react-site-enhanced-chat-and-agentforce-voice)).
+
+<a id="developer"></a>
+
+## Developer
+
+Whoever changes the firmware or adds a new kind of device, from the terminal.
+
+<a id="scenario-8"></a>
+<a id="update-one-board-through-the-saga"></a>
+
+### 8. A new firmware build reaches the boards over the air
+
+**Situation.** A developer changes the firmware. Every board must get it without a USB cable, and a failed update must undo itself.
+
+**Do.** First the build from your working copy to every board, then one board through the saga, which undoes each step if a later one fails.
+
+**Paste into your terminal.**
 
 ```bash
 scripts/ota.sh try Dev patient-monitor
+scripts/ota.sh status Dev
 ```
 
-It compiles the sketch as `<version>-try.<n>` from a copy, so your checkout
-stays as it is, uploads it to the firmware bucket under `firmware/<type>/try/`,
-creates one AWS IoT job for `fleet-<type>` at the pace and with the abort rule
-of a Dev release, and prints each board's answer as it comes. A board that is
-offline takes the job when it next connects, and `scripts/ota.sh status Dev`
-shows where each one stands. A new try cancels an earlier one that a board has
-not started, so a board that was offline installs only the newest. A board
-answers SUCCEEDED `running <version>` only once it has restarted into the new
-build and reconnected, and FAILED `came back on <version>` if the new build did
-not start. On the serial console you see `OTA: complete, restarting` and, after
-the restart, `aws: connected, patient-monitor v<version>-try.<n>`.
-The board keeps its Wi-Fi and certificate, which live in NVS,
-outside the part of the flash an update rewrites. A try costs one upload and one job execution per board, a fraction
-of a cent.
-
-To watch a board, open its Asset in the Cloud Agentic IoT app. The Live Status
-card shows whether it is connected and a reading every 2
-seconds while the card is on screen, straight from AWS IoT to your browser.
-Readings never pass through Salesforce, and an hour of watching costs about a
-third of a cent in AWS. [LIVE-STATUS.md](LIVE-STATUS.md) has the speeds, the
-costs and what to check when the card waits for the board.
-
-To send a board a command, open its Asset and choose **Send Command**, then
-`RESTART`. The Device Command shows `Sent` within
-seconds and `Acked` once the board answers, or `Failed`
-with the reason (a board that is offline is not sent anything). The command is
-sent as you, so you need the `AWS_IoT_Relay` principal access from
-[Detailed Install Guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach).
-[DATA-MODEL.md](DATA-MODEL.md#device-command-lifecycle) explains each status.
-
-The card and Send Command both need a board provisioned from its Asset
-([Chapters, chapter 13](CHAPTERS.md#13--device-provisioning-automation)). An
-Asset made by hand, as in Stage 3, has no Thing ARN: its Connection stays *Not
-reported yet*, the card says it has no AWS IoT Thing, and a command fails as
-not provisioned.
-
-## Talk to the agent
-
-The deploy created the **Patient Care Agent**, inactive: switching on an agent
-that can create clinical Cases is left to a person. Activate it, check it, and
-give yourself access:
-
-```bash
-scripts/publish-agent.sh Dev
-sf data query --query "SELECT VersionNumber, Status FROM BotVersion WHERE BotDefinition.DeveloperName = 'Patient_Care_Agent'"
-sf org assign permset --name Patient_Care_Agent
-```
-
-Or activate it in Setup → **Agentforce Agents** → **Patient Care Agent**. The
-query shows the newest version `Active`. `Patient_Care_Agent` opens the agent to you
-and gives its actions what they read and create; it is an employee agent, so
-it acts as you. Open it from the Lightning header, then:
-
-1. Ask what a device is reporting, by its serial number (PatientExternalESP32, say). It
-   answers from the device's latest readings and connection status.
-2. Ask it to escalate a reading. It says which device and reading, and asks
-   you to confirm.
-3. Confirm. It reports the Case number, and the Case (`Origin = Agentforce`)
-   is in Care_Team_Queue, so the indicator board moves.
-
-## Warm the sensor, get a high temperature alert
-
-The temperature alert demo rule ([Chapters, chapter 03](CHAPTERS.md#temperature-alert-demo-rule)):
-the monitored device's DHT11 can sit wherever the temperature matters, against
-a patient (the demo puts it under an arm), in a medication fridge, in a room.
-When it reads 30 C or more, the board itself sweeps its servo back and forth to
-tell whoever is near, and stops at the first reading below 30 C (decided on the board, so closing the Case does not stop it,
-cooling the sensor does). Salesforce also opens a Case for the device in
-Care_Team_Queue, and the ward board moves. The motor only ever means
-"temperature high": there is no dose. It is a demo rule, not a
-clinical alert: a DHT11 is not a calibrated thermometer. It is on in Dev
-(`RoomTempAlert` in `config/Dev.json`) and off in Prod.
-
-**Deploy Salesforce first, then AWS.** A flagged record that reaches an org
-without the `Room_Temperature_Alert__c` field, or without its field access, is
-refused with `INVALID_FIELD`; the sync queue retries it 5 times over about 30
-minutes, then moves it to the dead-letter queue and `SyncDeadLetterAlarm`
-fires. So when you first bring this rule to a project and org:
-
-```bash
-scripts/check.sh
-scripts/deploy-salesforce.sh Dev --with-tests
-# verify in the org: the list below, and Device_Integration has Temperature Alert
-scripts/deploy-aws.sh Dev            # patient-vitals with RoomTempAlert "true" from config/Dev.json
-scripts/ota.sh try Dev patient-monitor   # optional: send your working copy of the firmware over the air
-```
-
-The pipeline deploys AWS before Salesforce (`.github/workflows/deploy.yml`),
-so through CI ship it in two pushes: first with `"RoomTempAlert": "false"` in
-`config/Dev.json`, and once the Salesforce side is verified, a second push that
-sets it to `"true"`.
-
-**Before you start**
-
-- The board's Asset (PatientExternalESP32 here) has a SerialNumber equal to its Thing name,
-  and is Provisioned and Online. Without a matching Asset there is no Case,
-  only a WARN in the debug log.
-- Care_Team_Queue lists Case as a supported object (Setup → Queues). If not,
-  the Case lands with the integration user, an ERROR is logged, and the
-  ward board does not count it.
-- Your ward board's Asset has the Internal Device record type. Any such
-  board follows Care_Team_Queue.
-- The integration user has the `AWS_IoT_Relay` principal access
-  ([Detailed Install Guide, Stage 2 part d](INSTALL-GUIDE.md#stage-2--connect-the-seams-ci-cannot-reach)):
-  the Case moves the ward board through a callout made as that user.
-- `Room Temperature Rule` (labelled Temperature Alert Rule) and `Agentforce` are Case Origin values: the
-  deploy adds them (`standardValueSets/CaseOrigin`). A value you added to
-  Case Origin by hand must be in that file too, or the deploy may take it
-  off the list.
-
-**Steps**
-
-1. Put the DHT11 under your arm (it reads about 33 to 36 C there), or cup
-   your hand around it, until it reads 30 C (its maximum is 50 C). Within
-   about 5 s the board's servo starts sweeping (console:
-   `temperature 30.0C: 30 C or more, motor turning`).
-2. Within 1 to 3 stored readings (about 30 s each) a Case appears in
-   Care_Team_Queue (Subject `High temperature ... C on PatientExternalESP32`) and the ward
-   board moves. The servo goes on sweeping.
-3. Keep it warm: no new Case. AWS reports the device again every re-alert
-   interval (15 minutes in Dev), and Salesforce sees the open Case and stops.
-4. Take the sensor out and let it cool below 30 C: the sweep stops within
-   about 5 s of the first reading below 30 C (a DHT11 takes a minute or two
-   to cool from body heat). The Case stays
-   open, and the ward board keeps moving until someone closes or takes it.
-5. Close the Case: the ward board stops (if it was the queue's last Case).
-   Warm the sensor again: the sweep starts again at once; a new Case follows
-   once a reading went below 29 C in between.
-6. Unplug the board while it is warm, plug it back in: it sweeps again as
-   soon as its first reading after the start is 30 C or more.
-7. If it does not sweep while warm, check the console for the temperature
-   it reads and for `motor turning`.
-   SOP-WARD-004 is the procedure for a motor that does not follow the
-   temperature.
-
-**For a live talk**, step 4 waits up to `RealertIntervalMinutes`. To shorten
-it, deploy Dev with `"RealertIntervalMinutes": 2` for the session and set it
-back after. That also speeds up the clinical reminders for devices that are
-not STABLE; PatientExternalESP32 on a desk is always STABLE.
-
-**Check it**
-
-```sql
-SELECT CaseNumber, Owner.Name, Asset.SerialNumber, Status, CreatedDate
-FROM Case WHERE Origin = 'Room Temperature Rule' ORDER BY CreatedDate DESC
-```
-
-The rule creates no Device Command. A flagged reading is a `Patient_Vitals__c`
-(Device Reading) row with Temperature Alert (`Room_Temperature_Alert__c`)
-checked. In AWS, the salesforce-sync function logs each batch it writes (use
-your project's Region):
-
-```bash
-aws logs tail /aws/lambda/cloud-agentic-iot-salesforce-sync --since 15m --region us-east-2 \
-  --filter-pattern '"Synced to Salesforce"'
-# ... Synced to Salesforce { records: 1, returned: 0 }
-```
-
-That line counts every synced record, flagged or not. A record Salesforce
-refused (for example `INVALID_FIELD` on `Room_Temperature_Alert__c`, when AWS
-was switched on before the Salesforce deploy) logs `Salesforce refused a
-record` instead.
-
-**Emergency stop**: in Setup → Custom Settings → Integration Control, at org
-level, add `PatientVitalsTriggerHandler` to Bypass Handlers. It takes effect
-at once, with no deploy. To stop AWS sending flagged readings, set
-`RoomTempAlert` to `"false"` in `config/Dev.json` and deploy AWS. The
-board's own sweep follows only its sensor: cool the sensor, or unplug the servo.
-
-## Device readings in Data Cloud
-
-If the org has Data Cloud, every device reading can reach it from the S3
-archive, with a daily count of minutes at or above 30 C per device and a
-list of devices that went quiet: [SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward).
-A project cannot hold the IAM identity provider the keyless way needs, so
-here Data Cloud signs in with an access key of an IAM user you make as
-`<name>` (step 3a), typed into Data Cloud and nowhere else.
-[DATA-CLOUD.md](DATA-CLOUD.md) explains the path.
-
-## Fire the vitals stream
-
-The boards send only temperature and humidity, so the chapter 02 stream (EventBridge to
-Salesforce Platform Events) never fires on its own. Send it one synthetic
-reading with a heart rate of 135 and an SpO2 of 86, the way a wearable
-would, from the repository root and signed in as in step 2:
-
-```bash
-scripts/streams-test.sh Dev PatientExternalESP32
-```
-
-It prints what the alert dispatcher decided (`CRITICAL_VITALS`). Within a few
-seconds Salesforce has a Case **Critical vitals on PatientExternalESP32**, Origin **Vital
-Alert**, in **Care Team Queue** on PatientExternalESP32's Asset, and the ward board starts
-turning for it like for any other Case. Run it again while that Case is open
-and no second one opens; close it and the next run opens a new one.
-`scripts/streams-test.sh Dev PatientExternalESP32 warning` publishes an `ABNORMAL_TREND`
-alert, which opens nothing, and `normal` is dropped in AWS. Nothing is
-written to the device's readings and no board is contacted.
-
-## Update one board through the saga
-
-Chapter 09 sends one board one build as a saga: each step has a step that
-undoes it. Use a build that is already published, for example the last try
-(`scripts/ota.sh status Dev` names it):
+Then, with the version `status` printed (for example `1.0.0-try.1`):
 
 ```bash
 scripts/ota-saga.sh send Dev PatientExternalESP32 patient-monitor 1.0.0-try.1
 scripts/ota-saga.sh status Dev PatientExternalESP32
 ```
 
-`status` shows the Thing's `otaState` (`UPDATING` while the saga runs,
-`ACTIVE` with `otaVersion` once the board has installed it) and the board's
-`saga-` jobs. A board already on that version reports it as current and the
-saga completes. The trace is in
-`aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow`.
+**See.**
 
-To watch it unwind, unplug the board, send it again and wait: the job stays
-`QUEUED`, and after 20 minutes the log shows `cancel_iot_job`,
-`mark_device_active` and `delete_staged_firmware`, in that order, and
-`status` shows the job `CANCELED` and the Thing `ACTIVE` on its old version.
+1. `ota.sh try` compiles your working copy as `1.0.0-try.<n>`, uploads it, and prints each board's answer as it comes: SUCCEEDED `running 1.0.0-try.<n>` once the board has restarted into it and reconnected, or FAILED `came back on <version>` if the new build did not start. The serial console shows `OTA: complete, restarting`, then `aws: connected, patient-monitor v1.0.0-try.<n>`. Each board keeps its Wi-Fi and certificate.
+2. The saga's `status` shows the Thing's `otaState` `UPDATING` while it runs, then `ACTIVE` with `otaVersion`. A board already on that version reports it as current. The trace: `aws logs tail /aws/lambda/cloud-agentic-iot-ota-saga --follow`.
 
-## Ask the ward from Slack
+**To watch it undo itself**, unplug the board and send the saga again: the job stays `QUEUED`, and after 20 minutes the log shows `cancel_iot_job`, `mark_device_active` and `delete_staged_firmware`, in that order, and the board stays `ACTIVE` on its old version.
 
-Optional (chapter 04). Slack never signs in to Salesforce: a slash command
-reaches the `cloud-agentic-iot-slack-integration` function through API
-Gateway, the function checks Slack's signature, and it calls Salesforce as
-the integration user from step 5, as every other function does. Use a
-workspace where you may install apps; a free workspace of your own keeps the
-demo apart from any team's. Slash commands work on the free plan.
+**Value and cost.** The KPI is boards on the current version: every update after the first USB flash arrives over the air. A try costs one upload and one job execution per board, a fraction of a cent.
 
-1. **Make the app.** <https://api.slack.com/apps> → **Create New App** →
-   **Pick features** (under **From scratch**; older dialogs call it **From
-   scratch**), name it `Ward Bot`, and pick the workspace. Skip the **AI
-   agent** and **Starter app** templates, which expect code hosted by
-   Slack. **Paste a manifest** works too if it declares both commands with
-   a placeholder URL such as `https://example.com/slack/commands`; replace
-   it with the address from step 3.
-2. **Store its signing secret in AWS.** **Basic Information** → **App
-   Credentials** → **Signing Secret** → **Show**. Then, in your terminal:
+<a id="scenario-9"></a>
+<a id="fire-the-vitals-stream"></a>
 
-   ```bash
-   scripts/seed-ssm.sh Dev
-   ```
+### 9. A wearable reports critical readings
 
-   Press Enter at every question except **Slack signing secret**, and paste
-   the secret there, where nothing is shown. A value already in SSM is kept
-   when you press Enter.
-3. **Deploy AWS again.** `scripts/deploy-aws.sh Dev` now finds the secret and
-   deploys the Slack stack. Its address for Slack:
+**Situation.** A wearable that sends heart rate and oxygen saturation reports a critical combination. The boards here send only temperature and humidity, so this sends one synthetic reading down the same event stream a wearable would use (chapter 02: EventBridge to Salesforce Platform Events).
 
-   ```bash
-   aws cloudformation describe-stacks --stack-name cloud-agentic-iot-slack-integration-Dev \
-     --query "Stacks[0].Outputs[?OutputKey=='SlackCommandsUrl'].OutputValue" --output text
-   ```
-4. **Add the command.** In the app, **Slash Commands** → **Create New
-   Command**, with that address as **Request URL**: `/patient-status`
-   (hint `PatientExternalESP32`).
-5. **Install it.** **Install App** → **Install to Workspace** → **Allow**.
-6. **Try it.** In any channel: `/patient-status PatientExternalESP32`. The answer shows
-   only to you: first "Looking up `PatientExternalESP32`…", then the live reading from AWS
-   (or "offline since" when the board has not sent for five minutes) and the
-   last event Salesforce saved, which can be hours older because Salesforce
-   keeps only state changes and alerts. Slack sends no commands to a board;
-   that is **Send Command** on the Asset.
+**Do.**
 
-If Slack says `dispatch_failed` or the command times out, the address is
-wrong or the stack is not deployed; `aws logs tail
-/aws/lambda/cloud-agentic-iot-slack-integration --since 10m` shows whether
-the call arrived and why it was refused.
-
-## See what it costs
-
-The app's Home page shows this month's AWS spend against the project's spend
-limit. No AWS API returns a spend limit, so the card reads it from a budget of
-the same amount, named `cloud-agentic-iot-monthly`. As the project owner, in the
-project's CloudShell, first see what budgets the project lists:
+**Paste into your terminal.**
 
 ```bash
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-aws budgets describe-budgets --region us-east-1 --account-id "$ACCOUNT" --show-filter-expression \
-  --query 'Budgets[].{name:BudgetName,type:BudgetType,unit:TimeUnit,limit:BudgetLimit.Amount,filter:FilterExpression,old:CostFilters}'
+scripts/streams-test.sh Dev PatientExternalESP32
 ```
 
-Then create `cloud-agentic-iot-monthly` with its amount equal to the spend
-limit, with the command in
-[SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md#give-the-account-a-budget). Change
-both together from then on.
+**See.** The script prints what the alert dispatcher in AWS decided: `CRITICAL_VITALS`. Within a few seconds a Case `Critical vitals on PatientExternalESP32`, Origin **Vital Alert**, opens in Care_Team_Queue on the device's Asset, and the gauge rings for it. Run it again while that Case is open: no second Case. `scripts/streams-test.sh Dev PatientExternalESP32 warning` publishes an `ABNORMAL_TREND` alert that opens nothing, and `normal` is dropped in AWS. Nothing is written to the device's readings, no board is contacted, and the AWS logs label the reading `SYNTHETIC_TEST`.
 
-The pipeline accounts get the same budget from the bootstrap stack. It also
-runs in a project, without the GitHub role, which a project can't hold; this
-has not been tried in a project yet, so if the stack fails with AccessDenied,
-use the command above instead:
+Close the Case afterwards, so the gauge stops.
+
+**Value and cost.** Any new kind of device joins by publishing to the same stream: no new integration. A reading through the stream costs a few millionths of a dollar in AWS.
+
+<a id="owner"></a>
+
+## Business owner
+
+Whoever pays for the platform and answers for its value, reading the dashboards on the app's Home tab.
+
+<a id="scenario-10"></a>
+<a id="see-what-it-costs"></a>
+
+### 10. The business owner reads what it is worth and what it costs
+
+**Situation.** The owner wants to know what the platform costs this month, how close it is to its limits, and whether it pays for itself.
+
+**Do.** The value dashboard needs one setup the install doesn't do: a permission set and a nightly snapshot.
+
+**Paste into your terminal.** Once per org. It schedules the nightly snapshot (01:00) and takes the first one now.
 
 ```bash
-GITHUB_OIDC=no BUDGET_USD=20 BUDGET_EMAIL='<your email>' scripts/bootstrap-aws.sh Dev
+sf org assign permset --name Business_Value_Viewer --target-org "$NAME"
+sf apex run --target-org "$NAME" <<'APEX'
+System.schedule('Business Value snapshot', '0 0 1 * * ?', new ValueSnapshotJob());
+ValueSnapshotService.takeSnapshot();
+APEX
 ```
 
-A budget without actions is free, and the card
-reads it at no charge.
+Then open the Cloud Agentic IoT app's **Home** tab and reload it.
 
-## What happens near the limit
+**See.**
 
-- As spending nears the limit, AWS denies Lambda invocations, Bedrock calls and
-  new compute in the project. Readings stop flowing, which is the point.
-- At the limit, AWS pauses the project and stops its resources for the rest of
-  that month. Your data is kept. To resume, raise the limit in AWS Settings;
-  some resources may need a manual restart.
-- A paused project left untouched for 90 days is deleted, after reminder emails.
-- The Home page's AWS spend may stop answering, because it runs on Lambda. The
-  card says so, points to AWS Settings, and shows the last spend it read. Its
-  Salesforce half keeps working.
-- Deploy changes that add Lambda functions well before the limit: once AWS
-  stops new resource creation, a stack update that adds a function fails.
+1. **Costs and limits**: this month's AWS spend against the project's spend limit, read from the `cloud-agentic-iot-monthly` budget you made in [step 6](INSTALL.md#step-6), and the org's limits by group (API calls, storage).
+2. **Business Value** dashboard (also under Dashboards → Business Value): net value over the last 7 days (staff time value minus Agentforce and AWS cost), chats the agent handled, response time before and after, AWS per device per month, and hours avoided ([BUSINESS-VALUE.md](BUSINESS-VALUE.md)).
+3. **Data Cloud value: monitored devices**: minutes at or above 30 C and the highest temperature over 7 days, how many devices report and which went silent, and the return on Data Cloud: manual checks replaced against Data Cloud's cost ([BUSINESS-VALUE.md, Data Cloud value card](BUSINESS-VALUE.md#data-cloud-value-card)).
 
-## Moving to the pipelines
+The value side uses the stated as-is numbers shipped with the org (3 minutes a manual check, 12 checks a device a day, $55 a staff hour); change them to your own in Setup → Custom Metadata Types → **Value Assumption** → **Default**, so the dashboard compares measured against your baseline ([Before and after](BUSINESS-VALUE.md#before-and-after-as-is--to-be)).
 
-When you want GitHub Actions to deploy for you, and later a Prod environment,
-move to regular AWS accounts:
+Near the spend limit, AWS stops new Lambda runs and then pauses the project; the spend card then says so and shows the last spend it read, and its Salesforce half keeps working ([Detailed Install Guide, near the limit](INSTALL-GUIDE.md#near-the-limit)).
 
-1. Set up a regular account for Dev as in [SETUP.md §3](SETUP.md#3-aws-dev-account)
-   (`scripts/bootstrap-aws.sh`: the OIDC deploy role and the budget) and
-   [§5](SETUP.md#5-github) (`scripts/setup-github-secrets.sh`: environments,
-   secrets and variables).
-2. Deploy through the pipeline. Stacks don't move between accounts: the regular
-   account gets new resources, a new IoT endpoint and new certificates, so
-   provision each board again against it.
-3. Keep `<name>` for trying changes from your laptop. It stays connected, and
-   the pipelines never touch it. If you'd rather not keep it, copy anything you
-   want out of its S3 buckets and DynamoDB table, then delete its
-   `cloud-agentic-iot-*` stacks, or close the project.
+**Value and cost.** The one number to say out loud is net value a week. The cost is driven by how often agents act, not by data or infrastructure: AWS is about $0.08 per device per month ([COST-MODEL.md](COST-MODEL.md)). Reading the budget is free, the spend card costs under a cent a month ([SPEND-AND-LIMITS.md](SPEND-AND-LIMITS.md)), and the Data Cloud card reads its insights at most once every 10 minutes per session, to save credits.
 
-## Sources
+<a id="sysadmin"></a>
 
-- [AWS reimagines the getting started experience](https://aws.amazon.com/blogs/aws/aws-reimagines-the-getting-started-experience/): spend limits from $20, pausing, the 90-day deletion
-- [New AWS builder experience (What's New, September 2026)](https://aws.amazon.com/about-aws/whats-new/2026/09/New-AWS-Builder-Experience)
-- [Service and resource control policies for projects](https://docs.aws.amazon.com/accounts/latest/reference/scps-and-rcps-for-projects.html): the identity-provider block, what is denied near the limit, the organization-only trust
-- [Activate advanced features](https://docs.aws.amazon.com/accounts/latest/reference/activate-advanced-features.html): removes spend limits, can't be reversed
-- [Project Regions](https://docs.aws.amazon.com/accounts/latest/reference/project-regions.html)
-- [Connect an AI coding tool](https://docs.aws.amazon.com/accounts/latest/reference/connect-ai-coding-tool.html) and [Login with console credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html): `aws login`, CLI 2.32.0, 12-hour sessions
+## Sysadmin
+
+Whoever keeps it running and finds out why something behaves oddly, in the app and the terminal.
+
+<a id="scenario-11"></a>
+
+### 11. A device goes quiet and the sysadmin finds out why
+
+**Situation.** A device stops reporting. Is it the device, its Wi-Fi, AWS or Salesforce? The sysadmin works outward from the device to the first hop that went quiet.
+
+**Do.**
+
+1. Unplug the corp ticket gauge (`CompanyInternalESP32`) and watch its Asset.
+2. Ask the Patient Care Agent: "When did CompanyInternalESP32 last send anything?"
+3. In the terminal, check the alarms, the presence log, the boards' firmware and what is deployed.
+4. Plug the gauge back in.
+
+**Paste into your terminal.** Any time something looks wrong.
+
+```bash
+aws cloudwatch describe-alarms --alarm-name-prefix cloud-agentic-iot   --query 'MetricAlarms[].[AlarmName,StateValue]' --output table
+aws logs tail /aws/lambda/cloud-agentic-iot-device-presence --since 15m
+scripts/ota.sh status Dev
+aws ssm get-parameters --names /cloud-agentic-iot/deployed-commit/aws /cloud-agentic-iot/deployed-commit/salesforce \
+  --query 'Parameters[].[Name,Value]' --output text
+```
+
+**See.**
+
+1. The Asset's Connection turns `Offline` within about 30 to 45 s of losing power (AWS IoT closes a silent connection after 1.5 times its keep-alive), and the Live Status card says it waits for the board ([LIVE-STATUS.md](LIVE-STATUS.md)).
+2. The agent gives the time of the last reading from Data Cloud's silence insight, which updates hourly: a device that is silent for longer reads as a device fault, not a quiet patient.
+3. Every alarm `OK` (a dead-letter queue that is filling, or `telemetry-falling-behind`, points at the hop that fails); the presence log shows the disconnect for `CompanyInternalESP32`; `ota.sh status` lists each board's firmware and any job still waiting; the last lines name the commits AWS and Salesforce run.
+4. Connection `Online` again within a few seconds, and readings on the card.
+
+Each symptom found while building this, with its cause and fix: [Troubleshooting](TROUBLESHOOTING.md). The hop-by-hop checklist: [Detailed Install Guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end).
+
+**Value and cost.** The KPI is coverage: a silent device is a gap in monitoring, and here it shows within a minute instead of at the next manual round. Reading alarms and logs costs nothing extra; the alarms email whoever `ALARM_EMAIL` named.
 
 ---
 

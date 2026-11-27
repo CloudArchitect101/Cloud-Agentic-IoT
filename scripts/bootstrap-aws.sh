@@ -17,7 +17,7 @@
 #   BUDGET_EMAIL    who the budget emails at 80% actual and 100% forecast
 #   GITHUB_REPO     owner/name; read from `gh` when unset
 #   GITHUB_OIDC=no  an AWS project with a spend limit, which cannot hold an
-#                   OIDC provider: only the budget is created (docs/TRY-IT.md)
+#                   OIDC provider: only the budget is created (docs/INSTALL-GUIDE.md)
 #   EXISTING_OIDC_PROVIDER_ARN  an account's GitHub provider that this stack
 #                   did not create, to use instead of creating one
 #

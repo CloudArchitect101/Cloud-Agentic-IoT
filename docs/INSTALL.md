@@ -21,7 +21,7 @@ Every feature, from a fresh clone to a working system, in order: copy each block
 | [10](#step-10) | [Patient portal with Enhanced Chat](#step-10) | <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> <img class="pi" src="images/platforms/terminal.svg" alt="Terminal" title="Terminal" width="20" height="20"> Setup + terminal |
 | [11](#step-11) | [MCP servers](#step-11) | <img class="pi" src="images/platforms/agentforce.svg" alt="Agentforce" title="Agentforce" width="20" height="20"> Setup |
 | [12](#step-12) | [Add the boards](#step-12) | <img class="pi" src="images/platforms/esp32.svg" alt="ESP32" title="ESP32" width="20" height="20"> <img class="pi" src="images/platforms/electronics.svg" alt="Electronics (wiring)" title="Electronics (wiring)" width="20" height="20"> Board + terminal |
-| [13](#step-13) | [Check that it works](#step-13) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> <img class="pi" src="images/platforms/slack.svg" alt="Slack" title="Slack" width="20" height="20"> <img class="pi" src="images/platforms/portal.svg" alt="Portal (Experience Cloud)" title="Portal (Experience Cloud)" width="20" height="20"> App, Slack, portal |
+| [13](#step-13) | [Check that it works](#step-13), then the [use case scenarios](TRY-IT.md) | <img class="pi" src="images/platforms/salesforce.svg" alt="Salesforce" title="Salesforce" width="20" height="20"> App |
 | [14](#step-14) | [Dev and Prod pipelines](#step-14) | <img class="pi" src="images/platforms/git.svg" alt="Git and GitHub" title="Git and GitHub" width="20" height="20"> <img class="pi" src="images/platforms/aws.svg" alt="AWS" title="AWS" width="20" height="20"> GitHub + terminal |
 
 > [!NOTE]
@@ -682,19 +682,15 @@ When it all works, warming the monitored device to 30 C on the arm opens a Case,
 <figure style="flex:1 1 300px;margin:0"><video src="videos/working-corp-gauge.mp4" poster="videos/working-corp-gauge.jpg" autoplay muted loop playsinline controls width="720" style="width:100%;height:auto" aria-label="Animation: the corp ticket gauge sweeps its needle and rings the bell for an open ticket"></video><figcaption><code>CompanyInternalESP32</code> rings for the open Case</figcaption></figure>
 </div>
 
+**Check that it's alive:**
+
 | Check | Expect |
 |---|---|
-| The board's Asset | Connection `Online`, a reading every 2 s on the Live Status card |
-| **Send Command** → `RESTART` on the Asset | The Device Command goes `Sent`, then `Acked` |
-| Warm the sensor to 30 C (under an arm) | The board's motor sweeps, and a Case opens in Care_Team_Queue |
-| Ask the agent "what is PatientExternalESP32 reporting?" (your board's name) | The latest readings, and an SOP citation when you ask what to do |
-| Ask the agent "How long was PatientExternalESP32 at or above 30 C yesterday?" (the day after step 12) | An answer from Data Cloud, with a note that the newest hour or two may be missing |
-| Ask any agent "What is the spec of the ESP32-S3-DevKitC-1?" | An answer from Espressif's catalogs, with a docs.espressif.com link for the rest |
+| Each board's Asset (`PatientExternalESP32`, `CompanyInternalESP32`) | Connection `Online`, a reading every 2 s on the Live Status card |
 | The app's Home tab | This month's AWS spend against the limit, and the org's limits |
-| `/patient-status PatientExternalESP32` in Slack | The live reading |
-| The portal, as a patient | The patient's own device, and the assistant answering "what is my temperature?" |
 
-The full checklist: [Detailed Install Guide, Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end).
+> [!TIP]
+> **Next: test every feature.** [After install: use case scenarios](TRY-IT.md) walks through each feature end to end, one real situation at a time, with what you should see: the temperature alert and its Case, both boards, the agents (SOP answers, device history), Slack, the portal, over-the-air updates and the cost. The Detailed Install Guide's [Stage 4](INSTALL-GUIDE.md#stage-4--verify-end-to-end) explains what each check proves.
 
 [← 12. Add the boards](#step-12) · [Step map](#step-map) · [14. Dev and Prod pipelines →](#step-14)
 

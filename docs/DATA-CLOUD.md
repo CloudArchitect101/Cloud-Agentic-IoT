@@ -117,7 +117,7 @@ and both off until their parameters are set:
 
 | | A role (preferred) | An access key |
 |---|---|---|
-| Where | A regular AWS account | An AWS project with a spend limit ([TRY-IT.md](TRY-IT.md)) |
+| Where | A regular AWS account | An AWS project with a spend limit ([why](INSTALL-GUIDE.md#aws-project-or-regular-account)) |
 | Data Cloud's setting | **Identity Provider (IdP) Based**: IAM Role Name and External ID | **Access Key/Secret Based** |
 | How it works | Data Cloud gets a token from your org's own identity provider, `https://<My Domain>/services/connectors`, and assumes `cloud-agentic-iot-data-cloud-reader` with it. The role trusts only the connection whose External ID it names | An IAM user, made by hand, whose key Data Cloud holds. The bucket policy lets that user read `datacloud/`; the user has no policy of its own |
 | What is by hand | The IAM identity provider for the org, once per account (the deploy identities may not create identity providers) | The user and its key (the deploy identities may not create either) |
@@ -221,7 +221,7 @@ echo "$BUCKET"
    A `reading_id__c` that is also a `Patient_Vitals__c.Device_Reading_Id__c`
    in CRM is the same reading.
 5. **Out of range counts.** Warm the sensor to 30 C or above for a few
-   minutes ([TRY-IT.md](TRY-IT.md#warm-the-sensor-get-a-high-temperature-alert)).
+   minutes ([Use case scenarios, scenario 1](TRY-IT.md#scenario-1)).
    After the next stream refresh and insight run, Data Explorer → Calculated
    Insight **Room Out Of Range Daily** shows today's row for that device with
    `readings_out_of_range__c` above 0 and `minutes_out_of_range__c` at half

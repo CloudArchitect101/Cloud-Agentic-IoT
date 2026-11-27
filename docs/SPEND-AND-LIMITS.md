@@ -184,7 +184,7 @@ Once per AWS account. In Dev and Prod, `scripts/bootstrap-aws.sh` creates it
 with `BUDGET_USD` and `BUDGET_EMAIL` ([SETUP.md §3.2](SETUP.md#32-the-deploy-role-and-the-budget-scriptsbootstrap-awssh)),
 counting the same way as the command below. In an AWS project, a project
 owner runs the command below in the project's CloudShell, or tries
-`GITHUB_OIDC=no scripts/bootstrap-aws.sh Dev` ([TRY-IT.md](TRY-IT.md#see-what-it-costs)).
+`GITHUB_OIDC=no scripts/bootstrap-aws.sh Dev` ([Moving to the pipelines](INSTALL-GUIDE.md#moving-to-the-pipelines)).
 
 ```bash
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)

@@ -25,7 +25,7 @@ The [Quick Install Guide](INSTALL.md) is the one path everyone follows. The othe
 |---|---|
 | [Quick Install Guide](INSTALL.md) | The steps, in order, with a check after each one |
 | [Detailed Install Guide](INSTALL-GUIDE.md) | Why each step is done that way, and what to look at when one fails |
-| [Try it](TRY-IT.md) | The demos to run once it works: warm the sensor, the saga, Slack |
+| [Use case scenarios](TRY-IT.md) | Once it is installed: test every feature as one real situation each, as an internal user in Salesforce or Slack, a patient, a business owner or a sysadmin |
 | [Setup](SETUP.md) | Accounts, licences and secrets in detail, for the Dev and Prod pipelines |
 | [Troubleshooting](TROUBLESHOOTING.md) | Every problem met so far, with its cause and fix |
 

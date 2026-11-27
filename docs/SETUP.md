@@ -402,7 +402,7 @@ a deploy app that authenticates, with the secrets stripped:
 
 ## 3. AWS Dev account
 
-> **Just trying it out?** [TRY-IT.md](TRY-IT.md) runs it on your own AWS project with a spend limit and a Developer Edition org, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
+> **Just trying it out?** The [Quick Install Guide](INSTALL.md) runs it on your own AWS project with a spend limit and a Developer Edition org, from your laptop, with no GitHub setup. Come back here when you're ready for the pipelines.
 
 ### 3.1 Root: create the account and `iot-operator`, then never again
 
@@ -512,8 +512,8 @@ sf org display --target-org iot-dev-integration   # confirm: integration@, not a
 ```
 
 The `salesforce-dx` MCP server follows the default org, so this also makes
-tooling operate least-privilege. The test org of [TRY-IT.md](TRY-IT.md) keeps
-its one alias, `test-cloudarchitect101` (`<name>`), for the admin.
+tooling operate least-privilege. The test org of the [Quick Install Guide](INSTALL.md) keeps
+its one alias, `test-cloud-agentic-iot` (`<name>`), for the admin.
 
 ### AWS
 
@@ -815,7 +815,7 @@ Two ways to let Data Cloud read the bucket; use the one your AWS side allows:
 
 | Your AWS side | Data Cloud signs in with | Step 3 |
 |---|---|---|
-| An AWS project with a spend limit ([TRY-IT.md](TRY-IT.md)) | An access key of an IAM user you make | 3a |
+| An AWS project with a spend limit ([why](INSTALL-GUIDE.md#aws-project-or-regular-account)) | An access key of an IAM user you make | 3a |
 | A regular account (the pipelines) | A role, through the org's own identity provider. No key | 3b |
 
 A project cannot hold an IAM identity provider, so the role is not possible
@@ -853,7 +853,7 @@ there.
    identity, which the deploy identities may not make.
 
    **3a. AWS project: the IAM user and its key.** In your own terminal,
-   signed in as the project's profile (`aws login`, as in [TRY-IT.md](TRY-IT.md)),
+   signed in as the project's profile (`aws login`, as in [Quick Install Guide, step 4](INSTALL.md#step-4)),
    from the repository root. The user has no policy of its own; the bucket
    policy the deploy writes lets it read `datacloud/`. Make the user before
    the deploy names it: S3 refuses a bucket policy for a user that does not
@@ -1013,7 +1013,7 @@ for an SOP-only change). Unchanged SOPs are not embedded again.
 
 ## Talk to the agent from Slack (optional)
 
-The Smart Ward app in [TRY-IT](TRY-IT.md#ask-the-ward-from-slack) answers two
+The Ward Bot app in [Use case scenarios, scenario 6](TRY-IT.md#scenario-6) answers two
 fixed commands. To ask the Patient Care Agent questions in Slack, use
 Salesforce's own Agentforce in Slack: the same agent, topics and actions,
 answering as the Salesforce user each Slack member is mapped to, so their

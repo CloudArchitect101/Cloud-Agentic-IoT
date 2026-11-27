@@ -50,8 +50,8 @@ deploy before it changes anything.
 
 While you're only trying the system, Dev can be your own AWS project with a
 spend limit and a Developer Edition org, under one profile and alias name, that
-you deploy to from your laptop. [TRY-IT.md](TRY-IT.md) covers that setup, and
-how to move to regular accounts when you want the pipelines.
+you deploy to from your laptop. The [Quick Install Guide](INSTALL.md) covers that setup, and
+[An AWS project or a regular account](INSTALL-GUIDE.md#aws-project-or-regular-account) how to move to regular accounts when you want the pipelines.
 
 ## 1. On your laptop
 

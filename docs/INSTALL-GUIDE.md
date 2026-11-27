@@ -9,7 +9,7 @@ Two ways to run it, same code:
 
 | Path | Where it deploys | Start with |
 |---|---|---|
-| **Try it** | Your own AWS project with a spend limit (advanced features **not** activated: activating them removes the spend limit for good) and a free [Developer Edition org](https://developer.salesforce.com/signup), deployed from your laptop | [TRY-IT.md](TRY-IT.md), then Stages 2 to 4 below |
+| **Quick install** | Your own AWS project with a spend limit (advanced features **not** activated: activating them removes the spend limit for good) and a free [Developer Edition org](https://developer.salesforce.com/signup), deployed from your laptop | The [Quick Install Guide](INSTALL.md), explained [below](#quick-install-explained); why a project: [An AWS project or a regular account](#aws-project-or-regular-account) |
 | **Pipelines** | Separate Dev and Prod AWS accounts and Salesforce orgs, deployed by GitHub Actions | [SETUP.md](SETUP.md), then every stage below |
 
 **The whole system deploys once, in one sequence.** Work top to bottom; each stage assumes the previous one is done. Nothing here is per-chapter — the chapters explain what these pieces do, they do not install separately.
@@ -46,7 +46,7 @@ The [Quick Install Guide](INSTALL.md) is commands only. This is the why behind e
 
 The print files hold the default set: the cuff for a 27 to 31 cm upper arm (`r46`), the bell on the left of the gauge and the 36 mm hanger. For another arm size (`r40` for 24 to 27 cm, `r52` for 31 to 35 cm), or a servo that turns clockwise and needs the `bell-right` parts, swap that part in the slicer: every part is also a single STL in [`hardware/cases/stl`](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases/stl). The [cases README](https://github.com/CloudArchitect101/Cloud-Agentic-IoT/tree/Dev/hardware/cases) explains each part, how to check the servo's direction before printing, and the assembly. PLA is enough, since nothing gets hot and nothing flexes; PETG or ABS also work. No part needs supports. The dial plate's art is raised in three steps (3.4, 3.8 and 4.2 mm): painting the tops is simplest, and a printer that changes filament mid-print can print them in colour instead.
 
-**Step 2. The AWS project and the org.** A project on the paid plan has a hard monthly spend limit (the lowest is $20). Its advanced features stay off: activating them removes the spend limit for good, and they matter only for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts. Why a project, and what it costs: [TRY-IT.md](TRY-IT.md#why-a-project-and-what-it-costs-you). The Bedrock check comes first because the agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account can be held from Bedrock for up to 72 hours. A new Developer Edition org comes with Agentforce and Data Cloud (Data 360), which steps 8 to 11 use. Agentforce Voice in the portal's chat needs a licence a Developer Edition lacks, so the Quick Install Guide leaves it out ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)).
+**Step 2. The AWS project and the org.** A project on the paid plan has a hard monthly spend limit (the lowest is $20). Its advanced features stay off: activating them removes the spend limit for good, and they matter only for GitHub OIDC, which the pipelines (step 14) use with regular AWS accounts. Why a project, and what it costs: [An AWS project or a regular account](#aws-project-or-regular-account). The Bedrock check comes first because the agent's Find Procedure answers from an SOP index that Amazon Bedrock builds (Titan Text Embeddings V2), and a new account can be held from Bedrock for up to 72 hours. A new Developer Edition org comes with Agentforce and Data Cloud (Data 360), which steps 8 to 11 use. Agentforce Voice in the portal's chat needs a licence a Developer Edition lacks, so the Quick Install Guide leaves it out ([PATIENT-PORTAL.md](PATIENT-PORTAL.md)).
 
 **Step 3. The org's features.** One pass through Setup, all before the deploy. Each switch accepts terms or can't be turned off, so it is a click of yours, and the deploy in step 6 builds on it. The patient portal needs one Customer Community licence per test patient; step 4 lists them once the terminal knows your org.
 
@@ -138,6 +138,50 @@ And on the repository (Settings → **Secrets and variables** → **Actions** �
 | `AUTO_DEPLOY` | Variable | `Dev`, later `Dev Prod`: which branches deploy on a push | Yes, when you answer `y` |
 | `EVAL_DEVICE`, `EVAL_OTHER_DEVICE`, `EVAL_PATIENT_USERNAME` | Variable | For the **Agent evals** workflow: the test patient's board, the corp ticket gauge, the test patient's username | **No, by hand**, below |
 
+<a id="aws-project-or-regular-account"></a>
+
+## An AWS project or a regular account
+
+<a id="why-a-project-and-what-it-costs-you"></a>
+
+**Why a project, and what it costs you.** The Quick Install Guide deploys to an AWS **project** with a spend limit, from your laptop. The pipelines (step 14) use regular AWS accounts.
+
+| | Project with a spend limit | Regular AWS account |
+|---|---|---|
+| Spending | Capped. AWS pauses the project at the limit. | Not capped. A budget alert is your protection. |
+| Who deploys | You, from your laptop | GitHub Actions, signed in with OIDC |
+| GitHub OIDC | Not possible: projects block IAM identity providers | Yes |
+| Region | Set by your contact address (a Canadian address gets `us-east-2`) | Your choice |
+| Console | Your AWS Builder ID. IAM users are command line only. | IAM users with console access and MFA |
+
+**You can't have both in one account.** Activating a project's advanced features lifts the OIDC block, but it removes every spend limit for good, and it can't be undone. A regular account can't hand access to a project either, because a project only trusts accounts in its own organization. So the project is deployed from your laptop, and GitHub comes in only with the regular accounts. For the same reason Data Cloud signs in to a project's bucket with an access key of an IAM user, not the keyless way ([SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward)).
+
+**What a laptop deploy guards.** The first deploy labels the account `Dev` in SSM (`/cloud-agentic-iot/environment`) and every later one checks it, so a wrong `AWS_PROFILE` stops before it changes anything. The first Salesforce deploy pairs the org with the account (`/cloud-agentic-iot/salesforce/org-id`), so a later one stops if `SF_TARGET_ORG` names another org. Both deploy scripts refuse uncommitted changes and record the commit they shipped under `/cloud-agentic-iot/deployed-commit/` ([DEVELOPMENT.md](DEVELOPMENT.md)). The pipeline never deploys to the project, so no release reaches its boards: firmware goes to them with `scripts/ota.sh try Dev patient-monitor`.
+
+<a id="near-the-limit"></a>
+<a id="what-happens-near-the-limit"></a>
+
+**What happens near the spend limit.**
+
+- As spending nears the limit, AWS denies Lambda invocations, Bedrock calls and new compute in the project. Readings stop flowing, which is the point.
+- At the limit, AWS pauses the project and stops its resources for the rest of that month. Your data is kept. To resume, raise the limit in AWS Settings; some resources may need a manual restart.
+- A paused project left untouched for 90 days is deleted, after reminder emails.
+- The Home page's AWS spend may stop answering, because it runs on Lambda. The card says so, points to AWS Settings, and shows the last spend it read. Its Salesforce half keeps working.
+- Deploy changes that add Lambda functions well before the limit: once AWS stops new resource creation, a stack update that adds a function fails.
+
+<a id="moving-to-the-pipelines"></a>
+
+**Moving to the pipelines.** When you want GitHub Actions to deploy for you, and later a Prod environment, move to regular AWS accounts ([Quick Install Guide, step 14](INSTALL.md#step-14)). Stacks don't move between accounts: the regular account gets new resources, a new IoT endpoint and new certificates, so provision each board again against it. Keep the project for trying changes from your laptop; the pipelines never touch it. If you'd rather not keep it, copy anything you want out of its S3 buckets and DynamoDB table, then delete its `cloud-agentic-iot-*` stacks, or close the project. Its budget can also come from the bootstrap stack without the GitHub role: `GITHUB_OIDC=no BUDGET_USD=20 BUDGET_EMAIL='<your email>' scripts/bootstrap-aws.sh Dev` (not tried in a project yet; if it fails with AccessDenied, use the command in step 6).
+
+Sources:
+
+- [AWS reimagines the getting started experience](https://aws.amazon.com/blogs/aws/aws-reimagines-the-getting-started-experience/): spend limits from $20, pausing, the 90-day deletion
+- [New AWS builder experience (What's New, September 2026)](https://aws.amazon.com/about-aws/whats-new/2026/09/New-AWS-Builder-Experience)
+- [Service and resource control policies for projects](https://docs.aws.amazon.com/accounts/latest/reference/scps-and-rcps-for-projects.html): the identity-provider block, what is denied near the limit, the organization-only trust
+- [Activate advanced features](https://docs.aws.amazon.com/accounts/latest/reference/activate-advanced-features.html): removes spend limits, can't be reversed
+- [Project Regions](https://docs.aws.amazon.com/accounts/latest/reference/project-regions.html)
+- [Connect an AI coding tool](https://docs.aws.amazon.com/accounts/latest/reference/connect-ai-coding-tool.html) and [Login with console credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html): `aws login`, CLI 2.32.0, 12-hour sessions
+
 ## Stage 1 — Push to `Dev`
 
 Push to `Dev` and GitHub Actions deploys **everything at once**: every CloudFormation stack and the real Lambda code, all Salesforce metadata in `force-app/`, and any firmware whose version went up, over the air to the Dev boards. Each step is a script you can run from your laptop as well; [`docs/DEVELOPMENT.md`](DEVELOPMENT.md) walks the whole path from laptop to Dev to Prod.
@@ -172,7 +216,7 @@ Everything below is manual for a structural reason, not an oversight: it stores 
 
 **1. Named Credential `AWS_IoT_Relay`.** This one credential carries every Salesforce → AWS callout in the system: the queue indicator, device provisioning, re-provisioning, teardown, the Wi-Fi credential push, Device Commands, the live status card and the Home page's AWS spend. The device API accepts only requests signed by an AWS identity, so it takes four parts.
 
-*a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in an [AWS project](TRY-IT.md), root in a regular account. In your own terminal, with the `-Prod` stack in Prod and `CALLER` set to `SalesforceCallerUserName` from `config/<env>.json`:
+*a. The IAM user Salesforce holds a key for.* The `queue-relay` stack creates `SalesforceCallerRole`, which may call this API and nothing else. Salesforce reaches it through a user that may only assume that role. The deploy identities may not create users or access keys (`NoBillingNoUsers` in [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json)), so make the user once, by hand, as an identity that may: your `aws login` profile in an [AWS project](#aws-project-or-regular-account), root in a regular account. In your own terminal, with the `-Prod` stack in Prod and `CALLER` set to `SalesforceCallerUserName` from `config/<env>.json`:
 
 ```bash
 STACK=cloud-agentic-iot-queue-relay-Dev
@@ -382,9 +426,11 @@ Expect the WiFi and AWS IoT connection lines, then a `telemetry:` line every 30 
 | Events fire | Platform Event monitoring | `Patient_Vital_Alert__e` on a threshold breach |
 | The loop closes | Assign a Case to the bound queue | The indicator servo starts |
 | The agent acts | The agent's panel in Lightning, as a holder of `Patient_Care_Agent`: ask for a device's latest readings, then escalate | The readings, then a Case with `Origin = Agentforce` in Care_Team_Queue |
-| High temperature Case | Warm the DHT11 above 30 C, for example under an arm (with `RoomTempAlert` on, [TRY-IT.md](TRY-IT.md#warm-the-sensor-get-a-high-temperature-alert)) | A Case `High temperature ... C on <device>` with Origin `Room Temperature Rule` in Care_Team_Queue, no Device Command, and the board sweeping until a reading is below 30 C |
+| High temperature Case | Warm the DHT11 above 30 C, for example under an arm (with `RoomTempAlert` on, [use case scenario 1](TRY-IT.md#scenario-1)) | A Case `High temperature ... C on <device>` with Origin `Room Temperature Rule` in Care_Team_Queue, no Device Command, and the board sweeping until a reading is below 30 C |
 | Temperature alert motor | Warm the DHT11 to 30 C on a monitored device | The board's servo sweeps back and forth within about 5 s, decided on the board with no Case, and stops at the first reading below 30 C |
 | Slack is headless | `/patient-status <device-id>` | A reply, with nobody logged into Salesforce |
+
+Every feature, one real situation at a time: [After install: use case scenarios](TRY-IT.md).
 
 The Asset's Connection field, its Live Status card and **Send Command** need a device provisioned from Salesforce (chapter 13), whose Asset carries its Thing ARN. On an Asset made by hand in Stage 3, Connection stays *Not reported yet*, the card says the device has no AWS IoT Thing, and a command fails as not provisioned. The by-hand publish works either way.
 

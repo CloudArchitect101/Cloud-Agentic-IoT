@@ -124,7 +124,7 @@ Grouped by what you came to do, after the [Diátaxis](https://diataxis.fr/) fram
 | Learn by doing | Get a task done |
 |---|---|
 | [Quick Install Guide](docs/INSTALL.md): every feature, step by step | [Detailed Install Guide](docs/INSTALL-GUIDE.md): every step, explained |
-| [Try it](docs/TRY-IT.md): your own project and org, then each demo (warm the sensor, the saga, Slack) | [Setup](docs/SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
+| [Use case scenarios](docs/TRY-IT.md): after install, test every feature as one real situation each, by who you act as | [Setup](docs/SETUP.md): accounts, identities, licences, Connected Apps, GitHub secrets |
 | [Platform primer](docs/PLATFORM-PRIMER.md): Apex, SOQL and LWC through their Python equivalents | [Development](docs/DEVELOPMENT.md): laptop to Dev to Prod |
 | | [Migration runbook](docs/MIGRATION-RUNBOOK.md): phased cutover with a rollback per phase |
 | | [Troubleshooting](docs/TROUBLESHOOTING.md): what broke, why, and the fix |
