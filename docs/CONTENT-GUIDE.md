@@ -25,7 +25,7 @@ The author (and much of the audience) is a **strong generalist who is junior on 
 5. **CTA** (1 sentence): "Check the repo for full implementation"
 
 ### Template
-```markdown
+````markdown
 # [Topic Title]
 
 [Hook: A compelling opening about the healthcare AI challenge]
@@ -46,7 +46,7 @@ My solution: [describe approach]
 [CTA: Link to the repo]
 
 #Salesforce #Agentforce #DataCloud #AI #Healthcare #AgenticData
-```
+````
 
 ## Blog Posts
 
@@ -63,7 +63,7 @@ My solution: [describe approach]
 6. **References**: Links to docs and code
 
 ### Template
-```markdown
+````markdown
 # [Topic Title]: A Deep Dive
 
 ## Introduction
@@ -98,7 +98,7 @@ graph TB
 - [Link to the repo]
 - [Link to architecture diagram]
 - [Related articles]
-```
+````
 
 ## Video Scripts
 

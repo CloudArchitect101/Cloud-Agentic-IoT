@@ -350,7 +350,7 @@ The script could not read your Region when the Region here is `us-east-1` and yo
 
 **c. Check the named credential.** **Named Credentials** → `AWS_IoT_Relay`: the URL is the named credential URL that step 6 printed, the external credential is the one from b, and **Enabled for Callouts** and **Generate Authorization Header** are both on. If the URL reads `https://dummy-replace-me.example.com`, the script could not read the real one from your stack: replace it.
 
-<details>
+<details markdown="1">
 <summary>By hand instead (step 6 said it could not create the credential, or you ran it with <code>SKIP_BOOTSTRAP=yes</code>)</summary>
 
 Either run the one-time script yourself, as an admin of the org:
@@ -419,16 +419,16 @@ If a callout fails with `HTTP 0` or `403`, the [Install guide, Stage 2](INSTALL-
 2. In Salesforce: Setup → Quick Find **Slack** → **Manage Slack Connection** → approve. Back in Slack's **Manage Salesforce Organizations**, open the pending connection → **Activate**.
 3. Same page → the org → **Users** → **Add Individually**: each Slack member who may use the agent. Each needs one Salesforce user with the same email, and two permission sets:
 
-**Fill in first:**
-- `MEMBER='<username>'`: that member's Salesforce username (Setup → **Users**, the **Username** column). Example: `MEMBER='nurse.lee@iot-dev.jsmith.com'`.
+   **Fill in first:**
+   - `MEMBER='<username>'`: that member's Salesforce username (Setup → **Users**, the **Username** column). Example: `MEMBER='nurse.lee@iot-dev.jsmith.com'`.
 
-**Paste into your terminal.** Once per Slack member. It gives that member the two permission sets the agent in Slack needs.
+   **Paste into your terminal.** Once per Slack member. It gives that member the two permission sets the agent in Slack needs.
 
-```bash
-MEMBER='<username>'
-sf org assign permset --name SlackSalesCloud --on-behalf-of "$MEMBER" --target-org "$NAME"
-sf org assign permset --name Patient_Care_Agent --on-behalf-of "$MEMBER" --target-org "$NAME"
-```
+   ```bash
+   MEMBER='<username>'
+   sf org assign permset --name SlackSalesCloud --on-behalf-of "$MEMBER" --target-org "$NAME"
+   sf org assign permset --name Patient_Care_Agent --on-behalf-of "$MEMBER" --target-org "$NAME"
+   ```
 
 4. Slack **Admin** → **Manage Agentforce** → **Review agent** → **Install Agent**. Quit and reopen Slack.
 5. DM the agent: "What is Test8 reading?"
@@ -446,11 +446,11 @@ Needs Data Cloud (Data 360) in the org, and you as an admin with **Data Cloud Ar
 
 1. **Its key**, typed into the connection in step 2 and nowhere else.
 
-**Paste into your terminal.** Once per AWS account. It prints the reader user's access key and secret once: keep the tab open until step 2 has them.
+   **Paste into your terminal.** Once per AWS account. It prints the reader user's access key and secret once: keep the tab open until step 2 has them.
 
-```bash
-aws iam create-access-key --user-name cloud-agentic-iot-data-cloud-reader
-```
+   ```bash
+   aws iam create-access-key --user-name cloud-agentic-iot-data-cloud-reader
+   ```
 
    **What this user may do.** Nothing of its own: it has no IAM policy. The archive bucket's policy (`ArchiveBucketPolicy` in [`lambda/patient-vitals/cloudformation.yaml`](../lambda/patient-vitals/cloudformation.yaml)) gives it three permissions, and only when `DATA_CLOUD_READER_USER` named it:
 
@@ -465,16 +465,16 @@ aws iam create-access-key --user-name cloud-agentic-iot-data-cloud-reader
 2. **Connection.** Data Cloud Setup → **Other Connectors** → **New** → **Amazon S3**: Name `Room Readings S3`, **Bucket Name** = the Data Cloud bucket step 6 printed, **Parent Directory** `datacloud/room-readings/`, **Access Key/Secret Based** with the key from 1. **Test Connection** → **Save**.
 3. **Data stream.** Data Streams → **New** → **Amazon S3** → `Room Readings S3`:
 
-| Setting | Value |
-|---|---|
-| File Type / File Name | CSV, `room-readings-*.csv` (Import from Directory empty) |
-| Source | `AWS_IoT`. Letters, digits and single underscores only: no spaces, starts with a letter, no `__`, no `_` at the end, unique in the org |
-| Data lake object | New, `Room_Readings`. `reading_ts` and `received_ts` DateTime, `temperature_c` and `humidity_pct` Number, the rest Text |
-| Date format of `reading_ts` and `received_ts` | Not in the list: choose the manual (custom) format and type `yyyy-MM-dd'T'HH:mm:ss.SSSXXX`. The CSV writes them as `2026-11-19T18:00:00.123Z` (UTC, milliseconds, a literal `Z`) |
-| Category / primary key / event time | Engagement, `reading_id`, `reading_ts` |
-| Refresh | **Upsert**, the most frequent schedule |
+   | Setting | Value |
+   |---|---|
+   | File Type / File Name | CSV, `room-readings-*.csv` (Import from Directory empty) |
+   | Source | `AWS_IoT`. Letters, digits and single underscores only: no spaces, starts with a letter, no `__`, no `_` at the end, unique in the org |
+   | Data lake object | New, `Room_Readings`. `reading_ts` and `received_ts` DateTime, `temperature_c` and `humidity_pct` Number, the rest Text |
+   | Date format of `reading_ts` and `received_ts` | Not in the list: choose the manual (custom) format and type `yyyy-MM-dd'T'HH:mm:ss.SSSXXX`. The CSV writes them as `2026-11-19T18:00:00.123Z` (UTC, milliseconds, a literal `Z`) |
+   | Category / primary key / event time | Engagement, `reading_id`, `reading_ts` |
+   | Refresh | **Upsert**, the most frequent schedule |
 
-**Deploy**, then **Refresh Now**.
+   **Deploy**, then **Refresh Now**.
 
 4. **Mapping.** On the stream, **Start** the mapping → **New Custom Object** `Room_Readings`, every field under the same name, `reading_id` as primary key → Save.
 5. **Calculated insights**, once `Room_Readings__dlm` has rows (a board must have sent readings):
@@ -503,62 +503,62 @@ The deploy brought the site, the React app, the Apex, the agent's actions and th
 2. **User verification.** Setup → **Enhanced Chat User Verification** → **JSON Web Keys** → **New Key**: upload `patient-portal-chat-key.json` (5e). Then **JSON Web Keysets** → **New Keyset**: name `Patient_Portal_Keyset`, issuer `cloud-agentic-iot-patient-portal`, add the key. In **Messaging Settings**, open the channel: tick **Add User Verification**, save, then **User Verification Configuration** → **New** → `Patient_Portal_Keyset`.
 3. **The agent user.** Setup → **Users** → **New User**: licence **Einstein Agent**, profile **Einstein Agent User**. Then:
 
-**Fill in first:**
-- `AGENT_USER='<agent username>'`: the username of the Einstein Agent user you just made. Example: `AGENT_USER='portal-agent@iot-dev.jsmith.com'`. To look it up, paste this into your terminal:
+   **Fill in first:**
+   - `AGENT_USER='<agent username>'`: the username of the Einstein Agent user you just made. Example: `AGENT_USER='portal-agent@iot-dev.jsmith.com'`. To look it up, paste this into your terminal:
 
-  ```bash
-  sf data query --target-org "$NAME" \
-    --query "SELECT Username FROM User WHERE Profile.Name = 'Einstein Agent User' AND IsActive = true"
-  ```
+     ```bash
+     sf data query --target-org "$NAME" \
+       --query "SELECT Username FROM User WHERE Profile.Name = 'Einstein Agent User' AND IsActive = true"
+     ```
 
-**Paste into your terminal.** Once per org. It gives the agent user its four permission sets, publishes and activates the portal's agent, then deploys the chat's routing flow. It takes a few minutes.
+   **Paste into your terminal.** Once per org. It gives the agent user its four permission sets, publishes and activates the portal's agent, then deploys the chat's routing flow. It takes a few minutes.
 
-```bash
-AGENT_USER='<agent username>'
-sf org assign permset --name AgentforceServiceAgentBase --on-behalf-of "$AGENT_USER" --target-org "$NAME"
-sf org assign permset --name AgentforceServiceAgentUser --on-behalf-of "$AGENT_USER" --target-org "$NAME"
-sf org assign permset --name EinsteinGPTPromptTemplateUser --on-behalf-of "$AGENT_USER" --target-org "$NAME"
-sf org assign permset --name Patient_Portal_Agent --on-behalf-of "$AGENT_USER" --target-org "$NAME"
-PORTAL_AGENT_USER="$AGENT_USER" scripts/publish-portal-agent.sh "$NAME"
-sf agent activate --api-name Patient_Portal_Agent --target-org "$NAME"
-scripts/deploy-portal-routing.sh "$NAME"
-```
+   ```bash
+   AGENT_USER='<agent username>'
+   sf org assign permset --name AgentforceServiceAgentBase --on-behalf-of "$AGENT_USER" --target-org "$NAME"
+   sf org assign permset --name AgentforceServiceAgentUser --on-behalf-of "$AGENT_USER" --target-org "$NAME"
+   sf org assign permset --name EinsteinGPTPromptTemplateUser --on-behalf-of "$AGENT_USER" --target-org "$NAME"
+   sf org assign permset --name Patient_Portal_Agent --on-behalf-of "$AGENT_USER" --target-org "$NAME"
+   PORTAL_AGENT_USER="$AGENT_USER" scripts/publish-portal-agent.sh "$NAME"
+   sf agent activate --api-name Patient_Portal_Agent --target-org "$NAME"
+   scripts/deploy-portal-routing.sh "$NAME"
+   ```
 
-A permission set the user already holds prints a warning: that's fine, carry on.
+   A permission set the user already holds prints a warning: that's fine, carry on.
 
 4. **Routing.** **Messaging Settings** → the channel → Routing Type **Omni-Flow**, Flow `Route_Patient_Portal_Chat`, Fallback Queue **Care Team Queue**.
 5. **The site's chat link.** From the deployment's code snippet, copy the site URL (it holds `ESW`).
 
-**Fill in first:**
-- `CHAT_SITE_URL='<the site URL>'`: the URL you just copied. Example: `CHAT_SITE_URL='https://yourdomain.my.site.com/ESWPatientPortalChat1700000000000'`. It is not a secret.
+   **Fill in first:**
+   - `CHAT_SITE_URL='<the site URL>'`: the URL you just copied. Example: `CHAT_SITE_URL='https://yourdomain.my.site.com/ESWPatientPortalChat1700000000000'`. It is not a secret.
 
-**Paste into your terminal.** Once per org. It stores the URL in the org's `Patient_Portal_Setting.Default` record and touches no other setting. Nothing to commit, and later deploys keep it, because the repo's copy of the record does not name this field.
+   **Paste into your terminal.** Once per org. It stores the URL in the org's `Patient_Portal_Setting.Default` record and touches no other setting. Nothing to commit, and later deploys keep it, because the repo's copy of the record does not name this field.
 
-```bash
-CHAT_SITE_URL='<the site URL>'
-scripts/set-portal-chat-url.sh "$NAME" "$CHAT_SITE_URL"
-```
+   ```bash
+   CHAT_SITE_URL='<the site URL>'
+   scripts/set-portal-chat-url.sh "$NAME" "$CHAT_SITE_URL"
+   ```
 
 6. **CORS.** Setup → **CORS** → **New**: `https://<your My Domain>.my.site.com`. Publish the Embedded Service deployment again.
 7. **Guest user.** The site → **Administration** → **Pages** → **Public Access**: assign `Patient_Portal_Guest_Api`.
 8. **Patients.** Setup → **Users** → your user → **Edit** → Role **Care Team Administrator**. Then for each patient's Person Account: **Enable Customer User** (profile Customer Community User, its own plus-address email), and:
 
-**Fill in first:**
-- `PATIENT_USER='<patient username>'`: the username Salesforce gave the patient's Customer Community user. Example: `PATIENT_USER='you+patient-a@example.com'`. To look it up, paste this into your terminal:
+   **Fill in first:**
+   - `PATIENT_USER='<patient username>'`: the username Salesforce gave the patient's Customer Community user. Example: `PATIENT_USER='you+patient-a@example.com'`. To look it up, paste this into your terminal:
 
-  ```bash
-  sf data query --target-org "$NAME" \
-    --query "SELECT Username, Contact.Name FROM User WHERE Profile.Name = 'Customer Community User' AND IsActive = true"
-  ```
+     ```bash
+     sf data query --target-org "$NAME" \
+       --query "SELECT Username, Contact.Name FROM User WHERE Profile.Name = 'Customer Community User' AND IsActive = true"
+     ```
 
-**Paste into your terminal.** Once per patient. It lets that patient use the portal.
+   **Paste into your terminal.** Once per patient. It lets that patient use the portal.
 
-```bash
-PATIENT_USER='<patient username>'
-sf org assign permset --name Patient_Portal_User --on-behalf-of "$PATIENT_USER" --target-org "$NAME"
-```
+   ```bash
+   PATIENT_USER='<patient username>'
+   sf org assign permset --name Patient_Portal_User --on-behalf-of "$PATIENT_USER" --target-org "$NAME"
+   ```
 
-Put the patient's device on that account: its Asset's Account = the Person Account, record type **Patient Device**.
+   Put the patient's device on that account: its Asset's Account = the Person Account, record type **Patient Device**.
 
 9. **Try it.** Sign in as the patient, ask the assistant "what is my temperature?", then "I need a nurse": a Case appears on Care_Team_Queue.
 
@@ -601,12 +601,12 @@ claude mcp add smart-ward -- uvx mcp-proxy-for-aws-cli@latest "$MCP_URL" \
 2. **Add the actions.** Agentforce Builder → **Patient Care Agent** → subagent **ESP32 Hardware Questions** → add the five actions → **Commit** → **Activate**. Repeat in **Patient Portal Agent**, subagent **ESP32 Hardware**.
 3. **Save them to the repo.**
 
-**Paste into your terminal.** Once, after 2.
+   **Paste into your terminal.** Once, after 2.
 
-```bash
-sf project retrieve start --metadata AiAuthoringBundle:Patient_Care_Agent --target-org "$NAME"
-sf project retrieve start --metadata AiAuthoringBundle:Patient_Portal_Agent --target-org "$NAME"
-```
+   ```bash
+   sf project retrieve start --metadata AiAuthoringBundle:Patient_Care_Agent --target-org "$NAME"
+   sf project retrieve start --metadata AiAuthoringBundle:Patient_Portal_Agent --target-org "$NAME"
+   ```
 
 4. **Try it** in the agent panel, Slack or the portal: "What is the spec of the ESP32-S3-DevKitC-1?" The answer ends with a docs.espressif.com link. If it shows `URL_Redacted`, check Setup → **Trusted URLs** lists `docs.espressif.com` and `www.espressif.com` (step 6 deploys both).
 
@@ -700,132 +700,132 @@ Do 1 to 5 for `Dev`, then again for `Prod` with the Prod account and org (replac
 1. **The AWS account, as root.** Create a regular AWS account and turn on MFA for root. IAM → **Policies** → **Create policy** → JSON: paste [`scripts/aws-project-policy.json`](../scripts/aws-project-policy.json), name `cloud-agentic-iot-operator`. IAM → **Users** → **Create user** `iot-operator`, attach that policy, MFA on, then **Security credentials** → **Create access key** (CLI). Then do the Bedrock check from step 2 in this account too, and open its Support case at once if it is held.
 2. **The deploy role and the budget.** `bootstrap-aws.sh` creates the OIDC provider, the `github-actions-deploy` role and the `cloud-agentic-iot-monthly` budget, and offers to store the role's ARN as `AWS_ROLE_ARN`:
 
-**Fill in first:**
-- `aws configure` asks for `iot-operator`'s access key ID and secret (from 1). Type them at its prompts, Region `ca-central-1`, output `json`.
-- `BUDGET_USD='20'`: the monthly amount to watch, in US dollars. Example: `BUDGET_USD='50'`.
-- `BUDGET_EMAIL='<your email>'`: where the budget alerts go. Example: `BUDGET_EMAIL='you@example.com'`.
-- For Prod, use `iot-prod` instead of `iot-dev` and `Prod` instead of `Dev`.
+   **Fill in first:**
+   - `aws configure` asks for `iot-operator`'s access key ID and secret (from 1). Type them at its prompts, Region `ca-central-1`, output `json`.
+   - `BUDGET_USD='20'`: the monthly amount to watch, in US dollars. Example: `BUDGET_USD='50'`.
+   - `BUDGET_EMAIL='<your email>'`: where the budget alerts go. Example: `BUDGET_EMAIL='you@example.com'`.
+   - For Prod, use `iot-prod` instead of `iot-dev` and `Prod` instead of `Dev`.
 
-**Paste into your terminal.** Once per AWS account. `aws configure` and `gh auth login` ask questions; answer them, then the script makes the deploy role and the budget.
+   **Paste into your terminal.** Once per AWS account. `aws configure` and `gh auth login` ask questions; answer them, then the script makes the deploy role and the budget.
 
-```bash
-BUDGET_USD='20'
-BUDGET_EMAIL='<your email>'
-aws configure --profile iot-dev
-export AWS_PROFILE=iot-dev
-gh auth login
-BUDGET_USD="$BUDGET_USD" BUDGET_EMAIL="$BUDGET_EMAIL" scripts/bootstrap-aws.sh Dev
-```
+   ```bash
+   BUDGET_USD='20'
+   BUDGET_EMAIL='<your email>'
+   aws configure --profile iot-dev
+   export AWS_PROFILE=iot-dev
+   gh auth login
+   BUDGET_USD="$BUDGET_USD" BUDGET_EMAIL="$BUDGET_EMAIL" scripts/bootstrap-aws.sh Dev
+   ```
 
 3. **The org's two service users and apps.** In the environment's org, do steps 3 and 5a to 5c as before (the integration user and app). Then add the deploy user the pipeline signs in as:
 
-**Paste into your terminal.** Once per environment's org. It signs you in to that org as `iot-dev-admin`, makes the deploy certificate in `scripts/`, and deploys the `Metadata_Deploy` permission set.
+   **Paste into your terminal.** Once per environment's org. It signs you in to that org as `iot-dev-admin`, makes the deploy certificate in `scripts/`, and deploys the `Metadata_Deploy` permission set.
 
-```bash
-sf org login web --alias iot-dev-admin
-export SF_TARGET_ORG=iot-dev-admin
-openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
-  -keyout scripts/server-deploy.key -out scripts/server-deploy.crt \
-  -subj "/CN=CloudAgenticIoT-Deploy/O=Personal/C=CA"
-sf project deploy start --source-dir scripts/Metadata_Deploy.permissionset-meta.xml --target-org iot-dev-admin
-```
+   ```bash
+   sf org login web --alias iot-dev-admin
+   export SF_TARGET_ORG=iot-dev-admin
+   openssl req -x509 -sha256 -nodes -days 3650 -newkey rsa:2048 \
+     -keyout scripts/server-deploy.key -out scripts/server-deploy.crt \
+     -subj "/CN=CloudAgenticIoT-Deploy/O=Personal/C=CA"
+   sf project deploy start --source-dir scripts/Metadata_Deploy.permissionset-meta.xml --target-org iot-dev-admin
+   ```
 
    Setup → **Users** → **New User**: Last name `Deploy`, its own plus-address email, Username `deploy@iot-dev.<yourdomain>`, licence **Salesforce**, profile **System Administrator**. Then give it the permission set:
 
-**Fill in first:**
-- `DEPLOY_USER='<deploy username>'`: the username you just gave it. Example: `DEPLOY_USER='deploy@iot-dev.jsmith.com'`.
+   **Fill in first:**
+   - `DEPLOY_USER='<deploy username>'`: the username you just gave it. Example: `DEPLOY_USER='deploy@iot-dev.jsmith.com'`.
 
-**Paste into your terminal.** Once per environment's org.
+   **Paste into your terminal.** Once per environment's org.
 
-```bash
-DEPLOY_USER='<deploy username>'
-sf org assign permset --name Metadata_Deploy --on-behalf-of "$DEPLOY_USER" --target-org iot-dev-admin
-```
+   ```bash
+   DEPLOY_USER='<deploy username>'
+   sf org assign permset --name Metadata_Deploy --on-behalf-of "$DEPLOY_USER" --target-org iot-dev-admin
+   ```
 
    Create a second External Client App, `Cloud Agentic IoT Deploy`, as in 5c with `scripts/server-deploy.crt`, and set its policy: **Admin approved users are pre-authorized**, permission set `Metadata_Deploy`. Copy its **Consumer Key**.
 
 4. **GitHub secrets and variables.** The script creates the environment, limits it to its branch, makes you Prod's reviewer, and asks for each value below, hiding secrets and base64-encoding the key files itself:
 
-**Paste into your terminal.** Once per environment. It asks which environment (choose `Dev`) and each value below; answer `n` to `AUTO_DEPLOY` for now.
+   **Paste into your terminal.** Once per environment. It asks which environment (choose `Dev`) and each value below; answer `n` to `AUTO_DEPLOY` for now.
 
-```bash
-./scripts/setup-github-secrets.sh
-```
+   ```bash
+   ./scripts/setup-github-secrets.sh
+   ```
 
    Every value, per environment (Settings → **Environments** → `Dev` or `Prod`):
 
-| Name | Kind | Value, and where it comes from | Set by the script? |
-|---|---|---|---|
-| `AWS_ROLE_ARN` | Secret | `DeployRoleArn` of the bootstrap stack (2) | Yes, read from the stack |
-| `AWS_REGION` | Variable | `ca-central-1` | Yes |
-| `ALARM_EMAIL` | Variable | Optional: who the CloudWatch alarms email | Yes, Enter skips |
-| `SF_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Deploy` (3) | Yes |
-| `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` (3) | Yes |
-| `SF_JWT_KEY` | Secret | `scripts/server-deploy.key`, base64-encoded (3) | Yes, from the file |
-| `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` | Yes |
-| `SF_INTEGRATION_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Integration` (5c) | Yes |
-| `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` (5b) | Yes |
-| `SF_INTEGRATION_JWT_KEY` | Secret | `scripts/server-integration.key`, base64-encoded (5a) | Yes, from the file |
-| `SLACK_SIGNING_SECRET` | Secret | Optional: the Slack app's signing secret (5d). Without it the Slack stack is skipped | Yes, Enter skips |
-| `DATA_CLOUD_OIDC_PROVIDER_ARN` | Variable | Optional, for Data Cloud: the provider ARN from the commands below | **No, by hand** |
-| `DATA_CLOUD_EXTERNAL_ID` | Variable | Optional, for Data Cloud: the connection's External ID (9, step 2, with **Identity Provider (IdP) Based**) | **No, by hand** |
+   | Name | Kind | Value, and where it comes from | Set by the script? |
+   |---|---|---|---|
+   | `AWS_ROLE_ARN` | Secret | `DeployRoleArn` of the bootstrap stack (2) | Yes, read from the stack |
+   | `AWS_REGION` | Variable | `ca-central-1` | Yes |
+   | `ALARM_EMAIL` | Variable | Optional: who the CloudWatch alarms email | Yes, Enter skips |
+   | `SF_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Deploy` (3) | Yes |
+   | `SF_USERNAME` | Secret | `deploy@iot-dev.<yourdomain>` (3) | Yes |
+   | `SF_JWT_KEY` | Secret | `scripts/server-deploy.key`, base64-encoded (3) | Yes, from the file |
+   | `SF_LOGIN_URL` | Variable | `https://login.salesforce.com` | Yes |
+   | `SF_INTEGRATION_CONSUMER_KEY` | Secret | Consumer key of `Cloud Agentic IoT Integration` (5c) | Yes |
+   | `SF_INTEGRATION_USERNAME` | Secret | `integration@iot-dev.<yourdomain>` (5b) | Yes |
+   | `SF_INTEGRATION_JWT_KEY` | Secret | `scripts/server-integration.key`, base64-encoded (5a) | Yes, from the file |
+   | `SLACK_SIGNING_SECRET` | Secret | Optional: the Slack app's signing secret (5d). Without it the Slack stack is skipped | Yes, Enter skips |
+   | `DATA_CLOUD_OIDC_PROVIDER_ARN` | Variable | Optional, for Data Cloud: the provider ARN from the commands below | **No, by hand** |
+   | `DATA_CLOUD_EXTERNAL_ID` | Variable | Optional, for Data Cloud: the connection's External ID (9, step 2, with **Identity Provider (IdP) Based**) | **No, by hand** |
 
    And on the repository (Settings → **Secrets and variables** → **Actions** → **Variables**):
 
-| Name | Kind | Value | Set by the script? |
-|---|---|---|---|
-| `AUTO_DEPLOY` | Variable | `Dev`, later `Dev Prod`: which branches deploy on a push | Yes, when you answer `y` |
-| `EVAL_DEVICE`, `EVAL_OTHER_DEVICE`, `EVAL_PATIENT_USERNAME` | Variable | Optional, for the **Agent evals** workflow: a test patient's board (`Test8`), another board (`Test7`), the test patient's username | **No, by hand** |
+   | Name | Kind | Value | Set by the script? |
+   |---|---|---|---|
+   | `AUTO_DEPLOY` | Variable | `Dev`, later `Dev Prod`: which branches deploy on a push | Yes, when you answer `y` |
+   | `EVAL_DEVICE`, `EVAL_OTHER_DEVICE`, `EVAL_PATIENT_USERNAME` | Variable | Optional, for the **Agent evals** workflow: a test patient's board (`Test8`), another board (`Test7`), the test patient's username | **No, by hand** |
 
    To set or change any one value by hand, type it at the prompt, never on the command line.
 
-**Paste into your terminal.** Only the line you need, any time. Each line sets one value.
+   **Paste into your terminal.** Only the line you need, any time. Each line sets one value.
 
-```bash
-gh secret set SF_CONSUMER_KEY --env Dev                               # asks for the value, hidden
-base64 < scripts/server-deploy.key | gh secret set SF_JWT_KEY --env Dev
-gh variable set AWS_REGION --env Dev --body ca-central-1
-gh variable set EVAL_DEVICE --body Test8                              # a repository variable: no --env
-```
+   ```bash
+   gh secret set SF_CONSUMER_KEY --env Dev                               # asks for the value, hidden
+   base64 < scripts/server-deploy.key | gh secret set SF_JWT_KEY --env Dev
+   gh variable set AWS_REGION --env Dev --body ca-central-1
+   gh variable set EVAL_DEVICE --body Test8                              # a repository variable: no --env
+   ```
 
    Data Cloud in a regular account reads the bucket through the org's identity provider, with no key. As an AWS admin, with your My Domain (no `https://`) and the External ID:
 
-**Fill in first:**
-- `MY_DOMAIN='<your My Domain>'`: from Setup → **My Domain**, without `https://`. Example: `MY_DOMAIN='jsmith-dev-ed.develop.my.salesforce.com'`.
-- `EXTERNAL_ID='<External ID>'`: the External ID the Data Cloud connection showed (9, step 2).
-- For Prod, use `--env Prod`.
+   **Fill in first:**
+   - `MY_DOMAIN='<your My Domain>'`: from Setup → **My Domain**, without `https://`. Example: `MY_DOMAIN='jsmith-dev-ed.develop.my.salesforce.com'`.
+   - `EXTERNAL_ID='<External ID>'`: the External ID the Data Cloud connection showed (9, step 2).
+   - For Prod, use `--env Prod`.
 
-**Paste into your terminal.** Once per AWS account. It registers the org as an identity provider in AWS and stores both values for the pipeline.
+   **Paste into your terminal.** Once per AWS account. It registers the org as an identity provider in AWS and stores both values for the pipeline.
 
-```bash
-MY_DOMAIN='<your My Domain>'
-EXTERNAL_ID='<External ID>'
-aws iam create-open-id-connect-provider \
-  --url "https://$MY_DOMAIN/services/connectors" --client-id-list "https://$MY_DOMAIN"
-gh variable set DATA_CLOUD_OIDC_PROVIDER_ARN --env Dev \
-  --body "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):oidc-provider/$MY_DOMAIN/services/connectors"
-gh variable set DATA_CLOUD_EXTERNAL_ID --env Dev --body "$EXTERNAL_ID"
-```
+   ```bash
+   MY_DOMAIN='<your My Domain>'
+   EXTERNAL_ID='<External ID>'
+   aws iam create-open-id-connect-provider \
+     --url "https://$MY_DOMAIN/services/connectors" --client-id-list "https://$MY_DOMAIN"
+   gh variable set DATA_CLOUD_OIDC_PROVIDER_ARN --env Dev \
+     --body "arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):oidc-provider/$MY_DOMAIN/services/connectors"
+   gh variable set DATA_CLOUD_EXTERNAL_ID --env Dev --body "$EXTERNAL_ID"
+   ```
 
    After the next deploy, paste the patient-vitals stack's `DataCloudReaderRoleArn` output into the connection's **IAM Role Name**.
 
 5. **First run.** Actions → **Deploy** → **Run workflow** → branch `Dev` → part `everything`. When it's green: set the integration app's policy (step 6), then steps 7 to 13 against this org and account. Then switch pushes on.
 
-**Paste into your terminal.** Once. From now on a push to `Dev` deploys Dev.
+   **Paste into your terminal.** Once. From now on a push to `Dev` deploys Dev.
 
-```bash
-gh variable set AUTO_DEPLOY --body "Dev"
-```
+   ```bash
+   gh variable set AUTO_DEPLOY --body "Dev"
+   ```
 
 6. **Prod.** Once Dev's first deploy is green, create the branch and repeat 1 to 5 with `Prod`, the Prod account (`iot-prod`) and the Prod org (`iot-prod-admin`, `deploy@iot-prod.<yourdomain>`):
 
-**Paste into your terminal.** Once. It creates the `Prod` branch from `Dev`, asks for Prod's values (choose `Prod`), then lets pushes deploy Prod too.
+   **Paste into your terminal.** Once. It creates the `Prod` branch from `Dev`, asks for Prod's values (choose `Prod`), then lets pushes deploy Prod too.
 
-```bash
-git switch Dev && git pull && git switch -c Prod && git push -u origin Prod
-./scripts/setup-github-secrets.sh
-gh variable set AUTO_DEPLOY --body "Dev Prod"
-```
+   ```bash
+   git switch Dev && git pull && git switch -c Prod && git push -u origin Prod
+   ./scripts/setup-github-secrets.sh
+   gh variable set AUTO_DEPLOY --body "Dev Prod"
+   ```
 
    From then on, a pull request from `Dev` into `Prod` deploys Prod after you approve the run in the Actions tab.
 
