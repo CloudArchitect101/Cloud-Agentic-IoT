@@ -144,7 +144,24 @@ day plus 200 patient questions a month is about 3,500 questions a year, or
 Foundations includes. In test-cloudarchitect101 it uses the Developer
 Edition's allowance.
 
-## Sources (checked 2026-07; §7 on 2026-11-09, §8 on 2026-11-19)
+## 9. Device history for the staff agent (Get Device History)
+
+The Patient Care Agent's history action ([DATA-CLOUD.md, How the agent reads it](DATA-CLOUD.md#how-the-agent-reads-it))
+adds no AWS cost and no fixed fee. Each answer is one agent action, 20 Flex
+Credits (about $0.10), plus Data Cloud query credits for at most about 2,900
+raw rows and 30 daily rows; read the real figure off the org's consumption
+page after the first week.
+
+| Scenario | History questions a month | Flex Credits | About (USD) |
+| --- | --- | --- | --- |
+| Test org or pilot: 2 nurses, 5 a day, 22 days | 220 | 4,400 | $22, inside the 200k Foundations credits a year |
+| Production: 10 nurses, 10 a day, 22 days | 2,200 | 44,000 | $220 |
+
+The cost follows questions asked, not devices or readings. Embedding every
+reading for a search index instead would grow with the fleet: 2,880 rows a
+device a day, about 8.6 million a month for 100 devices.
+
+## Sources (checked 2026-07; §7 on 2026-11-09, §8 on 2026-11-19, §9 on 2026-11-27)
 
 - [Agentforce flexible pricing (Salesforce)](https://www.salesforce.com/news/press-releases/2025/05/15/agentforce-flexible-pricing-news/), [Flex credits guide](https://www.jitendrazaa.com/blog/salesforce/salesforce-agentforce-credits-cost-model-complete-guide-2026/), [2026 tiers](https://ekfrazo.com/resources/blogs/salesforce-agentforce-pricing-2026/)
 - [Data Cloud pricing changes (Salesforce Ben)](https://www.salesforceben.com/new-pricing-for-salesforce-data-cloud-is-here-what-you-need-to-know/), [credit consumption](https://davidpalencia.com/salesforce-data-cloud-pricing-credit-consumption/)

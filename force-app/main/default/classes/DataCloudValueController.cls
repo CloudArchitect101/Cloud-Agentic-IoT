@@ -34,12 +34,49 @@ public with sharing class DataCloudValueController {
             ConnectApi.CdpQueryInput input = new ConnectApi.CdpQueryInput();
             input.sql = sql;
             ConnectApi.CdpQueryOutput output = ConnectApi.CdpQuery.queryAnsiSql(input);
-            if (output == null) return new List<Map<String, Object>>();
-            // Through JSON on purpose: the output's row and column classes
-            // differ between API versions (CdpQueryMetadataItem has no
-            // placeInOrder in Apex), but their JSON shape is the REST API's.
-            return fromJson(JSON.serialize(output));
+            if (output == null || output.data == null) return new List<Map<String, Object>>();
+            // Rows are read straight from output.data, a map of column to
+            // value each. Not through JSON: in a real org JSON.serialize of
+            // the output throws "Attempt to de-reference a null object", and
+            // of output.data "Type unsupported in JSON: LinkedTreeMap", so a
+            // round trip answered every query, even COUNT(*), with no rows
+            // (Nov 27, docs/TROUBLESHOOTING.md).
+            return copyRows(output.data);
         }
+    }
+
+    /**
+     * Each row as a plain Map of column to value, through JSON one row at a
+     * time. A row that is not a map is skipped; a value that is not a primitive becomes its text, so no
+     * platform map type travels further than this.
+     */
+    @TestVisible
+    private static List<Map<String, Object>> copyRows(List<Object> data) {
+        List<Map<String, Object>> rows = new List<Map<String, Object>>();
+        for (Object row : data == null ? new List<Object>() : data) {
+            if (row == null || !(row instanceof Map<String, Object>)) continue;
+            // A real org hands back its own internal map: instanceof Map is
+            // true, but get(), keySet() and new Map(row) all fail inside the
+            // platform ("Made lookup for method that does not exist ...
+            // Map.keySet()"). One row serializes cleanly, though, and comes
+            // back as a real Apex map (Nov 27, test-cloudarchitect101).
+            Map<String, Object> source;
+            try {
+                source = (Map<String, Object>) JSON.deserializeUntyped(JSON.serialize(row));
+            } catch (Exception e) {
+                continue;
+            }
+            Map<String, Object> copy = new Map<String, Object>();
+            for (String column : source.keySet()) {
+                Object value = source.get(column);
+                copy.put(column, value == null || value instanceof String || value instanceof Decimal
+                    || value instanceof Integer || value instanceof Long || value instanceof Double
+                    || value instanceof Boolean || value instanceof Datetime || value instanceof Date
+                    ? value : String.valueOf(value));
+            }
+            rows.add(copy);
+        }
+        return rows;
     }
 
     /*
@@ -143,11 +180,14 @@ public with sharing class DataCloudValueController {
     // Times as ISO 8601 text in UTC, numbers and text as they are.
     @TestVisible
     private static Object plain(Object value) {
-        if (value instanceof Datetime) {
-            return ((Datetime) value).formatGmt('yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z\'');
-        }
+        // A Date is also instanceof Datetime in Apex, but a Datetime is not
+        // instanceof Date, so the Date check goes first (checked in the org,
+        // Nov 27).
         if (value instanceof Date) {
             return String.valueOf((Date) value);
+        }
+        if (value instanceof Datetime) {
+            return ((Datetime) value).formatGmt('yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z\'');
         }
         return value;
     }

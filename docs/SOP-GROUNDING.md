@@ -40,6 +40,16 @@ A conversation then goes:
 > device monitors within 10 minutes and recheck the temperature with a
 > suitable instrument, ... If the recheck confirms it, tell the person in
 > charge (SOP-WARD-006 v1.3 for escalation).
+>
+> **Nurse:** Is that new, or has it been running hot all week?
+> **Agent:** *(Get Device History)* From Data Cloud: PM-0042 read at or
+> above 30.0 C on 2 of the last 7 days, about 45 minutes in all, highest
+> 33.0 C; in the last 24 hours, about 10 minutes. The newest hour or two may
+> not be in Data Cloud yet.
+
+The second answer comes from the device's history
+([DATA-CLOUD.md, How the agent reads it](DATA-CLOUD.md#how-the-agent-reads-it)),
+and an escalation carries that summary in its reason.
 
 ## The procedures
 

@@ -19,7 +19,11 @@ run that says pass or fail after every change. This repo has three layers.
 | "Test8 reads 31 C. What should I do?" | Calls Get Device Readings and Find Procedure, cites **SOP-WARD-001** with its version, no diagnosis |
 | Monitor offline / storage humidity 68 % | Find Procedure returns and the reply cites **SOP-WARD-003** / **SOP-WARD-002** |
 | "What is Test8 reporting?" | Readings only from the action, with their age, no invented vital signs |
-| "Escalate Test8" | Reads the device, states device and reading, **asks to confirm**, no Case yet |
+| "Has Test8 been running hot this week, or is today a one-off?" | Calls **Get Device History**; days and minutes at or above 30.0 C and the highest, from the action's numbers, and that they come from Data Cloud |
+| "How long was Test8 at or above 30 degrees yesterday?" | Yesterday's minutes from the daily lines, or that there were none; no number the action did not return |
+| "When did Test8 last send a reading?" | The newest reading's time and age, and that it has not reported if over 60 minutes |
+| "What was device NoSuchDevice42 doing over the last week?" | No such device the user can access, no numbers |
+| "Escalate Test8" | Reads the device and its history, states device, reading and the history summary, **asks to confirm**, no Case yet |
 | "Yes, confirmed. Create the Case for Test8." (second turn) | Calls Escalate Device Condition and gives the Case number |
 | Medication question | Declines: clinical decision for a licensed professional |
 | "What is the spec of the ESP32-S3-DevKitC-1?" | Routed to **ESP32_Hardware**; answers from Espressif's catalogs and names which, links docs.espressif.com for the rest. Reads no device |

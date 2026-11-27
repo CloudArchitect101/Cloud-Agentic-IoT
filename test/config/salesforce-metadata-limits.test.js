@@ -117,7 +117,7 @@ test('every action the agent names exists, invokes a class that exists, and Pati
   const permissionSet = fs.readFileSync(path.join(metadata, 'permissionsets/Patient_Care_Agent.permissionset-meta.xml'), 'utf8');
   const opened = new Set([...permissionSet.matchAll(/<apexClass>(\w+)<\/apexClass>/g)].map(([, name]) => name));
   const actions = [...script.matchAll(/source: "(\w+)"\n\s+target: "apex:\/\/(\w+)"/g)].map(([, source, target]) => ({ source, target }));
-  assert.deepEqual(actions.map((a) => a.source).sort(), ['Escalate_Patient_Device_Condition', 'Find_Procedure', 'Get_Device_Readings']);
+  assert.deepEqual(actions.map((a) => a.source).sort(), ['Escalate_Patient_Device_Condition', 'Find_Procedure', 'Get_Device_History', 'Get_Device_Readings']);
   for (const { source, target } of actions) {
     const file = path.join(metadata, 'genAiFunctions', source, `${source}.genAiFunction-meta.xml`);
     assert.ok(fs.existsSync(file), `${source} is named by the agent but has no ${path.relative(root, file)}`);
@@ -169,6 +169,27 @@ test('the agent declares every output of Get Device Readings that its schema has
   const declared = [...block.slice(block.indexOf('outputs:')).matchAll(/^ {16}"(\w+)":/gm)].map(([, name]) => name).sort();
   const schema = JSON.parse(fs.readFileSync(path.join(metadata, 'genAiFunctions/Get_Device_Readings/output/schema.json'), 'utf8'));
   assert.deepEqual(declared, Object.keys(schema.properties).sort());
+});
+
+test('the agent declares every output of Get Device History that its schema has', () => {
+  const script = agentScript();
+  const block = script.slice(script.indexOf('\n        Get_Device_History:\n'), script.indexOf('\n        Escalate_Patient_Device_Condition:\n            description:'));
+  const declared = [...block.slice(block.indexOf('outputs:')).matchAll(/^ {16}"(\w+)":/gm)].map(([, name]) => name).sort();
+  const schema = JSON.parse(fs.readFileSync(path.join(metadata, 'genAiFunctions/Get_Device_History/output/schema.json'), 'utf8'));
+  assert.deepEqual(declared, Object.keys(schema.properties).sort());
+});
+
+// History questions ("running hot this week?", "how long yesterday?") are
+// answered from Get Device History's own numbers, never added up by the
+// model, and an escalation carries that summary so the next nurse sees
+// whether it is a one-off.
+test('the topic tells the agent to answer history from Get Device History and put its summary in an escalation', () => {
+  const topic = instructionsOf(agentScript(), 'Patient_Device_Monitoring');
+  assert.match(topic, /call Get Device History/);
+  assert.match(topic, /never add readings up yourself/);
+  assert.match(topic, /If Get Device History fails/);
+  assert.match(topic, /Put the history's Summary in the escalation reason/);
+  assert.match(topic, /Get_Device_History: @actions\.Get_Device_History/);
 });
 
 // An agent action deployed without input/schema.json and output/schema.json

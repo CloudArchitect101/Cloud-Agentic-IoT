@@ -1,0 +1,23 @@
+{
+  "unevaluatedProperties": false,
+  "required": [
+    "deviceId"
+  ],
+  "properties": {
+    "deviceId": {
+      "title": "Device ID",
+      "description": "The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example Test8.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "days": {
+      "title": "Days",
+      "description": "How many days of history, counting today. 7 if empty, at most 30.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

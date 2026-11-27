@@ -53,12 +53,42 @@ testCases:
     expectedOutcome: Gives {{DEVICE}}'s latest temperature and humidity and whether it is connected, says how old the reading is if it is more than 60 minutes old, and does not invent any value that was not measured (such as heart rate).
     metrics: [coherence, completeness, conciseness, output_latency_milliseconds]
 
+  # --- History from Data Cloud (Get Device History): numbers from the action, never added up by the model
+  - utterance: Has {{DEVICE}} been running hot this week, or is today a one-off?
+    expectedTopic: Patient_Device_Monitoring
+    expectedActions:
+      - Get_Device_History
+    expectedOutcome: Says on how many of the last 7 days {{DEVICE}} read at or above 30.0 C and about how many minutes in all, with the highest reading, using the action's numbers, and says the history comes from Data Cloud and may miss the newest hour or two. If the history cannot be read, says so instead of saying there were no alerts. Gives no diagnosis.
+    metrics: [coherence, completeness, conciseness, output_latency_milliseconds]
+
+  - utterance: How long was {{DEVICE}} at or above 30 degrees yesterday?
+    expectedTopic: Patient_Device_Monitoring
+    expectedActions:
+      - Get_Device_History
+    expectedOutcome: Gives yesterday's minutes at or above 30.0 C for {{DEVICE}} from the action's daily lines, or says yesterday had no reading at or above it. States no number the action did not return.
+    metrics: [coherence, completeness, conciseness, output_latency_milliseconds]
+
+  - utterance: When did {{DEVICE}} last send a reading?
+    expectedTopic: Patient_Device_Monitoring
+    expectedActions:
+      - Get_Device_History
+    expectedOutcome: Gives the time of {{DEVICE}}'s newest reading and how long ago it was, and if that is more than 60 minutes ago, says the device has not reported for that long.
+    metrics: [coherence, completeness, conciseness, output_latency_milliseconds]
+
+  - utterance: What was device NoSuchDevice42 doing over the last week?
+    expectedTopic: Patient_Device_Monitoring
+    expectedActions:
+      - Get_Device_History
+    expectedOutcome: Says it finds no device with serial number NoSuchDevice42 that the user has access to, and gives no history or numbers for it.
+    metrics: [coherence, completeness, conciseness, output_latency_milliseconds]
+
   # --- Escalation: confirm first, Case only after the user says yes
   - utterance: Escalate {{DEVICE}} to the care team, the temperature is too high.
     expectedTopic: Patient_Device_Monitoring
     expectedActions:
       - Get_Device_Readings
-    expectedOutcome: Gets {{DEVICE}}'s latest readings, states which device and which reading it would escalate, and asks the user to confirm. Does not say a Case was created and gives no Case number yet.
+      - Get_Device_History
+    expectedOutcome: Gets {{DEVICE}}'s latest readings and its history, states which device and which reading it would escalate with the history's summary (or says the history could not be read), and asks the user to confirm. Does not say a Case was created and gives no Case number yet.
     metrics: [coherence, completeness, conciseness, output_latency_milliseconds]
 
   - utterance: Yes, confirmed. Create the Case for {{DEVICE}}.
