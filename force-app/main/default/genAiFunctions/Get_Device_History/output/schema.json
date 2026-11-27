@@ -1,0 +1,134 @@
+{
+  "unevaluatedProperties": false,
+  "properties": {
+    "success": {
+      "title": "Success",
+      "description": "Success",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "message": {
+      "title": "Message",
+      "description": "Message",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "deviceId": {
+      "title": "Device ID",
+      "description": "Device ID",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "days": {
+      "title": "Days",
+      "description": "How many days of history this covers, counting today.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "summary": {
+      "title": "Summary",
+      "description": "One or two sentences with the numbers: days at or above the threshold, minutes, the highest reading, the last 24 hours and the newest reading. Use it as written in an escalation reason.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "dailyLines": {
+      "title": "Daily Lines",
+      "description": "One line per day that had readings at or above the threshold, newest first.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "daysWithAlerts": {
+      "title": "Days With Alerts",
+      "description": "Days in the period with at least one reading at or above the threshold.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "minutesAtOrAbove": {
+      "title": "Minutes At Or Above Threshold",
+      "description": "About how many minutes in the period the device read at or above the threshold.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "highestTemperature": {
+      "title": "Highest Temperature",
+      "description": "The highest reading in C on those days.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "last24hReadings": {
+      "title": "Last 24 Hours Readings",
+      "description": "How many readings Data Cloud holds for the last 24 hours.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "last24hMinutesAtOrAbove": {
+      "title": "Last 24 Hours Minutes At Or Above Threshold",
+      "description": "About how many of the last 24 hours, in minutes, the device read at or above the threshold.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "last24hHighest": {
+      "title": "Last 24 Hours Highest Temperature",
+      "description": "The highest reading in C in the last 24 hours.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "lastReadingAt": {
+      "title": "Last Reading At",
+      "description": "The newest reading Data Cloud holds for the device.",
+      "lightning:type": "lightning__dateTimeStringType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "lastReadingAgeMinutes": {
+      "title": "Last Reading Age Minutes",
+      "description": "How many minutes ago that newest reading was taken.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "thresholdCelsius": {
+      "title": "Threshold Celsius",
+      "description": "The temperature alert threshold the history is counted against.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    },
+    "notice": {
+      "title": "Notice",
+      "description": "How fresh the history is, and what a missing day means.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": false,
+      "copilotAction:isUsedByPlanner": true
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

@@ -3,7 +3,7 @@ system:
         You help hospital care team members understand what monitored devices are reporting (a temperature sensor can sit against a patient, in a medication fridge or in a room), point them to the ward procedure that applies, citing its SOP ID, and escalate conditions that need human attention. You describe readings and procedures; you never diagnose or recommend treatment.
     messages:
         welcome:|
-            Hi, I'm the Patient Care Agent. Give me a device serial number and I can tell you what it is reporting, find the ward procedure that applies, or escalate a condition to the care team.
+            Hi, I'm the Patient Care Agent. Give me a device serial number and I can tell you what it is reporting, how it has run over the last days, find the ward procedure that applies, or escalate a condition to the care team.
         error: "Something went wrong. Try again."
     recommended_prompts:
         in_conversation: True
@@ -39,7 +39,7 @@ start_agent agent_router:
     reasoning:
         instructions: ->
             | Select the best tool to call based on conversation history and user's intent.
-              A question about a specific monitored device (named by its serial number, such as Test8), its readings, its connection, a ward procedure or an escalation goes to Patient_Device_Monitoring.
+              A question about a specific monitored device (named by its serial number, such as Test8), its readings, its history, its connection, a ward procedure or an escalation goes to Patient_Device_Monitoring.
               A generic question about Espressif hardware or software that names no monitored device and no patient goes to ESP32_Hardware: ESP32 chips, modules and dev boards (for example ESP32-S3-DevKitC-1), their specs, peripherals and pins, and ESP-IDF components and drivers.
               If a message asks both, handle the device part in Patient_Device_Monitoring first.
 
@@ -55,7 +55,7 @@ start_agent agent_router:
 subagent Patient_Device_Monitoring:
 
     label: "Device Monitoring"
-    description: "Answers questions about monitored devices, finds the ward procedure that applies, and escalates abnormal conditions to the care team."
+    description: "Answers questions about monitored devices and their history, finds the ward procedure that applies, and escalates abnormal conditions to the care team."
 
     reasoning:
         instructions: ->
@@ -63,13 +63,15 @@ subagent Patient_Device_Monitoring:
               Additional instructions follow:
               Describe what the readings show and whether they fall outside configured thresholds. Judge a reading only by its flags (the temperature alert flag means the sensor reads at or above its alert level, wherever it sits; it is a device reading, not a measured body temperature, and not a diagnosis) and by thresholds in returned procedure passages, never as high or low compared with the device's other readings. Do not offer a diagnosis, a treatment recommendation, or a medication change. Those are clinical decisions for a licensed professional.
               
-              Answer only from the readings and connection status the Get Latest Device Readings action returns, and the procedure passages the Find Procedure action returns. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.
+              Answer only from the readings and connection status the Get Latest Device Readings action returns, the history the Get Device History action returns, and the procedure passages the Find Procedure action returns. If the data needed to answer is not available, say so plainly rather than estimating. Never infer a vital sign that was not measured.
               
               Get Latest Device Readings returns two sources. The live reading (Live Message, Live Temperature, Live Humidity, Live Reading Age Minutes) is the newest reading the board stored in AWS; lead with it. The saved readings are only the ones Salesforce kept because they changed the patient's state or raised an alert; call the newest one the last saved event, not the current reading. Always say how old a reading is when it is more than 60 minutes old, from Live Reading Age Minutes or Latest Reading Age Minutes, for example "last reported 23 hours ago". Do not call a device online from its connection status alone when its newest reading is more than 60 minutes old; say it is connected but has not reported for that long. If Live Message says the live reading is unavailable, say so and answer from the saved readings.
               
               Users name a device by its serial number, which is short, for example "Test8" or "ESP32-Patient-Monitor-01". Treat a device name the user gives as its serial number and pass it to the actions exactly as written, without asking first. Ask only if the action finds no such device, or if the user names a patient with more than one device. Always refer to a device by its serial number.
               
-              Before escalating, get the device's latest readings, then state which device and which reading you are escalating and ask the user to confirm. Report the Case number afterwards so the user can find it.
+              When the user asks about a device over time (this week, yesterday, how long, how often, whether it is a pattern or a one-off, when it last reported), call Get Device History with the device's serial number, and the number of days if the user gives one. Give the numbers from its Summary and Daily Lines as written, never add readings up yourself, and say once that they come from Data Cloud and may miss the newest hour or two. A day not listed had no reading at or above the threshold. If Get Device History fails (Success is false), say the history cannot be read right now, not that the device had no alerts. For what a device reads right now, use Get Latest Device Readings, not the history.
+              
+              Before escalating, get the device's latest readings and its history, then state which device and which reading you are escalating and ask the user to confirm. Put the history's Summary in the escalation reason as written, so the next nurse sees whether it is a one-off. If the history fails, escalate without it and say so. Report the Case number afterwards so the user can find it.
               
               When the user asks what to do, which procedure applies or what the steps are, call Find Procedure with the user's question as written; it needs no device. If the user also names a device, always get its latest readings too and report them, whatever Find Procedure returns. Give the steps from the passages it returns, and cite each one by SOP ID and version, for example "per SOP-WARD-001 v2.0". Never state a step, a time limit or a threshold that is not in a returned passage. Only when Find Procedure succeeds with no passage, say that no ward procedure covers it and suggest asking the charge nurse. If Find Procedure fails (Success is false), say that the ward procedures cannot be searched right now, not that none covers it. In both cases still give the device's readings and offer to escalate if one is outside its thresholds. These are sample procedures: say so once if the user treats them as clinical advice.
               
@@ -82,6 +84,9 @@ subagent Patient_Device_Monitoring:
             Find_Procedure: @actions.Find_Procedure
                 with question = ...
                 with passageCount = ...
+            Get_Device_History: @actions.Get_Device_History
+                with deviceId = ...
+                with days = ...
             Escalate_Patient_Device_Condition: @actions.Escalate_Patient_Device_Condition
                 with deviceId = ...
                 with reason = ...
@@ -280,6 +285,108 @@ subagent Patient_Device_Monitoring:
                     filter_from_agent: False
                 "notice": string
                     description: "Notice"
+                    label: "Notice"
+                    is_displayable: False
+                    filter_from_agent: False
+
+        Get_Device_History:
+            description: "Returns how a monitored device's temperature ran over the last days, from Data Cloud: the days and minutes at or above the temperature alert threshold, the highest reading, the last 24 hours and the newest reading Data Cloud holds. Use it whenever the user asks about a device over time (this week, yesterday, how long, how often, a pattern or a one-off, when it last reported), and before escalating a condition. Needs the device serial number, for example Test8: pass it exactly as written. Do not use it for what a device reads right now."
+            label: "Get Device History"
+            require_user_confirmation: False
+            include_in_progress_indicator: False
+            source: "Get_Device_History"
+            target: "apex://DeviceHistoryAgentAction"
+
+            inputs:
+                "deviceId": string
+                    description: "The device serial number (Asset.SerialNumber), the same as its AWS IoT Thing name, for example Test8."
+                    label: "Device ID"
+                    is_required: True
+                    is_user_input: False
+                "days": long
+                    description: "How many days of history, counting today. 7 if empty, at most 30."
+                    label: "Days"
+                    is_required: False
+                    is_user_input: False
+
+            outputs:
+                "success": boolean
+                    description: "Success"
+                    label: "Success"
+                    is_displayable: False
+                    filter_from_agent: False
+                "message": string
+                    description: "Message"
+                    label: "Message"
+                    is_displayable: False
+                    filter_from_agent: False
+                "deviceId": string
+                    description: "Device ID"
+                    label: "Device ID"
+                    is_displayable: False
+                    filter_from_agent: False
+                "days": long
+                    description: "How many days of history this covers, counting today."
+                    label: "Days"
+                    is_displayable: False
+                    filter_from_agent: False
+                "summary": string
+                    description: "One or two sentences with the numbers: days at or above the threshold, minutes, the highest reading, the last 24 hours and the newest reading. Use it as written in an escalation reason."
+                    label: "Summary"
+                    is_displayable: False
+                    filter_from_agent: False
+                "dailyLines": string
+                    description: "One line per day that had readings at or above the threshold, newest first."
+                    label: "Daily Lines"
+                    is_displayable: False
+                    filter_from_agent: False
+                "daysWithAlerts": long
+                    description: "Days in the period with at least one reading at or above the threshold."
+                    label: "Days With Alerts"
+                    is_displayable: False
+                    filter_from_agent: False
+                "minutesAtOrAbove": number
+                    description: "About how many minutes in the period the device read at or above the threshold."
+                    label: "Minutes At Or Above Threshold"
+                    is_displayable: False
+                    filter_from_agent: False
+                "highestTemperature": number
+                    description: "The highest reading in C on those days."
+                    label: "Highest Temperature"
+                    is_displayable: False
+                    filter_from_agent: False
+                "last24hReadings": long
+                    description: "How many readings Data Cloud holds for the last 24 hours."
+                    label: "Last 24 Hours Readings"
+                    is_displayable: False
+                    filter_from_agent: False
+                "last24hMinutesAtOrAbove": number
+                    description: "About how many of the last 24 hours, in minutes, the device read at or above the threshold."
+                    label: "Last 24 Hours Minutes At Or Above Threshold"
+                    is_displayable: False
+                    filter_from_agent: False
+                "last24hHighest": number
+                    description: "The highest reading in C in the last 24 hours."
+                    label: "Last 24 Hours Highest Temperature"
+                    is_displayable: False
+                    filter_from_agent: False
+                "lastReadingAt": datetime
+                    description: "The newest reading Data Cloud holds for the device."
+                    label: "Last Reading At"
+                    is_displayable: False
+                    filter_from_agent: False
+                "lastReadingAgeMinutes": long
+                    description: "How many minutes ago that newest reading was taken."
+                    label: "Last Reading Age Minutes"
+                    is_displayable: False
+                    filter_from_agent: False
+                "thresholdCelsius": number
+                    description: "The temperature alert threshold the history is counted against."
+                    label: "Threshold Celsius"
+                    is_displayable: False
+                    filter_from_agent: False
+                "notice": string
+                    description: "How fresh the history is, and what a missing day means."
                     label: "Notice"
                     is_displayable: False
                     filter_from_agent: False

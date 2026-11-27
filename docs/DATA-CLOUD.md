@@ -1,11 +1,13 @@
-# Data Cloud: room readings for the ward
+# Data Cloud: every reading from the monitored devices
 
-Every board in the ward measures its room's temperature and humidity (a
-DHT11) every 30 seconds. Salesforce CRM sees only the readings someone has to
+Every monitored device measures the temperature of whatever it sits on, and
+the humidity (a DHT11), every 30 seconds. Salesforce CRM sees only the readings someone has to
 act on, as `Patient_Vitals__c` records; every reading is kept in the S3
 archive. This page is how all of them reach **Data Cloud**, Salesforce's data
-platform for large volumes, and become two answers per device: how long its
-room was out of range each day, and whether it has gone quiet.
+platform for large volumes, and become two answers per device: how long it
+read at or above the temperature alert threshold each day, and whether it has
+gone quiet. The Patient Care Agent reads both, and the raw readings, with
+Get Device History ([How the agent reads it](#how-the-agent-reads-it)).
 
 The setup steps are in [SETUP.md §7](SETUP.md#7-data-cloud-room-readings-for-the-ward).
 This page explains the path, what is code and what is not, and how to check
@@ -253,6 +255,81 @@ transfer out when a stream runs: cents a month for a ward of boards. In
 Salesforce: Data Cloud counts rows ingested and insight runs against the org's
 Data Cloud credits; the org's consumption pages show what each stream and
 insight used.
+
+## How the agent reads it
+
+The Patient Care Agent's **Get Device History** action
+(`classes/DeviceHistoryAgentAction.cls`, `genAiFunctions/Get_Device_History`)
+reads the two insights and the raw readings, so a nurse can ask:
+
+| A nurse asks | What the answer decides | SOP it feeds |
+| --- | --- | --- |
+| "Has Test8 been running hot this week, or is today a one-off?" | Escalate now, or recheck the device first | SOP-WARD-001 |
+| "How long was Test8 at or above 30 C yesterday?" | What goes into the shift handover | SOP-WARD-006 |
+| "When did Test7 last send anything?" | Treat it as a device fault, not a quiet patient | SOP-WARD-003 |
+| "Create a Case for Test8" | The Case reason carries the history's summary line | SOP-WARD-001 |
+
+For one device it sends three Data Cloud ANSI SQL queries
+(`ConnectApi.CdpQuery`, through the same `Querier` the Home page's value card
+uses), each answered on its own so one failing never blanks the others:
+
+| Query | From | Gives |
+| --- | --- | --- |
+| Per day, last 1 to 30 days (7 by default) | `Room_Out_Of_Range_Daily__cio` | Readings and minutes at or above 30.0 C, and the highest, per day |
+| Last 24 hours | `Room_Readings__dlm`, counted in the query | Readings, minutes at or above 30.0 C, highest, newest reading |
+| Last reading | `Room_Device_Silence__cio` | When the device last reported, however long ago |
+
+The action returns the numbers and a one-line **Summary** the agent quotes
+as written, and puts in an escalation's reason. The model never adds readings
+up itself. The start times are written into the SQL by Apex (UTC), so no
+query needs the current time, which Data Cloud refuses after an aggregate.
+A day the insight does not list had no reading at or above the threshold, or
+no readings; the action says so. The current reading stays with Get Latest
+Device Readings.
+
+**Why SQL and not a search index.** These are questions about numbers over
+time. A Data Cloud search index and retriever would chunk and embed the
+readings and return similar-looking ones, leaving the model to count minutes,
+and every reading embedded is a cost that grows with the fleet. Retrieval
+stays with the ward procedures ([SOP-GROUNDING.md](SOP-GROUNDING.md)).
+
+**Security.** The Asset is looked up first as the person talking to the
+agent (`with sharing`, `WITH USER_MODE`): a device they cannot see gets the
+same answer as one that does not exist, and Data Cloud is not asked. The
+Query API takes no bind variables, so a serial number must match
+`^[A-Za-z0-9_-]{1,64}$` before it is written into the SQL; anything else is
+refused and not echoed. Only the serial number and numbers come back.
+
+**Access.** The `Patient_Care_Agent` permission set opens the class. Querying
+Data Cloud also needs the user to have Data Cloud query access (for example
+the standard **Data Cloud User** permission set). Without it the action
+answers that the history cannot be read, and the agent says so instead of
+claiming there were no alerts.
+
+**Freshness.** As fresh as the stream's last import and the daily insight's
+last run (every 6 hours): the newest hour or two may be missing. The action's
+Notice says so, and the agent repeats it once.
+
+**Cost.** One action is 20 Flex Credits, about $0.10
+([COST-MODEL.md](COST-MODEL.md) §9). Each question reads at most about 2,900
+raw rows (one device, 24 hours) and 30 daily rows; check the org's Data Cloud
+consumption page after the first week for the query credits they use. No AWS
+cost. It grows with questions asked, not with devices or readings.
+
+**Tests and KPIs.** Apex tests over a fake Data Cloud
+(`DeviceHistoryAgentActionTest`); a config test that the action's SQL reads
+only fields the insights and `Room_Readings` have, and uses their threshold
+and interval (`test/config/data-cloud-insights.test.js`); four Testing Center
+cases ([AGENT-EVALS.md](AGENT-EVALS.md)). KPIs:
+
+| KPI | Target | Measured in |
+| --- | --- | --- |
+| Time to answer a history question | Under 30 seconds (about 5 minutes by hand in reports) | Agent session latency |
+| Escalations that carry a history summary | 90 % or more | Case Description, a report |
+| Action success rate | 98 % or more | Agentforce action logs |
+| Action latency p95 | Under 3 seconds | Testing Center latency |
+| History eval cases passing | 100 % | `scripts/eval-agents.sh` |
+| Cost per answer | About $0.10 | The org's consumption pages |
 
 ## If a step fails
 

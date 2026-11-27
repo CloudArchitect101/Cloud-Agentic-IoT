@@ -107,6 +107,15 @@ Agentforce cost is an **estimate**: Apex cannot read per-conversation Flex
 Credit usage. Check it monthly against Setup -> Digital Wallet and adjust
 Agent Actions per Conversation.
 
+## Device history in the staff agent
+
+Get Device History lets a nurse ask the agent whether a high temperature is a
+one-off or a pattern, instead of opening reports: about 5 minutes by hand,
+under 30 seconds in the chat, for about $0.10 an answer. Its KPIs (time to
+answer, escalations that carry a history summary, success rate, latency, eval
+pass rate, cost per answer) are in
+[DATA-CLOUD.md, How the agent reads it](DATA-CLOUD.md#how-the-agent-reads-it).
+
 ## Set it up
 
 After `scripts/deploy-salesforce.sh` has deployed it:

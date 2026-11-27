@@ -110,3 +110,33 @@ test('each insight has a publish schedule, hourly only where freshness needs it'
   assert.equal(insight('Room_Device_Silence__cio').publishScheduleInterval, 'One');
   assert.notEqual(insight('Room_Out_Of_Range_Daily__cio').publishScheduleInterval, 'One');
 });
+
+// Get Device History (DeviceHistoryAgentAction) queries the two insights and
+// the raw readings with its own SQL. It counts minutes against the same
+// threshold and interval, and reads only fields the sources have, so a
+// renamed column or a moved threshold fails here, not in front of a nurse.
+test('Get Device History counts against the insights\' threshold and interval, and reads only their fields', () => {
+  const apex = fs.readFileSync(path.join(root, 'force-app/main/default/classes/DeviceHistoryAgentAction.cls'), 'utf8');
+  const daily = insight('Room_Out_Of_Range_Daily__cio');
+  assert.equal(Number(apex.match(/ALERT_CELSIUS = (\d+(?:\.\d+)?);/)[1]), daily.roomTempAlertCelsius);
+  assert.equal(Number(apex.match(/TELEMETRY_SECONDS = (\d+);/)[1]), daily.telemetrySeconds);
+  assert.match(apex, new RegExp(`DAILY = '${daily.apiName}'`));
+  assert.match(apex, new RegExp(`SILENCE = '${insight('Room_Device_Silence__cio').apiName}'`));
+  assert.match(apex, new RegExp(`RAW = '${DMO}'`));
+
+  const insightFields = (i) => new Set([...sql(i).matchAll(/\bAS (\w+)/g)].map((m) => m[1]).concat('device_id__c'));
+  const dailyFields = insightFields(daily);
+  const silenceFields = insightFields(insight('Room_Device_Silence__cio'));
+  const rawFields = new Set(spec.columns.map((c) => c.dmoField));
+  // Each query is one run(<sql>, <part>, failed) call; its source is the name after FROM.
+  const queries = [...apex.matchAll(/List<Map<String, Object>> \w+ = run\(([\s\S]*?), failed\);/g)].map((m) => m[1]);
+  assert.equal(queries.length, 3, 'three queries: daily, last 24 hours, last reading');
+  const sources = { DAILY: dailyFields, SILENCE: silenceFields, RAW: rawFields };
+  for (const query of queries) {
+    const name = query.match(/FROM ' \+ (DAILY|SILENCE|RAW)\b/)[1];
+    for (const [, field] of query.replace(/ AS \w+/g, '').matchAll(/\b([a-z][a-z0-9_]*__c)\b/g)) {
+      assert.ok(sources[name].has(field), `the ${name} query reads ${field}, which that source does not have`);
+    }
+    assert.doesNotMatch(query, /NOW\(|CURRENT_(TIMESTAMP|DATE)/i, 'start times are written by Apex');
+  }
+});

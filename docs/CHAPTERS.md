@@ -26,11 +26,13 @@ A real, physical system you can walk end-to-end, not a mockup. Secure authentica
 
 ## 01 · Data Cloud RAG Pipeline
 
-Patient IoT data flowing from edge devices through **Data Cloud** into a RAG pipeline that lets agents retrieve patient context autonomously.
+Every reading from the monitored devices flows into **Data Cloud**, and the Patient Care Agent reads a device's history from it on its own, to tell a nurse whether a high temperature is a one-off or a pattern.
 
-The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and stores in DynamoDB and the S3 archive → syncs the readings someone acts on to Salesforce via REST → Data Cloud ingests every room reading from the archive's CSV copy into the `Room_Readings` data model object, with two calculated insights per device ([DATA-CLOUD.md](DATA-CLOUD.md)) → auto-chunks the time series → Bedrock embeds each chunk → agents retrieve by semantic search. The ingestion and the insights are built; the chunking, embedding and retrieval are not yet.
+The pipeline stages: telemetry arrives at IoT Core → Lambda transforms and stores in DynamoDB and the S3 archive → syncs the readings someone acts on to Salesforce via REST → Data Cloud ingests every reading from the archive's CSV copy into the `Room_Readings` data model object, with two calculated insights per device ([DATA-CLOUD.md](DATA-CLOUD.md)) → the agent's **Get Device History** action queries them with SQL: days and minutes at or above the 30.0 C temperature alert threshold, the highest reading, the last 24 hours and the newest reading. All of it is built.
 
-**Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `lambda/patient-vitals/`, `datacloud/`
+**Why a query, not retrieval-augmented generation (RAG):** the questions are about numbers over time (how long, how often, when last). A SQL count answers them exactly. A semantic search over embedded readings returns similar-looking chunks and leaves the model to add up minutes, and embedding every reading (2,880 a device a day) costs more with every device added. Retrieval stays where text needs it: the ward procedures (chapter 08, [SOP-GROUNDING.md](SOP-GROUNDING.md)). [DATA-CLOUD.md, How the agent reads it](DATA-CLOUD.md#how-the-agent-reads-it) has the design, the cost and the KPIs.
+
+**Key files:** `force-app/main/default/objects/Patient_Vitals__c/`, `Patient_Daily_Summary__c/`, `classes/DataIngestionService.cls`, `classes/DeviceHistoryAgentAction.cls` (+ test), `genAiFunctions/Get_Device_History/`, `lambda/patient-vitals/`, `datacloud/`
 
 The device registry uses the **standard Asset object** — SerialNumber is the IoT Thing name, Account is the patient's Person Account — extended with 13 custom fields: firmware, connection, provisioning and Thing identity (`objects/Asset/fields/`). A Patient Device must belong to a Person Account (`objects/Asset/validationRules/`); an Internal Device sits on a ward's business account.
 
