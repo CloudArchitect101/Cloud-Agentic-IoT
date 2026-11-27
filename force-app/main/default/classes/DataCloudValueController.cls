@@ -46,16 +46,26 @@ public with sharing class DataCloudValueController {
     }
 
     /**
-     * Each row as a plain Map of column to value. A row that is not a map
-     * is skipped; a value that is not a primitive becomes its text, so no
+     * Each row as a plain Map of column to value, through JSON one row at a
+     * time. A row that is not a map is skipped; a value that is not a primitive becomes its text, so no
      * platform map type travels further than this.
      */
     @TestVisible
     private static List<Map<String, Object>> copyRows(List<Object> data) {
         List<Map<String, Object>> rows = new List<Map<String, Object>>();
         for (Object row : data == null ? new List<Object>() : data) {
-            if (!(row instanceof Map<String, Object>)) continue;
-            Map<String, Object> source = (Map<String, Object>) row;
+            if (row == null || !(row instanceof Map<String, Object>)) continue;
+            // A real org hands back its own internal map: instanceof Map is
+            // true, but get(), keySet() and new Map(row) all fail inside the
+            // platform ("Made lookup for method that does not exist ...
+            // Map.keySet()"). One row serializes cleanly, though, and comes
+            // back as a real Apex map (Nov 27, test-cloudarchitect101).
+            Map<String, Object> source;
+            try {
+                source = (Map<String, Object>) JSON.deserializeUntyped(JSON.serialize(row));
+            } catch (Exception e) {
+                continue;
+            }
             Map<String, Object> copy = new Map<String, Object>();
             for (String column : source.keySet()) {
                 Object value = source.get(column);
@@ -170,7 +180,9 @@ public with sharing class DataCloudValueController {
     // Times as ISO 8601 text in UTC, numbers and text as they are.
     @TestVisible
     private static Object plain(Object value) {
-        if (value instanceof Datetime) {
+        // A Date is also instanceof Datetime in Apex: tell them apart by the
+        // text, which is yyyy-MM-dd for a Date only.
+        if (value instanceof Datetime && String.valueOf(value).length() > 10) {
             return ((Datetime) value).formatGmt('yyyy-MM-dd\'T\'HH:mm:ss.SSS\'Z\'');
         }
         if (value instanceof Date) {
