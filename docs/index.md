@@ -10,6 +10,11 @@ title: Cloud-Agentic-IoT
 <img src="images/device-to-care.svg" alt="From a monitored device to the care team: sense, stream, alert, act">
 </div>
 
+<div class="sw-story">
+<video src="videos/alert-story.mp4" poster="videos/alert-story.jpg" controls playsinline preload="metadata" width="960" aria-label="15-second animation: the monitored device on the arm passes 30 C, the ticket gauge rings its bell, a Salesforce Case is assigned to the nurse, and the nurse reaches Room 103"></video>
+<p><b>In 15 seconds:</b> the arm cuff reads a temperature over 30 C, Salesforce opens a Case and the ticket gauge rings its bell, the Case is assigned to a nurse, and the nurse reaches the room. Turn the sound on for the music. Rendered in Blender from the real 3D case models; a demo, not a medical device.</p>
+</div>
+
 ## See what you build
 
 Two ESP32 boards in 3D-printed cases, AWS IoT, Salesforce with Agentforce and Data Cloud, all running together. Everything below comes from the [Quick Install Guide](INSTALL.md), steps 12 and 13.

@@ -11,13 +11,11 @@
 
 > A healthcare IoT + Agentforce system, built from scratch and in public. A physical ESP32 board measures temperature, AWS IoT streams it, Salesforce turns it into Cases, and an Agentforce agent answers from the readings and the ward's procedures, in Salesforce, Slack and a patient portal.
 
-<!--
-  VIDEO PLACEHOLDER: replace the block below with the walkthrough video.
-  On GitHub a thumbnail that links to YouTube works best:
-  [![Watch the 3-minute walkthrough](docs/images/video-thumbnail.png)](https://www.youtube.com/watch?v=VIDEO_ID)
--->
-> [!NOTE]
-> **Video walkthrough: coming soon.** A short video showing the end result (board, alerts, agent, portal) and where each part lives in this repository.
+**In 15 seconds:** the arm cuff reads a temperature over 30 C, Salesforce opens a Case and the ticket gauge rings its bell, the Case is assigned to a nurse, and the nurse reaches the room.
+
+[![15-second animation: the monitored device on the arm passes 30 C, the ticket gauge rings its bell, a Salesforce Case is assigned to the nurse, and the nurse reaches Room 103](docs/images/showcase/alert-story.gif)](docs/videos/alert-story.mp4)
+
+<sub>Silent preview. [Watch it with sound (MP4)](docs/videos/alert-story.mp4). Rendered in Blender from the real 3D case models; a demo, not a medical device.</sub>
 
 ## See what you build
 
@@ -272,6 +270,7 @@ Third-party material keeps its own terms:
 
 - The part photos in `docs/images/parts/` are from Wikimedia Commons under their authors' licences (some CC BY-SA). See [Part photo credits](docs/images/parts/CREDITS.md).
 - Product names, logos and service icons (Salesforce, Agentforce, Slack, AWS, Espressif, Git and others) belong to their owners. See [Icon credits](docs/images/platforms/CREDITS.md).
+- The music and bell sound in `docs/videos/alert-story.mp4` were generated with ElevenLabs and are used under ElevenLabs' terms.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) points to the Contributor Covenant, which has its own licence.
 
 Neither licence grants rights to the project's name or logo as a brand, so don't present a copy as the original or as endorsed by the author.
